@@ -14,6 +14,7 @@ describe("useAuthStore", () => {
     const { result } = renderHook(() => useAuthStore());
     expect(result.current.accessToken).toBeNull();
     expect(result.current.refreshToken).toBeNull();
+    expect(result.current.role).toBeNull();
   });
 
   it("setTokens stores both tokens", () => {

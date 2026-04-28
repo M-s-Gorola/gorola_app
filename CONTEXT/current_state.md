@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-28
-- **Session Summary:** **Phase 2.3 complete** — **`gsap`**, **`@gsap/react`**, **`lenis`**; **`src/lib/gsap.ts`** — `registerPlugin(ScrollTrigger)`, `gsap.defaults({ ease: "power2.out", duration: 0.8 })`, **`linkLenisToGsapTicker`** (Lenis `on("scroll", ScrollTrigger.update)` + `gsap.ticker` → `lenis.raf(time*1000)` + `lagSmoothing(0)`, cleanup restores ticker + unsubscribes). **`src/lib/lenis.ts`** — `export let lenis`, **`createGorolaLenis`** / **`destroyGorolaLenis`** (singleton, `autoRaf: false`). **`src/hooks/useGorolaMotion.ts`** — `useEffect` init + full cleanup (`disconnect`, `lenis.destroy()`). **`App.tsx`** calls **`useGorolaMotion()`** once. **`main.tsx`**: `import "lenis/dist/lenis.css"`. **Tests:** `gsap-context-cleanup.test.tsx` (manual `gsap.context` + `revert`); `useGorolaMotion.test.tsx` (Lenis cleared after unmount); **`test/setup.ts`** — **`matchMedia`** + **`ResizeObserver`** for ScrollTrigger / Lenis in jsdom. **`pnpm ci:quality`** green (API 277 + web **33** tests).
-- **Next Session Must Start With:** **Phase 2.4** buyer layout / nav / route guards — or **API** `POST /api/v1/orders`, or **2.5** hero. Optional: `ThemeProvider` + `<Toaster />` (2.4 checklist still lists them on `App`).
+- **Session Summary:** **Phase 2.4 complete (shell + guards, TDD)** — Added reusable **`GorolaMountainMark`** SVG component and buyer shell components: **`BuyerNav`**, **`BuyerLayout`**, **`BuyerFooter`**. Added route guards in **`src/app/routes/guards.tsx`** (`ProtectedRoute`, `StoreRoute`, `AdminRoute`) and expanded auth store with `role` for RBAC checks. Updated **`App.tsx`** to host QueryClientProvider + Toaster and route structure (`/`, `/search`, `/cart`, `/login`, `/profile`, `/store`, `/admin`) while `main.tsx` now only wraps BrowserRouter. New RED→GREEN tests: `route-guards.test.tsx`, `BuyerNav.test.tsx`, `BuyerLayout.test.tsx`; full `pnpm ci:quality` green (API 277 + web **41** tests).
+- **Next Session Must Start With:** **Phase 2.5** hero section (GSAP timeline + topo/noise composition) or **API** `POST /api/v1/orders`.
 
 ---
 
@@ -19,7 +19,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                |
 | ------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.3 done** (stack + design tokens + Lenis/GSAP); next **2.4** shell/nav or catalog UX                                                                 |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.4 done** (stack + design + Lenis/GSAP + buyer shell/guards); next **2.5** hero or catalog UX                                                                 |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                               |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                               |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                |
@@ -61,14 +61,15 @@
 - **Session 32 (Phase 2.1 stack, TDD):** Router, Query, Zustand, `api.ts`, RHF+Zod, Vitest/RTL, `HomePage` + `App` routes; colocated `*.test.ts` / `*.test.tsx`.
 - **Session 33 (Phase 2.2 design tokens + shared UI):** Split CSS into `tokens` / `fonts` / `globals`; keyframes + utility classes; `TopographicBg`, `WeatherBanner`, `ETABanner` + tests; `HomePage` preview strip.
 - **Session 34 (Phase 2.3 Lenis + GSAP):** `lib/gsap.ts`, `lib/lenis.ts`, `useGorolaMotion`, `App` init; `gsap-context-cleanup` + `useGorolaMotion` tests; jsdom `matchMedia` / `ResizeObserver` in `test/setup`.
+- **Session 35 (Phase 2.4 shell + routing, strict TDD):** RED tests first for guards/nav/layout; added `GorolaMountainMark` (separate SVG component), `BuyerNav`, `BuyerLayout`, `BuyerFooter`, and `app/routes/guards.tsx`; moved QueryClientProvider + Toaster into `App`; added route stubs and RBAC role in `auth.store`; GREEN with `ci:quality`.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.4** (buyer shell, nav, route guards) — or **order HTTP** on the API.
+**Current Task:** **Phase 2.5** (hero section with GSAP timeline) — or **order HTTP** on the API.
 
-**Exact stopping point:** **2.3** checklist [x] — `gsap` / `@gsap/react` / `lenis`, `lib/gsap.ts` + `lib/lenis.ts` + `useGorolaMotion` from **`App`**, destroy on cleanup, GSAP `context` + Lenis mount tests. **`QueryClientProvider`** remains in `main.tsx` (2.4 still asks to consolidate `App` with Toaster). **Next:** **2.4** or **2.5** / API orders.
+**Exact stopping point:** **2.4** checklist [x] — buyer shell + nav/footer + route guards complete, tests added for guard redirects and nav interactions. `App` now owns QueryClientProvider + Toaster + shell routes; `main.tsx` wraps BrowserRouter only. **Next:** **2.5** hero section (`HeroSection`, animations, cleanup tests) or API `POST /api/v1/orders`.
 
 ---
 
@@ -335,18 +336,18 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.4 — App Shell + Routing
 
-- [ ] `src/App.tsx` — sets up React Router, Lenis, GSAP, QueryClientProvider, Toaster (sonner)
-- [ ] Route guards: `ProtectedRoute` (redirects to /login if no auth), `StoreRoute` (requires STORE_OWNER role), `AdminRoute` (requires ADMIN role)
-- [ ] `BuyerLayout` — shared layout for buyer pages: sticky nav, main content, footer
-- [ ] `BuyerNav` component:
-  - [ ] GoRola mountain logo (inline SVG, from design system)
-  - [ ] Location pill (current delivery area — "Kulri, Mussoorie")
-  - [ ] Search bar (links to /search on enter)
-  - [ ] Cart button with item count badge
-  - [ ] Login/Profile button
-  - [ ] Weather mode: nav background shifts from `--gorola-pine` to `--gorola-slate`
-- [ ] `BuyerFooter` component — minimal, pine background, links
-- [ ] TESTS: route guard redirects unauthenticated users, role guard redirects wrong role
+- [x] `src/App.tsx` — sets up React Router, Lenis, GSAP, QueryClientProvider, Toaster (sonner)
+- [x] Route guards: `ProtectedRoute` (redirects to /login if no auth), `StoreRoute` (requires STORE_OWNER role), `AdminRoute` (requires ADMIN role)
+- [x] `BuyerLayout` — shared layout for buyer pages: sticky nav, main content, footer
+- [x] `BuyerNav` component:
+  - [x] GoRola mountain logo (inline SVG, from design system) via `components/shared/GorolaMountainMark.tsx`
+  - [x] Location pill (current delivery area — "Kulri, Mussoorie")
+  - [x] Search bar (links to /search on enter)
+  - [x] Cart button with item count badge
+  - [x] Login/Profile button
+  - [x] Weather mode: nav background shifts from `--gorola-pine` to `--gorola-slate`
+- [x] `BuyerFooter` component — minimal, pine background, links
+- [x] TESTS: route guard redirects unauthenticated users, role guard redirects wrong role
 
 ### 2.5 — Hero Section
 
@@ -948,7 +949,7 @@ gorola/
 | user              | ❌         | ✅                | integration: `user.repository.test.ts`                                                                                                                            |
 | store-owner       | ❌         | ✅                | integration: `store-owner.repository.test.ts`                                                                                                                     |
 | admin             | ❌         | ✅                | integration: `admin.repository.test.ts`                                                                                                                           |
-| **web (buyer)**   | **✅**     | ⏳                | **unit:** `apps/web` Vitest (30) — stores, `api`, `query-client`, `form-wiring`, `router`, `TopographicBg`, `WeatherBanner`, `ETABanner`; E2E = Phase 2.18                                                                                          |
+| **web (buyer)**   | **✅**     | ⏳                | **unit:** `apps/web` Vitest (41) — stores, `api`, `query-client`, `form-wiring`, `router`, `TopographicBg`, `WeatherBanner`, `ETABanner`, `useGorolaMotion`, `gsap-context-cleanup`, `route-guards`, `BuyerNav`, `BuyerLayout`; E2E = Phase 2.18                                                                                          |
 | catalog           | ❌         | ✅                | integration: `category`, `product`, `variant` `*.repository.test.ts`                                                                                              |
 | cart              | ❌         | ✅                | integration: `cart.repository.test.ts`                                                                                                                            |
 | order             | ✅         | ✅                | unit: `order.service.test.ts`; integration: `order.repository.test.ts`, `order.service.stock.integration.test.ts`                                                 |
