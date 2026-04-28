@@ -261,4 +261,77 @@ describe("Product controller", () => {
     });
     expect(medicalId.length).toBeGreaterThan(0);
   });
+
+  it("GET /api/v1/products/:id returns product detail with variants", async () => {
+    const apple = await db.product.findFirstOrThrow({
+      where: {
+        name: "Apple",
+      },
+    });
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes,
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/products/${apple.id}`,
+    });
+
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toEqual({
+      success: true,
+      data: {
+        id: apple.id,
+        name: "Apple",
+        description: "Fresh apple",
+        imageUrl: "https://cdn.example.com/apple.jpg",
+        store: {
+          id: storeOne.id,
+          name: "Peak Mart",
+          phone: "+919111111111",
+        },
+        variants: expect.arrayContaining([
+          expect.objectContaining({
+            id: expect.any(String),
+            label: expect.any(String),
+            price: expect.any(String),
+            unit: expect.any(String),
+            stockQty: expect.any(Number),
+          }),
+        ]),
+      },
+      meta: {
+        requestId: expect.any(String),
+      },
+    });
+  });
+
+  it("GET /api/v1/products/:id returns 404 when product does not exist", async () => {
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes,
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/v1/products/non-existent-product-id",
+    });
+
+    await server.close();
+    expect(response.statusCode).toBe(404);
+    expect(response.json()).toEqual({
+      success: false,
+      error: {
+        code: "NOT_FOUND",
+        message: expect.any(String),
+        details: expect.any(Object),
+      },
+      meta: {
+        requestId: expect.any(String),
+      },
+    });
+  });
 });

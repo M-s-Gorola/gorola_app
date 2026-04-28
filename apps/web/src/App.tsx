@@ -9,6 +9,7 @@ import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { createAppQueryClient } from "@/lib/query-client";
 import { CategoryPage } from "@/pages/buyer/CategoryPage";
 import { HomePage } from "@/pages/buyer/HomePage";
+import { ProductDetailPage } from "@/pages/buyer/ProductDetailPage";
 
 const queryClient = createAppQueryClient();
 
@@ -42,6 +43,14 @@ export function App(): ReactElement {
           element={
             <BuyerLayout>
               <CategoryPage />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/products/:id"
+          element={
+            <BuyerLayout>
+              <ProductDetailPage />
             </BuyerLayout>
           }
         />

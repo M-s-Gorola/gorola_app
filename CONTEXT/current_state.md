@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-29
-- **Session Summary:** **Phase 2.7 completed (strict TDD)** — Added RED tests for loading skeleton grid and variant-id cart contract, plus backend RED tests for product payload variant-id exposure; then implemented GREEN with `highestPricedVariantId` in `GET /api/v1/products`, optimistic cart sync using real variant IDs, 12-card loading skeletons, and GSAP+ScrollTrigger card-entry animation for newly loaded items.
-- **Next Session Must Start With:** **Phase 2.8 start (strict TDD)** — begin `ProductDetailPage` vertical slice (`GET /api/v1/products/:id` contract + frontend route/component/tests).
+- **Session Summary:** **Phase 2.8 completed (strict TDD, verified)** — Added RED integration tests for `GET /api/v1/products/:id` (detail + 404), implemented GREEN backend route and repository detail contract (store + active variants), then added RED/GREEN frontend tests and implementation for `ProductDetailPage` route with variant selection, price updates, quantity controls (including out-of-stock disable), add-to-cart payload, loading skeleton, and GSAP entry animation.
+- **Next Session Must Start With:** **Phase 2.9 start (strict TDD)** — begin cart drawer/sidebar vertical slice with backend cart runtime routes + contract tests, then frontend cart UI tests and implementation.
 
 ---
 
@@ -74,14 +74,16 @@
 - **Session 45 (Phase 2.7 frontend continuation, strict TDD):** Added RED tests for `CategoryPage` slug->categoryId resolution and `ProductGrid` retry/pagination behavior, then implemented GREEN by resolving category IDs via `/api/v1/categories`, passing `categoryId` to product fetches, adding retry button refetch in error state, and adding next-page loading (`Load more`) wired to cursor pagination.
 - **Session 46 (Phase 2.7 frontend continuation, strict TDD):** Added RED tests in `ProductGrid.test.tsx` for intersection-observer pagination trigger and optimistic cart controls (`Add` then `+/-`), confirmed RED, then implemented GREEN by replacing manual load-more interaction with a sentinel observer and adding optimistic cart mutations with background `POST /api/v1/cart/items` sync.
 - **Session 47 (Phase 2.7 completion, strict TDD):** Added RED tests for `ProductGrid` loading skeleton count and variant-id cart payload plus backend `product.controller` variant-id response contract; implemented GREEN by exposing `highestPricedVariantId` from catalog API, wiring `ProductGrid` cart actions to that variant id, adding 12-card skeleton loading grid, and adding GSAP + ScrollTrigger entry animation for new cards. Verified with API/web targeted tests and package typechecks.
+- **Session 48 (Phase 2.8 start, strict TDD):** Added backend RED integration tests for `GET /api/v1/products/:id` detail and not-found behavior, then implemented GREEN route in `product.controller.ts` and `ProductRepository.getDetailForBuyer()` including active variant payload. Added frontend RED tests and implemented `pages/buyer/ProductDetailPage.tsx` + `/products/:id` app route with variant pill selector, selected-price updates, quantity +/- clamped by stock, add-to-cart API call with variant+quantity, loading skeleton, and GSAP page-entry animation. Verified with targeted lint/typecheck/test on API and web packages.
+- **Session 49 (Phase 2.8 hardening, strict TDD):** Added RED frontend tests for product-detail error state coverage and out-of-stock add-to-cart disable behavior, then implemented GREEN by disabling add-to-cart and quantity increment when selected variant stock is zero and guarding cart mutation path. Re-verified API/web lint + typecheck and targeted detail/controller tests.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.8** (Product Detail Page vertical slice with API Contract Gate).
+**Current Task:** **Phase 2.9** (Cart Drawer/Sidebar vertical slice with API Contract Gate).
 
-**Exact stopping point:** **2.7 complete** — product listing now has slug->categoryId wiring, debounced search, error retry, intersection-observer pagination, real variant-id optimistic add-to-cart controls, loading skeleton grid, and GSAP card-entry animation. **Next:** start Phase 2.8 product detail API + page tests-first.
+**Exact stopping point:** **2.8 complete** — runtime `GET /api/v1/products/:id` contract and frontend `ProductDetailPage` (route, variant selector, price update, qty clamp, add-to-cart payload, skeleton, GSAP entry) are implemented and verified with RED->GREEN tests. **Next:** proceed to Phase 2.9 cart vertical slice.
 
 ---
 
@@ -430,22 +432,22 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.8 — Product Detail Page
 
-- [ ] API Contract Gate (mandatory for phase completion):
-  - [ ] Backend endpoint implemented and reachable at runtime: `GET /api/v1/products/:id`
-  - [ ] Backend integration tests cover not-found and variant payload shape
-  - [ ] Route is registered in runtime app route graph
-  - [ ] Frontend tests validated against expected API envelope and error states
+- [x] API Contract Gate (mandatory for phase completion):
+  - [x] Backend endpoint implemented and reachable at runtime: `GET /api/v1/products/:id`
+  - [x] Backend integration tests cover not-found and variant payload shape
+  - [x] Route is registered in runtime app route graph
+  - [x] Frontend tests validated against expected API envelope and error states
 
-- [ ] `src/pages/buyer/ProductDetailPage.tsx` → route: `/products/:id`
-- [ ] Fetches `GET /api/v1/products/:id` (includes variants)
-- [ ] Large product name (Playfair Display), shop name with phone number
-- [ ] Variant selector: if multiple variants (e.g. 500ml / 1L), show pills
-- [ ] Price: updates based on selected variant
-- [ ] Quantity selector: +/- buttons, min 1, max based on stockQty
-- [ ] "Add to Cart" CTA: pill button, saffron, full width on mobile
-- [ ] Loading: skeleton matching page layout
-- [ ] GSAP: page entry animation — content slides up on load
-- [ ] TESTS: variant selection updates price, add to cart calls API with correct variantId + quantity
+- [x] `src/pages/buyer/ProductDetailPage.tsx` → route: `/products/:id`
+- [x] Fetches `GET /api/v1/products/:id` (includes variants)
+- [x] Large product name (Playfair Display), shop name with phone number
+- [x] Variant selector: if multiple variants (e.g. 500ml / 1L), show pills
+- [x] Price: updates based on selected variant
+- [x] Quantity selector: +/- buttons, min 1, max based on stockQty
+- [x] "Add to Cart" CTA: pill button, saffron, full width on mobile
+- [x] Loading: skeleton matching page layout
+- [x] GSAP: page entry animation — content slides up on load
+- [x] TESTS: variant selection updates price, add to cart calls API with correct variantId + quantity
 
 ### 2.9 — Cart (Drawer on Mobile, Sidebar on Desktop)
 

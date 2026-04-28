@@ -39,6 +39,25 @@ export type ProductListResult = {
   nextCursor: string | null;
 };
 
+export type ProductDetailResult = {
+  id: string;
+  name: string;
+  description: string;
+  imageUrl: string;
+  store: {
+    id: string;
+    name: string;
+    phone: string;
+  };
+  variants: Array<{
+    id: string;
+    label: string;
+    price: string;
+    unit: string;
+    stockQty: number;
+  }>;
+};
+
 const productListInclude = Prisma.validator<Prisma.ProductInclude>()({
   store: {
     select: {
@@ -195,6 +214,67 @@ export class ProductRepository {
     return {
       items,
       nextCursor: hasNext ? page[page.length - 1]?.id ?? null : null
+    };
+  }
+
+  public async getDetailForBuyer(id: string): Promise<ProductDetailResult> {
+    const product = await this.db.product.findFirst({
+      where: {
+        id,
+        isDeleted: false,
+        isActive: true
+      },
+      select: {
+        id: true,
+        name: true,
+        description: true,
+        imageUrl: true,
+        store: {
+          select: {
+            id: true,
+            name: true,
+            phone: true
+          }
+        },
+        variants: {
+          where: {
+            isActive: true
+          },
+          orderBy: {
+            price: "asc"
+          },
+          select: {
+            id: true,
+            label: true,
+            price: true,
+            unit: true,
+            stockQty: true
+          }
+        }
+      }
+    });
+
+    if (product === null) {
+      throw new NotFoundError("Product not found", { id });
+    }
+
+    return {
+      id: product.id,
+      name: product.name,
+      description: product.description,
+      imageUrl: product.imageUrl,
+      store: {
+        id: product.store.id,
+        name: product.store.name,
+        phone: product.store.phone
+      },
+      variants: product.variants.map((variant) => ({
+        id: variant.id,
+        label: variant.label,
+        price: variant.price.toFixed(2),
+        unit: variant.unit,
+        stockQty: variant.stockQty
+      }))
     };
   }
 }
