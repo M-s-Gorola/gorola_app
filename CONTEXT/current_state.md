@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-28
-- **Session Summary:** **Universal contract-gate docs update complete (2.17+, 3, 4, 5 included)** — Added a global **Universal Phase Completion Gate** to `rules_and_spec.md` so API contract requirements are now project-wide, including future Rider work. Expanded `current_state.md` with explicit **API Contract Gate (mandatory)** checkpoints at the start of Phase 3, Phase 4, and Phase 5 checklist sections in addition to existing Phase 2.7+ gates.
-- **Next Session Must Start With:** **Phase 2.61 implementation** (auth runtime wiring + integration test), then **Phase 2.7** vertical slice with universal API Contract Gate enforcement.
+- **Session Summary:** **Phase 2.61 hardening complete (auth runtime + local dummy-data bootstrap)** — Added local DB bootstrap/verification scripts (`db:local:bootstrap`, `db:local:verify-seed`) that run Prisma migrate+seed and validate required category/product fixtures for buyer flows. Ran locally against Postgres (`gorola_dev`) and confirmed seeded slugs (`groceries`, `medical`) and active products are present. Auth runtime route wiring and integration test coverage from 2.61 remain green; buyer OTP/token runtime path is explicitly marked as a **temporary stub** in `src/routes.ts`.
+- **Next Session Must Start With:** **Phase 2.7 implementation** (product listing vertical slice) with API Contract Gate enforcement.
 
 ---
 
@@ -68,14 +68,16 @@
 - **Session 39 (Docs hardening: Phase 2.61 + API Contract Gates):** Added **Phase 2.61** to Phase 2 checklist for contract alignment and drift-prevention, including categories/CORS closure and explicit auth runtime wiring validation. Added **API Contract Gate** bullets to Phase 2.7+ sections so future work is tracked as vertical slices (UI + backend endpoint + backend tests + runtime route registration + frontend tests).
 - **Session 40 (Docs hardening: universal API Contract Gate):** Extended API Contract Gate policy beyond buyer phases by adding explicit gate blocks at the top of **Phase 3** and **Phase 4** checklists in `current_state.md`. Also added a global rule in `rules_and_spec.md` (“Universal Phase Completion Gate”) so all future phases must satisfy UI + backend endpoint + integration tests + runtime route registration + frontend test validation before being marked complete.
 - **Session 41 (Docs hardening: include Phase 5 in universal gate):** Updated global API Contract Gate language to explicitly include **rider/Phase 5** and added a Phase 5 checklist placeholder section with mandatory gate bullets for future rider implementation.
+- **Session 42 (Phase 2.61 auth runtime wiring, strict TDD):** Added RED integration test `auth.runtime-routes.test.ts` asserting `/api/v1/auth/buyer/send-otp` is reachable via runtime `registerAppRoutes`; confirmed RED (404). Then wired `registerAuthRoutes` in `src/routes.ts` with runtime auth deps (buyer flow operational for route reachability) and confirmed GREEN. Verification: `pnpm --filter @gorola/api lint`, `typecheck`, and integration runs for `auth.runtime-routes`, `auth.controller`, and `category.controller`.
+- **Session 43 (Phase 2.61 local dummy-data bootstrap):** Added `apps/api/scripts/bootstrap-local-db.cjs` to load root `.env` and run `prisma migrate deploy && prisma db seed`; added `apps/api/scripts/verify-local-seed.cjs` to assert required active category slugs (`groceries`, `medical`) and active product count for buyer pages. Added workspace scripts: `db:local:bootstrap`, `db:local:seed`, `db:local:verify-seed`. Local verification run succeeded on `gorola_dev` with expected seeded categories/products.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.61** (contract alignment hardening) — then **Phase 2.7**.
+**Current Task:** **Phase 2.7** (Product Listing Page vertical slice with API Contract Gate).
 
-**Exact stopping point:** **2.61 docs prep complete** — checklist now includes explicit contract-alignment step between 2.6 and 2.7, and all 2.7+ buyer phases now include API Contract Gates. **Next:** implement 2.61 (auth runtime wiring + integration verification), then start 2.7 vertical slice.
+**Exact stopping point:** **2.61 implementation complete** — auth runtime route registration is wired and integration-tested via app runtime registrar. **Next:** start 2.7 with tests-first backend products endpoint contract and runtime registration.
 
 ---
 
@@ -392,9 +394,13 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 - [x] Categories endpoint exposed in runtime app: `GET /api/v1/categories`
 - [x] Credentialed CORS contract fixed (`credentials: true`) and integration tested
-- [ ] Auth routes wired in runtime app registration (`/api/v1/auth/*`) so Phase 2.10 has live endpoints
-- [ ] TESTS: integration test proving auth endpoint reachable through runtime route registrar (not test-only registration)
-- [ ] Guardrail note added: every new UI phase must ship with backend route exposure + tests before marking checklist done
+- [x] Auth routes wired in runtime app registration (`/api/v1/auth/*`) so Phase 2.10 has live endpoints
+- [x] TESTS: integration test proving auth endpoint reachable through runtime route registrar (not test-only registration)
+- [x] BUYER AUTH RUNTIME NOTE: OTP sender + token issue/rotation in `src/routes.ts` are explicit temporary stubs for dev reachability; replace with real provider/token wiring before production auth rollout
+- [x] Guardrail note added: every new UI phase must ship with backend route exposure + tests before marking checklist done
+- [x] Local dummy-data bootstrap script added for Postgres dev DB (`db:local:bootstrap` → migrate + seed)
+- [x] Local seed verification script added (`db:local:verify-seed`) to assert required buyer data exists
+- [x] TESTS / VERIFICATION: ran local bootstrap + verification and confirmed seeded `groceries`/`medical` categories and active products
 
 ### 2.7 — Product Listing Page
 

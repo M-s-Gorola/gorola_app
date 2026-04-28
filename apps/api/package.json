@@ -15,6 +15,8 @@
     "prisma:validate": "prisma validate",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
+    "prisma:bootstrap:local": "node ./scripts/bootstrap-local-db.cjs",
+    "prisma:verify:seed": "node ./scripts/verify-local-seed.cjs",
     "start": "prisma migrate deploy && node dist/app.js",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:test-db": "node ./scripts/migrate-test-db.cjs"

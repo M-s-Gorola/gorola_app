@@ -12,7 +12,10 @@
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "ci:quality": "pnpm --filter @gorola/shared build && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
-    "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy"
+    "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
+    "db:local:bootstrap": "pnpm --filter @gorola/api prisma:bootstrap:local",
+    "db:local:seed": "pnpm --filter @gorola/api prisma:seed",
+    "db:local:verify-seed": "pnpm --filter @gorola/api prisma:verify:seed"
   },
   "devDependencies": {
     "@eslint/js": "^9.24.0",

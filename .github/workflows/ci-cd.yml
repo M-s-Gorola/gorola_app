@@ -274,3 +274,4 @@ jobs:
           set -euo pipefail
           MSG="${GITHUB_REF_NAME} ${GITHUB_SHA:0:7}"
           railway up --ci --message "$MSG" --service "$RAILWAY_SERVICE_ID"
+          railway run --service "$RAILWAY_SERVICE_ID" -- pnpm --filter @gorola/api prisma:seed
