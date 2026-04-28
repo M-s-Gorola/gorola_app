@@ -56,7 +56,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
       path: "/",
       sameSite: "lax"
     });
-    return success(request, reply, tokens);
+    return success(request, reply, {
+      ...tokens,
+      name: null as string | null,
+      phone: payload.phone,
+      userId: `buyer:${payload.phone.replace(/^\+91/, "")}`
+    });
   });
 
   app.post("/api/v1/auth/buyer/refresh", async (request, reply) => {

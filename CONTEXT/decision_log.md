@@ -533,3 +533,35 @@ Make API Contract Gate policy universal:
 1. Keep gates only in Phase 2 — rejected: inconsistent enforcement.
 2. Keep only decision-log guidance without checklist updates — rejected: too implicit.
 3. Enforce only through CI without checklist language — rejected: CI can pass while runtime wiring still drifts.
+
+---
+
+## [DECISION-018] Phase 2.10.1 — Auth Plumbing Before Live SMS OTP Provider
+
+**Date:** 2026-04-29  
+**Status:** Accepted
+
+**Context:**
+Phase 2.10 delivered buyer OTP **UX** + API contract gates, but runtime wiring still used **dev stubs** (e.g., placeholder token strings, non-persisted synthetic user ids, OTP sender no-op). Product discussion clarified that **production-grade auth plumbing** (DB user rows, consistent JWT/token lifecycle, swappable OTP delivery) **does not depend** on subscribing to Fast2SMS immediately.
+
+**Decision:**
+Add an explicit **`Phase 2.10.1` buyer auth plumbing slice** in `CONTEXT/current_state.md` that completes **before** checkout flows that rely on durable identity (`2.11+`), with:
+- **`OtpProvider` interface** + **dev/stub provider** for local and automated tests (no outbound SMS required to mark GREEN).
+- **Find-or-create buyer `User`** in PostgreSQL on successful `verify-otp` (phone unique, role `BUYER`).
+- **Real `TokenService` wiring** per `rules_and_spec.md` §6 (RS256, `jti`, Redis allowlist, refresh rotation, logout revoke) — with a documented escape hatch only if an interim algorithm is strictly necessary.
+- **Cryptographically random OTP** + existing Redis+bcrypt OTP storage semantics.
+- **Full TDD / API Contract Gate**: backend integration + unit tests, frontend tests aligned to real verify envelope, `ci:quality` green.
+
+**Rationale:**
+- Unblocks **durable buyer identity** and token semantics without blocking on SMS vendor onboarding, API keys, or spend.
+- Keeps **Fast2SMS (DECISION-006)** as a **drop-in implementation** of `OtpProvider` later, not a rewrite of auth core.
+- Avoids false progress: checkout and orders need a stable `userId` in DB, not a client-generated placeholder.
+
+**Tradeoffs:**
+- Extra phase and checklist surface area before 2.11.
+- Team must still budget time for **production SMS** integration + env hardening before go-live (separate from 2.10.1 “plumbing complete”).
+
+**Alternatives Considered:**
+1. Bundle DB + token plumbing into Phase 2.11 checkout — rejected: identity is prerequisite for checkout and order attribution; delaying it increases rework.
+2. Require live Fast2SMS before any DB persistence — rejected: couples infrastructure procurement to core engineering milestones.
+3. Implicit signup only via frontend state — rejected: violates data model and audit needs for orders.

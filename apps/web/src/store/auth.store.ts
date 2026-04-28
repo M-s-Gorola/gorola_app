@@ -7,20 +7,57 @@ export type AuthTokens = {
 
 export type UserRole = "BUYER" | "STORE_OWNER" | "ADMIN";
 
+export type BuyerSession = AuthTokens & {
+  userId: string;
+  name: string | null;
+  phone: string;
+};
+
 type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
   role: UserRole | null;
+  /** Buyer profile fields — null when logged out */
+  userId: string | null;
+  name: string | null;
+  phone: string | null;
   setTokens: (tokens: AuthTokens) => void;
+  setBuyerSession: (session: BuyerSession) => void;
   setRole: (role: UserRole | null) => void;
   clearSession: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
+  name: null,
+  phone: null,
   refreshToken: null,
   role: null,
-  setTokens: (tokens) => set({ accessToken: tokens.accessToken, refreshToken: tokens.refreshToken }),
+  userId: null,
+  clearSession: () =>
+    set({
+      accessToken: null,
+      name: null,
+      phone: null,
+      refreshToken: null,
+      role: null,
+      userId: null
+    }),
+  setBuyerSession: (session) =>
+    set({
+      accessToken: session.accessToken,
+      name: session.name,
+      phone: session.phone,
+      refreshToken: session.refreshToken,
+      role: "BUYER",
+      userId: session.userId
+    }),
   setRole: (role) => set({ role }),
-  clearSession: () => set({ accessToken: null, refreshToken: null, role: null })
+  /** Refresh flow only — leaves buyer profile untouched */
+  setTokens: (tokens) =>
+    set((state) => ({
+      ...state,
+      accessToken: tokens.accessToken,
+      refreshToken: tokens.refreshToken
+    }))
 }));

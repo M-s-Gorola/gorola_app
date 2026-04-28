@@ -132,7 +132,13 @@ describe("auth controller routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json().data.accessToken).toBe("access");
+    expect(response.json().data).toMatchObject({
+      accessToken: "access",
+      name: null,
+      phone: "+919876543210",
+      refreshToken: "refresh",
+      userId: "buyer:9876543210"
+    });
     expect(response.headers["set-cookie"]).toEqual(expect.any(String));
   });
 

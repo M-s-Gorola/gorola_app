@@ -38,7 +38,7 @@ export class AuthService {
       const windowStarted = new Date(existingRecord.sentWindowStartedAt).getTime();
       const withinWindow = now - windowStarted < 15 * 60 * 1000;
       if (withinWindow && existingRecord.sentCount >= 5) {
-        throw new RateLimitError("OTP send limit reached");
+        throw new RateLimitError("Too many attempts — try in 15 minutes");
       }
     }
 
@@ -74,7 +74,9 @@ export class AuthService {
 
     const record = JSON.parse(payload) as OtpStoreRecord;
     if (record.attempts >= 3) {
-      throw new RateLimitError("OTP verification locked");
+      throw new RateLimitError(
+        "Too many incorrect OTP attempts. Try requesting a new code."
+      );
     }
 
     if (new Date(record.expiresAt).getTime() < Date.now()) {
@@ -84,12 +86,21 @@ export class AuthService {
     const valid = await compare(input.otp, record.hashedOtp);
     if (!valid) {
       const nextAttempts = record.attempts + 1;
+      const attemptsRemainingAfterThisFailure = Math.max(0, 3 - nextAttempts);
       const nextRecord: OtpStoreRecord = {
         ...record,
         attempts: nextAttempts
       };
       await this.deps.redis.set(key, JSON.stringify(nextRecord), "EX", this.deps.otpTtlSeconds);
-      throw new UnauthorizedError("Invalid OTP");
+
+      if (nextAttempts >= 3) {
+        throw new RateLimitError(
+          "Too many incorrect OTP attempts. Try requesting a new code."
+        );
+      }
+      throw new UnauthorizedError("Invalid OTP", {
+        attemptsRemaining: attemptsRemainingAfterThisFailure
+      });
     }
 
     const tokens = await this.deps.tokenService.issueTokens({

@@ -128,12 +128,18 @@ describe("AuthService", () => {
         } satisfies OtpStoreRecord)
       );
 
-      await expect(
-        service.verifyOtp({
+      try {
+        await service.verifyOtp({
           otp: "000000",
           phone: "+919876543210"
-        })
-      ).rejects.toBeInstanceOf(UnauthorizedError);
+        });
+        expect.fail("expected rejection");
+      } catch (e) {
+        expect(e).toBeInstanceOf(UnauthorizedError);
+        expect((e as UnauthorizedError).details).toEqual({
+          attemptsRemaining: 2
+        });
+      }
       expect(redis.set).toHaveBeenCalled();
     });
 

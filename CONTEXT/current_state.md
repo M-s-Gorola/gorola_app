@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-29
-- **Session Summary:** **Phase 2.9 completed (strict TDD, thorough)** — Finished runtime cart contract gate and frontend cart drawer/sidebar slice end-to-end: nav-trigger open, mobile bottom-drawer + desktop sidebar behavior, line item quantity/remove flows, subtotal/delivery/total math, discount apply success/error handling, payment method selection with UPI/Card flag gating, and proceed-checkout disable/enable states under tests-first flow.
-- **Next Session Must Start With:** **Phase 2.10 start (strict TDD)** — begin buyer OTP login page flow (step 1 + step 2) with API contract-aligned frontend tests before implementation.
+- **Session Summary:** **Phase 2.10 completed (strict TDD, thorough)** — OTP login vertical slice: RED `LoginPage.test.tsx`, buyer auth API contract hardening (`verify-otp` enriched success payload; wrong-OTP `attemptsRemaining`; send/verify rate-limit UX copy), `LoginPage` two-step flow (+91 / 6-digit OTP, timer, resend, GSAP step transition), `useAuthStore` buyer session fields + `ProtectedRoute` return-path state, `App` `/login` route. Verified: web lint/typecheck + full web vitest; API auth unit + controller tests; `ci:quality` recommended before push.
+- **Next Session Must Start With:** **Phase 2.10.1 start (strict TDD)** — buyer auth plumbing: DB-backed user on OTP verify, `OtpProvider` interface + dev stub, real token-service shape; full API + web tests before checkout-dependent flows.
 
 ---
 
@@ -19,7 +19,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                |
 | ------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.4 done** (stack + design + Lenis/GSAP + buyer shell/guards); next **2.5** hero or catalog UX                                                                 |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.10 done** (OTP login UI + contract); next **2.10.1** buyer auth plumbing (DB user + provider interface + tokens), then **2.11** checkout / address |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                               |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                               |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                |
@@ -78,14 +78,15 @@
 - **Session 49 (Phase 2.8 hardening, strict TDD):** Added RED frontend tests for product-detail error state coverage and out-of-stock add-to-cart disable behavior, then implemented GREEN by disabling add-to-cart and quantity increment when selected variant stock is zero and guarding cart mutation path. Re-verified API/web lint + typecheck and targeted detail/controller tests.
 - **Session 50 (Phase 2.9 start, strict TDD):** Added RED integration tests in `cart.controller.test.ts` for runtime cart read/mutate lifecycle and validation errors, then implemented GREEN via new `modules/cart/cart.controller.ts` and route registration in `routes.ts`. Added RED frontend tests in `CartDrawer.test.tsx`, then implemented GREEN `CartDrawer` + `BuyerLayout`/`BuyerNav` wiring with open-from-nav behavior, empty state, line item quantity/remove actions, subtotal+delivery+total summary, payment-method selector (COD default), and discount-apply API call hook.
 - **Session 51 (Phase 2.9 completion, strict TDD):** Added RED frontend tests for discount invalid/expired messaging, remove-item API call, feature-flag gated UPI/Card methods, and proceed-checkout enabled/disabled states; implemented GREEN in `CartDrawer` with error handling, labeled remove actions, checkout CTA state, and responsive mobile-bottom-drawer/desktop-sidebar container behavior. Re-verified cart and nav tests plus package lint/typecheck.
+- **Session 52 (Phase 2.10 OTP login flow, strict TDD):** Added RED frontend tests (`LoginPage.test.tsx`) for phone validation, send-OTP/verify payloads, countdown+resend, error envelopes (429 send, attempts remaining / lockout on verify), and post-login redirect semantics. Implemented `LoginPage` + wired `/login`; extended `verify-otp` success payload (`userId`, `phone`, `name`) and tightened `AuthService` OTP error payloads; updated `ProtectedRoute`/role guards with `location` state for safe return navigation; expanded buyer `useAuthStore` session shape. Verified web (lint, typecheck, 86 Vitest tests) + API auth tests.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.9** (Cart Drawer/Sidebar vertical slice with API Contract Gate).
+**Current Task:** **Phase 2.10.1** (Buyer auth plumbing: DB user on verify, `OtpProvider` + stub, production-shaped token service).
 
-**Exact stopping point:** **2.9 complete** — runtime cart read/mutate endpoints and frontend cart drawer/sidebar checklist items are implemented and validated via RED->GREEN tests. **Next:** proceed to Phase 2.10 OTP login flow.
+**Exact stopping point:** **2.10 complete** — buyer OTP login UI + API contract gates are done. **Next:** **2.10.1** (see checklist below), then **2.11** checkout / address entry + `POST /api/v1/orders` slice.
 
 ---
 
@@ -475,28 +476,71 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.10 — OTP Login Flow
 
-- [ ] API Contract Gate (mandatory for phase completion):
-  - [ ] Backend auth endpoints reachable at runtime: `/api/v1/auth/buyer/send-otp`, `/verify-otp`, `/refresh`, `/logout`
-  - [ ] Backend integration tests cover endpoint reachability and envelope compatibility for frontend
-  - [ ] Routes are registered in runtime app route graph
-  - [ ] Frontend tests validated against expected API envelope and auth error states
+- [x] API Contract Gate (mandatory for phase completion):
+  - [x] Backend auth endpoints reachable at runtime: `POST /api/v1/auth/buyer/send-otp`, `POST /api/v1/auth/buyer/verify-otp`, `POST /api/v1/auth/buyer/refresh`, `POST /api/v1/auth/buyer/logout`
+  - [x] Backend integration tests cover endpoint reachability and envelope compatibility for frontend (incl. verify success payload + error codes)
+  - [x] Routes are registered in runtime app route graph (`registerAuthRoutes` via `registerAppRoutes`)
+  - [x] Frontend tests validated against expected API envelope and auth error states
 
-- [ ] `src/pages/buyer/LoginPage.tsx` → route: `/login`
-- [ ] Step 1: Phone number input (E.164 format validation, India +91 prefix)
-  - [ ] Zod validation: must be 10 digits after +91
-  - [ ] Submit → `POST /api/v1/auth/buyer/send-otp`
-  - [ ] Error states: invalid format, rate limit hit ("Too many attempts — try in 15 minutes")
-  - [ ] Loading state on button
-- [ ] Step 2: OTP input (6-digit, auto-focus, auto-advance between digits)
-  - [ ] Countdown timer showing OTP expiry (5:00 → 0:00)
-  - [ ] "Resend OTP" button (disabled until timer expires)
-  - [ ] Submit → `POST /api/v1/auth/buyer/verify-otp`
-  - [ ] Error: wrong OTP, attempts remaining shown ("2 attempts left")
-  - [ ] Error: too many failed attempts (lockout message)
-  - [ ] Success: redirect to previous page or `/`
-  - [ ] GSAP: smooth transition between step 1 and step 2
-- [ ] Auth store updated on success: `{ userId, name, phone, accessToken }`
-- [ ] TESTS: phone validation, OTP input behavior, timer countdown, resend logic, success redirect, error states
+- [x] `src/pages/buyer/LoginPage.tsx` → route: `/login`
+- [x] Step 1: Phone number input (E.164 format validation, India +91 prefix)
+  - [x] Zod validation: must be 10 digits after +91
+  - [x] Submit → `POST /api/v1/auth/buyer/send-otp`
+  - [x] Error states: invalid format, rate limit hit ("Too many attempts — try in 15 minutes")
+  - [x] Loading state on button
+- [x] Step 2: OTP input (6-digit, auto-focus, auto-advance between digits)
+  - [x] Countdown timer showing OTP expiry (5:00 → 0:00)
+  - [x] "Resend OTP" button (disabled until timer expires)
+  - [x] Submit → `POST /api/v1/auth/buyer/verify-otp`
+  - [x] Error: wrong OTP, attempts remaining shown ("2 attempts left")
+  - [x] Error: too many failed attempts (lockout message)
+  - [x] Success: redirect to previous page or `/` (via `Navigate` state from guards)
+  - [x] GSAP: smooth transition between step 1 and step 2
+- [x] Auth store updated on success: `{ userId, name, phone, accessToken }` (+ `refreshToken` for client refresh interceptor)
+- [x] TESTS: phone validation, OTP input behavior, timer countdown, resend logic, success redirect, error states
+
+### 2.10.1 — Buyer Auth Plumbing (DB User + OTP Provider Interface + Token Service)
+
+> **Goal:** Replace dev-only runtime stubs with production-shaped plumbing while keeping SMS delivery swappable. **Does not require** a live SMS provider to complete; use a **dev/stub `OtpProvider`** in local/test. Real Fast2SMS (or other) wiring is a separate env-driven implementation behind the same interface.
+
+- [ ] API Contract Gate (mandatory for phase completion):
+  - [ ] `POST /api/v1/auth/buyer/verify-otp` success path **creates or loads** a buyer `User` row in PostgreSQL keyed by **unique phone** (normalized `+91` E.164); response `userId` / `phone` / `name` match DB (no client-synthesized ids)
+  - [ ] `POST /api/v1/auth/buyer/send-otp` / `verify-otp` integration tests cover: first-time verify creates user, repeat verify returns same `userId`, existing error envelopes unchanged (validation, rate limit, invalid OTP + `attemptsRemaining`, lockout)
+  - [ ] `POST /api/v1/auth/buyer/refresh` and `POST /api/v1/auth/buyer/logout` exercised against the **wired token service** (not placeholder random strings)
+  - [ ] Routes registered only through runtime `registerAppRoutes` / `registerAuthRoutes` — no drift or duplicate mounts
+  - [ ] Frontend tests aligned to API: `LoginPage` (or shared auth helper) persists **server-issued** `userId`, `phone`, tokens into `useAuthStore` from verify envelope mocks
+
+- [ ] Backend — OTP delivery (provider interface):
+  - [ ] Define `OtpProvider` interface (`sendOtp(phoneE164, otpPlain): Promise<void>` or equivalent)
+  - [ ] Wire **stub/dev provider** in test + local runtime (no network; may log/trace in dev only — never log full OTP in production builds)
+  - [ ] Reserve **production** implementation slot (Fast2SMS per DECISION-006) behind env/config; document required env keys in `.env.example` without blocking 2.10.1 GREEN
+
+- [ ] Backend — OTP generation & storage (align `rules_and_spec.md` §6):
+  - [ ] Generate **cryptographically random** 6-digit OTP (remove any fixed/dev-only constant OTP from production paths; tests may deterministically stub RNG **only** in unit tests)
+  - [ ] Store **bcrypt hash** + TTL + attempt/send counters in **Redis** (unchanged semantics vs spec)
+  - [ ] Unit tests (RED→GREEN): `AuthService.sendOtp` invokes provider with correct phone; hash/TTL behavior; existing rate-limit tests updated if needed
+
+- [ ] Backend — User persistence:
+  - [ ] On successful `verifyOtp`: **find-or-create** buyer `User` by phone (`role = BUYER`, `isActive` per product rules); return stable `userId` (+ optional `name` if schema supports null first)
+  - [ ] Migration / Prisma: confirm `User` model fields and unique index on phone satisfy above; additive migration if gaps
+  - [ ] Repository method(s) covered by integration tests (or service-level tests with DB) for idempotent create
+
+- [ ] Backend — Token service:
+  - [ ] Replace temporary token stubs in runtime wiring with **`TokenService` implementation** meeting `architecture.md` / `rules_and_spec.md` §6 expectations (RS256, payload `sub`, `role`, **`jti`**, refresh rotation, Redis allowlist/revoke on logout — match DECISION-007 / DECISION-008 posture; HttpOnly cookie for refresh remains server responsibility)
+  - [ ] Document any **interim** algorithm (e.g. HS256) only if unavoidable, with explicit follow-up migration task noted in checklist completion notes
+
+- [ ] Frontend integration:
+  - [ ] Consume verify response **as single source of truth** for buyer identity fields (no hard-coded `buyer:` prefix ids in UI)
+  - [ ] Guards / axios interceptor unchanged apart from consuming real tokens from store refresh flow
+  - [ ] Regression: existing `LoginPage` tests updated; optional smoke assertion that post-login store matches API shape
+
+- [ ] CONTEXT / cleanup:
+  - [ ] Narrow or supersede **§2.61 “BUYER AUTH RUNTIME NOTE”** stub wording once wired (or explicitly reference 2.10.1 completion in that bullet)
+
+- [ ] Quality gate (mandatory before marking phase complete):
+  - [ ] `pnpm --filter @gorola/api` lint + typecheck + full Vitest suite
+  - [ ] `pnpm --filter @gorola/web` lint + typecheck + Vitest
+  - [ ] Root `pnpm ci:quality` green
 
 ### 2.11 — Address Entry
 
