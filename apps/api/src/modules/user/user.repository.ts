@@ -45,6 +45,30 @@ export class UserRepository {
     });
   }
 
+  /**
+   * Buyer OTP onboarding: reuse row by active phone or create verified buyer (`name` empty until profile step).
+   */
+  public async ensureBuyerByPhone(phone: string): Promise<User> {
+    const normalized = phone.trim();
+    const existing = await this.findByPhone(normalized);
+    if (existing !== null) {
+      if (existing.isVerified) {
+        return existing;
+      }
+      return this.db.user.update({
+        data: { isVerified: true },
+        where: { id: existing.id }
+      });
+    }
+    return this.db.user.create({
+      data: {
+        name: "",
+        phone: normalized,
+        isVerified: true
+      }
+    });
+  }
+
   public async create(input: CreateUserInput): Promise<User> {
     try {
       return await this.db.user.create({

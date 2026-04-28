@@ -211,25 +211,25 @@ export function LoginPage(): ReactElement {
 
       const body = res.data as VerifyEnvelope;
       const data = body.success === true && body.data !== undefined ? body.data : undefined;
+      const accessToken = data?.accessToken;
+      const refreshToken = data?.refreshToken;
+      const userId = data?.userId;
       if (
         data === undefined ||
-        typeof data.accessToken !== "string" ||
-        typeof data.refreshToken !== "string"
+        typeof accessToken !== "string" ||
+        typeof refreshToken !== "string" ||
+        typeof userId !== "string"
       ) {
         setOtpError("Unexpected response.");
         return;
       }
 
-      const access = data.accessToken;
-      const refresh = data.refreshToken;
-
-      const payload = data;
       setBuyerSession({
-        accessToken: access,
-        name: payload.name ?? null,
-        phone: payload.phone ?? phoneE164,
-        refreshToken: refresh,
-        userId: payload.userId ?? `buyer:${phoneE164}`
+        accessToken,
+        name: data.name ?? null,
+        phone: data.phone ?? phoneE164,
+        refreshToken,
+        userId
       });
 
       const fromPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;

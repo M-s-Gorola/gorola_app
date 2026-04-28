@@ -29,6 +29,19 @@ Object.defineProperty(globalThis, "ResizeObserver", {
   value: ResizeObserverMock
 });
 
+if (globalThis.requestAnimationFrame === undefined) {
+  globalThis.requestAnimationFrame = function (callback: (timestamp: number) => void): number {
+    return setTimeout(() => {
+      callback(performance.now());
+    }, 0) as unknown as number;
+  };
+}
+if (globalThis.cancelAnimationFrame === undefined) {
+  globalThis.cancelAnimationFrame = function (handle: number): void {
+    clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
+  };
+}
+
 afterEach(() => {
   cleanup();
 });

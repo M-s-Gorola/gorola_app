@@ -83,6 +83,32 @@ describe("UserRepository", () => {
     });
   });
 
+  describe("ensureBuyerByPhone", () => {
+    it("creates verified buyer when none exists", async () => {
+      const u = await repo.ensureBuyerByPhone("+919800000070");
+      expect(u.phone).toBe("+919800000070");
+      expect(u.isVerified).toBe(true);
+      expect(u.name).toBe("");
+    });
+
+    it("returns same row when called twice for one phone", async () => {
+      const first = await repo.ensureBuyerByPhone("+919800000071");
+      const second = await repo.ensureBuyerByPhone("+919800000071");
+      expect(second.id).toBe(first.id);
+    });
+
+    it("sets isVerified when user existed unverified", async () => {
+      const pending = await repo.create({
+        isVerified: false,
+        name: "",
+        phone: "+919800000072"
+      });
+      const u = await repo.ensureBuyerByPhone("+919800000072");
+      expect(u.id).toBe(pending.id);
+      expect(u.isVerified).toBe(true);
+    });
+  });
+
   describe("findByPhone", () => {
     it("returns user by phone", async () => {
       await repo.create({ phone: "+919876543230", name: "Phone User" });

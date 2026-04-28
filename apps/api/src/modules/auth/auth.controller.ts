@@ -51,16 +51,17 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
 
   app.post("/api/v1/auth/buyer/verify-otp", async (request, reply) => {
     const payload = parseVerifyOtpInput(request.body as { otp: string; phone: string });
-    const tokens = await deps.authService.verifyOtp(payload);
-    reply.setCookie("refreshToken", tokens.refreshToken, {
+    const result = await deps.authService.verifyOtp(payload);
+    reply.setCookie("refreshToken", result.refreshToken, {
       path: "/",
       sameSite: "lax"
     });
     return success(request, reply, {
-      ...tokens,
-      name: null as string | null,
-      phone: payload.phone,
-      userId: `buyer:${payload.phone.replace(/^\+91/, "")}`
+      accessToken: result.accessToken,
+      name: result.name,
+      phone: result.phone,
+      refreshToken: result.refreshToken,
+      userId: result.userId
     });
   });
 

@@ -3,6 +3,7 @@ import { compare, hash } from "bcryptjs";
 
 import type {
   AuthTokenPair,
+  BuyerVerifySuccess,
   LogoutInput,
   OtpProvider,
   OtpStoreRecord,
@@ -12,12 +13,20 @@ import type {
   TokenService,
   VerifyOtpInput
 } from "./auth.types.js";
+import { generateBuyerOtp } from "./generate-buyer-otp.js";
+
+export type BuyerUserLookup = {
+  id: string;
+  name: string;
+  phone: string;
+};
 
 export type AuthServiceDependencies = {
-  redis: RedisLikeClient;
+  ensureBuyerUser: (phone: string) => Promise<BuyerUserLookup>;
   otpProvider: OtpProvider;
-  tokenService: TokenService;
   otpTtlSeconds: number;
+  redis: RedisLikeClient;
+  tokenService: TokenService;
 };
 
 export class AuthService {
@@ -32,9 +41,9 @@ export class AuthService {
     const key = `otp:${phone}`;
     const now = Date.now();
     const existing = await this.deps.redis.get(key);
-    const existingRecord = existing ? (JSON.parse(existing) as OtpStoreRecord) : null;
+    const existingRecord = existing !== null ? (JSON.parse(existing) as OtpStoreRecord) : null;
 
-    if (existingRecord) {
+    if (existingRecord !== null) {
       const windowStarted = new Date(existingRecord.sentWindowStartedAt).getTime();
       const withinWindow = now - windowStarted < 15 * 60 * 1000;
       if (withinWindow && existingRecord.sentCount >= 5) {
@@ -42,33 +51,35 @@ export class AuthService {
       }
     }
 
-    const otp = "123456";
-    const hashedOtp = await hash(otp, 8);
+    const otpPlain = generateBuyerOtp();
+    const hashedOtp = await hash(otpPlain, 8);
     const sentWindowStartedAt =
-      existingRecord && now - new Date(existingRecord.sentWindowStartedAt).getTime() < 15 * 60 * 1000
+      existingRecord !== null &&
+      now - new Date(existingRecord.sentWindowStartedAt).getTime() < 15 * 60 * 1000
         ? existingRecord.sentWindowStartedAt
         : new Date(now).toISOString();
     const sentCount =
-      existingRecord && sentWindowStartedAt === existingRecord.sentWindowStartedAt
+      existingRecord !== null && sentWindowStartedAt === existingRecord.sentWindowStartedAt
         ? existingRecord.sentCount + 1
         : 1;
 
     const record: OtpStoreRecord = {
-      hashedOtp,
       attempts: 0,
       expiresAt: new Date(now + this.deps.otpTtlSeconds * 1000).toISOString(),
+      hashedOtp,
       sentCount,
       sentWindowStartedAt
     };
 
     await this.deps.redis.set(key, JSON.stringify(record), "EX", this.deps.otpTtlSeconds);
-    await this.deps.otpProvider.sendOtp(phone, otp);
+    await this.deps.otpProvider.sendOtp(phone, otpPlain);
   }
 
-  public async verifyOtp(input: VerifyOtpInput): Promise<AuthTokenPair> {
+  /** Verifies OTP, persists/fetches buyer {@link BuyerUserLookup}, issues RS256-backed tokens. */
+  public async verifyOtp(input: VerifyOtpInput): Promise<BuyerVerifySuccess> {
     const key = `otp:${input.phone}`;
     const payload = await this.deps.redis.get(key);
-    if (!payload) {
+    if (payload === null) {
       throw new UnauthorizedError("OTP not found");
     }
 
@@ -103,11 +114,19 @@ export class AuthService {
       });
     }
 
+    const user = await this.deps.ensureBuyerUser(input.phone);
     const tokens = await this.deps.tokenService.issueTokens({
-      phone: input.phone
+      phone: user.phone,
+      userId: user.id
     });
     await this.deps.redis.del(key);
-    return tokens;
+
+    return {
+      ...tokens,
+      name: user.name.trim().length === 0 ? null : user.name,
+      phone: user.phone,
+      userId: user.id
+    };
   }
 
   public async refreshToken(input: RefreshTokenInput): Promise<AuthTokenPair> {

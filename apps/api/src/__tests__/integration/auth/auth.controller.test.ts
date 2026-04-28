@@ -112,7 +112,10 @@ describe("auth controller routes", () => {
     const adminAuthService = createAdminAuthServiceMock();
     authService.verifyOtp.mockResolvedValueOnce({
       accessToken: "access",
-      refreshToken: "refresh"
+      name: null,
+      phone: "+919876543210",
+      refreshToken: "refresh",
+      userId: "user_cuid_abc"
     });
 
     const server = createServer({
@@ -137,7 +140,7 @@ describe("auth controller routes", () => {
       name: null,
       phone: "+919876543210",
       refreshToken: "refresh",
-      userId: "buyer:9876543210"
+      userId: "user_cuid_abc"
     });
     expect(response.headers["set-cookie"]).toEqual(expect.any(String));
   });

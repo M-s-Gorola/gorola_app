@@ -1,6 +1,6 @@
 import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
 import { hash } from "bcryptjs";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthService } from "../../../modules/auth/auth.service.js";
 import type { AuthTokenPair, OtpStoreRecord } from "../../../modules/auth/auth.types.js";
@@ -35,8 +35,10 @@ describe("AuthService", () => {
     rotateRefreshToken: vi.fn(),
     revokeRefreshToken: vi.fn()
   };
+  const ensureBuyerUser = vi.fn();
 
   const service = new AuthService({
+    ensureBuyerUser,
     otpProvider,
     otpTtlSeconds: 300,
     redis,
@@ -47,6 +49,17 @@ describe("AuthService", () => {
     vi.clearAllMocks();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-21T08:00:00.000Z"));
+    process.env.GOROLA_TEST_OTP = "123456";
+    ensureBuyerUser.mockResolvedValue({
+      id: "user_test_1",
+      name: "",
+      phone: "+919876543210"
+    });
+  });
+
+  afterEach(() => {
+    delete process.env.GOROLA_TEST_OTP;
+    vi.useRealTimers();
   });
 
   describe("sendOtp", () => {
@@ -56,7 +69,7 @@ describe("AuthService", () => {
 
       await service.sendOtp({ phone: "+919876543210" });
 
-      expect(otpProvider.sendOtp).toHaveBeenCalledTimes(1);
+      expect(otpProvider.sendOtp).toHaveBeenCalledWith("+919876543210", "123456");
       expect(redis.set).toHaveBeenCalledWith(
         "otp:+919876543210",
         expect.any(String),
@@ -67,7 +80,7 @@ describe("AuthService", () => {
 
     it("should throw RateLimitError after 5 attempts in 15 minutes", async () => {
       const payload: OtpStoreRecord = {
-        attempts: 5,
+        attempts: 0,
         expiresAt: "2026-04-21T08:05:00.000Z",
         hashedOtp: "hashed",
         sentCount: 5,
@@ -90,7 +103,7 @@ describe("AuthService", () => {
   });
 
   describe("verifyOtp", () => {
-    it("should return tokens when OTP is valid", async () => {
+    it("should return tokens and user when OTP is valid", async () => {
       const validOtpHash = await hash("123456", 8);
       const tokenPair: AuthTokenPair = {
         accessToken: "access-token",
@@ -112,7 +125,17 @@ describe("AuthService", () => {
         phone: "+919876543210"
       });
 
-      expect(result).toEqual(tokenPair);
+      expect(ensureBuyerUser).toHaveBeenCalledWith("+919876543210");
+      expect(tokenService.issueTokens).toHaveBeenCalledWith({
+        phone: "+919876543210",
+        userId: "user_test_1"
+      });
+      expect(result).toEqual({
+        ...tokenPair,
+        name: null,
+        phone: "+919876543210",
+        userId: "user_test_1"
+      });
       expect(redis.del).toHaveBeenCalledWith("otp:+919876543210");
     });
 
