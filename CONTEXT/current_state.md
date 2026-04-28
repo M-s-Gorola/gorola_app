@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-28
-- **Session Summary:** **Phase 2.5 complete (hero section, strict TDD)** — Added RED tests first in `components/buyer/HeroSection.test.tsx`, then created a stub `HeroSection`, confirmed failing behavior, and implemented GREEN with `gsap.context()` timeline + cleanup (`ctx.revert()`), weather/normal ETA variants, saffron CTA scroll, and topo/noise hero composition. Created `pages/buyer/HomePage.tsx` using `HeroSection` plus a categories anchor placeholder, updated `App.tsx` import path, and kept compatibility export in `pages/HomePage.tsx` for existing route tests. Verification: `pnpm --filter @gorola/web lint`, `typecheck`, and focused route/hero tests all green.
-- **Next Session Must Start With:** **Phase 2.6** category section (`CategoryGrid` + query states + navigation + tests) or **API** `POST /api/v1/orders`.
+- **Session Summary:** **Phase 2.6 complete (category grid, strict TDD)** — Added RED tests first in `components/buyer/CategoryGrid.test.tsx`, created a `CategoryGrid` stub, confirmed functional RED failures, then implemented GREEN with TanStack Query fetch (`GET /api/v1/categories`), loading/empty/error states, card layout, hover behavior, click navigation to `/categories/:slug`, and conditional GSAP ScrollTrigger animation. Wired `CategoryGrid` into `pages/buyer/HomePage.tsx` and updated route test to provide QueryClient context. Verification: `pnpm --filter @gorola/web lint`, `typecheck`, and full web test suite green (**18 files, 48 tests**).
+- **Next Session Must Start With:** **Phase 2.7** product listing page (`CategoryPage` + `ProductGrid` + infinite query + tests) or **API** `POST /api/v1/orders`.
 
 ---
 
@@ -63,14 +63,15 @@
 - **Session 34 (Phase 2.3 Lenis + GSAP):** `lib/gsap.ts`, `lib/lenis.ts`, `useGorolaMotion`, `App` init; `gsap-context-cleanup` + `useGorolaMotion` tests; jsdom `matchMedia` / `ResizeObserver` in `test/setup`.
 - **Session 35 (Phase 2.4 shell + routing, strict TDD):** RED tests first for guards/nav/layout; added `GorolaMountainMark` (separate SVG component), `BuyerNav`, `BuyerLayout`, `BuyerFooter`, and `app/routes/guards.tsx`; moved QueryClientProvider + Toaster into `App`; added route stubs and RBAC role in `auth.store`; GREEN with `ci:quality`.
 - **Session 36 (Phase 2.5 hero section, strict TDD):** Added RED tests in `HeroSection.test.tsx`, then stubbed `HeroSection` and confirmed RED functional failures before GREEN implementation. Implemented `HeroSection` with `TopographicBg` + `.noise-overlay`, `gsap.context()` timeline for logo/wordmark/tagline/CTA/ETA, cleanup revert, weather-mode slate copy, and saffron pill CTA scrolling to categories. Added `pages/buyer/HomePage.tsx` and switched `App.tsx` to use it; retained compatibility re-export in `pages/HomePage.tsx`.
+- **Session 37 (Phase 2.6 category grid, strict TDD):** Added RED tests in `CategoryGrid.test.tsx` for loading, success, empty, error, and navigation behavior; created `CategoryGrid` stub and confirmed RED failures; then implemented GREEN with `useQuery` categories fetch, state UIs, and `/categories/:slug` navigation. Added GSAP stagger entry animation for cards with conditional ScrollTrigger (avoids test-env plugin warning), wired `CategoryGrid` into `pages/buyer/HomePage.tsx`, and updated `router.test.tsx` to wrap `HomePage` in `QueryClientProvider`.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.6** (category section) — or **order HTTP** on the API.
+**Current Task:** **Phase 2.7** (product listing page) — or **order HTTP** on the API.
 
-**Exact stopping point:** **2.5** checklist [x] — `HeroSection` completed with GSAP timeline + cleanup, weather/normal variants, and CTA scroll-to-categories behavior. `pages/buyer/HomePage.tsx` now hosts hero + categories anchor placeholder, and `App.tsx` routes `/` to buyer home directly. **Next:** **2.6** category grid/query states/tests or API `POST /api/v1/orders`.
+**Exact stopping point:** **2.6** checklist [x] — `CategoryGrid` added and wired on buyer home with query-backed fetch, loading/empty/error states, hover style, GSAP stagger reveal, and click navigation to category routes. `router.test.tsx` now provides QueryClient context because `HomePage` includes query-driven components. **Next:** **2.7** `CategoryPage` + `ProductGrid` (`useInfiniteQuery`, search, add-to-cart optimistic flow) or API `POST /api/v1/orders`.
 
 ---
 
@@ -371,17 +372,17 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.6 — Category Section
 
-- [ ] `src/components/buyer/CategoryGrid.tsx`:
-  - [ ] Fetches categories from `GET /api/v1/categories` (TanStack Query)
-  - [ ] V1 renders: Groceries, Medical (only these two from API)
-  - [ ] Card layout: emoji icon, category name, product count
-  - [ ] Loading state: skeleton cards matching real card dimensions
-  - [ ] Empty state: "No categories available" (shouldn't happen but must handle)
-  - [ ] Error state: "Couldn't load categories — tap to retry"
-  - [ ] GSAP ScrollTrigger: cards stagger-fade-up when section enters viewport
-  - [ ] Hover: subtle lift (translateY -4px) + shadow increase (CSS transition, not GSAP)
-  - [ ] Click → navigate to `/categories/:slug`
-- [ ] TESTS: renders correct categories, loading/empty/error states, navigation on click
+- [x] `src/components/buyer/CategoryGrid.tsx`:
+  - [x] Fetches categories from `GET /api/v1/categories` (TanStack Query)
+  - [x] V1 renders: Groceries, Medical (only these two from API)
+  - [x] Card layout: emoji icon, category name, product count
+  - [x] Loading state: skeleton cards matching real card dimensions
+  - [x] Empty state: "No categories available" (shouldn't happen but must handle)
+  - [x] Error state: "Couldn't load categories — tap to retry"
+  - [x] GSAP ScrollTrigger: cards stagger-fade-up when section enters viewport
+  - [x] Hover: subtle lift (translateY -4px) + shadow increase (CSS transition, not GSAP)
+  - [x] Click → navigate to `/categories/:slug`
+- [x] TESTS: renders correct categories, loading/empty/error states, navigation on click
 
 ### 2.7 — Product Listing Page
 
@@ -950,7 +951,7 @@ gorola/
 | user              | ❌         | ✅                | integration: `user.repository.test.ts`                                                                                                                            |
 | store-owner       | ❌         | ✅                | integration: `store-owner.repository.test.ts`                                                                                                                     |
 | admin             | ❌         | ✅                | integration: `admin.repository.test.ts`                                                                                                                           |
-| **web (buyer)**   | **✅**     | ⏳                | **unit:** `apps/web` Vitest (44) — stores, `api`, `query-client`, `form-wiring`, `router`, `TopographicBg`, `WeatherBanner`, `ETABanner`, `useGorolaMotion`, `gsap-context-cleanup`, `route-guards`, `BuyerNav`, `BuyerLayout`, `HeroSection`; E2E = Phase 2.18                                                                                          |
+| **web (buyer)**   | **✅**     | ⏳                | **unit:** `apps/web` Vitest (48) — stores, `api`, `query-client`, `form-wiring`, `router`, `TopographicBg`, `WeatherBanner`, `ETABanner`, `useGorolaMotion`, `gsap-context-cleanup`, `route-guards`, `BuyerNav`, `BuyerLayout`, `HeroSection`, `CategoryGrid`; E2E = Phase 2.18                                                                                          |
 | catalog           | ❌         | ✅                | integration: `category`, `product`, `variant` `*.repository.test.ts`                                                                                              |
 | cart              | ❌         | ✅                | integration: `cart.repository.test.ts`                                                                                                                            |
 | order             | ✅         | ✅                | unit: `order.service.test.ts`; integration: `order.repository.test.ts`, `order.service.stock.integration.test.ts`                                                 |

@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 
+import { CategoryGrid } from "@/components/buyer/CategoryGrid";
 import { HeroSection } from "@/components/buyer/HeroSection";
 
 type HomePageProps = {
@@ -13,9 +14,10 @@ export function HomePage(_props: HomePageProps): ReactElement {
       <HeroSection />
       <section id="home-categories" className="rounded-2xl bg-white/70 px-6 py-10">
         <h2 className="font-playfair text-3xl text-gorola-charcoal">Categories</h2>
-        <p className="mt-2 font-dm-sans text-sm text-gorola-slate">
-          Category grid starts in Phase 2.6.
-        </p>
+        <p className="mt-2 font-dm-sans text-sm text-gorola-slate">Shop by category.</p>
+        <div className="mt-6">
+          <CategoryGrid />
+        </div>
       </section>
     </div>
   );
