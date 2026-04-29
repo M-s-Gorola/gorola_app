@@ -1,8 +1,12 @@
 import { useMutation, useQuery } from "@tanstack/react-query";
 import type { ReactElement } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import {
+  AddressMapPicker,
+  type MapCoordinates,
+  MUSSOORIE_AREA_CENTER} from "@/components/buyer/AddressMapPicker";
 import { api } from "@/lib/api";
 import { useCartStore } from "@/store/cart.store";
 
@@ -39,8 +43,13 @@ export function CheckoutPage(): ReactElement {
   const [paymentMethod] = useState<"COD" | "UPI" | "CARD">("COD");
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const [addressDefaultSet, setAddressDefaultSet] = useState(false);
+  const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
 
   const addressesList = addressesQuery.data ?? [];
+
+  const handleMapCoordinates = useCallback((coords: MapCoordinates) => {
+    setMapCoords(coords);
+  }, []);
 
   useEffect(() => {
     if (addressDefaultSet) {
@@ -85,6 +94,10 @@ export function CheckoutPage(): ReactElement {
           const labelTrim = addressLabel.trim();
           body.saveAddress = true;
           body.addressLabel = labelTrim.length > 0 ? labelTrim : "Saved";
+        }
+        if (mapCoords !== null) {
+          body.lat = mapCoords.lat;
+          body.lng = mapCoords.lng;
         }
       } else {
         body = {
@@ -147,6 +160,7 @@ export function CheckoutPage(): ReactElement {
                       checked={deliveryChoice === a.id}
                       name="delivery-address-group"
                       onChange={() => {
+                        setMapCoords(null);
                         setDeliveryChoice(a.id);
                       }}
                       type="radio"
@@ -228,6 +242,27 @@ export function CheckoutPage(): ReactElement {
                       />
                     </label>
                   ) : null}
+
+                  <div className="space-y-1 pt-2">
+                    <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
+                      Drag the pin near your entrance
+                    </p>
+                    <AddressMapPicker
+                      center={MUSSOORIE_AREA_CENTER}
+                      onCoordinatesChange={handleMapCoordinates}
+                    />
+                    <p className="font-dm-sans text-xs text-gorola-slate">
+                      Tiles ©{" "}
+                      <a
+                        className="text-gorola-pine underline"
+                        href="https://www.openstreetmap.org/copyright"
+                        rel="noopener noreferrer"
+                        target="_blank"
+                      >
+                        OpenStreetMap
+                      </a>
+                    </p>
+                  </div>
                 </div>
               ) : null}
 

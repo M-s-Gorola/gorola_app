@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import type { InitialEntry } from "react-router-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -22,6 +22,29 @@ vi.mock("@/lib/api", () => ({
     post: postMock
   }
 }));
+
+vi.mock("@/components/buyer/AddressMapPicker", async () => {
+  const react = await import("react");
+
+  function MockAddressMapPicker({
+    onCoordinatesChange
+  }: {
+    onCoordinatesChange: (coords: { lat: number; lng: number }) => void;
+  }) {
+    react.useEffect(() => {
+      onCoordinatesChange({
+        lat: 29.01,
+        lng: 77.5
+      });
+    }, [onCoordinatesChange]);
+    return react.createElement("div", { "data-testid": "address-map-picker-mock" });
+  }
+
+  return {
+    AddressMapPicker: MockAddressMapPicker,
+    MUSSOORIE_AREA_CENTER: { lat: 30.455, lng: 78.066 }
+  };
+});
 
 function renderCheckout(entries: InitialEntry[] = ["/checkout"]): void {
   const queryClient = new QueryClient({
@@ -144,5 +167,45 @@ describe("CheckoutPage", () => {
     });
 
     expect(await screen.findByTestId("confirmation")).toBeInTheDocument();
+  });
+
+  it("sends new-address payload with map lat/lng to POST /api/v1/orders", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "order-new",
+          status: "PLACED"
+        },
+        success: true
+      }
+    });
+    const user = userEvent.setup();
+    renderCheckout();
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/Deliver to new location/i)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/Deliver to new location/i));
+
+    const landmarkText =
+      "Near red gate descriptive landmark text minimum ten characters long";
+    const landmark = screen.getByPlaceholderText(/Hotel Padmini|E\.g\./i);
+    fireEvent.change(landmark, { target: { value: landmarkText } });
+
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/orders",
+        expect.objectContaining({
+          addressMode: "new",
+          landmarkDescription: landmarkText,
+          lat: 29.01,
+          lng: 77.5,
+          paymentMethod: "COD"
+        })
+      );
+    });
   });
 });

@@ -9,7 +9,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-30
-- **Session Summary:** **Phase 2.11 checkout vertical slice (strict TDD)** — RED integration tests then GREEN for `POST /api/v1/orders` (buyer JWT, saved vs new address modes, landmark min 10, optional save-new-address, ₹30 delivery fee aligned with cart UI), plus `BuyerCheckoutService` + `GET /api/v1/addresses` buyer list. Wired `registerOrderRoutes` / `registerBuyerAddressRoutes` in runtime `routes.ts`. Frontend: `CheckoutPage` at `/checkout` (ProtectedRoute) with RTL tests for landmark enforcement, absence of pin/postal inputs, saved-address place order mock; cart “Proceed” navigates to checkout. Verified `pnpm ci:quality`: API **303** + web **92** Vitest tests, lint, typecheck, build.
+- **Session Summary:** **Phase 2.11 completion + Leaflet map pin (strict TDD)** — **Session 60** checkout API + `CheckoutPage`; **Session 61**: RED `AddressMapPicker.test.tsx` with mocked `leaflet`, GREEN `AddressMapPicker.tsx` (OSM `{s}.tile.openstreetmap.org` tiles, draggable marker, `@openstreetmap` attribution), `MUSSOORIE_AREA_CENTER`, Vite `*.png` module decl; wired on new-address branch with `mapCoords` → `POST /api/v1/orders` **`lat`/`lng`**; `CheckoutPage.test` mocks picker for stable jsdom + asserts new-address payload includes coordinates. Web **96** Vitest tests, lint, `vite build` green.
 - **Next Session Must Start With:** **Phase 2.12** — Order confirmation page `/orders/:id`, `GET /api/v1/orders/:id` + tests; checkout review step still lacks cart discount line synced to placement (discount today is cart-drawer-local only until follow-up).
 
 ---
@@ -19,7 +19,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                |
 | ------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 baseline done** (checkout `/checkout` + `POST /api/v1/orders` + `GET /api/v1/addresses` buyer); optional 2.11 map-pin + discount-on-review deferred; next **2.12** confirmation |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 address/checkout done** incl. optional Leaflet/OSM pin + `lat`/`lng`; **discount line on checkout review** still deferred; next **2.12** confirmation |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                               |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                               |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                |
@@ -87,6 +87,7 @@
 - **Session 58 (Promotion discount validate wiring closure):** Implemented `modules/promotion/discount.controller.ts` with `POST /api/v1/promotions/discounts/validate`, registered route via `registerPromotionRoutes` in runtime `registerAppRoutes`, and added integration tests (`discount.controller.test.ts`) proving valid and invalid discount paths through runtime route graph. 2.9 checklist drift resolved and items re-closed after runtime verification.
 - **Session 59 (Startup refresh bootstrap + mobile nav visibility):** Added `bootstrapBuyerAuthSession()` in `apps/web/src/lib/api.ts` and invoked it at app startup (`App.tsx`) to attempt one cookie-backed buyer refresh on reload. Updated auth controller refresh/logout routes to resolve refresh token from request body or `refreshToken` cookie for bootstrap compatibility. Refactored `BuyerNav` mobile layout to keep search input visible and always show login/logout text on small screens. Verified with API lint/typecheck + `auth.controller.test.ts`, and web lint/typecheck + `BuyerNav`/`LoginPage`/`api` tests.
 - **Session 60 (Phase 2.11 checkout + orders API, strict TDD):** RED integration tests (`order.controller.test.ts`) for saved/new-address placement + short-landmark 400; implemented `BuyerCheckoutService`, Zod `order.schema.ts`, `registerOrderRoutes` POST `/api/v1/orders`, buyer `GET /api/v1/addresses`; `address.repository.ts` helper `findByIdForBuyer`. RED `address.controller.test.ts` then GREEN listing. Web RED `CheckoutPage.test.tsx`, GREEN `CheckoutPage.tsx`, `/checkout` ProtectedRoute + cart proceed navigation. **`pnpm ci:quality`** green (**303** API tests, **92** web tests).
+- **Session 61 (Phase 2.11 optional map pin, strict TDD):** `leaflet` + `@types/leaflet`; `AddressMapPicker` + `AddressMapPicker.test.tsx` (mocked `leaflet` map/marker/tileLayer); `CheckoutPage` integration test for `lat`/`lng` on new-address place order; `vite-env.d.ts` `*.png`; checklist 2.11 optional map row closed.
 
 ---
 
@@ -94,7 +95,7 @@
 
 **Current Task:** **Phase 2.12** (Order confirmation page + `GET /api/v1/orders/:id`).
 
-**Exact stopping point:** **2.11 checkout baseline complete** — `POST /api/v1/orders` + `GET /api/v1/addresses`, buyer JWT preHandlers, ₹30 delivery aligned with cart drawer UI, frontend `CheckoutPage` + RTL tests + `/checkout` behind `ProtectedRoute`, cart navigates to checkout. Deferred from 2.11: draggable map tile for lat/lng; checkout review lacks applied discount line versus cart drawer (`savedAmount` is local-only until a follow-up vertical slice persists discount on order placement). Keep `GOROLA_DUMMY_OTP` temporary until SMS provider.
+**Exact stopping point:** **2.11 address + checkout + optional map pin complete** — same as Session 60/61 notes; **Leaflet** draggable pin on “new address” sets `lat`/`lng` on order placement. Still deferred: **checkout review discount line** vs cart drawer `savedAmount` (not on order payload). Keep `GOROLA_DUMMY_OTP` temporary until SMS provider.
 
 ---
 
@@ -559,7 +560,7 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
   - [x] Frontend tests validated against expected validation + place-order POST (`CheckoutPage.test.tsx`)
 
 - [x] `src/pages/buyer/CheckoutPage.tsx` → route: `/checkout` (inside `ProtectedRoute` + `BuyerLayout`)
-- [ ] Step 1 — Address:
+- [x] Step 1 — Address:
   - [x] If user has saved addresses: show list, allow select
   - [x] "Deliver to new location" (`new`) option always available
   - [x] New address form:
@@ -567,10 +568,10 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
     - [x] Flat/room number (optional)
     - [x] NO pin code field (ever)
     - [x] "Save this address" checkbox (with label validation when saving)
-  - [ ] Optional: draggable map pin (Leaflet.js, OpenStreetMap tiles — free) to capture lat/lng
+  - [x] Optional: draggable map pin (Leaflet.js, OpenStreetMap tiles — free) to capture lat/lng — `AddressMapPicker` + API `lat`/`lng` on `POST /api/v1/orders` / save-address
 - [x] Step 2 — Review (+ place): cart lines, subtotal, delivery fee (Rs 30, matches cart drawer), COD payment copy; **`POST /api/v1/orders`** on Place Order → navigate `/orders/:id`
 - [ ] Review screen: show **discount** consistent with cart drawer `savedAmount` (not persisted on order payload yet — deferred)
-- [x] TESTS: landmark validation (required, min length), no pin code field (`CheckoutPage.test.tsx`), order placement mocked with saved-address payload
+- [x] TESTS: landmark validation + no pin/postal (`CheckoutPage.test.tsx`), mocked place order (saved + new address **`lat`/`lng`**, `AddressMapPicker` mocked); `AddressMapPicker.test.tsx` Leaflet mocks
 
 ### 2.12 — Order Confirmation Page
 
@@ -1119,7 +1120,7 @@ gorola/
 | user              | ❌         | ✅                | integration: `user.repository.test.ts`                                                                                                                            |
 | store-owner       | ❌         | ✅                | integration: `store-owner.repository.test.ts`                                                                                                                     |
 | admin             | ❌         | ✅                | integration: `admin.repository.test.ts`                                                                                                                           |
-| **web (buyer)**   | **✅**     | ⏳                | **unit/component:** Vitest **92** in `apps/web` including `CheckoutPage`; E2E = Phase 2.18                                                                      |
+| **web (buyer)**   | **✅**     | ⏳                | **unit/component:** Vitest **96** in `apps/web` including `CheckoutPage`, `AddressMapPicker`; E2E = Phase 2.18                                                 |
 | catalog           | ❌         | ✅                | integration: `category`, `product`, `variant` `*.repository.test.ts`                                                                                              |
 | cart              | ❌         | ✅                | integration: `cart.repository.test.ts`                                                                                                                            |
 | order             | ✅         | ✅                | unit: `order.service.test.ts`; integration: `order.repository.test.ts`, `order.service.stock.integration.test.ts`, `order.controller.test.ts` (checkout HTTP)                     |
