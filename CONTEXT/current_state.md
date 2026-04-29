@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-29
-- **Session Summary:** **Phase 2.10.1 completed (strict TDD)** — DB-backed buyer user on `verify-otp` (`UserRepository.ensureBuyerByPhone`), `OtpProvider` + `noop` dev provider, `generateBuyerOtp` (random 6-digit; `GOROLA_TEST_OTP` under `NODE_ENV=test` only), `BuyerTokenService` (RS256 via `jose`, refresh rotation + logout in Redis), `jwt-keys` PEM vs ephemeral fallback in non-production, integration test `auth.buyer-flow.integration.test.ts` (create user, same `userId` on repeat, refresh/logout), unit tests for token service + repos. `LoginPage` uses narrowed verify fields (server `userId` only). `.env.example`: JWT + optional test OTP comment. Verified: API + web lint/typecheck/tests; root `ci:quality` green.
-- **Next Session Must Start With:** **Phase 2.11 (strict TDD)** — checkout / address entry slice and `POST /api/v1/orders` contract per checklist.
+- **Session Summary:** **Ops hotfix after 2.10.1** — clarified Railway `502` root cause (production boot fail when JWT PEM vars missing/invalid) and added temporary controlled OTP override `GOROLA_DUMMY_OTP` in `generateBuyerOtp` so manual OTP login can be tested on Railway before Fast2SMS wiring. Added unit tests in `generate-buyer-otp.test.ts`, expanded `.env.example` with Railway/JWT guidance + temporary dummy OTP note, and validated API lint/typecheck + targeted auth tests.
+- **Next Session Must Start With:** **Phase 2.11 (strict TDD)** — checkout / address entry slice and `POST /api/v1/orders` contract per checklist; keep `GOROLA_DUMMY_OTP` temporary and remove before real go-live.
 
 ---
 
@@ -80,6 +80,7 @@
 - **Session 51 (Phase 2.9 completion, strict TDD):** Added RED frontend tests for discount invalid/expired messaging, remove-item API call, feature-flag gated UPI/Card methods, and proceed-checkout enabled/disabled states; implemented GREEN in `CartDrawer` with error handling, labeled remove actions, checkout CTA state, and responsive mobile-bottom-drawer/desktop-sidebar container behavior. Re-verified cart and nav tests plus package lint/typecheck.
 - **Session 52 (Phase 2.10 OTP login flow, strict TDD):** Added RED frontend tests (`LoginPage.test.tsx`) for phone validation, send-OTP/verify payloads, countdown+resend, error envelopes (429 send, attempts remaining / lockout on verify), and post-login redirect semantics. Implemented `LoginPage` + wired `/login`; extended `verify-otp` success payload (`userId`, `phone`, `name`) and tightened `AuthService` OTP error payloads; updated `ProtectedRoute`/role guards with `location` state for safe return navigation; expanded buyer `useAuthStore` session shape. Verified web (lint, typecheck, 86 Vitest tests) + API auth tests.
 - **Session 53 (Phase 2.10.1 buyer auth plumbing, strict TDD):** `ensureBuyerByPhone`, `OtpProvider` + noop provider, random OTP + test-only `GOROLA_TEST_OTP`, `BuyerTokenService` (RS256, Redis refresh rotation), runtime wiring in `routes.ts`, `auth.buyer-flow.integration.test.ts` + unit tests, `LoginPage` verify narrowing for `userId`, `.env.example` JWT/test OTP notes; §2.61 buyer auth note superseded to reference 2.10.1 wiring.
+- **Session 54 (Railway OTP testing bridge, post-2.10.1):** Diagnosed browser CORS console noise as downstream from Railway `502` when API boot fails in `NODE_ENV=production` without valid JWT PEMs. Added temporary env-gated OTP fallback `GOROLA_DUMMY_OTP` (fixed six digits, e.g. `123456`) for manual login testing before SMS provider integration; retained `NODE_ENV=production` and JWT requirements. Added unit tests for override and `.env.example` production guidance.
 
 ---
 
@@ -87,7 +88,7 @@
 
 **Current Task:** **Phase 2.11** (Address entry + checkout / `POST /api/v1/orders` slice per checklist).
 
-**Exact stopping point:** **2.10.1 complete** — buyer OTP verify persists `User`, stub `OtpProvider`, RS256 access + Redis-backed refresh and logout. **Next:** **2.11** (see checklist below).
+**Exact stopping point:** **2.10.1 complete + temporary Railway OTP bridge in place** — buyer OTP verify persists `User`, RS256 access + Redis-backed refresh/logout, and optional env `GOROLA_DUMMY_OTP` allows fixed-code manual testing until Fast2SMS wiring. **Next:** **2.11** (see checklist below).
 
 ---
 

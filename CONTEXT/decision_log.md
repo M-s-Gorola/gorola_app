@@ -565,3 +565,33 @@ Add an explicit **`Phase 2.10.1` buyer auth plumbing slice** in `CONTEXT/current
 1. Bundle DB + token plumbing into Phase 2.11 checkout — rejected: identity is prerequisite for checkout and order attribution; delaying it increases rework.
 2. Require live Fast2SMS before any DB persistence — rejected: couples infrastructure procurement to core engineering milestones.
 3. Implicit signup only via frontend state — rejected: violates data model and audit needs for orders.
+
+---
+
+## [DECISION-019] Temporary Production OTP Override for Railway QA (`GOROLA_DUMMY_OTP`)
+
+**Date:** 2026-04-29  
+**Status:** Accepted (Temporary)
+
+**Context:**
+After Phase 2.10.1, buyer OTP generation became random by default and SMS delivery remained a noop provider until Fast2SMS integration. On Railway, manual QA needed a deterministic OTP to exercise login/refresh/logout before real SMS wiring. Browser console reports showed CORS errors, but the primary issue was upstream API availability (`502`) during env/setup churn.
+
+**Decision:**
+Introduce a temporary environment variable override in `generateBuyerOtp`:
+- `GOROLA_DUMMY_OTP` (must be exactly 6 digits) forces OTP value in all environments, including production.
+- Keep `NODE_ENV=production` on Railway and continue requiring valid `JWT_PRIVATE_KEY` / `JWT_PUBLIC_KEY` PEMs for startup.
+- Keep existing `GOROLA_TEST_OTP` behavior scoped to `NODE_ENV=test`.
+
+**Rationale:**
+- Enables manual OTP login verification on Railway immediately without changing auth route contracts.
+- Avoids misusing `NODE_ENV` as a feature flag (e.g., switching production runtime to `test` or `development`).
+- Keeps the temporary bridge explicit, env-gated, and easy to remove once Fast2SMS is wired.
+
+**Tradeoffs:**
+- Fixed OTP in production-like environment is insecure if left enabled.
+- Adds another environment knob that can be forgotten without explicit cleanup.
+
+**Alternatives Considered:**
+1. Set `NODE_ENV=test` on Railway and use `GOROLA_TEST_OTP` — rejected: changes broader runtime behavior and diverges from production semantics.
+2. Keep random OTP with noop provider — rejected: no practical way to complete manual auth QA.
+3. Implement Fast2SMS immediately — deferred: outside current phase sequencing; checkout work should continue first.
