@@ -28,10 +28,16 @@ type SuccessEnvelope<T> = {
   };
 };
 
-function refreshCookieOptions(): { path: string; sameSite: "lax" | "none"; secure?: boolean } {
+function refreshCookieOptions(): {
+  path: string;
+  sameSite: "lax" | "none";
+  secure?: boolean;
+  partitioned?: boolean;
+} {
   if (process.env.NODE_ENV === "production") {
     return {
       path: "/",
+      partitioned: true,
       sameSite: "none",
       secure: true
     };

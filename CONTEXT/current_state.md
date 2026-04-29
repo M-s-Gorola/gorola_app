@@ -9,7 +9,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-29
-- **Session Summary:** **Ops hotfix after 2.10.1** — clarified Railway `502` root cause (production boot fail when JWT PEM vars missing/invalid) and added temporary controlled OTP override `GOROLA_DUMMY_OTP` in `generateBuyerOtp` so manual OTP login can be tested on Railway before Fast2SMS wiring. Added unit tests in `generate-buyer-otp.test.ts`, expanded `.env.example` with Railway/JWT guidance + temporary dummy OTP note, and validated API lint/typecheck + targeted auth tests.
+- **Session Summary:** **Ops auth-cookie hardening after 2.10.1** — after Railway OTP QA bridge (`GOROLA_DUMMY_OTP`), fixed cross-site refresh cookie behavior for Vercel↔Railway auth: production cookie policy updated to `SameSite=None` + `Secure` and then `Partitioned` (CHIPS warning follow-up). Decision log updated under DECISION-020; OTP bridge remains temporary until Fast2SMS wiring.
 - **Next Session Must Start With:** **Phase 2.11 (strict TDD)** — checkout / address entry slice and `POST /api/v1/orders` contract per checklist; keep `GOROLA_DUMMY_OTP` temporary and remove before real go-live.
 
 ---
@@ -81,6 +81,7 @@
 - **Session 52 (Phase 2.10 OTP login flow, strict TDD):** Added RED frontend tests (`LoginPage.test.tsx`) for phone validation, send-OTP/verify payloads, countdown+resend, error envelopes (429 send, attempts remaining / lockout on verify), and post-login redirect semantics. Implemented `LoginPage` + wired `/login`; extended `verify-otp` success payload (`userId`, `phone`, `name`) and tightened `AuthService` OTP error payloads; updated `ProtectedRoute`/role guards with `location` state for safe return navigation; expanded buyer `useAuthStore` session shape. Verified web (lint, typecheck, 86 Vitest tests) + API auth tests.
 - **Session 53 (Phase 2.10.1 buyer auth plumbing, strict TDD):** `ensureBuyerByPhone`, `OtpProvider` + noop provider, random OTP + test-only `GOROLA_TEST_OTP`, `BuyerTokenService` (RS256, Redis refresh rotation), runtime wiring in `routes.ts`, `auth.buyer-flow.integration.test.ts` + unit tests, `LoginPage` verify narrowing for `userId`, `.env.example` JWT/test OTP notes; §2.61 buyer auth note superseded to reference 2.10.1 wiring.
 - **Session 54 (Railway OTP testing bridge, post-2.10.1):** Diagnosed browser CORS console noise as downstream from Railway `502` when API boot fails in `NODE_ENV=production` without valid JWT PEMs. Added temporary env-gated OTP fallback `GOROLA_DUMMY_OTP` (fixed six digits, e.g. `123456`) for manual login testing before SMS provider integration; retained `NODE_ENV=production` and JWT requirements. Added unit tests for override and `.env.example` production guidance.
+- **Session 55 (Cross-site refresh cookie fixes on Railway/Vercel):** Updated refresh-token cookie policy in `auth.controller.ts` for cross-site browser behavior: production uses `SameSite=None` + `Secure`, and follow-up hardening adds `Partitioned` to satisfy Chrome third-party cookie warning. Decision log DECISION-020 updated accordingly; API lint/typecheck re-verified green.
 
 ---
 
@@ -88,7 +89,7 @@
 
 **Current Task:** **Phase 2.11** (Address entry + checkout / `POST /api/v1/orders` slice per checklist).
 
-**Exact stopping point:** **2.10.1 complete + temporary Railway OTP bridge in place** — buyer OTP verify persists `User`, RS256 access + Redis-backed refresh/logout, and optional env `GOROLA_DUMMY_OTP` allows fixed-code manual testing until Fast2SMS wiring. **Next:** **2.11** (see checklist below).
+**Exact stopping point:** **2.10.1 complete + ops bridges in place** — buyer OTP verify persists `User`, RS256 access + Redis-backed refresh/logout, optional `GOROLA_DUMMY_OTP` supports manual OTP QA, and production refresh cookie is cross-site hardened (`SameSite=None`, `Secure`, `Partitioned`). **Next:** **2.11** (see checklist below).
 
 ---
 

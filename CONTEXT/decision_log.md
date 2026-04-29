@@ -608,19 +608,21 @@ Buyer OTP verify succeeded but browser console showed: refresh cookie rejected i
 
 **Decision:**
 Set refresh-token cookie attributes by environment in auth controllers:
-- **Production:** `SameSite=None` + `Secure=true` (cross-site compatible over HTTPS).
+- **Production:** `SameSite=None` + `Secure=true` + `Partitioned=true` (cross-site compatible over HTTPS and aligned with Chrome third-party cookie deprecation / CHIPS warning).
 - **Non-production:** keep `SameSite=Lax` for local same-site dev behavior.
 
 Applied in `auth.controller.ts` through shared `refreshCookieOptions()` used by buyer/store-owner/admin login + refresh handlers.
 
 **Rationale:**
 - Required for cross-site cookie persistence in modern browsers.
+- `Partitioned` addresses Chrome warning (`cookie ... is foreign and does not have the "Partitioned" attribute`) for third-party cookie hardening.
 - Keeps secure defaults in production while minimizing local-dev friction.
 - Removes misleading downstream symptoms where auth appears to fail even when OTP verify itself succeeds.
 
 **Tradeoffs:**
 - Cross-site cookies increase CSRF exposure surface and require tighter origin controls.
 - Depends on HTTPS in production (`Secure` mandatory when `SameSite=None`).
+- `Partitioned` behavior support is browser-dependent and should be monitored across target clients.
 
 **Alternatives Considered:**
 1. Keep `SameSite=Lax` and rely only on refresh token in JSON body — rejected for now: inconsistent with intended HttpOnly cookie refresh posture (DECISION-008).
