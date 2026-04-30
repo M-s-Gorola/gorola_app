@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports, import/order */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -145,10 +145,11 @@ describe("ProductDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
 
-    expect(postMock).toHaveBeenCalledWith("/api/v1/cart/items", {
-      userId: "u-buyer",
-      productVariantId: "v1",
-      quantity: 2
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/cart/items", {
+        productVariantId: "v1",
+        quantity: 2
+      });
     });
     expect(useCartStore.getState().lines[0]).toEqual(
       expect.objectContaining({
@@ -186,10 +187,11 @@ describe("ProductDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
 
-    expect(postMock).toHaveBeenCalledWith("/api/v1/cart/items", {
-      userId: "u-buyer",
-      productVariantId: "v1",
-      quantity: 2
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/cart/items", {
+        productVariantId: "v1",
+        quantity: 2
+      });
     });
   });
 

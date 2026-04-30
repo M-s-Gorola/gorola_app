@@ -150,6 +150,17 @@ describe("CartRepository", () => {
     it("throws NotFoundError when item does not exist", async () => {
       await expect(repo.updateQty(user.id, variantA.id, 2)).rejects.toThrow(NotFoundError);
     });
+
+    it("serializes concurrent updateQty mutations for the same variant in registration order", async () => {
+      await repo.addItem(user.id, variantA.id, 1);
+      await Promise.all([
+        repo.updateQty(user.id, variantA.id, 4),
+        repo.updateQty(user.id, variantA.id, 40),
+        repo.updateQty(user.id, variantA.id, 6)
+      ]);
+      const cart = await repo.findByUserId(user.id);
+      expect(cart?.items[0]?.quantity).toBe(6);
+    });
   });
 
   describe("removeItem", () => {

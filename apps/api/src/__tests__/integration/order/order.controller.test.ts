@@ -6,6 +6,7 @@ import { CartRepository } from "../../../modules/cart/cart.repository.js";
 import { CategoryRepository } from "../../../modules/catalog/category.repository.js";
 import { ProductRepository } from "../../../modules/catalog/product.repository.js";
 import { ProductVariantRepository } from "../../../modules/catalog/variant.repository.js";
+import { DiscountRepository } from "../../../modules/promotion/discount.repository.js";
 import { StoreRepository } from "../../../modules/store/store.repository.js";
 import { UserRepository } from "../../../modules/user/user.repository.js";
 import { registerAppRoutes } from "../../../routes.js";
@@ -16,6 +17,7 @@ async function cleanOrderIntegrationGraph(db: PrismaClient): Promise<void> {
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
   await db.order.deleteMany();
+  await db.discount.deleteMany();
   await db.cartItem.deleteMany();
   await db.cart.deleteMany();
   await db.address.deleteMany();
@@ -58,8 +60,10 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
   const productRepo = new ProductRepository(db);
   const variantRepo = new ProductVariantRepository(db);
   const cartRepo = new CartRepository(db);
+  const discountRepo = new DiscountRepository(db);
 
   let userRow: User;
+  let otherUserRow: User;
   let category: Category;
   let store: Store;
   let product: Product;
@@ -68,6 +72,7 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
   beforeEach(async () => {
     await cleanOrderIntegrationGraph(db);
     userRow = await userRepo.ensureBuyerByPhone("+919988776099");
+    otherUserRow = await userRepo.ensureBuyerByPhone("+919988776088");
 
     category = await categoryRepo.create({
       slug: `oc-${Date.now().toString(36)}`,
@@ -228,5 +233,255 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     expect(res.statusCode).toBe(400);
     const body = res.json() as { error: { code: string } };
     expect(body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("keeps cart and order ownership on JWT subject when stale userId is sent to cart API", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, "+919988776099");
+
+    const addr = await db.address.create({
+      data: {
+        userId: userRow.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+
+    const cartAdd = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "POST",
+      payload: {
+        userId: otherUserRow.id,
+        productVariantId: variant.id,
+        quantity: 1
+      },
+      url: "/api/v1/cart/items"
+    });
+    expect(cartAdd.statusCode).toBe(200);
+
+    const orderRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "POST",
+      payload: {
+        addressId: addr.id,
+        addressMode: "saved",
+        paymentMethod: "COD"
+      },
+      url: "/api/v1/orders"
+    });
+
+    expect(orderRes.statusCode).toBe(200);
+    const orderPayload = orderRes.json() as {
+      data: { id: string; userId: string };
+      success: boolean;
+    };
+    expect(orderPayload.success).toBe(true);
+    expect(orderPayload.data.userId).toBe(userRow.id);
+
+    const persistedOrder = await db.order.findUniqueOrThrow({
+      where: { id: orderPayload.data.id }
+    });
+    expect(persistedOrder.userId).toBe(userRow.id);
+
+    const buyerCart = await cartRepo.findByUserId(userRow.id);
+    const otherBuyerCart = await cartRepo.findByUserId(otherUserRow.id);
+    expect(buyerCart?.items ?? []).toHaveLength(0);
+    expect(otherBuyerCart?.items ?? []).toHaveLength(0);
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+  });
+
+  it("applies valid discount code at checkout and persists reconciled totals", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, "+919988776099");
+
+    const addr = await db.address.create({
+      data: {
+        userId: userRow.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+
+    await discountRepo.create({
+      code: "SAVE10",
+      discountType: "FLAT",
+      discountValue: 10,
+      endsAt: new Date(Date.now() + 60 * 60 * 1000),
+      startsAt: new Date(Date.now() - 60 * 1000),
+      storeId: store.id
+    });
+
+    await cartRepo.addItem(userRow.id, variant.id, 2);
+
+    const orderRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "POST",
+      payload: {
+        addressId: addr.id,
+        addressMode: "saved",
+        discountCode: "SAVE10",
+        paymentMethod: "COD"
+      },
+      url: "/api/v1/orders"
+    });
+
+    expect(orderRes.statusCode).toBe(200);
+    const orderPayload = orderRes.json() as {
+      data: {
+        discount: {
+          amount: string;
+          code: string | null;
+        };
+        id: string;
+        subtotal: string;
+        total: string;
+      };
+      success: boolean;
+    };
+    expect(orderPayload.success).toBe(true);
+    expect(orderPayload.data.discount).toEqual({
+      amount: "10.00",
+      code: "SAVE10"
+    });
+    expect(orderPayload.data.subtotal).toBe("200");
+    expect(orderPayload.data.total).toBe("220");
+
+    const persisted = await db.order.findUniqueOrThrow({
+      where: { id: orderPayload.data.id }
+    });
+    expect(persisted.subtotal.toString()).toBe("200");
+    expect(persisted.deliveryFee.toString()).toBe("30");
+    expect(persisted.total.toString()).toBe("220");
+    expect(
+      Number(persisted.subtotal) + Number(persisted.deliveryFee) - Number(orderPayload.data.discount.amount)
+    ).toBe(Number(persisted.total));
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+  });
+
+  it("returns placed order by id via GET /api/v1/orders/:id for owning buyer", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, "+919988776099");
+
+    const addr = await db.address.create({
+      data: {
+        userId: userRow.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+    await cartRepo.addItem(userRow.id, variant.id, 1);
+
+    const placeRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "POST",
+      payload: {
+        addressId: addr.id,
+        addressMode: "saved",
+        paymentMethod: "COD"
+      },
+      url: "/api/v1/orders"
+    });
+    expect(placeRes.statusCode).toBe(200);
+    const placedPayload = placeRes.json() as {
+      data: { id: string };
+      success: boolean;
+    };
+    const orderId = placedPayload.data.id;
+
+    const getRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "GET",
+      url: `/api/v1/orders/${orderId}`
+    });
+    expect(getRes.statusCode).toBe(200);
+    const getPayload = getRes.json() as {
+      data: { id: string; userId: string };
+      success: boolean;
+    };
+    expect(getPayload.success).toBe(true);
+    expect(getPayload.data.id).toBe(orderId);
+    expect(getPayload.data.userId).toBe(userRow.id);
+
+    const persistedOrder = await db.order.findUniqueOrThrow({
+      where: { id: orderId }
+    });
+    expect(persistedOrder.id).toBe(orderId);
+    expect(persistedOrder.userId).toBe(userRow.id);
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+  });
+
+  it("returns 404 for GET /api/v1/orders/:id when buyer does not own order", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const ownerAuth = await getBuyerAccessToken(server, "+919988776099");
+    const otherAuth = await getBuyerAccessToken(server, "+919988776088");
+
+    const addr = await db.address.create({
+      data: {
+        userId: userRow.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+    await cartRepo.addItem(userRow.id, variant.id, 1);
+    const placeRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${ownerAuth.accessToken}`
+      },
+      method: "POST",
+      payload: {
+        addressId: addr.id,
+        addressMode: "saved",
+        paymentMethod: "COD"
+      },
+      url: "/api/v1/orders"
+    });
+    const orderId = (placeRes.json() as { data: { id: string } }).data.id;
+
+    const getRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${otherAuth.accessToken}`
+      },
+      method: "GET",
+      url: `/api/v1/orders/${orderId}`
+    });
+
+    expect(getRes.statusCode).toBe(404);
+    const body = getRes.json() as { error: { code: string } };
+    expect(body.error.code).toBe("NOT_FOUND");
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
   });
 });

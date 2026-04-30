@@ -1,12 +1,45 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { App } from "@/App";
 import { CategoryPage } from "@/pages/buyer/CategoryPage";
 import { HomePage } from "@/pages/HomePage";
+import { useAuthStore } from "@/store/auth.store";
+
+const { bootstrapMock } = vi.hoisted(() => ({
+  bootstrapMock: vi.fn().mockResolvedValue(undefined)
+}));
+
+vi.mock("@/hooks/useGorolaMotion", () => ({
+  useGorolaMotion: () => undefined
+}));
+
+vi.mock("@/lib/api", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/api")>("@/lib/api");
+  return {
+    ...actual,
+    bootstrapBuyerAuthSession: bootstrapMock
+  };
+});
 
 describe("buyer routes", () => {
+  beforeEach(() => {
+    bootstrapMock.mockReset();
+    bootstrapMock.mockResolvedValue(undefined);
+    useAuthStore.setState({
+      accessToken: null,
+      isBootstrapPending: true,
+      name: null,
+      phone: null,
+      refreshToken: null,
+      role: null,
+      userId: null
+    });
+  });
+
   it("renders home for /", () => {
     const queryClient = new QueryClient({
       defaultOptions: {
@@ -47,5 +80,144 @@ describe("buyer routes", () => {
       </QueryClientProvider>
     );
     expect(screen.getByRole("heading", { name: "Groceries" })).toBeInTheDocument();
+  });
+
+  it("renders order confirmation route for /orders/:id in runtime app router", () => {
+    useAuthStore.getState().setBuyerSession({
+      accessToken: "at",
+      name: null,
+      phone: "+910000000000",
+      refreshToken: "rt",
+      userId: "buyer-1"
+    });
+    useAuthStore.getState().setBootstrapPending(false);
+
+    render(
+      <MemoryRouter initialEntries={["/orders/order-123"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("heading", { name: "Order Confirmation" })).toBeInTheDocument();
+  });
+
+  it("does not bounce to login when auth bootstrap resolves a protected deep link", async () => {
+    bootstrapMock.mockImplementation(async () => {
+      useAuthStore.getState().setBootstrapPending(true);
+      await Promise.resolve();
+      useAuthStore.getState().setBuyerSession({
+        accessToken: "at",
+        name: null,
+        phone: "+910000000000",
+        refreshToken: "rt",
+        userId: "buyer-1"
+      });
+      useAuthStore.getState().setBootstrapPending(false);
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/profile"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByText("Restoring your session...")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole("heading", { name: "Verify OTP" })).not.toBeInTheDocument();
+  });
+
+  it("resolves footer discoverability links without dead-end navigation", async () => {
+    useAuthStore.getState().setBootstrapPending(false);
+    const user = userEvent.setup();
+
+    const { rerender } = render(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    await user.click(screen.getByRole("link", { name: "About" }));
+    rerender(
+      <MemoryRouter initialEntries={["/about"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "About" })).toBeInTheDocument();
+
+    rerender(
+      <MemoryRouter initialEntries={["/"]}>
+        <App />
+      </MemoryRouter>
+    );
+    await user.click(screen.getByRole("link", { name: "Support" }));
+    rerender(
+      <MemoryRouter initialEntries={["/support"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Support" })).toBeInTheDocument();
+  });
+
+  it("shows placeholder route guardrails for in-progress pages", () => {
+    useAuthStore.getState().setBuyerSession({
+      accessToken: "at",
+      name: null,
+      phone: "+910000000000",
+      refreshToken: "rt",
+      userId: "buyer-1"
+    });
+    useAuthStore.getState().setBootstrapPending(false);
+
+    const searchRender = render(
+      <MemoryRouter initialEntries={["/search"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByText("Search results page is under active development.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to Home" })).toBeInTheDocument();
+    searchRender.unmount();
+
+    const profileRender = render(
+      <MemoryRouter initialEntries={["/profile"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Profile" })).toBeInTheDocument();
+    expect(screen.getByText("This page is not ready yet.")).toBeInTheDocument();
+    profileRender.unmount();
+
+    const noRoleStoreRender = render(
+      <MemoryRouter initialEntries={["/store"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.queryByRole("heading", { name: "Store Dashboard" })).not.toBeInTheDocument();
+    expect(screen.queryByText("This page is not ready yet.")).not.toBeInTheDocument();
+    noRoleStoreRender.unmount();
+
+    useAuthStore.getState().setRole("STORE_OWNER");
+    render(
+      <MemoryRouter initialEntries={["/store"]}>
+        <App />
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Store Dashboard" })).toBeInTheDocument();
+    expect(screen.getByText("This page is not ready yet.")).toBeInTheDocument();
+  });
+
+  it("renders query-aware search placeholder for /search?q=", () => {
+    useAuthStore.getState().setBootstrapPending(false);
+
+    render(
+      <MemoryRouter initialEntries={["/search?q=bread"]}>
+        <App />
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("heading", { name: 'Search results for "bread"' })).toBeInTheDocument();
+    expect(screen.getByText("Search results page is under active development.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Back to Home" })).toBeInTheDocument();
   });
 });

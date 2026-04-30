@@ -291,19 +291,71 @@ describe("ProductGrid", () => {
     expect(screen.getByRole("button", { name: "Decrease Apple quantity" })).toBeInTheDocument();
     expect(screen.getByText("1")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Increase Apple quantity" })).toBeInTheDocument();
-    expect(postMock).toHaveBeenCalledWith(
-      "/api/v1/cart/items",
-      expect.objectContaining({
-        userId: "u-buyer",
-        productVariantId: "v-apple-1kg",
-        quantity: 1
-      })
-    );
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/cart/items",
+        expect.objectContaining({
+          productVariantId: "v-apple-1kg",
+          quantity: 1
+        })
+      );
+    });
     expect(useCartStore.getState().lines[0]).toEqual(
       expect.objectContaining({
         unitPrice: 220,
         variantLabel: "kg"
       })
     );
+  });
+
+  it("queues rapid +/- sync so a second PUT is not dispatched until the first completes", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "p1",
+              name: "Apple",
+              highestPricedVariantId: "v-apple-1kg",
+              storeId: "s1",
+              storeName: "Peak Mart",
+              categoryId: "c1",
+              imageUrl: "https://x",
+              price: "220.00",
+              unit: "kg"
+            }
+          ],
+          nextCursor: null
+        }
+      }
+    });
+    postMock.mockResolvedValue({ data: { success: true } });
+    const unblock: Array<(value?: void) => void> = [];
+    putMock.mockImplementation(async () => {
+      await new Promise<void>((resolve) => {
+        unblock.push(resolve);
+      });
+      return { data: { success: true } };
+    });
+
+    renderGrid({ categoryId: "c1" });
+    fireEvent.click(await screen.findByRole("button", { name: "Add Apple to cart" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Apple quantity" }));
+    fireEvent.click(screen.getByRole("button", { name: "Increase Apple quantity" }));
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledTimes(1);
+    });
+    expect(putMock.mock.calls[0]?.[1]).toEqual({ quantity: 2 });
+    unblock[0]!();
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledTimes(2);
+    });
+    expect(putMock.mock.calls[1]?.[1]).toEqual({ quantity: 3 });
+    unblock[1]!();
+    await waitFor(() => {
+      expect(screen.getByText("3")).toBeInTheDocument();
+    });
   });
 });

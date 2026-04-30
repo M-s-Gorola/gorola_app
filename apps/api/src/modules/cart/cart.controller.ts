@@ -4,6 +4,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { getPrismaClient } from "../../lib/prisma.js";
+import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import type { AccessTokenVerifier } from "../auth/auth.types.js";
 
 import { CartRepository } from "./cart.repository.js";
 
@@ -15,18 +17,12 @@ type SuccessEnvelope<T> = {
   };
 };
 
-const cartQuerySchema = z.object({
-  userId: z.string().min(1)
-});
-
 const addCartItemBodySchema = z.object({
-  userId: z.string().min(1),
   productVariantId: z.string().min(1),
   quantity: z.coerce.number().int().min(1)
 });
 
 const updateCartItemBodySchema = z.object({
-  userId: z.string().min(1),
   quantity: z.coerce.number().int().min(1)
 });
 
@@ -48,28 +44,36 @@ function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): Succ
   };
 }
 
-export function registerCartRoutes(app: FastifyInstance): void {
+export function registerCartRoutes(
+  app: FastifyInstance,
+  deps: { tokenVerifier: AccessTokenVerifier }
+): void {
   const cartRepo = new CartRepository(getPrismaClient());
+  const preCheckout = [requireAuth(deps.tokenVerifier), requireRole(["BUYER"])];
 
-  app.get("/api/v1/cart", async (request, reply) => {
-    const parsed = cartQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      throw new ValidationError("Invalid cart query", parsed.error.flatten());
+  app.get("/api/v1/cart", { preHandler: preCheckout }, async (request, reply) => {
+    const buyerId = request.user?.sub;
+    if (!buyerId) {
+      throw new ValidationError("Buyer subject missing from auth context");
     }
-    const cart = await cartRepo.findByUserId(parsed.data.userId);
-    return success(request, reply, cart ?? { userId: parsed.data.userId, items: [] });
+    const cart = await cartRepo.findByUserId(buyerId);
+    return success(request, reply, cart ?? { userId: buyerId, items: [] });
   });
 
-  app.post("/api/v1/cart/items", async (request, reply) => {
+  app.post("/api/v1/cart/items", { preHandler: preCheckout }, async (request, reply) => {
     const parsed = addCartItemBodySchema.safeParse(request.body);
     if (!parsed.success) {
       throw new ValidationError("Invalid add-cart-item payload", parsed.error.flatten());
     }
-    const cart = await cartRepo.addItem(parsed.data.userId, parsed.data.productVariantId, parsed.data.quantity);
+    const buyerId = request.user?.sub;
+    if (!buyerId) {
+      throw new ValidationError("Buyer subject missing from auth context");
+    }
+    const cart = await cartRepo.addItem(buyerId, parsed.data.productVariantId, parsed.data.quantity);
     return success(request, reply, cart);
   });
 
-  app.put("/api/v1/cart/items/:productVariantId", async (request, reply) => {
+  app.put("/api/v1/cart/items/:productVariantId", { preHandler: preCheckout }, async (request, reply) => {
     const params = cartItemParamsSchema.safeParse(request.params);
     const body = updateCartItemBodySchema.safeParse(request.body);
     if (!params.success || !body.success) {
@@ -78,29 +82,35 @@ export function registerCartRoutes(app: FastifyInstance): void {
         body: body.success ? undefined : body.error.flatten()
       });
     }
-    const cart = await cartRepo.updateQty(body.data.userId, params.data.productVariantId, body.data.quantity);
+    const buyerId = request.user?.sub;
+    if (!buyerId) {
+      throw new ValidationError("Buyer subject missing from auth context");
+    }
+    const cart = await cartRepo.updateQty(buyerId, params.data.productVariantId, body.data.quantity);
     return success(request, reply, cart);
   });
 
-  app.delete("/api/v1/cart/items/:productVariantId", async (request, reply) => {
+  app.delete("/api/v1/cart/items/:productVariantId", { preHandler: preCheckout }, async (request, reply) => {
     const params = cartItemParamsSchema.safeParse(request.params);
-    const query = cartQuerySchema.safeParse(request.query);
-    if (!params.success || !query.success) {
+    if (!params.success) {
       throw new ValidationError("Invalid remove-cart-item payload", {
-        params: params.success ? undefined : params.error.flatten(),
-        query: query.success ? undefined : query.error.flatten()
+        params: params.error.flatten()
       });
     }
-    const cart = await cartRepo.removeItem(query.data.userId, params.data.productVariantId);
+    const buyerId = request.user?.sub;
+    if (!buyerId) {
+      throw new ValidationError("Buyer subject missing from auth context");
+    }
+    const cart = await cartRepo.removeItem(buyerId, params.data.productVariantId);
     return success(request, reply, cart);
   });
 
-  app.delete("/api/v1/cart", async (request, reply) => {
-    const query = cartQuerySchema.safeParse(request.query);
-    if (!query.success) {
-      throw new ValidationError("Invalid clear-cart query", query.error.flatten());
+  app.delete("/api/v1/cart", { preHandler: preCheckout }, async (request, reply) => {
+    const buyerId = request.user?.sub;
+    if (!buyerId) {
+      throw new ValidationError("Buyer subject missing from auth context");
     }
-    const cart = await cartRepo.clearCart(query.data.userId);
+    const cart = await cartRepo.clearCart(buyerId);
     return success(request, reply, cart);
   });
 }

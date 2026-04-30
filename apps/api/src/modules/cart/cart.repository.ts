@@ -26,7 +26,27 @@ async function getCartWithItems(db: PrismaClient, cartId: string): Promise<CartW
 }
 
 export class CartRepository {
+  private readonly variantMutationTails = new Map<string, Promise<unknown>>();
+
   public constructor(private readonly db: PrismaClient) {}
+
+  private enqueueVariantMutation<T>(
+    userId: string,
+    productVariantId: string,
+    work: () => Promise<T>
+  ): Promise<T> {
+    const key = `${userId}::${productVariantId}`;
+    const prev = this.variantMutationTails.get(key) ?? Promise.resolve();
+    const next = prev.then(work);
+    this.variantMutationTails.set(
+      key,
+      next.then(
+        (): undefined => undefined,
+        (): undefined => undefined
+      )
+    );
+    return next;
+  }
 
   public async findByUserId(userId: string): Promise<CartWithItems | null> {
     return this.db.cart.findUnique({
@@ -48,12 +68,54 @@ export class CartRepository {
       throw new ValidationError("Quantity must be greater than zero", { quantity });
     }
 
-    try {
-      const cart = await this.db.cart.upsert({
-        where: { userId },
-        update: {},
-        create: { userId }
-      });
+    return this.enqueueVariantMutation(userId, productVariantId, async () => {
+      try {
+        const cart = await this.db.cart.upsert({
+          where: { userId },
+          update: {},
+          create: { userId }
+        });
+
+        const existing = await this.db.cartItem.findUnique({
+          where: {
+            cartId_productVariantId: {
+              cartId: cart.id,
+              productVariantId
+            }
+          }
+        });
+
+        if (existing) {
+          await this.db.cartItem.update({
+            where: { id: existing.id },
+            data: { quantity: existing.quantity + quantity }
+          });
+        } else {
+          await this.db.cartItem.create({
+            data: {
+              cartId: cart.id,
+              productVariantId,
+              quantity
+            }
+          });
+        }
+
+        return getCartWithItems(this.db, cart.id);
+      } catch (error: unknown) {
+        if (isPrismaError(error, "P2003")) {
+          throw new NotFoundError("User or product variant not found", { userId, productVariantId }, error);
+        }
+        throw error;
+      }
+    });
+  }
+
+  public async removeItem(userId: string, productVariantId: string): Promise<CartWithItems> {
+    return this.enqueueVariantMutation(userId, productVariantId, async () => {
+      const cart = await this.db.cart.findUnique({ where: { userId } });
+      if (!cart) {
+        throw new NotFoundError("Cart item not found", { userId, productVariantId });
+      }
 
       const existing = await this.db.cartItem.findUnique({
         where: {
@@ -64,51 +126,13 @@ export class CartRepository {
         }
       });
 
-      if (existing) {
-        await this.db.cartItem.update({
-          where: { id: existing.id },
-          data: { quantity: existing.quantity + quantity }
-        });
-      } else {
-        await this.db.cartItem.create({
-          data: {
-            cartId: cart.id,
-            productVariantId,
-            quantity
-          }
-        });
+      if (!existing) {
+        throw new NotFoundError("Cart item not found", { userId, productVariantId });
       }
 
+      await this.db.cartItem.delete({ where: { id: existing.id } });
       return getCartWithItems(this.db, cart.id);
-    } catch (error: unknown) {
-      if (isPrismaError(error, "P2003")) {
-        throw new NotFoundError("User or product variant not found", { userId, productVariantId }, error);
-      }
-      throw error;
-    }
-  }
-
-  public async removeItem(userId: string, productVariantId: string): Promise<CartWithItems> {
-    const cart = await this.db.cart.findUnique({ where: { userId } });
-    if (!cart) {
-      throw new NotFoundError("Cart item not found", { userId, productVariantId });
-    }
-
-    const existing = await this.db.cartItem.findUnique({
-      where: {
-        cartId_productVariantId: {
-          cartId: cart.id,
-          productVariantId
-        }
-      }
     });
-
-    if (!existing) {
-      throw new NotFoundError("Cart item not found", { userId, productVariantId });
-    }
-
-    await this.db.cartItem.delete({ where: { id: existing.id } });
-    return getCartWithItems(this.db, cart.id);
   }
 
   public async updateQty(
@@ -120,30 +144,32 @@ export class CartRepository {
       throw new ValidationError("Quantity must be greater than zero", { quantity });
     }
 
-    const cart = await this.db.cart.findUnique({ where: { userId } });
-    if (!cart) {
-      throw new NotFoundError("Cart item not found", { userId, productVariantId });
-    }
-
-    const existing = await this.db.cartItem.findUnique({
-      where: {
-        cartId_productVariantId: {
-          cartId: cart.id,
-          productVariantId
-        }
+    return this.enqueueVariantMutation(userId, productVariantId, async () => {
+      const cart = await this.db.cart.findUnique({ where: { userId } });
+      if (!cart) {
+        throw new NotFoundError("Cart item not found", { userId, productVariantId });
       }
+
+      const existing = await this.db.cartItem.findUnique({
+        where: {
+          cartId_productVariantId: {
+            cartId: cart.id,
+            productVariantId
+          }
+        }
+      });
+
+      if (!existing) {
+        throw new NotFoundError("Cart item not found", { userId, productVariantId });
+      }
+
+      await this.db.cartItem.update({
+        where: { id: existing.id },
+        data: { quantity }
+      });
+
+      return getCartWithItems(this.db, cart.id);
     });
-
-    if (!existing) {
-      throw new NotFoundError("Cart item not found", { userId, productVariantId });
-    }
-
-    await this.db.cartItem.update({
-      where: { id: existing.id },
-      data: { quantity }
-    });
-
-    return getCartWithItems(this.db, cart.id);
   }
 
   public async clearCart(userId: string): Promise<CartWithItems> {

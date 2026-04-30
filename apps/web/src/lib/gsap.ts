@@ -38,6 +38,7 @@ export function linkLenisToGsapTicker(lenis: Lenis): () => void {
   return () => {
     offScroll();
     gsap.ticker.remove(onGsapTickRef);
+    ScrollTrigger.getAll().forEach((trigger) => trigger.kill());
     gsap.ticker.lagSmoothing(
       DEFAULT_LAG_SMOOTHING[0],
       DEFAULT_LAG_SMOOTHING[1]

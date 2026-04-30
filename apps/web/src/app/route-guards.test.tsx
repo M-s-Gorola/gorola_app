@@ -19,7 +19,12 @@ function SecretPage() {
 
 describe("route guards", () => {
   beforeEach(() => {
-    useAuthStore.setState({ accessToken: null, refreshToken: null, role: null });
+    useAuthStore.setState({
+      accessToken: null,
+      isBootstrapPending: false,
+      refreshToken: null,
+      role: null
+    });
   });
 
   it("redirects to /login for unauthenticated protected routes", () => {
@@ -42,7 +47,7 @@ describe("route guards", () => {
   });
 
   it("redirects STORE_OWNER route when role is not store owner", () => {
-    useAuthStore.setState({ accessToken: "a", refreshToken: "r", role: "BUYER" });
+    useAuthStore.setState({ accessToken: "a", isBootstrapPending: false, refreshToken: "r", role: "BUYER" });
     render(
       <MemoryRouter initialEntries={["/store"]}>
         <Routes>
@@ -62,7 +67,7 @@ describe("route guards", () => {
   });
 
   it("allows ADMIN route when role is ADMIN", () => {
-    useAuthStore.setState({ accessToken: "a", refreshToken: "r", role: "ADMIN" });
+    useAuthStore.setState({ accessToken: "a", isBootstrapPending: false, refreshToken: "r", role: "ADMIN" });
     render(
       <MemoryRouter initialEntries={["/admin"]}>
         <Routes>

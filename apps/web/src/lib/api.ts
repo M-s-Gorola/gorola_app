@@ -158,11 +158,14 @@ export const api: ReturnType<typeof createApiClient> | null = (() => {
  */
 export async function bootstrapBuyerAuthSession(): Promise<void> {
   if (api === null) {
+    useAuthStore.getState().setBootstrapPending(false);
     return;
   }
   if (useAuthStore.getState().accessToken !== null) {
+    useAuthStore.getState().setBootstrapPending(false);
     return;
   }
+  useAuthStore.getState().setBootstrapPending(true);
   try {
     const res = await api.post<unknown>(BUYER_REFRESH_PATH, {});
     const tokens = parseRefreshEnvelope(res.data);
@@ -173,5 +176,7 @@ export async function bootstrapBuyerAuthSession(): Promise<void> {
     }
   } catch {
     // No valid refresh cookie/token on startup; keep anonymous state.
+  } finally {
+    useAuthStore.getState().setBootstrapPending(false);
   }
 }

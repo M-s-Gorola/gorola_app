@@ -17,6 +17,7 @@ type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
   role: UserRole | null;
+  isBootstrapPending: boolean;
   /** Buyer profile fields — null when logged out */
   userId: string | null;
   name: string | null;
@@ -24,11 +25,13 @@ type AuthState = {
   setTokens: (tokens: AuthTokens) => void;
   setBuyerSession: (session: BuyerSession) => void;
   setRole: (role: UserRole | null) => void;
+  setBootstrapPending: (pending: boolean) => void;
   clearSession: () => void;
 };
 
 export const useAuthStore = create<AuthState>((set) => ({
   accessToken: null,
+  isBootstrapPending: true,
   name: null,
   phone: null,
   refreshToken: null,
@@ -53,6 +56,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       userId: session.userId
     }),
   setRole: (role) => set({ role }),
+  setBootstrapPending: (pending) => set({ isBootstrapPending: pending }),
   /** Refresh flow only — leaves buyer profile untouched */
   setTokens: (tokens) =>
     set((state) => ({

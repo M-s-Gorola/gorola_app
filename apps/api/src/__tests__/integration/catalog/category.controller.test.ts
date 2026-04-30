@@ -37,14 +37,53 @@ describe("Category controller", () => {
   });
 
   it("GET /api/v1/categories returns active categories in envelope", async () => {
-    await db.category.create({
+    const groceries = await db.category.create({
       data: { slug: "groceries", name: "Groceries", emoji: "🥬", displayOrder: 2, isActive: true }
     });
-    await db.category.create({
+    const medical = await db.category.create({
       data: { slug: "medical", name: "Medical", emoji: "💊", displayOrder: 1, isActive: true }
     });
     await db.category.create({
       data: { slug: "hidden", name: "Hidden", emoji: "🙈", displayOrder: 0, isActive: false }
+    });
+    const store = await db.store.create({
+      data: {
+        name: "Peak Mart",
+        description: "Local essentials",
+        phone: "+919111111111",
+        address: "Mall Road"
+      }
+    });
+    await db.product.createMany({
+      data: [
+        {
+          storeId: store.id,
+          categoryId: groceries.id,
+          name: "Apple",
+          description: "Fresh",
+          imageUrl: "https://cdn.example.com/apple.jpg",
+          isActive: true,
+          isDeleted: false
+        },
+        {
+          storeId: store.id,
+          categoryId: groceries.id,
+          name: "Hidden Apple",
+          description: "Inactive",
+          imageUrl: "https://cdn.example.com/hidden-apple.jpg",
+          isActive: false,
+          isDeleted: false
+        },
+        {
+          storeId: store.id,
+          categoryId: medical.id,
+          name: "Deleted Syrup",
+          description: "Deleted",
+          imageUrl: "https://cdn.example.com/deleted-syrup.jpg",
+          isActive: true,
+          isDeleted: true
+        }
+      ]
     });
 
     const server = createServer({
@@ -71,6 +110,7 @@ describe("Category controller", () => {
         icon: string | null;
         displayOrder: number;
         isActive: boolean;
+        productCount: number;
       }>;
       meta: { requestId: string };
     };
@@ -83,7 +123,8 @@ describe("Category controller", () => {
         emoji: "💊",
         icon: null,
         displayOrder: 1,
-        isActive: true
+        isActive: true,
+        productCount: 0
       },
       {
         slug: "groceries",
@@ -91,7 +132,8 @@ describe("Category controller", () => {
         emoji: "🥬",
         icon: null,
         displayOrder: 2,
-        isActive: true
+        isActive: true,
+        productCount: 1
       }
     ]);
     expect(body.meta.requestId).toEqual(expect.any(String));

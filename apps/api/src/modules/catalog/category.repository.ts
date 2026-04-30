@@ -14,6 +14,10 @@ export type UpdateCategoryInput = Partial<
   Pick<Category, "slug" | "name" | "emoji" | "icon" | "displayOrder" | "isActive">
 >;
 
+export type BuyerCategory = Category & {
+  productCount: number;
+};
+
 function isPrismaError(error: unknown, code: string): boolean {
   return (
     typeof error === "object" &&
@@ -55,6 +59,32 @@ export class CategoryRepository {
       where: options?.includeInactive === true ? {} : { isActive: true },
       orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
     });
+  }
+
+  public async findAllForBuyer(): Promise<BuyerCategory[]> {
+    const categories = await this.findAll();
+    if (categories.length === 0) {
+      return [];
+    }
+
+    const categoryIds = categories.map((category) => category.id);
+    const productCounts = await this.db.product.groupBy({
+      by: ["categoryId"],
+      where: {
+        categoryId: { in: categoryIds },
+        isActive: true,
+        isDeleted: false
+      },
+      _count: {
+        _all: true
+      }
+    });
+    const countByCategory = new Map(productCounts.map((row) => [row.categoryId, row._count._all]));
+
+    return categories.map((category) => ({
+      ...category,
+      productCount: countByCategory.get(category.id) ?? 0
+    }));
   }
 
   public async create(input: CreateCategoryInput): Promise<Category> {

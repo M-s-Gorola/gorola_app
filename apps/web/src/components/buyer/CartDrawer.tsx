@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { useFeatureFlagsStore } from "@/store/feature-flags.store";
@@ -17,12 +18,13 @@ export function CartDrawer(): ReactElement | null {
   const lines = useCartStore((s) => s.lines);
   const removeLine = useCartStore((s) => s.removeLine);
   const setQty = useCartStore((s) => s.setQty);
+  const discountCode = useCartStore((s) => s.discountCode);
+  const savedAmount = useCartStore((s) => s.discountSavedAmount);
+  const discountError = useCartStore((s) => s.discountError);
+  const setDiscountState = useCartStore((s) => s.setDiscountState);
   const userId = useAuthStore((s) => s.userId);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
-  const [discountCode, setDiscountCode] = useState("");
-  const [savedAmount, setSavedAmount] = useState(0);
-  const [discountError, setDiscountError] = useState<string | null>(null);
   const upiEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_UPI_ENABLED"));
   const cardEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_CARD_ENABLED"));
 
@@ -66,16 +68,17 @@ export function CartDrawer(): ReactElement | null {
                     const next = line.quantity - 1;
                     setQty(line.productVariantId, next);
                     if (api !== null && userId !== null) {
-                      if (next <= 0) {
-                        void api.delete(`/api/v1/cart/items/${line.productVariantId}`, {
-                          params: { userId }
-                        });
-                      } else {
-                        void api.put(`/api/v1/cart/items/${line.productVariantId}`, {
-                          userId,
-                          quantity: next
-                        });
-                      }
+                      const client = api;
+                      const variantId = line.productVariantId;
+                      void enqueueCartVariantMutation(variantId, async () => {
+                        if (next <= 0) {
+                          await client.delete(`/api/v1/cart/items/${variantId}`);
+                        } else {
+                          await client.put(`/api/v1/cart/items/${variantId}`, {
+                            quantity: next
+                          });
+                        }
+                      });
                     }
                   }}
                   className="h-7 w-7 rounded-full border border-gorola-pine/20 text-sm"
@@ -90,9 +93,12 @@ export function CartDrawer(): ReactElement | null {
                     const next = line.quantity + 1;
                     setQty(line.productVariantId, next);
                     if (api !== null && userId !== null) {
-                      void api.put(`/api/v1/cart/items/${line.productVariantId}`, {
-                        userId,
-                        quantity: next
+                      const client = api;
+                      const variantId = line.productVariantId;
+                      void enqueueCartVariantMutation(variantId, async () => {
+                        await client.put(`/api/v1/cart/items/${variantId}`, {
+                          quantity: next
+                        });
                       });
                     }
                   }}
@@ -106,8 +112,10 @@ export function CartDrawer(): ReactElement | null {
                   onClick={() => {
                     removeLine(line.productVariantId);
                     if (api !== null && userId !== null) {
-                      void api.delete(`/api/v1/cart/items/${line.productVariantId}`, {
-                        params: { userId }
+                      const client = api;
+                      const variantId = line.productVariantId;
+                      void enqueueCartVariantMutation(variantId, async () => {
+                        await client.delete(`/api/v1/cart/items/${variantId}`);
                       });
                     }
                   }}
@@ -139,7 +147,11 @@ export function CartDrawer(): ReactElement | null {
         <input
           value={discountCode}
           onChange={(event: ChangeEvent<HTMLInputElement>) => {
-            setDiscountCode(event.target.value);
+            setDiscountState({
+              code: event.target.value,
+              error: null,
+              savedAmount: 0
+            });
           }}
           placeholder="Discount code"
           className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
@@ -159,16 +171,25 @@ export function CartDrawer(): ReactElement | null {
               .then((response) => {
                 const amount = response.data?.data?.amountSaved;
                 if (response.data?.success === true && typeof amount === "number") {
-                  setDiscountError(null);
-                  setSavedAmount(amount);
+                  setDiscountState({
+                    code: discountCode.trim(),
+                    error: null,
+                    savedAmount: amount
+                  });
                   return;
                 }
-                setSavedAmount(0);
-                setDiscountError("Invalid or expired discount code");
+                setDiscountState({
+                  code: discountCode.trim(),
+                  error: "Invalid or expired discount code",
+                  savedAmount: 0
+                });
               })
               .catch(() => {
-                setSavedAmount(0);
-                setDiscountError("Could not validate discount code right now");
+                setDiscountState({
+                  code: discountCode.trim(),
+                  error: "Could not validate discount code right now",
+                  savedAmount: 0
+                });
               });
           }}
           className="rounded-lg bg-gorola-pine px-3 py-2 font-dm-sans text-sm font-semibold text-white"

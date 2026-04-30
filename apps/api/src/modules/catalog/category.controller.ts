@@ -31,7 +31,7 @@ export function registerCategoryRoutes(app: FastifyInstance): void {
   const categoryRepo = new CategoryRepository(getPrismaClient());
 
   app.get("/api/v1/categories", async (request, reply) => {
-    const categories = await categoryRepo.findAll();
+    const categories = await categoryRepo.findAllForBuyer();
     return success(request, reply, categories);
   });
 }

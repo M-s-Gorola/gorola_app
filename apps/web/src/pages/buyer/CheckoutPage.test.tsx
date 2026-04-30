@@ -208,4 +208,83 @@ describe("CheckoutPage", () => {
       );
     });
   });
+
+  it("shows discount in review when cart discount is active", async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({
+        discountCode: "SAVE20",
+        discountError: null,
+        discountSavedAmount: 20,
+        lines: [
+          {
+            productName: "P",
+            quantity: 1,
+            productVariantId: "pv1",
+            unitPrice: 100,
+            variantLabel: "500g"
+          }
+        ]
+      });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    expect(screen.getByText("Discount (SAVE20): -Rs 20.00")).toBeInTheDocument();
+    expect(screen.getByText("Total: Rs 110.00")).toBeInTheDocument();
+  });
+
+  it("sends active discount code in place-order payload", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "order-discount",
+          status: "PLACED"
+        },
+        success: true
+      }
+    });
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({
+        discountCode: "SAVE20",
+        discountError: null,
+        discountSavedAmount: 20,
+        lines: [
+          {
+            productName: "P",
+            quantity: 1,
+            productVariantId: "pv1",
+            unitPrice: 100,
+            variantLabel: "500g"
+          }
+        ]
+      });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/orders",
+        expect.objectContaining({
+          addressId: "addr-1",
+          addressMode: "saved",
+          discountCode: "SAVE20",
+          paymentMethod: "COD"
+        })
+      );
+    });
+  });
 });

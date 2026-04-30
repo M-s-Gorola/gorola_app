@@ -41,6 +41,12 @@ if (globalThis.cancelAnimationFrame === undefined) {
     clearTimeout(handle as unknown as ReturnType<typeof setTimeout>);
   };
 }
+if (window.requestAnimationFrame === undefined) {
+  window.requestAnimationFrame = globalThis.requestAnimationFrame;
+}
+if (window.cancelAnimationFrame === undefined) {
+  window.cancelAnimationFrame = globalThis.cancelAnimationFrame;
+}
 
 afterEach(() => {
   cleanup();

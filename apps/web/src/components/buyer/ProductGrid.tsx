@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
+import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { initGorolaGsapOnce } from "@/lib/gsap";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
@@ -182,10 +183,11 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     if (api === null || userId === null) {
       return;
     }
-    void api.post("/api/v1/cart/items", {
-      userId,
-      productVariantId,
-      quantity
+    void enqueueCartVariantMutation(productVariantId, async () => {
+      await api!.post("/api/v1/cart/items", {
+        productVariantId,
+        quantity
+      });
     });
   }
 
@@ -193,15 +195,14 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     if (api === null || userId === null) {
       return;
     }
-    if (quantity <= 0) {
-      void api.delete(`/api/v1/cart/items/${productVariantId}`, {
-        params: { userId }
+    void enqueueCartVariantMutation(productVariantId, async () => {
+      if (quantity <= 0) {
+        await api!.delete(`/api/v1/cart/items/${productVariantId}`);
+        return;
+      }
+      await api!.put(`/api/v1/cart/items/${productVariantId}`, {
+        quantity
       });
-      return;
-    }
-    void api.put(`/api/v1/cart/items/${productVariantId}`, {
-      userId,
-      quantity
     });
   }
 

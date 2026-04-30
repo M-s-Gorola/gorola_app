@@ -21,6 +21,8 @@ type AddrRow = {
 export function CheckoutPage(): ReactElement {
   const navigate = useNavigate();
   const lines = useCartStore((s) => s.lines);
+  const discountCode = useCartStore((s) => s.discountCode);
+  const discountSavedAmount = useCartStore((s) => s.discountSavedAmount);
   const clearCart = useCartStore((s) => s.clear);
 
   const addressesQuery = useQuery({
@@ -68,7 +70,7 @@ export function CheckoutPage(): ReactElement {
     () => lines.reduce((acc, line) => acc + (line.unitPrice ?? 0) * line.quantity, 0),
     [lines]
   );
-  const total = subtotal + DELIVERY_FEE;
+  const total = Math.max(subtotal + DELIVERY_FEE - discountSavedAmount, 0);
 
   const placeMutation = useMutation({
     mutationFn: async (): Promise<string> => {
@@ -84,6 +86,9 @@ export function CheckoutPage(): ReactElement {
           landmarkDescription: landmarkInput.trim(),
           paymentMethod: payment
         };
+        if (discountCode.trim().length > 0) {
+          body.discountCode = discountCode.trim();
+        }
 
         const room = flatRoom.trim();
         if (room.length > 0) {
@@ -105,6 +110,9 @@ export function CheckoutPage(): ReactElement {
           addressMode: "saved",
           paymentMethod: payment
         };
+        if (discountCode.trim().length > 0) {
+          body.discountCode = discountCode.trim();
+        }
       }
 
       const res = await api.post<{ data?: { id: string } }>(`/api/v1/orders`, body);
@@ -303,6 +311,11 @@ export function CheckoutPage(): ReactElement {
             ))}
           </ul>
           <p className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee: Rs {DELIVERY_FEE.toFixed(2)}</p>
+          {discountSavedAmount > 0 ? (
+            <p className="font-dm-sans text-sm font-semibold text-gorola-pine">
+              Discount ({discountCode || "Applied"}): -Rs {discountSavedAmount.toFixed(2)}
+            </p>
+          ) : null}
           <p className="font-dm-sans text-lg font-semibold text-gorola-charcoal">Total: Rs {total.toFixed(2)}</p>
           <p className="font-dm-sans text-sm text-gorola-slate">
             Payment: {paymentMethod === "COD" ? "Cash on delivery" : paymentMethod}

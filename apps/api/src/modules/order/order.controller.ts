@@ -1,12 +1,13 @@
 /* eslint-disable simple-import-sort/imports */
-import { UnauthorizedError } from "@gorola/shared";
+import { NotFoundError, UnauthorizedError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 
 import type { BuyerCheckoutService } from "./buyer-checkout.service.js";
-import type { OrderWithRelations } from "./order.repository.js";
+import type { OrderRepository, OrderWithRelations } from "./order.repository.js";
 import { parsePlaceBuyerOrderBody } from "./order.schema.js";
 
 type SuccessEnvelope<T> = {
@@ -31,7 +32,10 @@ function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): Succ
   };
 }
 
-function serializeOrderResponse(order: OrderWithRelations): Record<string, unknown> {
+function serializeOrderResponse(
+  order: OrderWithRelations,
+  discount: { amount: string; code: string | null }
+): Record<string, unknown> {
   return {
     createdAt: order.createdAt.toISOString(),
     deliveryFee: order.deliveryFee.toString(),
@@ -50,6 +54,7 @@ function serializeOrderResponse(order: OrderWithRelations): Record<string, unkno
     paymentMethod: order.paymentMethod,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
     status: order.status,
+    discount,
     statusHistory: order.statusHistory.map((h) => ({
       changedAt: h.changedAt.toISOString(),
       changedBy: h.changedBy,
@@ -68,11 +73,15 @@ function serializeOrderResponse(order: OrderWithRelations): Record<string, unkno
 
 type RegisterOrderDeps = {
   buyerCheckout: BuyerCheckoutService;
+  orders: OrderRepository;
   tokenVerifier: AccessTokenVerifier;
 };
 
 export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDeps): void {
   const preCheckout = [requireAuth(deps.tokenVerifier), requireRole(["BUYER"])];
+  const orderParamsSchema = z.object({
+    id: z.string().min(1)
+  });
 
   app.post(
     "/api/v1/orders",
@@ -84,7 +93,38 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         throw new UnauthorizedError("Buyer subject missing");
       }
       const placed = await deps.buyerCheckout.placeFromCart(buyerId, parsed);
-      return success(request, reply, serializeOrderResponse(placed));
+      return success(
+        request,
+        reply,
+        serializeOrderResponse(placed.order, {
+          amount: placed.appliedDiscountAmount,
+          code: placed.appliedDiscountCode
+        })
+      );
+    }
+  );
+
+  app.get(
+    "/api/v1/orders/:id",
+    { preHandler: preCheckout },
+    async (request, reply) => {
+      const buyerId = request.user?.sub;
+      if (!buyerId) {
+        throw new UnauthorizedError("Buyer subject missing");
+      }
+      const params = orderParamsSchema.parse(request.params);
+      const order = await deps.orders.findById(params.id);
+      if (order === null || order.userId !== buyerId) {
+        throw new NotFoundError("Order not found", { orderId: params.id });
+      }
+      return success(
+        request,
+        reply,
+        serializeOrderResponse(order, {
+          amount: "0.00",
+          code: null
+        })
+      );
     }
   );
 }

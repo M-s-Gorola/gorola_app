@@ -222,14 +222,7 @@ describe("CartDrawer", () => {
     renderShell();
     fireEvent.click(screen.getByRole("button", { name: "Remove Apple" }));
     await waitFor(() => {
-      expect(deleteMock).toHaveBeenCalledWith(
-        "/api/v1/cart/items/v1",
-        expect.objectContaining({
-          params: expect.objectContaining({
-            userId: "buyer-u1"
-          })
-        })
-      );
+      expect(deleteMock).toHaveBeenCalledWith("/api/v1/cart/items/v1");
     });
   });
 

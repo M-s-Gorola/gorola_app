@@ -1,7 +1,7 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useEffect } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Link, Route, Routes, useSearchParams } from "react-router-dom";
 
 import { AdminRoute, ProtectedRoute, StoreRoute } from "@/app/routes/guards";
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
@@ -13,12 +13,45 @@ import { CategoryPage } from "@/pages/buyer/CategoryPage";
 import { CheckoutPage } from "@/pages/buyer/CheckoutPage";
 import { HomePage } from "@/pages/buyer/HomePage";
 import { LoginPage } from "@/pages/buyer/LoginPage";
+import { OrderConfirmationPage } from "@/pages/buyer/OrderConfirmationPage";
 import { ProductDetailPage } from "@/pages/buyer/ProductDetailPage";
 
 const queryClient = createAppQueryClient();
 
 function PlaceholderPage({ title }: { title: string }): ReactElement {
-  return <h1 className="text-2xl font-semibold text-gorola-charcoal">{title}</h1>;
+  return (
+    <section className="space-y-3">
+      <h1 className="text-2xl font-semibold text-gorola-charcoal">{title}</h1>
+      <p className="font-dm-sans text-sm text-gorola-slate">This page is not ready yet.</p>
+      <Link
+        to="/"
+        className="inline-flex rounded-full border border-gorola-pine/20 px-3 py-2 text-sm font-semibold text-gorola-pine hover:bg-gorola-pine/5"
+      >
+        Back to Home
+      </Link>
+    </section>
+  );
+}
+
+function SearchPlaceholderPage(): ReactElement {
+  const [searchParams] = useSearchParams();
+  const query = searchParams.get("q")?.trim() ?? "";
+  const title = query.length > 0 ? `Search results for "${query}"` : "Search";
+
+  return (
+    <section className="space-y-3">
+      <h1 className="text-2xl font-semibold text-gorola-charcoal">{title}</h1>
+      <p className="font-dm-sans text-sm text-gorola-slate">
+        Search results page is under active development.
+      </p>
+      <Link
+        to="/"
+        className="inline-flex rounded-full border border-gorola-pine/20 px-3 py-2 text-sm font-semibold text-gorola-pine hover:bg-gorola-pine/5"
+      >
+        Back to Home
+      </Link>
+    </section>
+  );
 }
 
 export function App(): ReactElement {
@@ -41,7 +74,7 @@ export function App(): ReactElement {
           path="/search"
           element={
             <BuyerLayout>
-              <PlaceholderPage title="Search" />
+              <SearchPlaceholderPage />
             </BuyerLayout>
           }
         />
@@ -69,6 +102,22 @@ export function App(): ReactElement {
             </BuyerLayout>
           }
         />
+        <Route
+          path="/about"
+          element={
+            <BuyerLayout>
+              <PlaceholderPage title="About" />
+            </BuyerLayout>
+          }
+        />
+        <Route
+          path="/support"
+          element={
+            <BuyerLayout>
+              <PlaceholderPage title="Support" />
+            </BuyerLayout>
+          }
+        />
         <Route path="/login" element={<LoginPage />} />
         <Route
           path="/profile"
@@ -86,6 +135,16 @@ export function App(): ReactElement {
             <ProtectedRoute>
               <BuyerLayout>
                 <CheckoutPage />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/orders/:id"
+          element={
+            <ProtectedRoute>
+              <BuyerLayout>
+                <OrderConfirmationPage />
               </BuyerLayout>
             </ProtectedRoute>
           }

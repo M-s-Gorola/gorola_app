@@ -20,6 +20,7 @@ import { registerOrderRoutes } from "./modules/order/order.controller.js";
 import { OrderRepository } from "./modules/order/order.repository.js";
 import { OrderService } from "./modules/order/order.service.js";
 import { registerPromotionRoutes } from "./modules/promotion/discount.controller.js";
+import { DiscountRepository } from "./modules/promotion/discount.repository.js";
 import { UserRepository } from "./modules/user/user.repository.js";
 
 type RedisLikeRuntime = {
@@ -50,7 +51,6 @@ function getRuntimeRedis(app: FastifyInstance): RedisLikeRuntime {
 export function registerAppRoutes(app: FastifyInstance): void {
   registerCategoryRoutes(app);
   registerProductRoutes(app);
-  registerCartRoutes(app);
   registerPromotionRoutes(app);
 
   const prisma = getPrismaClient();
@@ -87,12 +87,24 @@ export function registerAppRoutes(app: FastifyInstance): void {
   const orderRepoOrders = new OrderRepository(prisma);
   const variantRepoOrders = new ProductVariantRepository(prisma);
   const stockMovementRepoOrders = new StockMovementRepository(prisma);
+  const discountRepo = new DiscountRepository(prisma);
   const buyerOrderSvc = new OrderService(prisma, orderRepoOrders, variantRepoOrders, stockMovementRepoOrders);
   const addressRepoOrders = new AddressRepository(prisma);
-  const buyerCheckout = new BuyerCheckoutService(prisma, checkoutCartRepo, addressRepoOrders, buyerOrderSvc);
+  const buyerCheckout = new BuyerCheckoutService(
+    prisma,
+    checkoutCartRepo,
+    addressRepoOrders,
+    buyerOrderSvc,
+    discountRepo
+  );
+
+  registerCartRoutes(app, {
+    tokenVerifier: tokenService
+  });
 
   registerOrderRoutes(app, {
     buyerCheckout,
+    orders: orderRepoOrders,
     tokenVerifier: tokenService
   });
 

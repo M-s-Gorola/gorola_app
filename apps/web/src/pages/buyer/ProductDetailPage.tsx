@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
@@ -184,10 +185,11 @@ export function ProductDetailPage(): ReactElement {
           if (userId === null) {
             return;
           }
-          void api.post("/api/v1/cart/items", {
-            userId,
-            productVariantId: selected.id,
-            quantity
+          void enqueueCartVariantMutation(selected.id, async () => {
+            await api!.post("/api/v1/cart/items", {
+              productVariantId: selected.id,
+              quantity
+            });
           });
         }}
         disabled={!canAddToCart}

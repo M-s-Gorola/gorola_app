@@ -4,10 +4,11 @@ import {
   UnprocessableEntityError,
   ValidationError
 } from "@gorola/shared";
-import { Prisma, type PrismaClient } from "@prisma/client";
+import { Prisma, type Discount, type PrismaClient } from "@prisma/client";
 
 import { AddressRepository } from "../address/address.repository.js";
 import type { CartRepository } from "../cart/cart.repository.js";
+import { DiscountRepository } from "../promotion/discount.repository.js";
 
 import type { PlaceBuyerOrderBody } from "./order.schema.js";
 import { OrderService } from "./order.service.js";
@@ -17,8 +18,17 @@ export class BuyerCheckoutService {
     private readonly db: PrismaClient,
     private readonly cartRepo: CartRepository,
     private readonly addressRepo: AddressRepository,
-    private readonly orderService: OrderService
+    private readonly orderService: OrderService,
+    private readonly discountRepo: DiscountRepository
   ) {}
+
+  private computeDiscountAmount(discount: Discount, subtotal: Prisma.Decimal): Prisma.Decimal {
+    const discountValue = new Prisma.Decimal(discount.discountValue.toString());
+    if (discount.discountType === "PERCENTAGE") {
+      return subtotal.mul(discountValue).div(100).toDecimalPlaces(2);
+    }
+    return discountValue.toDecimalPlaces(2);
+  }
 
   public async placeFromCart(userId: string, body: PlaceBuyerOrderBody) {
     const cart = await this.cartRepo.findByUserId(userId);
@@ -96,8 +106,45 @@ export class BuyerCheckoutService {
     }
 
     const deliveryFee = new Prisma.Decimal(30);
-    const total = subtotal.add(deliveryFee);
     const storeId = [...storeIds][0]!;
+    let appliedDiscountCode: string | null = null;
+    let appliedDiscountAmount = new Prisma.Decimal(0);
+
+    if (typeof body.discountCode === "string" && body.discountCode.trim().length > 0) {
+      const normalizedCode = body.discountCode.trim().toUpperCase();
+      const discount = await this.discountRepo.findActiveByCode(normalizedCode);
+      if (discount === null) {
+        throw new ValidationError("Invalid or expired discount code", {
+          discountCode: normalizedCode
+        });
+      }
+      if (discount.storeId !== null && discount.storeId !== storeId) {
+        throw new ValidationError("Discount code is not valid for this store", {
+          discountCode: normalizedCode
+        });
+      }
+      if (discount.usageLimit !== null && discount.usedCount >= discount.usageLimit) {
+        throw new ValidationError("Invalid or expired discount code", {
+          discountCode: normalizedCode
+        });
+      }
+      const minOrderAmount =
+        discount.minOrderAmount === null ? null : new Prisma.Decimal(discount.minOrderAmount.toString());
+      if (minOrderAmount !== null && subtotal.lessThan(minOrderAmount)) {
+        throw new ValidationError("Discount minimum subtotal not met", {
+          discountCode: normalizedCode,
+          minOrderAmount: minOrderAmount.toString()
+        });
+      }
+      appliedDiscountAmount = Prisma.Decimal.min(
+        subtotal,
+        this.computeDiscountAmount(discount, subtotal)
+      );
+      appliedDiscountCode = normalizedCode;
+      await this.discountRepo.incrementUsedCount(discount.id);
+    }
+
+    const total = Prisma.Decimal.max(subtotal.add(deliveryFee).sub(appliedDiscountAmount), new Prisma.Decimal(0));
 
     const order = await this.orderService.placeOrderWithStock({
       changedBy: `buyer:${userId}`,
@@ -137,6 +184,10 @@ export class BuyerCheckoutService {
       });
     }
 
-    return order;
+    return {
+      appliedDiscountAmount: appliedDiscountAmount.toFixed(2),
+      appliedDiscountCode,
+      order
+    };
   }
 }

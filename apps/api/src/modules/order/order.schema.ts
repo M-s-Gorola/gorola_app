@@ -8,6 +8,7 @@ export const placeBuyerOrderBodySchema = z
       addressMode: z.literal("saved"),
       addressId: z.string().min(1),
       deliveryNote: z.string().max(500).optional().nullable(),
+      discountCode: z.string().trim().min(1).optional(),
       paymentMethod: z.nativeEnum(PaymentMethod)
     }),
     z
@@ -15,6 +16,7 @@ export const placeBuyerOrderBodySchema = z
         addressLabel: z.string().min(1).optional(),
         addressMode: z.literal("new"),
         deliveryNote: z.string().max(500).optional().nullable(),
+        discountCode: z.string().trim().min(1).optional(),
         flatRoom: z.string().max(120).optional().nullable(),
         landmarkDescription: z.string().min(10),
         lat: z.number().optional().nullable(),
