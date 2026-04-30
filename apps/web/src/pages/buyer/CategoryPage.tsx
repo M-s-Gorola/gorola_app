@@ -13,6 +13,7 @@ export function CategoryPage(): ReactElement {
   const { slug } = useParams<{ slug: string }>();
   const heading = slug !== undefined ? toTitleCase(slug) : "Category";
   const categoryQuery = useQuery({
+    enabled: api !== null && slug !== undefined,
     queryKey: ["buyer-category-by-slug", slug ?? null],
     queryFn: async () => {
       if (api === null || slug === undefined) {
@@ -33,7 +34,10 @@ export function CategoryPage(): ReactElement {
   return (
     <section className="space-y-4 rounded-2xl bg-white/70 px-6 py-8">
       <h1 className="font-playfair text-3xl text-gorola-charcoal">{heading}</h1>
-      <ProductGrid {...(typeof categoryQuery.data === "string" ? { categoryId: categoryQuery.data } : {})} />
+      {categoryQuery.isLoading ? (
+        <p className="font-dm-sans text-sm text-gorola-slate">Resolving category...</p>
+      ) : null}
+      {typeof categoryQuery.data === "string" ? <ProductGrid categoryId={categoryQuery.data} /> : null}
     </section>
   );
 }

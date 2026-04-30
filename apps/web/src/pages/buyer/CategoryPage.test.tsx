@@ -80,4 +80,53 @@ describe("CategoryPage", () => {
       );
     });
   });
+
+  it("does not request unfiltered products before category id resolves", async () => {
+    let releaseCategories: (() => void) | null = null;
+    const categoriesWait = new Promise<void>((resolve) => {
+      releaseCategories = resolve;
+    });
+
+    getMock.mockImplementation(async (url: string) => {
+      if (url === "/api/v1/categories") {
+        await categoriesWait;
+        return {
+          data: {
+            success: true,
+            data: [{ id: "cat-medical", slug: "medical", name: "Medical", emoji: "💊", productCount: 1 }]
+          }
+        };
+      }
+      if (url === "/api/v1/products") {
+        return {
+          data: {
+            success: true,
+            data: {
+              items: [],
+              nextCursor: null
+            }
+          }
+        };
+      }
+      throw new Error(`Unexpected API call: ${url}`);
+    });
+
+    renderPage("/categories/medical");
+    expect(await screen.findByText("Resolving category...")).toBeInTheDocument();
+    expect(getMock).toHaveBeenCalledTimes(1);
+    expect(getMock).toHaveBeenCalledWith("/api/v1/categories");
+
+    releaseCategories?.();
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(
+        "/api/v1/products",
+        expect.objectContaining({
+          params: expect.objectContaining({
+            categoryId: "cat-medical"
+          })
+        })
+      );
+    });
+  });
 });
