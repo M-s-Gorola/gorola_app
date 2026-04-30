@@ -24,6 +24,8 @@ async function cleanOrderIntegrationGraph(db: PrismaClient): Promise<void> {
   await db.user.deleteMany();
   await db.productVariant.deleteMany();
   await db.product.deleteMany();
+  await db.advertisement.deleteMany();
+  await db.offer.deleteMany();
   await db.storeOwner.deleteMany();
   await db.store.deleteMany();
   await db.category.deleteMany();
@@ -427,6 +429,13 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     expect(getPayload.success).toBe(true);
     expect(getPayload.data.id).toBe(orderId);
     expect(getPayload.data.userId).toBe(userRow.id);
+    expect(
+      (getPayload as { data: { store?: { id: string; name: string; phone: string } } }).data.store
+    ).toEqual({
+      id: store.id,
+      name: "OC Store",
+      phone: "+911200000099"
+    });
 
     const persistedOrder = await db.order.findUniqueOrThrow({
       where: { id: orderId }

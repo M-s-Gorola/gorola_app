@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-01
-- **Session Summary:** **Buyer cart UI ↔ server reconciliation (Phase 2.11.1 follow-up)** — backend cart responses now serialize catalog context per line (`productName`, `variantLabel`, `variantUnit`, `unitPrice`) via Prisma joins in `cart.repository.ts` + `serializeBuyerCart` in `cart.controller.ts`. Web: `syncBuyerCartFromServer` (`buyer-cart-sync.ts`) replaces `useCartStore` lines from `GET /api/v1/cart`; mounted in `BuyerCartHydration` inside `BuyerLayout` on buyer `accessToken` + on `CheckoutPage` mount so drawer/checkout match persisted cart. Logout clears cart via `auth.store.ts` → `cart.store.clear()` regression. Strict TDD: `buyer-cart-sync.test.ts`, `BuyerCartHydration.test.tsx`, `replaceLines`/auth tests, mocks in `CartDrawer`/`CheckoutPage` suites. Full `pnpm test` green (**311** API, **115** web).
-- **Next Session Must Start With:** **Phase 2.12** — Order Confirmation Page polish/expansion (`GET /api/v1/orders/:id` UX gate already partially implemented; align checklist).
+- **Session Summary:** **Phase 2.12 — Order Confirmation Page (strict TDD)** — Buyer `GET /api/v1/orders/:id` (and `POST` place response) now embed `store: { id, name, phone }` via `orderRelationsInclude` in `order.repository.ts` + `serializeOrderResponse` in `order.controller.ts`. **`OrderConfirmationPage`**: GSAP `context` fullscreen green bloom fade-out, stroke-dash SVG checkmark reveal, line items + totals + landmark + honest ETA / weather-mode copy, storefront **`tel:`** CTA (explicit that owner display name is not modeled yet). **Socket.IO live ETA** intentionally deferred to Phase 2.13 (on-page note). Stabilized **`order.controller.test.ts`** teardown with `Advertisement`/`Offer` delete before `Store`. Full **`pnpm test`** green (**311** API, **117** web).
+- **Next Session Must Start With:** **Phase 2.13** — Buyer order-status page + Socket.IO `order_status_changed` contract/timeline.
 
 ---
 
@@ -19,7 +19,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                |
 | ------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 done** + **2.11.1 wiring hardening complete**; next **2.12** confirmation UX polish/expansion |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 done**, **2.11.1** + **Phase 2.12 order confirmation MVP** shipped; next **2.13** buyer order-status + Socket.IO |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                               |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                               |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                |
@@ -103,14 +103,15 @@
 - **Session 72 (Phase 2.11.1 P2 wiring closure W-009, strict TDD):** RED `ProductGrid` test with stalled `PUT` mocks proving parallel dispatch; GREEN shared `enqueueCartVariantMutation` plus repository-level per-variant enqueue for `addItem`, `updateQty`, and `removeItem`. Removed stale `userId` from buyer cart POST/PUT payloads in catalog UI. Cart repository concurrency test asserts final DB quantity follows serialized registration order (`Promise.all` updates).
 - **Session 73 (Phase 2.11.1 final closure W-001 coupling, strict TDD):** Added RED integration coverage for missing `GET /api/v1/orders/:id`, then implemented GREEN buyer-owned order read route in `order.controller.ts` and runtime wiring in `routes.ts`. Integration assertions now prove runtime retrieval of just-placed order id plus DB row correspondence through this exact backend path, and enforce 404 for non-owner buyer access.
 - **Session 74 (Phase 2.11.1 cart hydration + enriched cart contract, strict TDD):** Closed invisible “ghost” server-only cart lines vs Zustand-only UI. API: `CartRepository.findByUserId` / `getCartWithItems` include `productVariant.product`; all cart endpoints return serialized buyer cart envelope. Web: `replaceLines`, `BuyerCartHydration`, `CheckoutPage` mount sync; `cart.controller.test.ts` asserts `productName` on GET items. Verified `pnpm test` (**311** API, **115** web) + root `pnpm typecheck`.
+- **Session 75 (Phase 2.12 Order Confirmation, strict TDD):** Implemented confirmation UX + API `store` snapshot on order reads; expanded `OrderConfirmationPage.test.tsx` (items, trust `tel:`, discount, `scheduledFor`, weather copy); fixed `order.controller.test.ts` cleanup FK order for parallel suites; `router.test.tsx` order heading regex. Full `pnpm test` green (**311** API, **117** web).
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.11.1** (wiring hardening, strict TDD) before and alongside 2.12 confirmation work.
+**Current Task:** **Phase 2.13** — buyer order-status page + Socket.IO contract (Phase 2.12 confirmation MVP complete).
 
-**Exact stopping point:** **2.11.1 complete** — all wiring issues `W-001..W-009` closed with route/API/identity and DB assertions. Next active work is **2.12** confirmation experience and its contract gate. Keep `GOROLA_DUMMY_OTP` temporary until SMS provider.
+**Exact stopping point:** **2.12 order confirmation** ships with `GET /api/v1/orders/:id` enriched payload, GSAP entrance, honest ETA copy, store `tel:` trust block; **no** live Socket.IO listener yet (explicit 2.13 scope).
 
 ---
 
@@ -661,22 +662,22 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.12 — Order Confirmation Page
 
-- [ ] API Contract Gate (mandatory for phase completion):
-  - [ ] Backend endpoint reachable at runtime: `GET /api/v1/orders/:id`
-  - [ ] Backend integration tests cover order detail payload and permission boundaries
-  - [ ] Route is registered in runtime app route graph
-  - [ ] Frontend tests validated against expected API envelope and update behavior
+- [x] API Contract Gate (mandatory for phase completion):
+  - [x] Backend endpoint reachable at runtime: `GET /api/v1/orders/:id`
+  - [x] Backend integration tests cover order detail payload, **embedded `store`**, and permission boundaries (`order.controller.test.ts`, `order.repository.test.ts`)
+  - [x] Route is registered in runtime route graph (`/orders/:id` under `ProtectedRoute` + `BuyerLayout`)
+  - [x] Frontend tests against API envelope (**`OrderConfirmationPage.test.tsx`**, **`router.test.tsx`**); GSAP mocked in unit tests
 
-- [ ] `src/pages/buyer/OrderConfirmationPage.tsx` → route: `/orders/:id`
-- [ ] On load: fetch `GET /api/v1/orders/:id`
-- [ ] GSAP: `greenBloom` animation — full screen warm green flash → fades to white → content appears
-- [ ] Large checkmark (SVG animated with GSAP drawSVG or stroke-dashoffset trick)
-- [ ] Order summary: items, total, payment method, estimated delivery
-- [ ] Rider trust block: "Your order from [Store Name] is being prepared. [Store Owner Name] will call if needed." + one-tap call button
-- [ ] ETA countdown (amber pulse banner) — updates via Socket.IO `order_status_changed` event
-- [ ] Weather mode variant: "Roads are foggy tonight. Your order will arrive between [time window]. We'll notify you."
-- [ ] Honest copy — no fake urgency
-- [ ] TESTS: renders with correct order data, Socket.IO status update reflects in UI, weather mode variant
+- [x] `src/pages/buyer/OrderConfirmationPage.tsx` → route: `/orders/:id`
+- [x] On load: TanStack Query → `GET /api/v1/orders/:id`
+- [x] GSAP entrance: fixed **`occ-bloom`** gradient layer → `timeline` fades it out (transparent) while content/check reveal
+- [x] SVG check stroke animates via **`strokeDashoffset`** (no GSAP DrawSVG plugin)
+- [x] Order summary: **`items`** with line math, **`subtotal` / `deliveryFee` / inferred `discount` / `total`**, payment label (**COD/UPI/CARD**), landmark + **`status`** banner + ETA copy (**`<time>`** when **`scheduledFor`** present)
+- [x] Trust + call: storefront **`tel:{store.phone}`** with truthful copy (**no synthetic “owner name”** yet — schema is owner-email–centric)
+- [ ] **Defer → 2.13:** countdown / **`order_status_changed`** Socket.IO (page calls this out plainly for shoppers)
+- [x] **`useWeatherStore.isWeatherMode`**: amber “weather-aware” banner + cautious ETA paragraph (still no fake ticking ETA)
+- [x] Honest copy baseline (explicit non-goals vs hype)
+- [x] TESTS: RTL coverage for totals/trust/scheduling/weather; **live Socket deferred to 2.13**
 
 ### 2.13 — Order Status Page (for post-confirmation tracking)
 
@@ -1206,7 +1207,7 @@ gorola/
 | user              | ❌         | ✅                | integration: `user.repository.test.ts`                                                                                                                            |
 | store-owner       | ❌         | ✅                | integration: `store-owner.repository.test.ts`                                                                                                                     |
 | admin             | ❌         | ✅                | integration: `admin.repository.test.ts`                                                                                                                           |
-| **web (buyer)**   | **✅**     | ⏳                | **unit/component:** Vitest **115** in `apps/web` including cart hydration (`BuyerCartHydration`, `buyer-cart-sync`), `CheckoutPage`, `CartDrawer`; E2E = Phase 2.18      |
+| **web (buyer)**   | **✅**     | ⏳                | **unit/component:** Vitest **117** in `apps/web` (`OrderConfirmationPage`, cart hydration, `CheckoutPage`, `CartDrawer`); E2E = Phase 2.18      |
 | catalog           | ❌         | ✅                | integration: `category`, `product`, `variant` `*.repository.test.ts`                                                                                              |
 | cart              | ❌         | ✅                | integration: `cart.repository.test.ts`                                                                                                                            |
 | order             | ✅         | ✅                | unit: `order.service.test.ts`; integration: `order.repository.test.ts`, `order.service.stock.integration.test.ts`, `order.controller.test.ts` (checkout HTTP)                     |

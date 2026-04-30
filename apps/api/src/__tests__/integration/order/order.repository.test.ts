@@ -127,6 +127,9 @@ describe("OrderRepository", () => {
       expect(order.statusHistory).toHaveLength(1);
       expect(order.statusHistory[0]?.status).toBe("PLACED");
       expect(order.statusHistory[0]?.changedBy).toBe("SYSTEM");
+      expect(order.store.id).toBe(store.id);
+      expect(order.store.name).toBe("Order Store");
+      expect(order.store.phone).toBe("+911111111177");
     });
 
     it("throws ValidationError when items are empty", async () => {
@@ -195,6 +198,8 @@ describe("OrderRepository", () => {
       expect(found?.id).toBe(created.id);
       expect(found?.items).toHaveLength(1);
       expect(found?.statusHistory).toHaveLength(1);
+      expect(found?.store.phone).toBe("+911111111177");
+      expect(found?.store.name).toBe("Order Store");
     });
 
     it("returns null when id does not exist", async () => {

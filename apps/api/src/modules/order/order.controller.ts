@@ -63,6 +63,11 @@ function serializeOrderResponse(
       orderId: h.orderId,
       status: h.status
     })),
+    store: {
+      id: order.store.id,
+      name: order.store.name,
+      phone: order.store.phone
+    },
     storeId: order.storeId,
     subtotal: order.subtotal.toString(),
     total: order.total.toString(),

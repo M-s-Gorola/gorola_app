@@ -64,7 +64,8 @@ const sampleOrder = (): OrderWithRelations =>
         quantity: 1
       }
     ],
-    statusHistory: []
+    statusHistory: [],
+    store: { id: "s1", name: "Mock Store", phone: "+919900000001" }
   }) as never;
 
 function mockVariantForPreCheck(available: number, storeId = "s1"): void {

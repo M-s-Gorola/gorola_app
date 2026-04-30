@@ -98,7 +98,7 @@ describe("buyer routes", () => {
       </MemoryRouter>
     );
 
-    expect(screen.getByRole("heading", { name: "Order Confirmation" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /order confirmation/i })).toBeInTheDocument();
   });
 
   it("does not bounce to login when auth bootstrap resolves a protected deep link", async () => {

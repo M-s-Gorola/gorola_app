@@ -1,7 +1,5 @@
 import { NotFoundError, ValidationError } from "@gorola/shared";
 import {
-  type Order,
-  type OrderItem,
   type OrderStatus,
   type OrderStatusHistory,
   type PaymentMethod,
@@ -9,10 +7,16 @@ import {
   type PrismaClient
 } from "@prisma/client";
 
-export type OrderWithRelations = Order & {
-  items: OrderItem[];
-  statusHistory: OrderStatusHistory[];
-};
+/** Shared include graph for reads + post-create hydrate. */
+export const orderRelationsInclude = {
+  items: { orderBy: { id: "asc" as const } },
+  statusHistory: { orderBy: { changedAt: "asc" as const } },
+  store: { select: { id: true, name: true, phone: true } }
+} satisfies Prisma.OrderInclude;
+
+export type OrderWithRelations = Prisma.OrderGetPayload<{
+  include: typeof orderRelationsInclude;
+}>;
 
 export type CreateOrderInput = {
   userId: string;
@@ -51,11 +55,8 @@ type DbLike = PrismaClient | Prisma.TransactionClient;
 
 async function getOrderWithRelations(db: DbLike, id: string): Promise<OrderWithRelations> {
   return db.order.findUniqueOrThrow({
-    where: { id },
-    include: {
-      items: { orderBy: { id: "asc" } },
-      statusHistory: { orderBy: { changedAt: "asc" } }
-    }
+    include: orderRelationsInclude,
+    where: { id }
   });
 }
 
@@ -121,33 +122,24 @@ export class OrderRepository {
 
   public async findById(id: string): Promise<OrderWithRelations | null> {
     return this.db.order.findUnique({
-      where: { id },
-      include: {
-        items: { orderBy: { id: "asc" } },
-        statusHistory: { orderBy: { changedAt: "asc" } }
-      }
+      include: orderRelationsInclude,
+      where: { id }
     });
   }
 
   public async findByUserId(userId: string): Promise<OrderWithRelations[]> {
     return this.db.order.findMany({
-      where: { userId },
-      include: {
-        items: { orderBy: { id: "asc" } },
-        statusHistory: { orderBy: { changedAt: "asc" } }
-      },
-      orderBy: { createdAt: "desc" }
+      include: orderRelationsInclude,
+      orderBy: { createdAt: "desc" },
+      where: { userId }
     });
   }
 
   public async findByStoreId(storeId: string): Promise<OrderWithRelations[]> {
     return this.db.order.findMany({
-      where: { storeId },
-      include: {
-        items: { orderBy: { id: "asc" } },
-        statusHistory: { orderBy: { changedAt: "asc" } }
-      },
-      orderBy: { createdAt: "desc" }
+      include: orderRelationsInclude,
+      orderBy: { createdAt: "desc" },
+      where: { storeId }
     });
   }
 
