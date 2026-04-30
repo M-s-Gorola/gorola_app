@@ -9,7 +9,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-01
-- **Session Summary:** **Phase 2.12 — Order Confirmation Page (strict TDD)** — Buyer `GET /api/v1/orders/:id` (and `POST` place response) now embed `store: { id, name, phone }` via `orderRelationsInclude` in `order.repository.ts` + `serializeOrderResponse` in `order.controller.ts`. **`OrderConfirmationPage`**: GSAP `context` fullscreen green bloom fade-out, stroke-dash SVG checkmark reveal, line items + totals + landmark + honest ETA / weather-mode copy, storefront **`tel:`** CTA (explicit that owner display name is not modeled yet). **Socket.IO live ETA** intentionally deferred to Phase 2.13 (on-page note). Stabilized **`order.controller.test.ts`** teardown with `Advertisement`/`Offer` delete before `Store`. Full **`pnpm test`** green (**311** API, **117** web).
+- **Session Summary:** **Production checkout UX + correctness (post‑2.12)** — **`CheckoutPage`**: replaced fire-and-forget **`mutateAsync()`** with **`mutate()`** (+ `onSettled`) to stop **Axios unhandled rejection** spam on failures; **`useRef`** in-flight gate so ultra-fast double-clicks cannot issue two **`POST /api/v1/orders`** before `isPending` paints; **`aria-live`** status (“Placing your order…”), button label swap, **`Back`** disabled while pending, **`aria-label="Place order"`** for stable accessibility name, clearer **`role="alert"`** error line (surfaced **`error.message`**, hints for HTTP 500 retry). **`buyer-checkout.service.ts`**: move **`discountRepo.incrementUsedCount`** to **after** successful **`placeOrderWithStock`** and **`clearCart`** (no usage bump before a placed order); if increment fails afterward, **`getLogger().warn`** so checkout still returns success (order+cart already committed). **`order.controller.test.ts`**: asserts **`discount.usedCount === 1`** after SAVE10 checkout. **`OrderConfirmationPage.test.tsx`**: fix **`tsc --noEmit`** (non-circular GSAP **`timeline`** mock stub; **`renderPage` → void**).
 - **Next Session Must Start With:** **Phase 2.13** — Buyer order-status page + Socket.IO `order_status_changed` contract/timeline.
 
 ---
@@ -19,7 +19,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                |
 | ------- | -------------------- | -------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 done**, **2.11.1** + **Phase 2.12 order confirmation MVP** shipped; next **2.13** buyer order-status + Socket.IO |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 done**, **2.11.1** + **2.12** shipped; checkout **Place order** hardened (double-submit + error surfacing) + **`BuyerCheckoutService`** discount usage timing aligned with successful orders; next **2.13** buyer order-status + Socket.IO |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                               |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                               |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                |
@@ -104,6 +104,7 @@
 - **Session 73 (Phase 2.11.1 final closure W-001 coupling, strict TDD):** Added RED integration coverage for missing `GET /api/v1/orders/:id`, then implemented GREEN buyer-owned order read route in `order.controller.ts` and runtime wiring in `routes.ts`. Integration assertions now prove runtime retrieval of just-placed order id plus DB row correspondence through this exact backend path, and enforce 404 for non-owner buyer access.
 - **Session 74 (Phase 2.11.1 cart hydration + enriched cart contract, strict TDD):** Closed invisible “ghost” server-only cart lines vs Zustand-only UI. API: `CartRepository.findByUserId` / `getCartWithItems` include `productVariant.product`; all cart endpoints return serialized buyer cart envelope. Web: `replaceLines`, `BuyerCartHydration`, `CheckoutPage` mount sync; `cart.controller.test.ts` asserts `productName` on GET items. Verified `pnpm test` (**311** API, **115** web) + root `pnpm typecheck`.
 - **Session 75 (Phase 2.12 Order Confirmation, strict TDD):** Implemented confirmation UX + API `store` snapshot on order reads; expanded `OrderConfirmationPage.test.tsx` (items, trust `tel:`, discount, `scheduledFor`, weather copy); fixed `order.controller.test.ts` cleanup FK order for parallel suites; `router.test.tsx` order heading regex. Full `pnpm test` green (**311** API, **117** web).
+- **Session 76 (Checkout production hardening + CI type safety):** See **Last Updated** session summary above for `CheckoutPage.tsx`, `buyer-checkout.service.ts`, `OrderConfirmationPage.test.tsx`, `order.controller.test.ts` delta. **Doc clarification (chat):** **`Cart`** table stores per-user shell (`id`, `userId`, timestamps); **`CartItem`** rows are the actual SKU lines — empty cart ⇒ **zero `CartItem`**, parent **`Cart`** row commonly remains by design (`clearCart` / remove-item paths do not delete **`Cart`**).
 
 ---
 
@@ -111,7 +112,7 @@
 
 **Current Task:** **Phase 2.13** — buyer order-status page + Socket.IO contract (Phase 2.12 confirmation MVP complete).
 
-**Exact stopping point:** **2.12 order confirmation** ships with `GET /api/v1/orders/:id` enriched payload, GSAP entrance, honest ETA copy, store `tel:` trust block; **no** live Socket.IO listener yet (explicit 2.13 scope).
+**Exact stopping point:** **2.12 order confirmation** ships with enriched order payload + confirmation UX (`OrderConfirmationPage`). **Checkout** post-session **76**: place-order UX is explicit + single-flight guarded; **`POST /orders`** discounts increment usage **after** committed order+cart clear — **still no** buyer Socket.IO (2.13).
 
 ---
 
