@@ -1,3 +1,4 @@
+/* eslint-disable simple-import-sort/imports, import/order */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";

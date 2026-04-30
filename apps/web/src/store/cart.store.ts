@@ -31,12 +31,15 @@ function mergeLine(lines: CartLine[], line: CartLine): CartLine[] {
   if (existing === undefined) {
     return [...lines, { ...line }];
   }
+  const productName = line.productName ?? existing.productName;
+  const unitPrice = line.unitPrice ?? existing.unitPrice;
+  const variantLabel = line.variantLabel ?? existing.variantLabel;
   next[idx] = {
     ...existing,
     quantity: existing.quantity + line.quantity,
-    productName: line.productName ?? existing.productName,
-    unitPrice: line.unitPrice ?? existing.unitPrice,
-    variantLabel: line.variantLabel ?? existing.variantLabel
+    ...(productName !== undefined ? { productName } : {}),
+    ...(unitPrice !== undefined ? { unitPrice } : {}),
+    ...(variantLabel !== undefined ? { variantLabel } : {})
   };
   return next;
 }
