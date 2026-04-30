@@ -290,8 +290,8 @@ jobs:
           fi
 
           if [[ "$DEPLOY_OUTPUT" == *"Failed to stream build logs"* ]]; then
-            echo "Railway log streaming failed; retrying deploy once in 20s..."
-            sleep 20
+            echo "Railway log streaming failed; retrying deploy once in 30s..."
+            sleep 30
             railway up --ci --message "$MSG (retry)" --service "$RAILWAY_SERVICE_ID"
             exit 0
           fi
