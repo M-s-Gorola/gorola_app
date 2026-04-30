@@ -35,6 +35,31 @@ describe("useCartStore", () => {
     expect(result.current.totalItemCount()).toBe(3);
   });
 
+  it("addOrMergeLine keeps latest optional metadata when merging", () => {
+    const { result } = renderHook(() => useCartStore());
+    act(() => {
+      result.current.addOrMergeLine({
+        productVariantId: "v1",
+        quantity: 1,
+        productName: "Tea"
+      });
+      result.current.addOrMergeLine({
+        productVariantId: "v1",
+        quantity: 1,
+        variantLabel: "500g",
+        unitPrice: 120
+      });
+    });
+    expect(result.current.lines[0]).toEqual(
+      expect.objectContaining({
+        productName: "Tea",
+        variantLabel: "500g",
+        unitPrice: 120,
+        quantity: 2
+      })
+    );
+  });
+
   it("setQty removes line when quantity is 0", () => {
     const { result } = renderHook(() => useCartStore());
     act(() => {

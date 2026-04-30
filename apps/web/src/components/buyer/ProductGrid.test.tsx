@@ -5,21 +5,26 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProductGrid } from "./ProductGrid";
+import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
 
 
 
 
-const { getMock, postMock } = vi.hoisted(() => ({
+const { deleteMock, getMock, postMock, putMock } = vi.hoisted(() => ({
+  deleteMock: vi.fn(),
   getMock: vi.fn(),
-  postMock: vi.fn()
+  postMock: vi.fn(),
+  putMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
+    delete: deleteMock,
     get: getMock,
-    post: postMock
+    post: postMock,
+    put: putMock
   }
 }));
 
@@ -71,7 +76,16 @@ describe("ProductGrid", () => {
   beforeEach(() => {
     getMock.mockReset();
     postMock.mockReset();
+    putMock.mockReset();
+    deleteMock.mockReset();
     useCartStore.getState().clear();
+    useAuthStore.getState().setBuyerSession({
+      accessToken: "at",
+      refreshToken: "rt",
+      userId: "u-buyer",
+      phone: "+910000000000",
+      name: null
+    });
     observerCallback = undefined;
     vi.stubGlobal("IntersectionObserver", MockIntersectionObserver);
   });
@@ -280,8 +294,15 @@ describe("ProductGrid", () => {
     expect(postMock).toHaveBeenCalledWith(
       "/api/v1/cart/items",
       expect.objectContaining({
+        userId: "u-buyer",
         productVariantId: "v-apple-1kg",
         quantity: 1
+      })
+    );
+    expect(useCartStore.getState().lines[0]).toEqual(
+      expect.objectContaining({
+        unitPrice: 220,
+        variantLabel: "kg"
       })
     );
   });

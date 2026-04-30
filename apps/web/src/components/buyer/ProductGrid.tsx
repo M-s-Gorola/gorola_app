@@ -5,6 +5,7 @@ import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 
 import { api } from "@/lib/api";
 import { initGorolaGsapOnce } from "@/lib/gsap";
+import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
 type ProductGridProps = {
@@ -78,6 +79,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
   const addOrMergeLine = useCartStore((state) => state.addOrMergeLine);
   const setQty = useCartStore((state) => state.setQty);
   const lines = useCartStore((state) => state.lines);
+  const userId = useAuthStore((state) => state.userId);
   const nextPageSentinelRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
@@ -176,12 +178,29 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     };
   }, [items]);
 
-  function queueCartSync(productVariantId: string, quantity: number): void {
-    if (api === null) {
+  function syncAddCartItem(productVariantId: string, quantity: number): void {
+    if (api === null || userId === null) {
       return;
     }
     void api.post("/api/v1/cart/items", {
+      userId,
       productVariantId,
+      quantity
+    });
+  }
+
+  function syncQtyChange(productVariantId: string, quantity: number): void {
+    if (api === null || userId === null) {
+      return;
+    }
+    if (quantity <= 0) {
+      void api.delete(`/api/v1/cart/items/${productVariantId}`, {
+        params: { userId }
+      });
+      return;
+    }
+    void api.put(`/api/v1/cart/items/${productVariantId}`, {
+      userId,
       quantity
     });
   }
@@ -287,7 +306,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                       onClick={() => {
                         const next = quantity - 1;
                         setQty(item.highestPricedVariantId, next);
-                        queueCartSync(item.highestPricedVariantId, Math.max(next, 0));
+                        syncQtyChange(item.highestPricedVariantId, next);
                       }}
                       className="h-8 w-8 rounded-full border border-gorola-pine/20 text-sm font-semibold text-gorola-charcoal"
                     >
@@ -300,7 +319,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                       onClick={() => {
                         const next = quantity + 1;
                         setQty(item.highestPricedVariantId, next);
-                        queueCartSync(item.highestPricedVariantId, next);
+                        syncQtyChange(item.highestPricedVariantId, next);
                       }}
                       className="h-8 w-8 rounded-full border border-gorola-pine/20 text-sm font-semibold text-gorola-charcoal"
                     >
@@ -318,9 +337,11 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                     addOrMergeLine({
                       productVariantId: item.highestPricedVariantId,
                       quantity: 1,
-                      productName: item.name
+                      productName: item.name,
+                      unitPrice: Number(item.price),
+                      variantLabel: item.unit
                     });
-                    queueCartSync(item.highestPricedVariantId, 1);
+                    syncAddCartItem(item.highestPricedVariantId, 1);
                   }}
                   className="mt-3 rounded-full bg-gorola-saffron px-4 py-2 text-sm font-semibold text-gorola-charcoal"
                 >

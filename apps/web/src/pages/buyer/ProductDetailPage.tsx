@@ -5,6 +5,8 @@ import { useEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
+import { useCartStore } from "@/store/cart.store";
 
 type ProductVariant = {
   id: string;
@@ -46,6 +48,8 @@ async function fetchProductDetail(id: string): Promise<ProductDetail> {
 
 export function ProductDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
+  const userId = useAuthStore((state) => state.userId);
+  const addOrMergeLine = useCartStore((state) => state.addOrMergeLine);
   const containerRef = useRef<HTMLElement | null>(null);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -170,7 +174,18 @@ export function ProductDetailPage(): ReactElement {
           if (selected === undefined || api === null || selected.stockQty <= 0 || quantity <= 0) {
             return;
           }
+          addOrMergeLine({
+            productVariantId: selected.id,
+            quantity,
+            productName: query.data.name,
+            unitPrice: Number(selected.price),
+            variantLabel: selected.label
+          });
+          if (userId === null) {
+            return;
+          }
           void api.post("/api/v1/cart/items", {
+            userId,
             productVariantId: selected.id,
             quantity
           });

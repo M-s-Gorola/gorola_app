@@ -9,7 +9,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-04-30
-- **Session Summary:** **Phase 2.11 completion + Leaflet map pin (strict TDD)** — **Session 60** checkout API + `CheckoutPage`; **Session 61**: RED `AddressMapPicker.test.tsx` with mocked `leaflet`, GREEN `AddressMapPicker.tsx` (OSM `{s}.tile.openstreetmap.org` tiles, draggable marker, `@openstreetmap` attribution), `MUSSOORIE_AREA_CENTER`, Vite `*.png` module decl; wired on new-address branch with `mapCoords` → `POST /api/v1/orders` **`lat`/`lng`**; `CheckoutPage.test` mocks picker for stable jsdom + asserts new-address payload includes coordinates. Web **96** Vitest tests, lint, `vite build` green.
+- **Session Summary:** **Checkout/cart wiring hardening (post-2.11)** — fixed runtime mismatch where UI cart looked filled but server checkout failed with `Cart is empty`: `ProductGrid` and `ProductDetailPage` now send buyer `userId` on cart POST and persist optimistic cart metadata (`unitPrice`, `variantLabel`) so subtotal/total are non-zero. Also fixed grid decrement sync to call cart `DELETE` at quantity `0` (instead of invalid `POST quantity=0`) and `PUT` for positive qty updates. Updated targeted tests (`ProductGrid`, `ProductDetailPage`, `cart.store`) — **20/20 passing**.
 - **Next Session Must Start With:** **Phase 2.12** — Order confirmation page `/orders/:id`, `GET /api/v1/orders/:id` + tests; checkout review step still lacks cart discount line synced to placement (discount today is cart-drawer-local only until follow-up).
 
 ---
@@ -88,14 +88,15 @@
 - **Session 59 (Startup refresh bootstrap + mobile nav visibility):** Added `bootstrapBuyerAuthSession()` in `apps/web/src/lib/api.ts` and invoked it at app startup (`App.tsx`) to attempt one cookie-backed buyer refresh on reload. Updated auth controller refresh/logout routes to resolve refresh token from request body or `refreshToken` cookie for bootstrap compatibility. Refactored `BuyerNav` mobile layout to keep search input visible and always show login/logout text on small screens. Verified with API lint/typecheck + `auth.controller.test.ts`, and web lint/typecheck + `BuyerNav`/`LoginPage`/`api` tests.
 - **Session 60 (Phase 2.11 checkout + orders API, strict TDD):** RED integration tests (`order.controller.test.ts`) for saved/new-address placement + short-landmark 400; implemented `BuyerCheckoutService`, Zod `order.schema.ts`, `registerOrderRoutes` POST `/api/v1/orders`, buyer `GET /api/v1/addresses`; `address.repository.ts` helper `findByIdForBuyer`. RED `address.controller.test.ts` then GREEN listing. Web RED `CheckoutPage.test.tsx`, GREEN `CheckoutPage.tsx`, `/checkout` ProtectedRoute + cart proceed navigation. **`pnpm ci:quality`** green (**303** API tests, **92** web tests).
 - **Session 61 (Phase 2.11 optional map pin, strict TDD):** `leaflet` + `@types/leaflet`; `AddressMapPicker` + `AddressMapPicker.test.tsx` (mocked `leaflet` map/marker/tileLayer); `CheckoutPage` integration test for `lat`/`lng` on new-address place order; `vite-env.d.ts` `*.png`; checklist 2.11 optional map row closed.
+- **Session 62 (Cart/order wiring fix after Railway seed smoke):** Investigated checkout failure (`VALIDATION_ERROR: Cart is empty`) and zero subtotal bug. Root cause: cart add calls from `ProductGrid`/`ProductDetailPage` omitted `userId`, and grid decrement sent invalid cart `POST` with `quantity=0`. GREEN fix: add buyer `userId` to cart add payloads, use `PUT`/`DELETE` for qty mutations, and store `unitPrice` + `variantLabel` in `useCartStore` so subtotal reflects line prices. Added/updated tests in `ProductGrid.test.tsx`, `ProductDetailPage.test.tsx`, `cart.store.test.ts`; targeted Vitest run green (20 tests).
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.12** (Order confirmation page + `GET /api/v1/orders/:id`).
+**Current Task:** **Phase 2.12** (Order confirmation page + `GET /api/v1/orders/:id`) after cart/order wiring stabilization.
 
-**Exact stopping point:** **2.11 address + checkout + optional map pin complete** — same as Session 60/61 notes; **Leaflet** draggable pin on “new address” sets `lat`/`lng` on order placement. Still deferred: **checkout review discount line** vs cart drawer `savedAmount` (not on order payload). Keep `GOROLA_DUMMY_OTP` temporary until SMS provider.
+**Exact stopping point:** **Post-2.11 wiring fix complete** — cart adds now persist against buyer identity (`userId`) from both product list and detail, grid qty sync uses valid cart verbs (`PUT`/`DELETE`), and cart subtotal derives from populated `unitPrice`. This closes the observed UI/DB divergence (`items visible` + `subtotal 0` + checkout `Cart is empty`). Still deferred: **checkout review discount line** vs cart drawer `savedAmount` (not on order payload). Keep `GOROLA_DUMMY_OTP` temporary until SMS provider.
 
 ---
 

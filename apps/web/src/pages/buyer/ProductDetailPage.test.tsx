@@ -4,6 +4,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { ProductDetailPage } from "./ProductDetailPage";
+import { useAuthStore } from "@/store/auth.store";
+import { useCartStore } from "@/store/cart.store";
 
 const { getMock, postMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
@@ -41,6 +43,14 @@ describe("ProductDetailPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     postMock.mockReset();
+    useCartStore.getState().clear();
+    useAuthStore.getState().setBuyerSession({
+      accessToken: "at",
+      refreshToken: "rt",
+      userId: "u-buyer",
+      phone: "+910000000000",
+      name: null
+    });
   });
 
   it("shows loading skeleton while request is pending", () => {
@@ -135,9 +145,18 @@ describe("ProductDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
 
     expect(postMock).toHaveBeenCalledWith("/api/v1/cart/items", {
+      userId: "u-buyer",
       productVariantId: "v1",
       quantity: 2
     });
+    expect(useCartStore.getState().lines[0]).toEqual(
+      expect.objectContaining({
+        productVariantId: "v1",
+        quantity: 2,
+        unitPrice: 120,
+        variantLabel: "500g"
+      })
+    );
   });
 
   it("caps quantity at selected variant stock", async () => {
@@ -167,6 +186,7 @@ describe("ProductDetailPage", () => {
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
 
     expect(postMock).toHaveBeenCalledWith("/api/v1/cart/items", {
+      userId: "u-buyer",
       productVariantId: "v1",
       quantity: 2
     });

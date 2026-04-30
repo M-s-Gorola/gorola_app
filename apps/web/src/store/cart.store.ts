@@ -33,7 +33,10 @@ function mergeLine(lines: CartLine[], line: CartLine): CartLine[] {
   }
   next[idx] = {
     ...existing,
-    quantity: existing.quantity + line.quantity
+    quantity: existing.quantity + line.quantity,
+    productName: line.productName ?? existing.productName,
+    unitPrice: line.unitPrice ?? existing.unitPrice,
+    variantLabel: line.variantLabel ?? existing.variantLabel
   };
   return next;
 }
