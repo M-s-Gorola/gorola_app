@@ -102,6 +102,37 @@ describe("CartDrawer", () => {
     });
   });
 
+  it("syncs qty mutation when userId is null but access token exists", async () => {
+    useAuthStore.setState({
+      accessToken: "at-only",
+      name: null,
+      phone: null,
+      refreshToken: "rt-only",
+      role: "BUYER",
+      userId: null
+    });
+    useCartStore.setState({
+      lines: [
+        {
+          productVariantId: "v1",
+          quantity: 1,
+          productName: "Apple",
+          variantLabel: "1kg",
+          unitPrice: 120
+        }
+      ],
+      isOpen: true
+    });
+    putMock.mockResolvedValue({ data: { success: true } });
+
+    renderShell();
+    fireEvent.click(screen.getByRole("button", { name: "Increase Apple quantity" }));
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/cart/items/v1", expect.objectContaining({ quantity: 2 }));
+    });
+  });
+
   it("supports payment method selection with COD preselected", () => {
     useFeatureFlagsStore.getState().setFlag("PAYMENT_UPI_ENABLED", true);
     useFeatureFlagsStore.getState().setFlag("PAYMENT_CARD_ENABLED", true);

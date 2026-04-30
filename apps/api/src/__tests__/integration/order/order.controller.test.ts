@@ -438,6 +438,71 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     delete process.env.GOROLA_TEST_OTP;
   });
 
+  it("returns reconciled discount amount in GET /api/v1/orders/:id", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, "+919988776099");
+
+    const addr = await db.address.create({
+      data: {
+        userId: userRow.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+    await discountRepo.create({
+      code: "SAVE10",
+      discountType: "FLAT",
+      discountValue: 10,
+      startsAt: new Date(Date.now() - 60_000),
+      endsAt: new Date(Date.now() + 60_000),
+      minOrderAmount: null,
+      usageLimit: null
+    });
+    await cartRepo.addItem(userRow.id, variant.id, 1);
+
+    const placeRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "POST",
+      payload: {
+        addressId: addr.id,
+        addressMode: "saved",
+        discountCode: "SAVE10",
+        paymentMethod: "COD"
+      },
+      url: "/api/v1/orders"
+    });
+    expect(placeRes.statusCode).toBe(200);
+    const placed = placeRes.json() as { data: { id: string } };
+
+    const getRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "GET",
+      url: `/api/v1/orders/${placed.data.id}`
+    });
+    expect(getRes.statusCode).toBe(200);
+    const getPayload = getRes.json() as {
+      data: { deliveryFee: string; discount: { amount: string; code: string | null }; subtotal: string; total: string };
+      success: boolean;
+    };
+    expect(getPayload.success).toBe(true);
+    expect(getPayload.data.discount.amount).toBe("10.00");
+    expect(getPayload.data.discount.code).toBeNull();
+    expect(
+      Number(getPayload.data.subtotal) + Number(getPayload.data.deliveryFee) - Number(getPayload.data.discount.amount)
+    ).toBe(Number(getPayload.data.total));
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+  });
+
   it("returns 404 for GET /api/v1/orders/:id when buyer does not own order", async () => {
     process.env.GOROLA_TEST_OTP = "111222";
     const server = createServer({

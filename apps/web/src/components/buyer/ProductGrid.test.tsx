@@ -308,6 +308,52 @@ describe("ProductGrid", () => {
     );
   });
 
+  it("syncs add-to-cart API when userId is null but access token exists", async () => {
+    useAuthStore.setState({
+      accessToken: "at-only",
+      name: null,
+      phone: null,
+      refreshToken: "rt-only",
+      role: "BUYER",
+      userId: null
+    });
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "p1",
+              name: "Apple",
+              highestPricedVariantId: "v-apple-1kg",
+              storeId: "s1",
+              storeName: "Peak Mart",
+              categoryId: "c1",
+              imageUrl: "https://x",
+              price: "220.00",
+              unit: "kg"
+            }
+          ],
+          nextCursor: null
+        }
+      }
+    });
+    postMock.mockResolvedValue({ data: { success: true } });
+
+    renderGrid({ categoryId: "c1" });
+    fireEvent.click(await screen.findByRole("button", { name: "Add Apple to cart" }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/cart/items",
+        expect.objectContaining({
+          productVariantId: "v-apple-1kg",
+          quantity: 1
+        })
+      );
+    });
+  });
+
   it("queues rapid +/- sync so a second PUT is not dispatched until the first completes", async () => {
     getMock.mockResolvedValue({
       data: {

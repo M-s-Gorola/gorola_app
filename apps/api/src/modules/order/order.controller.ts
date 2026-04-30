@@ -71,6 +71,12 @@ function serializeOrderResponse(
   };
 }
 
+function inferDiscountAmount(order: OrderWithRelations): string {
+  const subtotalPlusDelivery = Number(order.subtotal.toString()) + Number(order.deliveryFee.toString());
+  const total = Number(order.total.toString());
+  return Math.max(subtotalPlusDelivery - total, 0).toFixed(2);
+}
+
 type RegisterOrderDeps = {
   buyerCheckout: BuyerCheckoutService;
   orders: OrderRepository;
@@ -121,7 +127,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         request,
         reply,
         serializeOrderResponse(order, {
-          amount: "0.00",
+          amount: inferDiscountAmount(order),
           code: null
         })
       );

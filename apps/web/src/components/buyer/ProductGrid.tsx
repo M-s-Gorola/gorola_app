@@ -80,7 +80,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
   const addOrMergeLine = useCartStore((state) => state.addOrMergeLine);
   const setQty = useCartStore((state) => state.setQty);
   const lines = useCartStore((state) => state.lines);
-  const userId = useAuthStore((state) => state.userId);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const nextPageSentinelRef = useRef<HTMLDivElement | null>(null);
   const gridRef = useRef<HTMLDivElement | null>(null);
 
@@ -180,7 +180,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
   }, [items]);
 
   function syncAddCartItem(productVariantId: string, quantity: number): void {
-    if (api === null || userId === null) {
+    if (api === null || accessToken === null) {
       return;
     }
     void enqueueCartVariantMutation(productVariantId, async () => {
@@ -192,7 +192,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
   }
 
   function syncQtyChange(productVariantId: string, quantity: number): void {
-    if (api === null || userId === null) {
+    if (api === null || accessToken === null) {
       return;
     }
     void enqueueCartVariantMutation(productVariantId, async () => {

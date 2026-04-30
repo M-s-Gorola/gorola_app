@@ -49,7 +49,7 @@ async function fetchProductDetail(id: string): Promise<ProductDetail> {
 
 export function ProductDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
-  const userId = useAuthStore((state) => state.userId);
+  const accessToken = useAuthStore((state) => state.accessToken);
   const addOrMergeLine = useCartStore((state) => state.addOrMergeLine);
   const containerRef = useRef<HTMLElement | null>(null);
   const [selectedVariantIndex, setSelectedVariantIndex] = useState(0);
@@ -182,7 +182,7 @@ export function ProductDetailPage(): ReactElement {
             unitPrice: Number(selected.price),
             variantLabel: selected.label
           });
-          if (userId === null) {
+          if (accessToken === null) {
             return;
           }
           void enqueueCartVariantMutation(selected.id, async () => {

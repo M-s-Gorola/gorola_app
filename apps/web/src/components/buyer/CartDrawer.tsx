@@ -22,7 +22,7 @@ export function CartDrawer(): ReactElement | null {
   const savedAmount = useCartStore((s) => s.discountSavedAmount);
   const discountError = useCartStore((s) => s.discountError);
   const setDiscountState = useCartStore((s) => s.setDiscountState);
-  const userId = useAuthStore((s) => s.userId);
+  const accessToken = useAuthStore((s) => s.accessToken);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const upiEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_UPI_ENABLED"));
@@ -67,7 +67,7 @@ export function CartDrawer(): ReactElement | null {
                   onClick={() => {
                     const next = line.quantity - 1;
                     setQty(line.productVariantId, next);
-                    if (api !== null && userId !== null) {
+                    if (api !== null && accessToken !== null) {
                       const client = api;
                       const variantId = line.productVariantId;
                       void enqueueCartVariantMutation(variantId, async () => {
@@ -92,7 +92,7 @@ export function CartDrawer(): ReactElement | null {
                   onClick={() => {
                     const next = line.quantity + 1;
                     setQty(line.productVariantId, next);
-                    if (api !== null && userId !== null) {
+                    if (api !== null && accessToken !== null) {
                       const client = api;
                       const variantId = line.productVariantId;
                       void enqueueCartVariantMutation(variantId, async () => {
@@ -111,7 +111,7 @@ export function CartDrawer(): ReactElement | null {
                   aria-label={`Remove ${line.productName ?? "item"}`}
                   onClick={() => {
                     removeLine(line.productVariantId);
-                    if (api !== null && userId !== null) {
+                    if (api !== null && accessToken !== null) {
                       const client = api;
                       const variantId = line.productVariantId;
                       void enqueueCartVariantMutation(variantId, async () => {
