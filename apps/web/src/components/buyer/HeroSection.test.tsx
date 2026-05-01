@@ -1,4 +1,4 @@
-/* eslint-disable simple-import-sort/imports, import/order -- local + @/ groups conflict with flat import rules */
+/* eslint-disable simple-import-sort/imports -- local + @/ groups conflict with flat import rules */
 import { act, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 

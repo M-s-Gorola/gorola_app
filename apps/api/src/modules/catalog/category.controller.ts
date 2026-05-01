@@ -1,4 +1,4 @@
-/* eslint-disable import/order -- conflicting grouping rules for relative imports */
+ 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { getPrismaClient } from "../../lib/prisma.js";

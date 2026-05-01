@@ -56,6 +56,13 @@ vi.mock("leaflet", () => ({
     icon: vi.fn(() => ({ options: {} })),
     map: leafletMocks.Lmap,
     marker: leafletMocks.markerFactory,
+    Marker: {
+      prototype: {
+        options: {
+          icon: null
+        }
+      }
+    },
     tileLayer: leafletMocks.TileLayerMock
   }
 }));

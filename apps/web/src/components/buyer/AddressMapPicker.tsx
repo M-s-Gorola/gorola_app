@@ -9,11 +9,21 @@ import type { ReactElement } from "react";
 import "leaflet/dist/leaflet.css";
 import { useEffect, useRef } from "react";
 
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIconRetinaUrl,
+/** 
+ * Fix for Leaflet default icon paths in Vite.
+ * By explicitly setting these, we avoid 404s for the blue marker pin.
+ */
+const DefaultIcon = L.icon({
   iconUrl: markerIconUrl,
-  shadowUrl: markerShadowUrl
+  iconRetinaUrl: markerIconRetinaUrl,
+  shadowUrl: markerShadowUrl,
+  iconSize: [25, 41],
+  iconAnchor: [12, 41],
+  popupAnchor: [1, -34],
+  shadowSize: [41, 41]
 });
+
+L.Marker.prototype.options.icon = DefaultIcon;
 
 export type MapCoordinates = {
   lng: number;
