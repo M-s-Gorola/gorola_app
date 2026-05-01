@@ -5,7 +5,7 @@ import {
   NotFoundError,
   UnprocessableEntityError
 } from "@gorola/shared";
-import { type PrismaClient, type ProductVariant } from "@prisma/client";
+import { type OrderStatus, type PrismaClient, type ProductVariant } from "@prisma/client";
 
 import { ProductVariantRepository } from "../catalog/variant.repository.js";
 import { StockMovementRepository } from "../inventory/stock-movement.repository.js";
@@ -16,13 +16,31 @@ import {
   type OrderWithRelations
 } from "./order.repository.js";
 
+export type OrderEventEmitter = {
+  emitStatusChanged: (orderId: string, status: string) => void | Promise<void>;
+};
+
 export class OrderService {
   public constructor(
     private readonly db: PrismaClient,
     private readonly orders: OrderRepository,
     private readonly variants: ProductVariantRepository,
-    private readonly stockMovements: StockMovementRepository
+    private readonly stockMovements: StockMovementRepository,
+    private readonly emitter?: OrderEventEmitter
   ) {}
+
+  public async updateStatus(
+    orderId: string,
+    status: OrderStatus,
+    changedBy: string,
+    note?: string
+  ): Promise<OrderWithRelations> {
+    const order = await this.orders.updateStatus(orderId, status, changedBy, note);
+    if (this.emitter) {
+      void this.emitter.emitStatusChanged(orderId, status);
+    }
+    return order;
+  }
 
   /**
    * Creates the order, then deducts stock and records SALE movements — all in one transaction.
@@ -171,6 +189,10 @@ export class OrderService {
         }
 
         await this.orders.updateStatus(orderId, "CANCELLED", changedBy, note, tx);
+
+        if (this.emitter) {
+          void this.emitter.emitStatusChanged(orderId, "CANCELLED");
+        }
 
         // Fetch final state inside transaction to ensure consistency
         return tx.order.findUniqueOrThrow({

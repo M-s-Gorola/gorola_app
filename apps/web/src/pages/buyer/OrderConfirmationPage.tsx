@@ -1,14 +1,18 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
+import { Bike, CheckCircle2, Home, Package } from "lucide-react";
 import {
   type ReactElement,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
 } from "react";
 import { useParams } from "react-router-dom";
 
+import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
+import { cn } from "@/lib/utils";
 import { useWeatherStore } from "@/store/weather.store";
 
 export type BuyerOrderConfirmationItem = {
@@ -19,6 +23,12 @@ export type BuyerOrderConfirmationItem = {
   productVariantId: string;
   quantity: number;
   variantLabel: string;
+};
+
+export type StatusHistoryItem = {
+  changedAt: string;
+  id: string;
+  status: string;
 };
 
 export type BuyerOrderDetail = {
@@ -34,6 +44,7 @@ export type BuyerOrderDetail = {
   paymentMethod: string;
   scheduledFor?: string | null;
   status: string;
+  statusHistory?: StatusHistoryItem[];
   store: {
     id: string;
     name: string;
@@ -55,16 +66,6 @@ function formatPayment(method: string): string {
   return method;
 }
 
-const STATUS_HINT: Partial<Record<string, string>> = {
-  DELIVERED: "Delivered",
-  OUT_FOR_DELIVERY: "Out for delivery",
-  PLACED: "We’ve received your order",
-  PREPARING: "The store is preparing your order",
-};
-
-function statusLabel(status: string): string {
-  return STATUS_HINT[status] ?? `Status: ${status.replaceAll("_", " ").toLowerCase()}`;
-}
 
 function telHref(phone: string): string {
   const trimmed = phone.trim();
@@ -123,6 +124,89 @@ function estimatedDeliveryCopy(
   );
 }
 
+function StatusStepper({
+  history,
+  status,
+}: {
+  history: StatusHistoryItem[];
+  status: string;
+}): ReactElement {
+  const steps = [
+    { icon: CheckCircle2, key: "PLACED", label: "Placed" },
+    { icon: Package, key: "PREPARING", label: "Preparing" },
+    { icon: Bike, key: "OUT_FOR_DELIVERY", label: "On the way" },
+    { icon: Home, key: "DELIVERED", label: "Delivered" },
+  ];
+
+  const currentIndex = steps.findIndex((s) => s.key === status);
+
+  return (
+    <div className="w-full py-6">
+      <div className="relative flex justify-between">
+        {/* Progress Line */}
+        <div className="absolute top-5 left-0 -z-10 h-0.5 w-full bg-gorola-slate-mist" />
+        <div
+          className="absolute top-5 left-0 -z-10 h-0.5 bg-gorola-pine transition-all duration-700"
+          style={{ width: `${Math.max(0, (currentIndex / (steps.length - 1)) * 100)}%` }}
+        />
+
+        {steps.map((step, i) => {
+          const Icon = step.icon;
+          const isCompleted = i < currentIndex || (status === "DELIVERED" && i === currentIndex);
+          const isActive = i === currentIndex && status !== "DELIVERED";
+          const hist = history.find((h) => h.status === step.key);
+
+          return (
+            <div className="flex flex-col items-center gap-2" key={step.key}>
+              <div
+                className={cn(
+                  "flex h-10 w-10 items-center justify-center rounded-full border-2 bg-white transition-colors duration-500",
+                  isCompleted || isActive
+                    ? "border-gorola-pine text-gorola-pine"
+                    : "border-gorola-slate-mist text-gorola-slate",
+                  isActive && "ring-4 ring-gorola-pine/10",
+                )}
+              >
+                <Icon className={cn("h-5 w-5", isActive && "animate-pulse")} />
+              </div>
+              <div className="text-center">
+                <p
+                  className={cn(
+                    "text-[11px] font-bold uppercase tracking-wider",
+                    isActive || isCompleted ? "text-gorola-pine" : "text-gorola-slate",
+                  )}
+                >
+                  {step.label}
+                </p>
+                {hist !== undefined ? (
+                  <p className="font-dm-sans text-[10px] text-gorola-slate">
+                    {new Date(hist.changedAt).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </p>
+                ) : null}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {status === "OUT_FOR_DELIVERY" ? (
+        <div className="mt-8 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="relative flex h-3 w-3">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+            <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+          </div>
+          <p className="font-dm-sans text-sm">
+            <strong>Rider location:</strong> Your rider is on the way with your order.
+          </p>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function OrderConfirmationPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const rootRef = useRef<HTMLElement | null>(null);
@@ -145,6 +229,37 @@ export function OrderConfirmationPage(): ReactElement {
       return payload.data;
     },
   });
+
+  const queryClient = useQueryClient();
+  const onStatusChanged = useCallback(
+    (data: { orderId: string; status: string }) => {
+      if (data.orderId === id) {
+        queryClient.setQueryData(
+          ["buyer-order-confirmation", id],
+          (old: BuyerOrderDetail | undefined) => {
+            if (old === undefined) return old;
+            const alreadyHasStatus = old.statusHistory?.some((h) => h.status === data.status);
+            if (alreadyHasStatus) return { ...old, status: data.status };
+
+            const newHistoryItem: StatusHistoryItem = {
+              changedAt: new Date().toISOString(),
+              id: `temp-${Date.now()}`,
+              status: data.status,
+            };
+
+            return {
+              ...old,
+              status: data.status,
+              statusHistory: [...(old.statusHistory ?? []), newHistoryItem],
+            };
+          },
+        );
+      }
+    },
+    [id, queryClient],
+  );
+
+  useOrderSocket(id, onStatusChanged);
 
   useEffect(() => {
     entranceDoneRef.current = false;
@@ -240,15 +355,6 @@ export function OrderConfirmationPage(): ReactElement {
               )
             : null;
 
-          const statusBanner = (
-            <div
-              className="rounded-xl border border-gorola-pine/15 bg-gorola-pine/5 px-3 py-2 font-dm-sans text-sm text-gorola-charcoal"
-              role="status"
-            >
-              {statusLabel(query.data.status)}
-            </div>
-          );
-
           return (
             <>
               <div
@@ -332,10 +438,13 @@ export function OrderConfirmationPage(): ReactElement {
                   <p className="font-semibold text-gorola-charcoal">Drop-off cue</p>
                   <p>{query.data.landmarkDescription}</p>
                   {estimatedDeliveryCopy(query.data, isWeatherMode)}
-                  {statusBanner}
+                  <StatusStepper
+                    history={query.data.statusHistory ?? []}
+                    status={query.data.status}
+                  />
                   <p className="font-dm-sans text-xs text-gorola-slate">
-                    Live Socket.IO ETA polish is slated for Phase 2.13—we show your current status plainly here instead of
-                    simulating a fake ticker.
+                    Tracking is live — updates appear here automatically as your order moves through
+                    the store and neighborhood.
                   </p>
                 </div>
               </div>

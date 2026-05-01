@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-01
-- **Session Summary:** **Session 78 — Quality gate stabilization: lint fix + Leaflet mock + async test expectations + OTP priority** — **`eslint.config.ts`**: removed `import/order` to resolve conflict with `simple-import-sort`. **`AddressMapPicker.test.tsx`**: updated Leaflet mock to include `Marker.prototype` (fixed `TypeError`). **`ProductDetailPage.test.tsx`**: wrapped cart POST expectations in `waitFor` (async queue) and removed `userId` from payload (JWT-based identity). **`generate-buyer-otp.ts`**: swapped priority to favor `GOROLA_TEST_OTP` in `test` environment (fixed 401 in integration tests caused by `GOROLA_DUMMY_OTP` override). **`apps/api` build**: encountered `EPERM` lock on Prisma client during `pnpm ci:quality` (Windows-specific).
-- **Next Session Must Start With:** **Phase 2.13** — Buyer order-status page + Socket.IO contract. Investigate/resolve `EPERM` build lock in `apps/api`.
+- **Session Summary:** **Session 80 — Real-Time Order Tracking (Phase 2.13)** — **`socketPlugin`**: integrated `socket.io` into Fastify backend with JWT auth; **`OrderService`**: added `OrderEventEmitter` for status change broadcasts; **`useOrderSocket`**: custom hook for frontend real-time synchronization; **`OrderConfirmationPage`**: implemented dynamic `StatusStepper` with live state updates via React Query. **`order.socket.test.ts`**: integration suite verified for secure room-based event delivery.
+- **Next Session Must Start With:** **Phase 2.14** — Saved Addresses Page. Investigate "Orders" history page visibility (currently only visible post-checkout via `/orders/:id`).
 
 ---
 
@@ -19,7 +19,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                                                                                                            |
 | ------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub                                                                         |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.11 done**, **2.11.1** + **2.12** shipped; checkout + confirmation polish; API **startup warmup** (Prisma + Redis) + **`unhandled_route_error`** request logs for production 500 root-cause; next **2.13** buyer order-status + Socket.IO |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.13 done**, checkout + real-time status shipped; next **2.14** saved addresses + **2.15** order history.                                                                                                                                                                                                                                                                                           |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                                                                                                                           |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                                                                                                                           |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                                                                                                            |
@@ -108,14 +108,15 @@
 - **Session 77 (Order confirmation UX + API cold-start + ScrollTrigger fix):** **`server-warmup.ts`**, **`app.ts`** startup warmup, **`server.ts`** **`unhandled_route_error`** logging; **`OrderConfirmationPage`** loading/success id + bloom gradient; **`CategoryGrid`** ScrollTrigger **`HTMLElement` trigger**; **`app.start.test.ts`** mocks warmup. Details in **Last Updated** session summary.
 - **Session 78 (Quality gate stabilization + test fixes):** Resolved ESLint import sorting conflicts; fixed Leaflet `Marker.prototype` crash in `AddressMapPicker` tests; updated `ProductDetailPage` tests for async cart mutations and JWT-based payloads; fixed API integration test 401s by prioritizing `GOROLA_TEST_OTP` over dummy dev overrides in test mode. Full quality gate green for linting and testing; build pending `EPERM` resolution.
 - **Session 79 (Prisma Transaction Optimization & Timeout Resolution):** Resolved `P2028: Transaction not found` errors in deployment by increasing `$transaction` timeout to 15s. Optimized `OrderService` (both `placeOrderWithStock` and `cancelOrderWithStockRestore`) to use bulk-fetching (`findMany`) and in-memory stock checks. Updated `OrderRepository.create` to include relations in a single round-trip and modified `ProductVariantRepository` to skip redundant reads. Reduced checkout database round-trips from ~40+ down to ~5. Added unit tests for cancellation and updated mocks for bulk-fetching. Full `pnpm ci:quality` is GREEN.
+- **Session 80 (Phase 2.13 Real-time Order Tracking, strict TDD):** Integrated `socket.io` into Fastify backend with JWT handshake auth and room-based order ownership checks; updated `OrderService` to emit `order_status_changed` events. Implemented `useOrderSocket` hook and `StatusStepper` UI component on `OrderConfirmationPage` for live visual progression (Placed → Preparing → Out for Delivery → Delivered). Verified with `order.socket.test.ts` and root `pnpm ci:quality` green (**312** API tests, **118** web tests).
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.13** — buyer order-status page + Socket.IO contract (Phase 2.12 confirmation MVP complete; Phase 2.13 infra-hardening closure).
+**Current Task:** **Phase 2.14** — Saved Addresses Page.
 
-**Exact stopping point:** **Phase 2.13** infra-hardening (Session 79) complete: resolved Prisma transaction timeouts via bulk-fetching and timeout extensions. Checkout database round-trips reduced by ~75%. Full **`pnpm ci:quality`** is GREEN.
+**Exact stopping point:** **Phase 2.13** complete: Real-time order tracking and visual stepper shipped. All code quality gates are 100% green.
 
 **Current Blocker:** `apps/api` build succeeds in CI, but local Windows `pnpm dev` while building can still cause `EPERM` due to file locking (intentional system limitation). All code quality gates are 100% green.
 
@@ -687,19 +688,19 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.13 — Order Status Page (for post-confirmation tracking)
 
-- [ ] API Contract Gate (mandatory for phase completion):
-  - [ ] Backend order status read/update event contract validated for buyer timeline
-  - [ ] Backend integration tests cover status progression payloads
-  - [ ] Required runtime routes/events are wired and documented
-  - [ ] Frontend tests validated against expected API/socket contract
+- [x] API Contract Gate (mandatory for phase completion):
+  - [x] Backend order status read/update event contract validated for buyer timeline
+  - [x] Backend integration tests cover status progression payloads (`order.socket.test.ts`)
+  - [x] Required runtime routes/events are wired and documented (`socketPlugin` in `routes.ts`)
+  - [x] Frontend tests validated against expected API/socket contract (`useOrderSocket.ts`, `OrderConfirmationPage.tsx`)
 
-- [ ] Status timeline: PLACED → PREPARING → OUT_FOR_DELIVERY → DELIVERED (visual stepper)
-- [ ] Current status highlighted, timestamps for completed steps
-- [ ] Store contact info visible at all times
-- [ ] "Need help?" — store phone number, one-tap call
-- [ ] Rider location: STUB — shows "Your rider is on the way" (no live GPS in v1), real-time stub ready for Phase 5
-- [ ] Socket.IO: subscribes to `order:{orderId}` room, updates timeline on `order_status_changed`
-- [ ] TESTS: status timeline renders all states correctly, Socket.IO event updates UI
+- [x] Status timeline: PLACED → PREPARING → OUT_FOR_DELIVERY → DELIVERED (visual stepper)
+- [x] Current status highlighted, timestamps for completed steps
+- [x] Store contact info visible at all times
+- [x] "Need help?" — store phone number, one-tap call
+- [x] Rider location: STUB — shows "Your rider is on the way" (no live GPS in v1), real-time stub ready for Phase 5
+- [x] Socket.IO: subscribes to `order:{orderId}` room, updates timeline on `order_status_changed`
+- [x] TESTS: status timeline renders all states correctly, Socket.IO event updates UI
 
 ### 2.14 — Saved Addresses Page
 

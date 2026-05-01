@@ -199,7 +199,7 @@ export function createServer(options: CreateServerOptions = {}): FastifyInstance
   });
 
   if (options.registerRoutes) {
-    void app.register(async (registeredApp) => options.registerRoutes?.(registeredApp));
+    void app.register(fp(async (registeredApp) => options.registerRoutes?.(registeredApp)));
   }
 
   return app as unknown as FastifyInstance;

@@ -147,7 +147,7 @@ describe("OrderConfirmationPage", () => {
     const tel = screen.getByRole("link", { name: /Call Kulri Provisions/i });
     expect(tel).toHaveAttribute("href", "tel:+911200000099");
 
-    expect(screen.getAllByText(/received your order/).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/Placed/).length).toBeGreaterThanOrEqual(1);
 
     expect(screen.getByText(/Near Kulri Bazaar/)).toBeInTheDocument();
   });

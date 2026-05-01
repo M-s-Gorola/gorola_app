@@ -2,6 +2,7 @@ import { NotImplementedError } from "@gorola/shared";
 import type { FastifyInstance } from "fastify";
 
 import { getPrismaClient } from "./lib/prisma.js";
+import { socketPlugin } from "./lib/socket.js";
 import { registerBuyerAddressRoutes } from "./modules/address/address.controller.js";
 import { AddressRepository } from "./modules/address/address.repository.js";
 import { registerAuthRoutes } from "./modules/auth/auth.controller.js";
@@ -88,7 +89,19 @@ export function registerAppRoutes(app: FastifyInstance): void {
   const variantRepoOrders = new ProductVariantRepository(prisma);
   const stockMovementRepoOrders = new StockMovementRepository(prisma);
   const discountRepo = new DiscountRepository(prisma);
-  const buyerOrderSvc = new OrderService(prisma, orderRepoOrders, variantRepoOrders, stockMovementRepoOrders);
+  const orderEmitter = {
+    emitStatusChanged: (orderId: string, status: string) => {
+      app.io.to(`order:${orderId}`).emit("order_status_changed", { orderId, status });
+    }
+  };
+
+  const buyerOrderSvc = new OrderService(
+    prisma,
+    orderRepoOrders,
+    variantRepoOrders,
+    stockMovementRepoOrders,
+    orderEmitter
+  );
   const addressRepoOrders = new AddressRepository(prisma);
   const buyerCheckout = new BuyerCheckoutService(
     prisma,
@@ -137,5 +150,10 @@ export function registerAppRoutes(app: FastifyInstance): void {
         throw new NotImplementedError("Store owner auth runtime wiring pending");
       }
     }
+  });
+
+  void app.register(socketPlugin, {
+    tokenVerifier: tokenService,
+    orderRepository: orderRepoOrders
   });
 }
