@@ -136,7 +136,7 @@ async function handle401(
  * Shared axios instance wired to in-memory `useAuthStore` (null when `VITE_API_BASE_URL` is unset).
  */
 export const api: ReturnType<typeof createApiClient> | null = (() => {
-  const base = getNormalizedApiBaseUrl(import.meta.env.VITE_API_BASE_URL);
+  const base = getNormalizedApiBaseUrl(import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'test' ? 'http://test-api' : ''));
   if (base.length === 0) {
     return null;
   }

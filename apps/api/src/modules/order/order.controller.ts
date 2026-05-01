@@ -74,7 +74,9 @@ function serializeOrderResponse(
     subtotal: order.subtotal.toString(),
     total: order.total.toString(),
     updatedAt: order.updatedAt.toISOString(),
-    userId: order.userId
+    userId: order.userId,
+    rating: order.rating,
+    ratingComment: order.ratingComment
   };
 }
 
