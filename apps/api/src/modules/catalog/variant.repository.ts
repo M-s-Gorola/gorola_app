@@ -95,16 +95,22 @@ export class ProductVariantRepository {
     variantId: string,
     quantity: number,
     storeId: string,
-    tx: Prisma.TransactionClient
+    tx: Prisma.TransactionClient,
+    options?: {
+      beforeRow?: (ProductVariant & { product: { storeId: string } }) | null | undefined;
+    }
   ): Promise<{ stockQtyBefore: number; stockQtyAfter: number }> {
     if (quantity <= 0) {
       throw new ValidationError("Stock increment quantity must be positive", { quantity });
     }
 
-    const beforeRow = await tx.productVariant.findUnique({
-      where: { id: variantId },
-      include: { product: { select: { storeId: true } } }
-    });
+    const beforeRow =
+      options?.beforeRow ??
+      (await tx.productVariant.findUnique({
+        where: { id: variantId },
+        include: { product: { select: { storeId: true } } }
+      }));
+
     if (beforeRow === null) {
       throw new NotFoundError("Product variant not found", { id: variantId });
     }

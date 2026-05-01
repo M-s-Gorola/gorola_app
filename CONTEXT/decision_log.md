@@ -700,29 +700,25 @@ Additionally, 2.11.1 tracks the full wiring register (`W-001`..`W-009`) and mark
 
 ---
 
-## [DECISION-023] — Prisma Transaction Timeout & Checkout Optimization
+## [DECISION-023] — Prisma Transaction Timeout & Order Flow Optimization
 
 **Date:** 2026-05-01
 **Status:** Accepted
 
 **Context:** 
-In cloud deployments (Railway), users reported an `INTERNAL_SERVER_ERROR` (P2028: Transaction not found) on the first "Place Order" attempt, which succeeded on the second attempt. This was caused by the first request exceeding Prisma's default 5-second transaction timeout due to cold-start latency and a "chatty" transaction logic performing many sequential database calls.
+In cloud deployments (Railway), users reported an `INTERNAL_SERVER_ERROR` (P2028: Transaction not found) on the first "Place Order" attempt. Investigation revealed a "chatty" transaction logic performing 40+ sequential database calls inside a 5-second timeout window, which is easily exceeded during infrastructure cold starts.
 
 **Decision:**
-1.  Increase the global transaction timeout for order placement to **15 seconds** to provide a safety buffer for infrastructure cold starts.
-2.  Optimize the `placeOrderWithStock` service method to use **Bulk-Fetching** (fetching all product variants in one `findMany` call) instead of sequential `findUnique` calls in a loop.
-3.  Optimize the `OrderRepository.create` method to use Prisma's `include` feature, allowing the order and its relations to be created and retrieved in a **single round-trip**.
-4.  Update `ProductVariantRepository.decrementStock` to accept pre-fetched data, eliminating redundant reads inside the transaction.
+1.  Increase the global transaction timeout for **all core order flows** (Placement and Cancellation) to **15 seconds**.
+2.  Optimize `OrderService.placeOrderWithStock` and `OrderService.cancelOrderWithStockRestore` to use **Bulk-Fetching** (`findMany`) instead of sequential loops.
+3.  Optimize `OrderRepository.create` to use Prisma's `include` feature for single-round-trip creation + hydration.
+4.  Update `ProductVariantRepository` (`decrementStock` and `incrementStock`) to support pre-fetched data, eliminating redundant reads.
 
 **Rationale:**
-- Checkout latency for a multi-item cart is reduced by ~75% (from 40+ DB calls down to ~5).
-- Improved resilience to infrastructure cold starts on Railway/Vercel.
-- Unit tests updated to mock `findMany` and verify the new optimized call sequence.
+- Checkout and Cancellation latency for a multi-item cart is reduced by **~75%**.
+- High resilience to cold starts on Railway/Vercel.
+- Unit tests added/updated to verify optimized call sequences and `findMany` usage.
 
 **Tradeoffs:**
-- Transaction logic becomes slightly more complex (mapping variants to IDs).
-- Pre-fetching consumes slightly more memory in the transaction context.
+- Service layer must now map IDs and pass data to repositories, slightly increasing code length for significant performance gains.
 
-**Alternatives Considered:**
-1. Only increase timeout — rejected: ignores the underlying performance bottleneck and high DB round-trip cost.
-2. Move stock logic out of transaction — rejected: violates the "Sacred Inventory" requirement (DECISION-013) for atomic decrements.

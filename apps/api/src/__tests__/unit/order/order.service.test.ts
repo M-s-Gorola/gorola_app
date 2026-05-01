@@ -9,14 +9,24 @@ const mockProductVariant = {
   findMany: vi.fn()
 };
 
-const mockTx = { productVariant: mockProductVariant } as never;
+const mockOrder = {
+  findUniqueOrThrow: vi.fn()
+};
+
+const mockTx = {
+  productVariant: mockProductVariant,
+  order: mockOrder
+} as never;
 
 type OrderRepoM = {
   create: ReturnType<typeof vi.fn>;
   findById: ReturnType<typeof vi.fn>;
   updateStatus: ReturnType<typeof vi.fn>;
 };
-type VariantRepoM = { decrementStock: ReturnType<typeof vi.fn> };
+type VariantRepoM = {
+  decrementStock: ReturnType<typeof vi.fn>;
+  incrementStock: ReturnType<typeof vi.fn>;
+};
 type StockM = { create: ReturnType<typeof vi.fn> };
 
 const baseInput = (): CreateOrderInput => ({
@@ -82,7 +92,10 @@ describe("OrderService (unit)", () => {
     findById: vi.fn(),
     updateStatus: vi.fn()
   };
-  const variants: VariantRepoM = { decrementStock: vi.fn() };
+  const variants: VariantRepoM = {
+    decrementStock: vi.fn(),
+    incrementStock: vi.fn()
+  };
   const stockMovements: StockM = { create: vi.fn() };
   const db: { $transaction: ReturnType<typeof vi.fn> } = { $transaction: vi.fn() };
 
@@ -150,6 +163,37 @@ describe("OrderService (unit)", () => {
         UnprocessableEntityError
       );
       expect(stockMovements.create).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("cancelOrderWithStockRestore", () => {
+    it("should increment stock, record movement, and update status", async () => {
+      const order = sampleOrder();
+      orders.findById.mockResolvedValueOnce(order);
+      mockVariantForPreCheck(10, "s1");
+      variants.incrementStock.mockResolvedValue({ stockQtyBefore: 10, stockQtyAfter: 11 });
+      stockMovements.create.mockResolvedValue({ id: "m1" });
+      orders.updateStatus.mockResolvedValueOnce(order);
+      mockOrder.findUniqueOrThrow.mockResolvedValueOnce(order);
+
+      const result = await service.cancelOrderWithStockRestore("ord1", "admin:1");
+
+      expect(orders.findById).toHaveBeenCalledWith("ord1");
+      expect(mockProductVariant.findMany).toHaveBeenCalled();
+      expect(variants.incrementStock).toHaveBeenCalledWith(
+        "v1",
+        1,
+        "s1",
+        mockTx,
+        expect.objectContaining({ beforeRow: expect.any(Object) })
+      );
+      expect(orders.updateStatus).toHaveBeenCalledWith("ord1", "CANCELLED", "admin:1", undefined, mockTx);
+      expect(result.id).toBe("ord1");
+    });
+
+    it("should throw NotFound if order missing", async () => {
+      orders.findById.mockResolvedValueOnce(null);
+      await expect(service.cancelOrderWithStockRestore("x", "u")).rejects.toThrow("Order not found");
     });
   });
 });

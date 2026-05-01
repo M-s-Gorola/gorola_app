@@ -11,6 +11,7 @@ import { ProductVariantRepository } from "../catalog/variant.repository.js";
 import { StockMovementRepository } from "../inventory/stock-movement.repository.js";
 import {
   type CreateOrderInput,
+  orderRelationsInclude,
   OrderRepository,
   type OrderWithRelations
 } from "./order.repository.js";
@@ -133,35 +134,54 @@ export class OrderService {
       throw new ConflictError("Order cannot be cancelled after delivery", { orderId });
     }
 
-    await this.db.$transaction(async (tx) => {
-      for (const item of current.items) {
-        const { stockQtyBefore, stockQtyAfter } = await this.variants.incrementStock(
-          item.productVariantId,
-          item.quantity,
-          current.storeId,
-          tx
-        );
-        await this.stockMovements.create(
-          {
-            storeId: current.storeId,
-            productVariantId: item.productVariantId,
-            orderId: current.id,
-            type: "CANCELLATION_RESTORE",
-            quantity: item.quantity,
-            stockQtyBefore,
-            stockQtyAfter
-          },
-          tx
-        );
+    return this.db.$transaction(
+      async (tx) => {
+        const variantIds = current.items.map((i) => i.productVariantId);
+        const variants = await tx.productVariant.findMany({
+          where: { id: { in: variantIds } },
+          include: { product: { select: { storeId: true } } }
+        });
+
+        const variantMap = new Map<
+          string,
+          ProductVariant & { product: { storeId: string } }
+        >(variants.map((v) => [v.id, v]));
+
+        for (const item of current.items) {
+          const preFetched = variantMap.get(item.productVariantId);
+          const { stockQtyBefore, stockQtyAfter } = await this.variants.incrementStock(
+            item.productVariantId,
+            item.quantity,
+            current.storeId,
+            tx,
+            { beforeRow: preFetched }
+          );
+          await this.stockMovements.create(
+            {
+              storeId: current.storeId,
+              productVariantId: item.productVariantId,
+              orderId: current.id,
+              type: "CANCELLATION_RESTORE",
+              quantity: item.quantity,
+              stockQtyBefore,
+              stockQtyAfter
+            },
+            tx
+          );
+        }
+
+        await this.orders.updateStatus(orderId, "CANCELLED", changedBy, note, tx);
+
+        // Fetch final state inside transaction to ensure consistency
+        return tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          include: orderRelationsInclude
+        });
+      },
+      {
+        timeout: 15000,
+        maxWait: 5000
       }
-
-      await this.orders.updateStatus(orderId, "CANCELLED", changedBy, note, tx);
-    });
-
-    const result = await this.orders.findById(orderId);
-    if (result === null) {
-      throw new Error("Invariant: order missing after cancel");
-    }
-    return result;
+    );
   }
 }
