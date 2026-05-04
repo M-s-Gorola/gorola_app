@@ -190,3 +190,18 @@ export async function bootstrapBuyerAuthSession(): Promise<void> {
     useAuthStore.getState().setBootstrapPending(false);
   }
 }
+
+/**
+ * Fetches a boolean feature flag value.
+ */
+export async function getFeatureFlag(key: string): Promise<boolean> {
+  if (api === null) return false;
+  try {
+    const res = await api.get<{ success: boolean; data: { key: string; value: boolean } }>(
+      `/api/v1/feature-flags/${key}`
+    );
+    return res.data.data.value;
+  } catch {
+    return false;
+  }
+}

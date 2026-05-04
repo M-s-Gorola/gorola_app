@@ -15,6 +15,9 @@ import { CartRepository } from "./modules/cart/cart.repository.js";
 import { registerCategoryRoutes } from "./modules/catalog/category.controller.js";
 import { registerProductRoutes } from "./modules/catalog/product.controller.js";
 import { ProductVariantRepository } from "./modules/catalog/variant.repository.js";
+import { registerFeatureFlagRoutes } from "./modules/feature-flag/feature-flag.controller.js";
+import { FeatureFlagRepository } from "./modules/feature-flag/feature-flag.repository.js";
+import { FeatureFlagService } from "./modules/feature-flag/feature-flag.service.js";
 import { StockMovementRepository } from "./modules/inventory/stock-movement.repository.js";
 import { BuyerCheckoutService } from "./modules/order/buyer-checkout.service.js";
 import { registerOrderRoutes } from "./modules/order/order.controller.js";
@@ -55,6 +58,10 @@ export function registerAppRoutes(app: FastifyInstance): void {
   registerPromotionRoutes(app);
 
   const prisma = getPrismaClient();
+
+  const featureFlagRepo = new FeatureFlagRepository(prisma);
+  const featureFlagService = new FeatureFlagService(featureFlagRepo);
+  registerFeatureFlagRoutes(app, { service: featureFlagService });
 
   const redis = getRuntimeRedis(app);
   const keys = resolveBuyerJwtKeyPair();

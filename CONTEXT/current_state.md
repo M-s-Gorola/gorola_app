@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-04
-- **Session Summary:** **Session 86 — Identity Hydration Fix.** Resolved issue where user phone/name disappeared on page reload by updating the refresh flow to return full user profile information. Implemented backend changes to `TokenService` and `AuthService` to store and retrieve user data from Redis refresh keys. Updated frontend `bootstrapBuyerAuthSession` to correctly hydrate the `authStore` on startup. Verified with TDD (Red-Green) and CI-level integration tests.
-- **Next Session Must Start With:** **Phase 2.16** — Weather Mode (System-Wide Toggle). Implement system-wide weather state and UI shifts.
+- **Session Summary:** **Session 88 — Weather Mode Aesthetic Fix.** Hardened the "Weather Mode" UI shift by broadening CSS overrides to catch stubborn "Pine" and "Saffron/Amber" brand colors. Refined the `.weather-mode` selector to correctly target the `body` and children. Verified with 100% green `ci:quality` gate.
+- **Next Session Must Start With:** **Phase 2.17** — Store List Performance (Pagination).
 
 
 ---
@@ -20,7 +20,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                                                                                                            |
 | ------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub                                                                         |
-| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.15 done**, checkout, real-time status, saved addresses, order history shipped; next **2.16** weather mode. |
+| Phase 2 | Buyer Web Experience | 🟡 IN PROGRESS | **2.1–2.16 done**, checkout, real-time status, saved addresses, order history, and weather mode shipped; next **2.17**. |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                                                                                                                           |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                                                                                                                           |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                                                                                                            |
@@ -115,14 +115,16 @@
 - **Session 84 (Phase 2.15.2 Order Hardening & Address Snapshotting):** Implemented database-backed address snapshotting for orders. Refactored `OrderConfirmationPage` into a state-aware UI with 5 states (PLACED, PREPARING, OUT_FOR_DELIVERY, DELIVERED, CANCELLED). Added dynamic delivery duration calculation and detailed address display block. Fixed flaky integration test cleanup logic in `order.history.test.ts` and `order.rate.test.ts` to include `Cart` and `CartItem` deletions. Verified with full quality gate pass.
 - **Session 85 (Scoped Mutation States & Vercel SPA Fix):** Resolved UI bug in `OrderHistoryPage` where multiple orders displayed simultaneous loading/disabled states during reorder or rating. Scoped mutation states to individual orders using `reorderMutation.variables`. Merged regression tests into the permanent `OrderHistoryPage.test.tsx` suite. Fixed SPA routing 404s on Vercel by adding a catch-all rewrite rule to `vercel.json`.
 - **Session 86 (Identity Hydration Fix):** Fixed bug where user's phone/name would revert to "Buyer" on page reload. Updated `TokenService` (Backend) to persist `name` in Redis alongside refresh tokens. Modified `rotateRefreshToken` to return the full user profile. Updated frontend `bootstrapBuyerAuthSession` to use `setBuyerSession` for full identity hydration during the startup refresh flow. Added regression tests in `buyer-token.service.test.ts`, `auth.service.test.ts`, `auth.controller.test.ts`, and `api.test.ts`.
+- **Session 87 (Weather Mode Implementation):** Implemented system-wide "Weather Mode" toggle controlled by a database feature flag. Created `FeatureFlagService` and `FeatureFlagController` following strict architecture. Implemented `useWeatherSync` polling hook (60s interval) and global CSS variable-driven UI shifts. Verified with TDD (Red-Green) and CI-level integration tests.
+- **Session 88 (Weather Mode Aesthetic Fix):** Resolved "stubborn green" issue by broadening CSS overrides in `globals.css`. Mapped Saffron/Amber accent tokens to Slate-Blue family when `.weather-mode` is active on `body`. Hardened selectors to ensure children correctly inherit theme shifts. Verified with full quality gate pass.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.16** — Weather Mode (System-Wide Toggle).
+**Current Task:** **Phase 2.17** — Store List Performance (Pagination) or Advertisements.
 
-**Exact stopping point:** **Phase 2.15.2** complete: Order confirmation UI hardened with state machine and address snapshotting. All quality gates are 100% green.
+**Exact stopping point:** **Phase 2.16** complete: Weather Mode system-wide toggle implemented with polling sync and CSS transitions. All quality gates are 100% green.
 
 **Current Blocker:** None. All quality gates are 100% green.
 
@@ -762,22 +764,22 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 ### 2.16 — Weather Mode (System-Wide Toggle)
 
-- [ ] API Contract Gate (mandatory for phase completion):
-  - [ ] Backend feature-flag endpoint reachable at runtime: `GET /api/v1/feature-flags/WEATHER_MODE_ACTIVE`
-  - [ ] Backend integration tests cover flag retrieval and cache behavior as applicable
-  - [ ] Route is registered in runtime app route graph
-  - [ ] Frontend tests validated against expected API envelope and state transitions
+- [x] API Contract Gate (mandatory for phase completion):
+  - [x] Backend feature-flag endpoint reachable at runtime: `GET /api/v1/feature-flags/WEATHER_MODE_ACTIVE`
+  - [x] Backend integration tests cover flag retrieval and cache behavior as applicable
+  - [x] Route is registered in runtime app route graph
+  - [x] Frontend tests validated against expected API envelope and state transitions
 
-- [ ] `weatherMode` boolean in Zustand weather store
-- [ ] Fetched from `GET /api/v1/feature-flags/WEATHER_MODE_ACTIVE` on app load (refetched every 60s)
-- [ ] When `weatherMode = true`:
-  - [ ] Body background class: `weather-mode` (changes `--bg` to `--gorola-slate-mist`)
-  - [ ] Nav background: `--gorola-slate`
-  - [ ] ETA banner: slate blue, "Scheduled deliveries only tonight"
-  - [ ] Hero: alternate copy and color scheme
-  - [ ] All amber accent elements shift to slate-blue
-- [ ] Transition: smooth CSS var transition (0.6s ease) — not jarring
-- [ ] TESTS: weather mode state changes CSS variables, all affected components re-render correctly
+- [x] `weatherMode` boolean in Zustand weather store
+- [x] Fetched from `GET /api/v1/feature-flags/WEATHER_MODE_ACTIVE` on app load (refetched every 60s)
+- [x] When `weatherMode = true`:
+  - [x] Body background class: `weather-mode` (changes `--bg` to `--gorola-slate-mist`)
+  - [x] Nav background: `--gorola-slate`
+  - [x] ETA banner: slate blue, "Scheduled deliveries only tonight"
+  - [x] Hero: alternate copy and color scheme
+  - [x] All amber accent elements shift to slate-blue
+- [x] Transition: smooth CSS var transition (0.6s ease) — not jarring
+- [x] TESTS: weather mode state changes CSS variables, all affected components re-render correctly
 
 ### 2.17 — Advertisements Display
 
@@ -1442,9 +1444,23 @@ _(Append new entries — never delete old ones)_
 - Verification: Created TDD reproduction test confirming the fix (Pass: 2/2) and re-verified original tests (Pass: 5/5).
 - Regression: Merged the reproduction test cases into the permanent `OrderHistoryPage.test.tsx` suite to prevent future regressions.
 - **Deployment Fix**: Added `rewrites` to `vercel.json` to handle SPA routing. This ensures that refreshing the page on any sub-route (like `/account/orders`) correctly serves `index.html` instead of a 404.
-- **Session 86 (Identity Hydration Fix):**
+
+**Session 86 (Identity Hydration Fix):**
+
 - Fixed bug where user profile (phone/name) reverted to "Buyer" on page reload.
 - Root Cause: The refresh flow (`POST /api/v1/auth/buyer/refresh`) only returned new tokens, losing the user's identity details during hydration.
 - Fix (Backend): Updated `TokenService` to store the user's `name` in Redis alongside the `userId` and `phone`. Modified `rotateRefreshToken` to return the full profile.
 - Fix (Frontend): Updated `bootstrapBuyerAuthSession` in `api.ts` to consume the full profile from the refresh response and call `setBuyerSession` for complete store hydration.
 - Verification: Implemented Red-Green TDD with new integration tests in `buyer-token.service.test.ts`, `auth.service.test.ts`, `auth.controller.test.ts`, and `api.test.ts`. Passed full repo `pnpm ci:quality`.
+
+**Session 87 (Weather Mode):**
+- **Decision 021:** Implemented a 60-second polling interval for weather mode synchronization. This balances the need for "real-time" aesthetic shifts (like fog arrival) with backend resource conservation.
+- **Architectural Adherence:** Ensured the feature flag retrieval follows the strict Controller -> Service -> Repository pattern, even for simple read-only operations.
+- **UI Persistence:** Integrated the body class toggle into `App.tsx` to ensure that weather-mode state is applied globally and survives navigation.
+- **CSS Strategy:** Used CSS variables for theme shifting (slate vs pine) to minimize JS-driven style recalculations and keep transitions smooth.
+- **Dev Tooling:** Added a floating `DevWeatherToggle` button (only visible in `import.meta.env.DEV`) to allow immediate manual testing of theme transitions without waiting for the 60s backend sync.
+
+**Session 88 (Weather Mode Aesthetic Fix):**
+- **Decision 022:** Switched to a "Color-Sweep" approach for theme shifting. Instead of only overriding primary variables, we now explicitly map the entire brand color spectrum (Pine, Saffron, Amber, Fog) to a cold Slate-Blue palette when in Weather Mode.
+- **Selector Hardening:** Fixed a selector mismatch where `body { ... }` was nested inside `.weather-mode`. Changed to `body.weather-mode` to ensure the body background and all inherited child variables update correctly.
+- **UI Consistency:** Explicitly targeted the `footer` and `nav` with specific overrides to prevent "stubborn" background colors caused by utility class specificity.

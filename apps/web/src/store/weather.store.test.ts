@@ -1,37 +1,43 @@
-import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach,describe, expect, it, vi } from 'vitest';
 
-import { useWeatherStore } from "./weather.store";
+import * as api from '../lib/api';
+import { useWeatherStore } from './weather.store';
 
-describe("useWeatherStore", () => {
+vi.mock('../lib/api', () => ({
+  getFeatureFlag: vi.fn(),
+}));
+
+describe('useWeatherStore', () => {
   beforeEach(() => {
-    act(() => {
-      useWeatherStore.getState().setWeatherMode(false);
-    });
+    vi.clearAllMocks();
+    useWeatherStore.setState({ isWeatherMode: false, isFetching: false });
   });
 
-  it("defaults to normal mode", () => {
-    const { result } = renderHook(() => useWeatherStore());
-    expect(result.current.isWeatherMode).toBe(false);
+  it('should have initial state', () => {
+    const state = useWeatherStore.getState();
+    expect(state.isWeatherMode).toBe(false);
+    expect(state.isFetching).toBe(false);
   });
 
-  it("setWeatherMode updates state", () => {
-    const { result } = renderHook(() => useWeatherStore());
-    act(() => {
-      result.current.setWeatherMode(true);
-    });
-    expect(result.current.isWeatherMode).toBe(true);
+  it('should fetch weather mode correctly', async () => {
+    vi.mocked(api.getFeatureFlag).mockResolvedValueOnce(true);
+
+    const promise = useWeatherStore.getState().fetchWeatherMode();
+    
+    expect(useWeatherStore.getState().isFetching).toBe(true);
+    
+    await promise;
+
+    expect(useWeatherStore.getState().isWeatherMode).toBe(true);
+    expect(useWeatherStore.getState().isFetching).toBe(false);
   });
 
-  it("toggleWeather flips mode", () => {
-    const { result } = renderHook(() => useWeatherStore());
-    act(() => {
-      result.current.toggleWeather();
-    });
-    expect(result.current.isWeatherMode).toBe(true);
-    act(() => {
-      result.current.toggleWeather();
-    });
-    expect(result.current.isWeatherMode).toBe(false);
+  it('should handle fetch failure by defaulting to false', async () => {
+    vi.mocked(api.getFeatureFlag).mockRejectedValueOnce(new Error('API error'));
+
+    await useWeatherStore.getState().fetchWeatherMode();
+
+    expect(useWeatherStore.getState().isWeatherMode).toBe(false);
+    expect(useWeatherStore.getState().isFetching).toBe(false);
   });
 });

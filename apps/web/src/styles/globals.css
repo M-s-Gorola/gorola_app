@@ -82,8 +82,8 @@
 
 @layer base {
   body {
-    @apply m-0 min-h-dvh font-sans antialiased bg-background text-foreground;
-    background-color: var(--color-gorola-fog);
+    @apply m-0 min-h-dvh font-sans antialiased bg-background text-foreground transition-colors duration-500 ease-in-out;
+    background-color: var(--gorola-fog);
   }
   * {
     @apply border-border outline-ring/50;
@@ -194,6 +194,21 @@
 
   .app-health-err {
     color: #b91c1c;
+  }
+}
+
+/* Weather Mode Overrides (Phase 2.16) — Refined in Session 89 */
+body.weather-mode {
+  --gorola-fog: var(--gorola-slate-mist);
+  background-color: var(--gorola-slate-mist);
+
+  .nav-blur {
+    background: color-mix(in srgb, var(--gorola-slate) 85%, transparent);
+  }
+
+  footer {
+    background-color: var(--gorola-slate) !important;
+    border-color: #2d3a4a !important;
   }
 }
 

@@ -5,8 +5,10 @@ import { Link, Route, Routes, useSearchParams } from "react-router-dom";
 
 import { AdminRoute, ProtectedRoute, StoreRoute } from "@/app/routes/guards";
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
+import { DevWeatherToggle } from "@/components/shared/DevWeatherToggle";
 import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
+import { useWeatherSync } from "@/hooks/useWeatherSync";
 import { bootstrapBuyerAuthSession } from "@/lib/api";
 import { createAppQueryClient } from "@/lib/query-client";
 import { CategoryPage } from "@/pages/buyer/CategoryPage";
@@ -17,6 +19,7 @@ import { OrderConfirmationPage } from "@/pages/buyer/OrderConfirmationPage";
 import { OrderHistoryPage } from "@/pages/buyer/OrderHistoryPage";
 import { ProductDetailPage } from "@/pages/buyer/ProductDetailPage";
 import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
+import { useWeatherStore } from "@/store/weather.store";
 
 const queryClient = createAppQueryClient();
 
@@ -58,9 +61,22 @@ function SearchPlaceholderPage(): ReactElement {
 
 export function App(): ReactElement {
   useGorolaMotion();
+  useWeatherSync();
+
+  const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
+
   useEffect(() => {
     void bootstrapBuyerAuthSession();
   }, []);
+
+  useEffect(() => {
+    if (isWeatherMode) {
+      document.body.classList.add("weather-mode");
+    } else {
+      document.body.classList.remove("weather-mode");
+    }
+  }, [isWeatherMode]);
+
   return (
     <QueryClientProvider client={queryClient}>
       <Routes>
@@ -189,6 +205,7 @@ export function App(): ReactElement {
         />
       </Routes>
       <Toaster position="bottom-left" />
+      <DevWeatherToggle />
     </QueryClientProvider>
   );
 }
