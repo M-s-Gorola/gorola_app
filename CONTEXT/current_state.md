@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-06
-- **Session Summary:** **Session 100 — Cart Wipe Bug Fix.** Resolved critical race condition in `syncBuyerCartFromServer` that zeroed out carts on checkout navigation. Added mutation barriers and resilient reconciliation logic. Verified with 507 tests green.
-- **Next Session Must Start With:** Phase 2.19 — Wiring Hardening (W-018: OTPLog Prisma Model Removal).
+- **Session Summary:** **Session 101 — Schema Hardening (OTPLog Removal).** Completed **W-018** (OTPLog Removal). Removed redundant Prisma model to align with Redis-only architecture. Verified with 507 tests green.
+- **Next Session Must Start With:** Phase 2.19 — Wiring Hardening (W-019: Cart Sync Stale authority logic refinement / Phase 2.20 Profile Page).
 
 
 ---
@@ -20,7 +20,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                                                                                                            |
 | ------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub                                                                         |
-| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.18 complete**. **Phase 2.19 (Wiring Hardening)** in progress — W-011 to W-017 complete. Currently working on W-018 (OTPLog Removal). |
+| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.18 complete**. **Phase 2.19 (Wiring Hardening)** in progress — W-011 to W-018 complete. Full quality gate GREEN. |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                                                                                                                           |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                                                                                                                           |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                                                                                                            |
@@ -130,9 +130,13 @@
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.19** — Wiring Hardening (**W-018: OTPLog Removal**).
+- **Session 101 (Phase 2.19 W-018 OTPLog Removal):** Removed redundant `OTPLog` model from `schema.prisma`. Generated and applied migration to drop `otp_logs` table. Verified Redis-only OTP flow consistency with integration tests and full CI quality gate (507 tests green).
 
-**Exact stopping point:** W-011 to W-017 100% complete. Cart Wipe Bug fixed and verified. Full CI quality gate GREEN (507 tests).
+---
+
+**Current Task:** **Phase 2.19** — Wiring Hardening (**W-018 Complete**).
+
+**Exact stopping point:** W-011 to W-018 100% complete. Full CI quality gate GREEN (507 tests).
 
 **Current Blocker:** None.
 
@@ -1070,16 +1074,16 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 **Fix:** Remove `model OTPLog` from `schema.prisma`. Create a migration to drop the table. Verify OTP flow still works (it uses Redis exclusively).
 
-- [ ] **Pre-check:** `grep -r "prisma.oTPLog\|prisma.oTPlog\|db.oTPLog" apps/api/src` — must return zero results in application code (test cleanup calls are acceptable)
-- [ ] **GREEN — Schema + Migration (this one has no RED — it's a deletion):**
-  - [ ] Remove `model OTPLog { ... }` block from `schema.prisma`
-  - [ ] `pnpm --filter @gorola/api prisma migrate dev --name remove-otp-log-table`
-  - [ ] Apply to test DB
-  - [ ] Run `pnpm --filter @gorola/api typecheck` — if any app code referenced `prisma.oTPLog`, it now fails (catching the bug)
-- [ ] **Integration test (`auth.controller.test.ts` — existing):**
-  - [ ] Test: full OTP send → verify flow (`POST /api/v1/auth/buyer/send-otp` then `POST /api/v1/auth/buyer/verify-otp`) still works end-to-end after migration
-  - [ ] Existing tests cover this — run them after migration and confirm GREEN
-- [ ] **Verification chain:** `schema.prisma` has no `OTPLog`; `prisma generate` removes the `db.oTPLog` accessor; `otp_logs` table dropped; full OTP auth flow passes
+- [x] **Pre-check:** `grep -r "prisma.oTPLog\|prisma.oTPlog\|db.oTPLog" apps/api/src` — must return zero results in application code (test cleanup calls are acceptable)
+- [x] **GREEN — Schema + Migration (this one has no RED — it's a deletion):**
+  - [x] Remove `model OTPLog { ... }` block from `schema.prisma`
+  - [x] `pnpm --filter @gorola/api prisma:migrate:dev --name remove-otp-log-table`
+  - [x] Apply to test DB
+  - [x] Run `pnpm --filter @gorola/api typecheck` — if any app code referenced `prisma.oTPLog`, it now fails (catching the bug)
+- [x] **Integration test (`auth.controller.test.ts` — existing):**
+  - [x] Test: full OTP send → verify flow (`POST /api/v1/auth/buyer/send-otp` then `POST /api/v1/auth/buyer/verify-otp`) still works end-to-end after migration
+  - [x] Existing tests cover this — run them after migration and confirm GREEN
+- [x] **Verification chain:** `schema.prisma` has no `OTPLog`; `prisma generate` removes the `db.oTPLog` accessor; `otp_logs` table dropped; full OTP auth flow passes
 
 ---
 
@@ -1696,3 +1700,7 @@ _(Append new entries — never delete old ones)_
 - **Resilient Reconciliation:** Hardened the sync logic to preserve local items if a server push fails (e.g., network timeout during guest-to-buyer migration).
 - **Checkout Guard:** Added an optimization to `CheckoutPage` to skip re-syncing if the local SPA cart is already populated, eliminating the race window entirely.
 - **Verification:** Created `buyer-cart-sync.hardening.test.ts` simulating stale responses and push failures. Full CI gate: 507 tests green.
+**Session 101 (Phase 2.19 W-018 OTPLog Removal):**
+- **Architecture Alignment:** Removed the `OTPLog` model from `schema.prisma` to resolve a contradiction with the architecture spec (§1.2), which specifies Redis as the single source of truth for OTP logs and rate limiting.
+- **Cleanup Migration:** Successfully dropped the `otp_logs` table. Verified that no application code (or test code) relied on this table via a monorepo-wide grep and full typecheck.
+- **Verification:** Confirmed that the `send-otp` and `verify-otp` integration tests pass using the existing Redis-backed logic. Full CI gate is 100% green with 507 tests.

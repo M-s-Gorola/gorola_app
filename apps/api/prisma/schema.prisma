@@ -372,16 +372,6 @@ model FeatureFlag {
   @@index([key, value])
 }
 
-model OTPLog {
-  id        String   @id @default(cuid())
-  phone     String
-  hashedOtp String
-  attempts  Int      @default(0)
-  expiresAt DateTime
-  createdAt DateTime @default(now())
-
-  @@index([phone, expiresAt])
-}
 
 model AuditLog {
   id         String    @id @default(cuid())
