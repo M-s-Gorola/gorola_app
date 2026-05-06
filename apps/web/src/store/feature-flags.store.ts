@@ -14,6 +14,7 @@ export const useFeatureFlagsStore = create<FeatureFlagsState>((set, get) => ({
       flags: { ...s.flags, [key]: value }
     })),
   getFlag: (key) => {
+    // eslint-disable-next-line security/detect-object-injection
     return get().flags[key] ?? false;
   },
   reset: () => set({ flags: {} })

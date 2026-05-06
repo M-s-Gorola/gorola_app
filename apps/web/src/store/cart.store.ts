@@ -38,6 +38,7 @@ function mergeLine(lines: CartLine[], line: CartLine): CartLine[] {
     return [...lines, { ...line }];
   }
   const next = lines.slice();
+  // eslint-disable-next-line security/detect-object-injection
   const existing = next[idx];
   if (existing === undefined) {
     return [...lines, { ...line }];
@@ -45,6 +46,7 @@ function mergeLine(lines: CartLine[], line: CartLine): CartLine[] {
   const productName = line.productName ?? existing.productName;
   const unitPrice = line.unitPrice ?? existing.unitPrice;
   const variantLabel = line.variantLabel ?? existing.variantLabel;
+  // eslint-disable-next-line security/detect-object-injection
   next[idx] = {
     ...existing,
     quantity: existing.quantity + line.quantity,

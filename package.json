@@ -11,7 +11,8 @@
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
     "build": "pnpm -r build",
-    "ci:quality": "pnpm --filter @gorola/shared build && pnpm lint && pnpm typecheck && pnpm test && pnpm build",
+    "security:audit": "pnpm audit --audit-level=high",
+    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm lint -- --max-warnings=0 && pnpm typecheck && pnpm test && pnpm build",
     "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
     "db:local:bootstrap": "pnpm --filter @gorola/api prisma:bootstrap:local",
     "db:local:seed": "pnpm --filter @gorola/api prisma:seed",
@@ -25,10 +26,17 @@
     "@typescript-eslint/parser": "^8.30.1",
     "eslint": "^9.24.0",
     "eslint-plugin-import": "^2.31.0",
+    "eslint-plugin-security": "^4.0.0",
     "eslint-plugin-simple-import-sort": "^12.1.1",
     "globals": "^16.0.0",
     "jiti": "^2.6.1",
     "prettier": "^3.5.3",
     "typescript": "^5.8.3"
+  },
+  "pnpm": {
+    "overrides": {
+      "ip-address": "^10.1.1",
+      "//ip-address": "Overridden due to moderate security vulnerability in <=10.1.0"
+    }
   }
 }

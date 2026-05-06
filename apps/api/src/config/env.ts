@@ -16,7 +16,9 @@ const examplePath = path.resolve(workspaceRoot, ".env.example");
 // PaaS (Railway, etc.): there is no committed `.env`; variables come from the host environment.
 // dotenv still tries to read `path` — use an empty file if missing so validation runs against
 // `process.env` (already populated by the platform) instead of failing with ENOENT.
+// eslint-disable-next-line security/detect-non-literal-fs-filename
 if (!existsSync(envPath)) {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   writeFileSync(envPath, "", { encoding: "utf8" });
 }
 

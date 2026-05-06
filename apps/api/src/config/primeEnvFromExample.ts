@@ -11,6 +11,7 @@ import { parse } from "dotenv";
  * Only fills keys that are still absent (`!(key in process.env)`).
  */
 export function primeMissingKeysFromExample(exampleFilePath: string): void {
+  // eslint-disable-next-line security/detect-non-literal-fs-filename
   const exampleVars = parse(readFileSync(exampleFilePath, "utf8"));
   const secretPlaceholders: Partial<Record<string, string>> = {
     JWT_PRIVATE_KEY: "placeholder",
@@ -25,15 +26,19 @@ export function primeMissingKeysFromExample(exampleFilePath: string): void {
       continue;
     }
     if (key === "DATABASE_URL_TEST" && typeof process.env.DATABASE_URL === "string") {
+      // eslint-disable-next-line security/detect-object-injection
       process.env[key] = process.env.DATABASE_URL;
       continue;
     }
+    // eslint-disable-next-line security/detect-object-injection
     const sample = exampleVars[key];
     if (sample !== undefined && sample !== "") {
+      // eslint-disable-next-line security/detect-object-injection
       process.env[key] = sample;
       continue;
     }
     const ph = secretPlaceholders[key as keyof typeof secretPlaceholders];
+    // eslint-disable-next-line security/detect-object-injection
     process.env[key] = ph ?? "";
   }
 }
