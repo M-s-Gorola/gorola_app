@@ -19,3 +19,11 @@ export function enqueueCartVariantMutation<T>(
   );
   return next;
 }
+
+/**
+ * Returns a promise that resolves when all currently queued mutations have finished.
+ */
+export async function waitForAllCartMutations(): Promise<void> {
+  const currentTails = Array.from(tailsByVariantId.values());
+  await Promise.allSettled(currentTails);
+}

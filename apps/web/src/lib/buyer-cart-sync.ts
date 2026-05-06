@@ -1,4 +1,5 @@
 import { api } from "@/lib/api";
+import { waitForAllCartMutations } from "@/lib/cart-variant-mutation-queue";
 import { type CartLine, useCartStore } from "@/store/cart.store";
 
 type CartGetEnvelope = {
@@ -56,14 +57,20 @@ export async function syncBuyerCartFromServer(): Promise<void> {
   if (api === null) {
     return;
   }
+
+  // 1. Wait for any in-flight additions/decrements to hit the server first
+  await waitForAllCartMutations();
+
+  // 2. Fetch current server state
   const res = await api.get<CartGetEnvelope>("/api/v1/cart");
   const items = res.data.data?.items;
   const serverLines = mapBuyerCartItemsToLines(items);
 
   const localLines = useCartStore.getState().lines;
 
-  // If server is empty but we have local items (guest cart), push them to server
+  // 3. RECONCILIATION: If server is empty but we have local items (guest cart), push them to server
   if (serverLines.length === 0 && localLines.length > 0) {
+    let anyPushFailed = false;
     for (const line of localLines) {
       try {
         await api.post("/api/v1/cart/items", {
@@ -72,15 +79,30 @@ export async function syncBuyerCartFromServer(): Promise<void> {
         });
       } catch (err) {
         console.error("Failed to sync guest line to server:", err);
+        anyPushFailed = true;
       }
     }
-    // No need to replaceLines yet, the next sync or local state is fine.
-    // But to be safe, let's re-fetch to get the authoritative IDs/prices from server.
+
+    // If a push failed, we don't blindly replace with server (which might be partial/empty).
+    // Instead, we re-fetch once to see what stuck, but if that's still empty and we had items, we KEEP local.
+    if (anyPushFailed) {
+      const retryRes = await api.get<CartGetEnvelope>("/api/v1/cart");
+      const retryLines = mapBuyerCartItemsToLines(retryRes.data.data?.items);
+      if (retryLines.length > 0) {
+        useCartStore.getState().replaceLines(retryLines);
+      }
+      // If still empty after failure, we just keep local state as is to prevent the "zero out" bug.
+      return;
+    }
+
     const secondRes = await api.get<CartGetEnvelope>("/api/v1/cart");
     const finalLines = mapBuyerCartItemsToLines(secondRes.data.data?.items);
     useCartStore.getState().replaceLines(finalLines);
     return;
   }
 
+  // 4. If server has items, it is the authority (replaces local items)
+  // BUT: If server is empty and local is empty, this just sets empty (correct).
+  // AND: If server is empty but local is NOT, it was handled above.
   useCartStore.getState().replaceLines(serverLines);
 }

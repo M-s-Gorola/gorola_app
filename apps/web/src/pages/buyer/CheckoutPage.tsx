@@ -61,10 +61,16 @@ export function CheckoutPage(): ReactElement {
     if (accessToken === null) {
       return;
     }
+    // Optimization: If we already have items in the SPA state, we don't need to sync 
+    // immediately on mount unless we want to force a refresh. This prevents race 
+    // conditions where a stale "empty" server response wipes a non-empty local cart.
+    if (lines.length > 0) {
+      return;
+    }
     void syncBuyerCartFromServer().catch(() => {
       /* keep local lines if cart fetch fails */
     });
-  }, [accessToken]);
+  }, [accessToken, lines.length]);
 
   useEffect(() => {
     if (addressDefaultSet) {

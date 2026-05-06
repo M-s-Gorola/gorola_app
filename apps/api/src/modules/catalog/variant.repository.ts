@@ -8,6 +8,7 @@ export type CreateProductVariantInput = {
   stockQty?: number;
   unit: string;
   isActive?: boolean;
+  lowStockThreshold?: number;
 };
 
 export type UpdateProductVariantInput = Partial<{
@@ -16,6 +17,7 @@ export type UpdateProductVariantInput = Partial<{
   stockQty: number;
   unit: string;
   isActive: boolean;
+  lowStockThreshold: number;
 }>;
 
 function isPrismaError(error: unknown, code: string): boolean {
@@ -72,9 +74,14 @@ export class ProductVariantRepository {
       });
     }
 
+    const newQty = beforeRow.stockQty - quantity;
     const result = await tx.productVariant.updateMany({
       where: { id: variantId, stockQty: { gte: quantity } },
-      data: { stockQty: { decrement: quantity } }
+      data: {
+        stockQty: { decrement: quantity },
+        isInStock: newQty > 0,
+        isLowStock: newQty <= beforeRow.lowStockThreshold
+      }
     });
     if (result.count === 0) {
       const latest = await tx.productVariant.findUniqueOrThrow({ where: { id: variantId } });
@@ -118,9 +125,14 @@ export class ProductVariantRepository {
       throw new ForbiddenError("Product variant is not in this store", { variantId, storeId });
     }
 
+    const newQty = beforeRow.stockQty + quantity;
     const updated = await tx.productVariant.update({
       where: { id: variantId },
-      data: { stockQty: { increment: quantity } }
+      data: {
+        stockQty: { increment: quantity },
+        isInStock: newQty > 0,
+        isLowStock: newQty <= beforeRow.lowStockThreshold
+      }
     });
     return {
       stockQtyBefore: beforeRow.stockQty,
@@ -161,6 +173,9 @@ export class ProductVariantRepository {
           label: input.label,
           price: toDecimal(input.price),
           stockQty: input.stockQty ?? 0,
+          lowStockThreshold: input.lowStockThreshold ?? 5,
+          isInStock: (input.stockQty ?? 0) > 0,
+          isLowStock: (input.stockQty ?? 0) <= (input.lowStockThreshold ?? 5),
           unit: input.unit,
           isActive: input.isActive ?? true
         }
@@ -176,13 +191,25 @@ export class ProductVariantRepository {
   public async update(id: string, data: UpdateProductVariantInput): Promise<ProductVariant> {
     try {
       const { price, ...rest } = data;
-      return await this.db.productVariant.update({
+      const updated = await this.db.productVariant.update({
         where: { id },
         data: {
           ...rest,
           ...(price !== undefined ? { price: toDecimal(price) } : {})
         }
       });
+
+      // Recalculate flags if stockQty or lowStockThreshold changed
+      if (data.stockQty !== undefined || data.lowStockThreshold !== undefined) {
+        return await this.db.productVariant.update({
+          where: { id },
+          data: {
+            isInStock: updated.stockQty > 0,
+            isLowStock: updated.stockQty <= updated.lowStockThreshold
+          }
+        });
+      }
+      return updated;
     } catch (error: unknown) {
       if (isPrismaError(error, "P2025")) {
         throw new NotFoundError("Product variant not found", { id }, error);

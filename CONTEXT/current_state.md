@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-06
-- **Session Summary:** **Session 98 — Inventory Foundation Hardening.** Completed **W-016** (StockMovementType Enum update). Added `REFILL`, `ADJUSTMENT`, `INITIAL` types and made `orderId` optional in `StockMovement`. Verified with integration tests and full CI quality gate (499 tests green).
-- **Next Session Must Start With:** Phase 2.19 — Wiring Hardening (W-017: ProductVariant Stock Flags Missing lowStockThreshold / isLowStock / isInStock).
+- **Session Summary:** **Session 100 — Cart Wipe Bug Fix.** Resolved critical race condition in `syncBuyerCartFromServer` that zeroed out carts on checkout navigation. Added mutation barriers and resilient reconciliation logic. Verified with 507 tests green.
+- **Next Session Must Start With:** Phase 2.19 — Wiring Hardening (W-018: OTPLog Prisma Model Removal).
 
 
 ---
@@ -20,7 +20,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                                                                                                            |
 | ------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub                                                                         |
-| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.18 complete**. **Phase 2.19 (Wiring Hardening)** in progress — W-011 to W-016 complete. Currently working on W-017 (Stock Flags). |
+| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.18 complete**. **Phase 2.19 (Wiring Hardening)** in progress — W-011 to W-017 complete. Currently working on W-018 (OTPLog Removal). |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                                                                                                                           |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                                                                                                                           |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                                                                                                            |
@@ -123,14 +123,16 @@
 - **Session 96 (Wiring & Security Hardening):** Completed **W-011** (Product Detail Navigation reachability + Cart button consistency), **W-012** (Search Routing Fix including `categorySlug` API enrichment), **W-013** (Phone Redaction in Logs for PII compliance), and **W-014** (Order Idempotency via Redis `X-Idempotency-Key` handling). Verified with full CI quality gate (491 tests green).
 - **Session 97 (Phase 2.19 W-015 Rider Stubs):** Registered mandatory Rider Interface HTTP stubs (`POST /api/v1/rider/auth/login`, `GET /api/v1/rider/orders/active`, `PUT /api/v1/rider/orders/:id/status`, `PUT /api/v1/rider/location`) returning `501 Not Implemented` with `NOT_IMPLEMENTED` code. Added `/rider` Socket.IO namespace stub in `socket.ts`. Verified with new integration tests (`rider.stubs.test.ts`) and full monorepo `ci:quality` gate (495 tests green).
 - **Session 98 (Phase 2.19 W-016 Stock Movement Types):** Expanded `StockMovementType` enum in `schema.prisma` to include `REFILL`, `ADJUSTMENT`, and `INITIAL`. Made `StockMovement.orderId` optional to support non-order-related inventory changes. Implemented comprehensive validation in `StockMovementRepository` for new types. Verified with new integration tests and full CI quality gate (499 tests green).
+- **Session 99 (Phase 2.19 W-017 ProductVariant Stock Flags):** Added `lowStockThreshold`, `isLowStock`, and `isInStock` fields to `ProductVariant`. Updated `decrementStock` and `incrementStock` in `ProductVariantRepository` to maintain flags atomically. Exposed flags in Buyer API (`ProductRepository`). Verified with 30 targeted tests and full CI quality gate (505 tests green).
+- **Session 100 (Cart Wipe Bug Fix):** Investigated and reproduced a race condition in `syncBuyerCartFromServer` that caused the cart to zero out on checkout transition. Implemented `waitForAllCartMutations` barrier and hardened reconciliation to preserve local state on push failures. Added `buyer-cart-sync.hardening.test.ts` to main suite. Verified with 507 tests green.
 
 ---
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.19** — Wiring Hardening (**W-017: ProductVariant Stock Flags Missing lowStockThreshold / isLowStock / isInStock**).
+**Current Task:** **Phase 2.19** — Wiring Hardening (**W-018: OTPLog Removal**).
 
-**Exact stopping point:** W-011 to W-016 100% complete. Stock movement types verified via integration tests. Full CI quality gate GREEN (499 tests).
+**Exact stopping point:** W-011 to W-017 100% complete. Cart Wipe Bug fixed and verified. Full CI quality gate GREEN (507 tests).
 
 **Current Blocker:** None.
 
@@ -1037,28 +1039,28 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 **Fix:** Migration to add 3 fields. Update `decrementStock` / `incrementStock` in `variant.repository.ts` to set these flags atomically in the same DB call.
 
-- [ ] **RED — Integration (`variant.repository.test.ts`):**
-  - [ ] Test: new `ProductVariant` defaults: `isInStock: true`, `isLowStock: false`, `lowStockThreshold: 5`
-  - [ ] Test: `decrementStock` bringing `stockQty` to 0 also sets `isInStock: false`
-  - [ ] Test: `decrementStock` bringing `stockQty <= lowStockThreshold` sets `isLowStock: true`
-  - [ ] Test: `incrementStock` bringing `stockQty > 0` restores `isInStock: true`
-  - [ ] Test: `incrementStock` bringing `stockQty > lowStockThreshold` restores `isLowStock: false`
-  - [ ] Run — confirm RED
-- [ ] **GREEN — Migration + Implementation:**
-  - [ ] Add 3 fields to `ProductVariant` in `schema.prisma`
-  - [ ] `pnpm --filter @gorola/api prisma migrate dev --name add-variant-stock-flags`
-  - [ ] Apply to test DB
-  - [ ] Update `decrementStock`: after atomic decrement, compute and update `isInStock` and `isLowStock` in the same Prisma `$transaction`
-  - [ ] Update `incrementStock` (used in cancellation restore): same pattern
-  - [ ] Run integration tests — GREEN
-- [ ] **RED — Integration (`product.controller.test.ts`):**
-  - [ ] Test: `GET /api/v1/products/:id` variant payload includes `isInStock` field
-  - [ ] Test: a variant with `isInStock: false` is still visible in the detail response but marked clearly (buyer sees "Out of Stock")
-  - [ ] Run — confirm RED (field absent from response)
-- [ ] **GREEN — Backend (`product.repository.ts`, `product.controller.ts`):**
-  - [ ] Include `isInStock`, `isLowStock`, `lowStockThreshold` in variant select/return shape for both list and detail endpoints
-  - [ ] Run integration tests — GREEN
-- [ ] **Verification chain:** Stock → 0 → `isInStock: false` → buyer card disabled → checkout stock check rejects it
+- [x] **RED — Integration (`variant.repository.test.ts`):**
+  - [x] Test: new `ProductVariant` defaults: `isInStock: true`, `isLowStock: false`, `lowStockThreshold: 5`
+  - [x] Test: `decrementStock` bringing `stockQty` to 0 also sets `isInStock: false`
+  - [x] Test: `decrementStock` bringing `stockQty <= lowStockThreshold` sets `isLowStock: true`
+  - [x] Test: `incrementStock` bringing `stockQty > 0` restores `isInStock: true`
+  - [x] Test: `incrementStock` bringing `stockQty > lowStockThreshold` restores `isLowStock: false`
+  - [x] Run — confirm RED
+- [x] **GREEN — Migration + Implementation:**
+  - [x] Add 3 fields to `ProductVariant` in `schema.prisma`
+  - [x] `pnpm --filter @gorola/api prisma migrate dev --name add-variant-stock-flags`
+  - [x] Apply to test DB
+  - [x] Update `decrementStock`: after atomic decrement, compute and update `isInStock` and `isLowStock` in the same Prisma `$transaction`
+  - [x] Update `incrementStock` (used in cancellation restore): same pattern
+  - [x] Run integration tests — GREEN
+- [x] **RED — Integration (`product.controller.test.ts`):**
+  - [x] Test: `GET /api/v1/products/:id` variant payload includes `isInStock` field
+  - [x] Test: a variant with `isInStock: false` is still visible in the detail response but marked clearly (buyer sees "Out of Stock")
+  - [x] Run — confirm RED (field absent from response)
+- [x] **GREEN — Backend (`product.repository.ts`, `product.controller.ts`):**
+  - [x] Include `isInStock`, `isLowStock`, `lowStockThreshold` in variant select/return shape for both list and detail endpoints
+  - [x] Run integration tests — GREEN
+- [x] **Verification chain:** Stock → 0 → `isInStock: false` → buyer card disabled → checkout stock check rejects it
 
 ---
 
@@ -1682,3 +1684,15 @@ _(Append new entries — never delete old ones)_
 - **Schema Modification:** Made `StockMovement.orderId` optional. This is an architectural shift to allow recording inventory changes (like initial stock load or manual adjustments) that are not tied to a specific buyer order.
 - **Repository Validation:** Updated `StockMovementRepository` to enforce strict arithmetic checks for all types (e.g., `REFILL` must result in `after = before + qty`, `ADJUSTMENT` must have `qty` matching the absolute difference).
 - **Verification:** Followed TDD. Created RED tests for new types -> Migration -> Repository Implementation -> GREEN pass. Full CI quality gate passing with 499 tests.
+**Session 99 (Phase 2.19 W-017 ProductVariant Stock Flags):**
+- **Decision 024:** Implemented stock state flags (`isInStock`, `isLowStock`) as managed fields in `ProductVariant` rather than dynamic calculations. This improves query performance for large catalog filters.
+- **Atomic Operations:** Updated `decrementStock` and `incrementStock` in `ProductVariantRepository` to update these flags within the same transaction as the quantity change, ensuring data consistency without race conditions.
+- **Buyer UI Alignment:** Exposed `isInStock` to the Buyer API detail and list endpoints. This allows the frontend to proactively disable "Add to Cart" and show "Out of Stock" labels without waiting for a server-side validation error at checkout.
+- **Verification:** Followed strict TDD. Added 30 integration tests covering default values, transition boundaries (e.g., stock 6 -> 5 triggering `isLowStock`), and restoration logic. Full CI gate: 505 tests green.
+
+**Session 100 (Cart Wipe Bug Fix):**
+- **Root Cause Analysis:** Navigating to the Checkout page triggered a `syncBuyerCartFromServer()` call. If a previous add-to-cart mutation was in flight, the server returned a stale "empty" cart, which unconditionally wiped the local Zustand store.
+- **Mutation Barrier:** Introduced `waitForAllCartMutations()` in the mutation queue. The sync utility now waits for all pending network updates to settle before fetching the authoritative server state.
+- **Resilient Reconciliation:** Hardened the sync logic to preserve local items if a server push fails (e.g., network timeout during guest-to-buyer migration).
+- **Checkout Guard:** Added an optimization to `CheckoutPage` to skip re-syncing if the local SPA cart is already populated, eliminating the race window entirely.
+- **Verification:** Created `buyer-cart-sync.hardening.test.ts` simulating stale responses and push failures. Full CI gate: 507 tests green.

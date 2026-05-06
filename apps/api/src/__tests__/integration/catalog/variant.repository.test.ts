@@ -297,6 +297,89 @@ describe("ProductVariantRepository", () => {
     });
   });
 
+  describe("Stock Flags (lowStockThreshold, isLowStock, isInStock)", () => {
+    it("initializes default flags correctly", async () => {
+      const v = await repo.create({
+        productId: product.id,
+        label: "flags1",
+        price: "1",
+        stockQty: 10,
+        unit: "u"
+      });
+      expect(v.lowStockThreshold).toBe(5);
+      expect(v.isLowStock).toBe(false);
+      expect(v.isInStock).toBe(true);
+    });
+
+    it("updates flags correctly on decrement to low stock", async () => {
+      const v = await repo.create({
+        productId: product.id,
+        label: "flags2",
+        price: "1",
+        stockQty: 10,
+        unit: "u"
+      });
+      await db.$transaction(async (tx) => {
+        await repo.decrementStock(v.id, 6, store.id, tx);
+      });
+      const updated = await db.productVariant.findUniqueOrThrow({ where: { id: v.id } });
+      expect(updated.stockQty).toBe(4);
+      expect(updated.isLowStock).toBe(true);
+      expect(updated.isInStock).toBe(true);
+    });
+
+    it("updates flags correctly on decrement to zero stock", async () => {
+      const v = await repo.create({
+        productId: product.id,
+        label: "flags3",
+        price: "1",
+        stockQty: 5,
+        unit: "u"
+      });
+      await db.$transaction(async (tx) => {
+        await repo.decrementStock(v.id, 5, store.id, tx);
+      });
+      const updated = await db.productVariant.findUniqueOrThrow({ where: { id: v.id } });
+      expect(updated.stockQty).toBe(0);
+      expect(updated.isLowStock).toBe(true);
+      expect(updated.isInStock).toBe(false);
+    });
+
+    it("updates flags correctly on increment from zero stock", async () => {
+      const v = await repo.create({
+        productId: product.id,
+        label: "flags4",
+        price: "1",
+        stockQty: 0,
+        unit: "u"
+      });
+      await db.$transaction(async (tx) => {
+        await repo.incrementStock(v.id, 1, store.id, tx);
+      });
+      const updated = await db.productVariant.findUniqueOrThrow({ where: { id: v.id } });
+      expect(updated.stockQty).toBe(1);
+      expect(updated.isLowStock).toBe(true);
+      expect(updated.isInStock).toBe(true);
+    });
+
+    it("updates flags correctly on increment above threshold", async () => {
+      const v = await repo.create({
+        productId: product.id,
+        label: "flags5",
+        price: "1",
+        stockQty: 4,
+        unit: "u"
+      });
+      await db.$transaction(async (tx) => {
+        await repo.incrementStock(v.id, 10, store.id, tx);
+      });
+      const updated = await db.productVariant.findUniqueOrThrow({ where: { id: v.id } });
+      expect(updated.stockQty).toBe(14);
+      expect(updated.isLowStock).toBe(false);
+      expect(updated.isInStock).toBe(true);
+    });
+  });
+
   describe("security", () => {
     it("does not treat SQL injection-like label as raw SQL", async () => {
       const malicious = "var'; DROP TABLE \"ProductVariant\";--";

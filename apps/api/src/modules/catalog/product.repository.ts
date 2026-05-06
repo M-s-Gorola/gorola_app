@@ -34,6 +34,8 @@ export type ProductListItem = {
   highestPricedVariantId: string;
   price: string;
   unit: string;
+  isInStock: boolean;
+  isLowStock: boolean;
 };
 
 export type ProductListResult = {
@@ -57,6 +59,9 @@ export type ProductDetailResult = {
     price: string;
     unit: string;
     stockQty: number;
+    isInStock: boolean;
+    isLowStock: boolean;
+    lowStockThreshold: number;
   }>;
 };
 
@@ -78,7 +83,9 @@ const productListInclude = Prisma.validator<Prisma.ProductInclude>()({
     select: {
       id: true,
       price: true,
-      unit: true
+      unit: true,
+      isInStock: true,
+      isLowStock: true
     }
   }
 });
@@ -213,7 +220,9 @@ export class ProductRepository {
         categoryId: row.categoryId,
         highestPricedVariantId: row.variants[0]!.id,
         price: row.variants[0]!.price.toFixed(2),
-        unit: row.variants[0]!.unit
+        unit: row.variants[0]!.unit,
+        isInStock: row.variants[0]!.isInStock,
+        isLowStock: row.variants[0]!.isLowStock
       }));
 
     return {
@@ -253,7 +262,10 @@ export class ProductRepository {
             label: true,
             price: true,
             unit: true,
-            stockQty: true
+            stockQty: true,
+            isInStock: true,
+            isLowStock: true,
+            lowStockThreshold: true
           }
         }
       }
@@ -278,7 +290,10 @@ export class ProductRepository {
         label: variant.label,
         price: variant.price.toFixed(2),
         unit: variant.unit,
-        stockQty: variant.stockQty
+        stockQty: variant.stockQty,
+        isInStock: variant.isInStock,
+        isLowStock: variant.isLowStock,
+        lowStockThreshold: variant.lowStockThreshold
       }))
     };
   }

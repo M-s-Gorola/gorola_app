@@ -321,6 +321,22 @@ describe("Product controller", () => {
     });
   });
 
+  it("GET /api/v1/products/:id includes isInStock and isLowStock flags in variants", async () => {
+    const apple = await db.product.findFirstOrThrow({ where: { name: "Apple" } });
+    const server = createServer({ disableRedis: true, registerRoutes: registerAppRoutes });
+    const response = await server.inject({ method: "GET", url: `/api/v1/products/${apple.id}` });
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    const variant = body.data.variants[0];
+    expect(variant).toMatchObject({
+      isInStock: expect.any(Boolean),
+      isLowStock: expect.any(Boolean),
+      lowStockThreshold: expect.any(Number)
+    });
+  });
+
   it("GET /api/v1/products/:id returns 404 when product does not exist", async () => {
     const server = createServer({
       disableRedis: true,
