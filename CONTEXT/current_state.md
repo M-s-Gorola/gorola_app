@@ -1089,17 +1089,17 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 #### Phase 2.19 Quality Gate (ALL must be green before marking done)
 
-- [ ] Every RED test was confirmed failing BEFORE any implementation started
-- [ ] Every GREEN implementation confirmed by the failing test now passing
-- [ ] `pnpm --filter @gorola/api lint` — clean
-- [ ] `pnpm --filter @gorola/api typecheck` — clean
-- [ ] `pnpm --filter @gorola/web lint` — clean
-- [ ] `pnpm --filter @gorola/web typecheck` — clean
-- [ ] `pnpm ci:quality` — full pipeline GREEN
-- [ ] Manual smoke: click product card image → navigates to `/products/:id` ✓
-- [ ] Manual smoke: search → click subcategory result → lands on `/categories/:cat/:sub` ✓
-- [ ] Manual smoke: double-click Place Order → only one order in DB ✓
-- [ ] Manual smoke: tail API logs during OTP request → no plain-text phone numbers in output ✓
+- [x] Every RED test was confirmed failing BEFORE any implementation started
+- [x] Every GREEN implementation confirmed by the failing test now passing
+- [x] `pnpm --filter @gorola/api lint` — clean
+- [x] `pnpm --filter @gorola/api typecheck` — clean
+- [x] `pnpm --filter @gorola/web lint` — clean
+- [x] `pnpm --filter @gorola/web typecheck` — clean
+- [x] `pnpm ci:quality` — full pipeline GREEN (507 tests)
+- [x] Manual smoke: click product card image → navigates to `/products/:id` ✓
+- [x] Manual smoke: search → click subcategory result → lands on `/categories/:cat/:sub` ✓
+- [x] Manual smoke: double-click Place Order → only one order in DB ✓
+- [x] Manual smoke: tail API logs during OTP request → no plain-text phone numbers in output ✓
 
 ---
 
