@@ -8,9 +8,9 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-05
-- **Session Summary:** **Session 96 — Wiring & Security Hardening.** Completed W-011 (Product detail page), W-012 (Search routing), and W-013 (Phone redaction). Completed W-014 (Idempotency for orders) by implementing a Redis-based cache for `X-Idempotency-Key` in `order.controller.ts`. This prevents duplicate orders from double-taps or network retries. Verified with strict TDD (unit + integration).
-- **Next Session Must Start With:** Phase 2.19 — Wiring Hardening (W-015: Address Snapshot Missing on Store Side).
+- **Date:** 2026-05-06
+- **Session Summary:** **Session 97 — Rider Stub Hardening.** Completed W-015 (Rider Interface HTTP Stubs). Registered 4 HTTP endpoints returning `501 Not Implemented` and added the `/rider` Socket.IO namespace stub. Verified with full CI quality gate (495 tests green).
+- **Next Session Must Start With:** Phase 2.19 — Wiring Hardening (W-016: StockMovementType Enum Missing REFILL / ADJUSTMENT / INITIAL).
 
 
 ---
@@ -20,7 +20,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                                                                                                            |
 | ------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub                                                                         |
-| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.18 complete**. **Phase 2.19 (Wiring Hardening)** in progress — 8 phantom-feature gaps being closed before Profile Page (2.20). |
+| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.18 complete**. **Phase 2.19 (Wiring Hardening)** in progress — W-011 to W-014 complete. Currently working on W-015 (Rider Stubs). |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                                                                                                                           |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                                                                                                                           |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                                                                                                            |
@@ -125,11 +125,11 @@
 
 ## 🔨 In Progress Right Now
 
-**Current Task:** **Phase 2.19** — Profile Page & Saved Addresses.
+**Current Task:** **Phase 2.19** — Wiring Hardening (**W-016: StockMovementType Enum Missing REFILL / ADJUSTMENT / INITIAL**).
 
-**Exact stopping point:** **Phase 2.18** 100% complete. Catalog hierarchy (3-tier), global search, cart wipe fix, and image hardening all verified. Production Railway database reset and re-seeded with your custom ad images. Full quality gate GREEN.
+**Exact stopping point:** W-011 to W-015 100% complete. Rider stubs verified via integration tests. Full CI quality gate GREEN (495 tests).
 
-**Current Blocker:** None. All quality gates are 100% green.
+**Current Blocker:** None.
 
 ---
 
@@ -994,17 +994,17 @@ _(Phase 1 is complete. Track Phase 2 items below; **2.1 is complete**.)_
 
 **Fix:** Register all 4 stubs in `routes.ts` and add the `/rider` Socket.IO namespace stub in `socket.ts`.
 
-- [ ] **RED — Integration (`rider.routes.test.ts` — new file):**
-  - [ ] Test: `POST /api/v1/rider/auth/login` → 501 with error code `NOT_IMPLEMENTED`
-  - [ ] Test: `GET /api/v1/rider/orders/active` → 501
-  - [ ] Test: `PUT /api/v1/rider/orders/any-id/status` → 501
-  - [ ] Test: `PUT /api/v1/rider/location` → 501
-  - [ ] Run — confirm RED (404 currently for all)
-- [ ] **GREEN — Implementation (`routes.ts`):**
-  - [ ] Add `registerRiderStubRoutes(app)` — each of the 4 routes returns `reply.status(501).send({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Rider interface deferred to Phase 5' } })`
-  - [ ] Call it inside `registerAppRoutes`
-  - [ ] Run tests — GREEN
-- [ ] **Verification chain:** Any future rider client hits an endpoint → clear 501 with code → no ambiguous 404; Phase 5 only needs to fill in the bodies
+- [x] **RED — Integration (`rider.routes.test.ts` — new file):**
+  - [x] Test: `POST /api/v1/rider/auth/login` → 501 with error code `NOT_IMPLEMENTED`
+  - [x] Test: `GET /api/v1/rider/orders/active` → 501
+  - [x] Test: `PUT /api/v1/rider/orders/any-id/status` → 501
+  - [x] Test: `PUT /api/v1/rider/location` → 501
+  - [x] Run — confirm RED (404 currently for all)
+- [x] **GREEN — Implementation (`routes.ts`):**
+  - [x] Add `registerRiderStubRoutes(app)` — each of the 4 routes returns `reply.status(501).send({ success: false, error: { code: 'NOT_IMPLEMENTED', message: 'Rider interface deferred to Phase 5' } })`
+  - [x] Call it inside `registerAppRoutes`
+  - [x] Run tests — GREEN
+- [x] **Verification chain:** Any future rider client hits an endpoint → clear 501 with code → no ambiguous 404; Phase 5 only needs to fill in the bodies
 
 ---
 
@@ -1660,3 +1660,10 @@ _(Append new entries — never delete old ones)_
 - **TDD Hardening:** Added image assertions to `ProductGrid.test.tsx`, `CategoryGrid.test.tsx`, and `SubCategoryGrid.test.tsx` to verify visual asset loading.
 - **Backend Test Fix:** Mass-updated all catalog-related integration tests in `apps/api` to include `subCategory` cleanup, resolving foreign key constraint failures in CI.
 - **Quality Gate:** Added `buyer-cart-sync.test.ts` to verify the merge logic. Full `ci:quality` (lint, typecheck, tests, build) is 100% GREEN.
+
+**Session 96 (Wiring & Security Hardening):**
+- **W-011 (Product Detail Navigation):** Fixed the "Add to Cart" button consistency. Now when the item count reaches zero, the "Add to Cart" button returns, matching the behavior on category pages.
+- **W-012 (Search Routing Fix):** Corrected search routing to ensure global search correctly populates results across categories.
+- **W-013 (Phone Redaction):** Implemented automatic PII redaction for phone numbers in logs (root, body, and req.body levels) to comply with data privacy specs.
+- **W-014 (Order Idempotency):** Implemented support for `X-Idempotency-Key` using Redis caching (24h TTL) in the order placement controller. Verified with integration tests simulating concurrent "double-tap" requests to ensure only one order is created.
+- **Quality Gate:** Resolved linting and typecheck issues in new unit tests. Final CI quality check confirmed GREEN with 491 passing tests.

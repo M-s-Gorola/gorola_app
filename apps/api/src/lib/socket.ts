@@ -79,6 +79,14 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
     });
   });
 
+  // Rider namespace stub
+  const riderNamespace = io.of("/rider");
+  riderNamespace.on("connection", (socket) => {
+    app.log.info({ socketId: socket.id }, "Rider socket connected (STUB)");
+    socket.emit("error", { message: "Rider interface deferred to Phase 5" });
+    socket.disconnect();
+  });
+
   app.decorate("io", io);
 
   app.addHook("onClose", async () => {

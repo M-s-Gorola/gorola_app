@@ -54,6 +54,17 @@ function getRuntimeRedis(app: FastifyInstance): RedisLikeRuntime {
   return createInMemoryRedisLike();
 }
 
+function registerRiderStubRoutes(app: FastifyInstance): void {
+  const handler = async () => {
+    throw new NotImplementedError("Rider interface deferred to Phase 5");
+  };
+
+  app.post("/api/v1/rider/auth/login", handler);
+  app.get("/api/v1/rider/orders/active", handler);
+  app.put("/api/v1/rider/orders/:id/status", handler);
+  app.put("/api/v1/rider/location", handler);
+}
+
 export function registerAppRoutes(app: FastifyInstance): void {
   registerCategoryRoutes(app);
   registerSubCategoryRoutes(app);
@@ -164,6 +175,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
       }
     }
   });
+
+  registerRiderStubRoutes(app);
 
   void app.register(socketPlugin, {
     tokenVerifier: tokenService,
