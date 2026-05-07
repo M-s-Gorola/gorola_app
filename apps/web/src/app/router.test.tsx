@@ -58,7 +58,7 @@ describe("buyer routes", () => {
         </MemoryRouter>
       </QueryClientProvider>
     );
-    expect(screen.getByText("GoRola", { exact: false })).toBeInTheDocument();
+    expect(screen.getByText("Categories")).toBeInTheDocument();
   });
 
   it("renders category page for /categories/:slug", () => {

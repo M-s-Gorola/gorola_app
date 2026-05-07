@@ -9,8 +9,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-07
-- **Session Summary:** **Session 103 — CI/CD Security Hardening.** Hardened pipeline by enabling strict linting (`pnpm lint --max-warnings 0`) and silencing false-positives line-by-line in the backend. Resolved `ip-address` and `hono` vulnerabilities via `pnpm.overrides`. Authored `ISSUES GUIDE/security_linting_and_audits.md` to document the security posture and maintenance strategy.
-- **Next Session Must Start With:** Phase 2.21 — UI Overhaul.
+- **Session Summary:** **Session 104 — Phase 2.21 UI Overhaul.** Completed the buyer UI modernization of `BuyerNav` and `HeroSection`. Navigation is now icon-only with a new account dropdown. Hero section features dynamic, time-aware greetings and personalized messaging ("Good [morning|afternoon|evening], [Name]"). Resolved regression flakiness in `ProductGrid` and updated `router.test.tsx` to align with the new branding-free layout.
+- **Next Session Must Start With:** Phase 2.22 — E2E Tests (Playwright).
 
 
 ---
@@ -20,7 +20,7 @@
 | Phase   | Name                 | Status         | Notes                                                                                                                                                                                                                                            |
 | ------- | -------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | 1.8 **CI+CD** in **`ci-cd.yml`** (Vercel + Railway on `main`, path-gated), 1.9 hosting config, **1.10** smoke + secrets. Optional: 1.8 coverage / branch rules in GitHub                                                                         |
-| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.20 complete**. Full quality gate GREEN. |
+| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | **2.1–2.21 complete**. Full quality gate GREEN. |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete                                                                                                                                                                                                                           |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete                                                                                                                                                                                                                           |
 | Phase 5 | Rider Interface      | ⏸️ DEFERRED    | Stubs only in Phase 1                                                                                                                                                                                                                            |
@@ -138,9 +138,9 @@
 
 ---
 
-**Current Task:** **Phase 2.21** — UI Overhaul.
+**Current Task:** **Phase 2.22** — E2E Tests (Playwright).
 
-**Exact stopping point:** Phase 2.20 (Profile Page) 100% complete. Full CI quality gate GREEN (514 tests).
+**Exact stopping point:** Phase 2.21 (UI Overhaul) 100% complete. Full CI quality gate GREEN.
 
 **Current Blocker:** None.
 
@@ -1156,7 +1156,54 @@ Update `BuyerNav` to make the Profile button navigate to `/profile`. Create `Pro
 
 ### 2.21 — UI Overhaul
 
-> Details to be added by the user.
+> **UI Update Gate (mandatory for phase completion):**
+> - All new component variants and UI changes are tested with frontend unit tests.
+> - Hero section logic is tested for normal and weather modes, handling all auth states (unauthenticated, authenticated without name, authenticated with name).
+> - Navigation dropdown is tested for correct links and logout functionality.
+
+#### Phase 2.21 — Navbar and Hero Section Overhaul
+
+**Root cause / Goal:**
+The current UI needs a refresh to feel more personalized, compact, and intuitive. The `BuyerNav` has too many explicit text labels, making it cluttered. The `HeroSection` is overly large and focuses heavily on branding (Gorola logo/name) instead of a personalized user greeting and action-oriented messaging. 
+
+**Fix / Approach:**
+1. Update `BuyerNav.tsx`: Remove the Orders button (users can access it from the profile page). Change the Cart and Profile buttons to be icon-only (just their symbols). Wrap the Profile button in a `DropdownMenu` (from `shadcn/ui`) showing "Profile" and "Logout" options for authenticated users.
+2. Update `HeroSection.tsx`: Reduce vertical height (e.g., `min-h-[50vh]` instead of full height). Remove the Gorola name and mountain mark entirely. Implement dynamic greeting logic based on time of day. 
+   - Normal mode: Shows "Greeting, [Name or Mussoorie]" and "What do you need delivered today?", plus "These are hill roads!" near the ETA.
+   - Weather mode: Shows "Weather mode active" and "Roads are foggy - we're still coming", plus "We are deliverying safely." near the ETA.
+
+---
+
+- [x] **RED — Unit / Component (`BuyerNav.test.tsx`):**
+  - [x] Test: The Cart and Profile buttons render as icon-only (no text labels).
+  - [x] Test: The Orders button is not rendered in the navbar.
+  - [x] Test: Clicking the Profile icon when authenticated opens a dropdown menu containing "Profile" and "Logout" options.
+  - [x] Test: Clicking the "Logout" option calls the logout flow.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`BuyerNav.tsx`):**
+  - [x] [Component] Update `BuyerNav.tsx` to remove the Orders button.
+  - [x] [Component] Update Cart and Profile buttons to use `lucide-react` icons exclusively.
+  - [x] [Component] Integrate `DropdownMenu` from `shadcn/ui` for the Profile button when the user is logged in.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **RED — Unit / Component (`HeroSection.test.tsx`):**
+  - [x] Test: The hero section does not render the Gorola mountain mark or wordmark.
+  - [x] Test: Unauthenticated user sees "Good [morning/afternoon/evening], Mussoorie".
+  - [x] Test: Authenticated user without a name sees "Good [morning/afternoon/evening], Mussoorie".
+  - [x] Test: Authenticated user with a name sees "Good [morning/afternoon/evening], [Name]".
+  - [x] Test: Weather mode renders "Weather mode active" and "Roads are foggy - we're still coming" with the modified ETA message.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`HeroSection.tsx`):**
+  - [x] [Component] Modify `HeroSection.tsx` height to be smaller and adjust layout classes.
+  - [x] [Component] Add a helper function to determine the time of day and return the appropriate greeting.
+  - [x] [Component] Read the user's name from `useAuthStore` and conditionally render the greeting.
+  - [x] [Component] Update the subheadings and ETA messages for both normal and weather mode paths.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] User opens the home page → Nav shows only Cart and Profile icons → Hero section shows a personalized, compact greeting without Gorola branding → User clicks the Profile icon → Dropdown appears to navigate to `/profile` or to log out → ✅ Done.
 
 ---
 
@@ -1763,3 +1810,9 @@ _(Append new entries — never delete old ones)_
 - **Strict Linting Enforcement:** Updated the `ci:quality` pipeline script and GitHub workflow to enforce zero warnings using `pnpm lint --max-warnings 0`. Fixed a syntax error where a double-dash (`--`) caused ESLint to fail recursive workspace checks. This ensures the "Zero-Warning" policy is strictly enforced across the full monorepo.
 - **Documentation:** Authored `ISSUES GUIDE/security_linting_and_audits.md` to document the team's methodology for handling dependency audits and ESLint false positives securely.
 - **JSON Comments:** Implemented the `_pnpm_overrides_comments` root-level object in `package.json` to store informative notes for the security overrides, circumventing `pnpm`'s restriction on inline comments within the `overrides` block.
+**Session 105 (Phase 2.21 UI Correction):**
+- **Refined Hero Hierarchy:** Adjusted `HeroSection` to match user reference images. Small greeting/weather label now precedes the large main heading.
+- **Weather Mode Logic:** Removed personalized greetings from weather mode as requested. Added a cloud emoji icon to the weather status.
+- **ETA Precision:** Replaced the delivery fee display with actual time estimates (e.g., "25-35 mins") in the hero section.
+- **Dropdown Cleanup:** Removed the "Orders" link from the `BuyerNav` dropdown to strictly follow the "Profile and Logout only" requirement. Improved the visibility of the user's name/phone at the top of the dropdown.
+- **Verification:** Updated `HeroSection.test.tsx` and `BuyerNav.test.tsx`. All tests passing.

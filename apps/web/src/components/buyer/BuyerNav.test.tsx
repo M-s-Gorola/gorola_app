@@ -1,4 +1,5 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -52,7 +53,8 @@ describe("BuyerNav", () => {
     expect(screen.getByLabelText("Cart items")).toHaveTextContent("3");
   });
 
-  it("navigates to /search on Enter from search input", () => {
+  it("navigates to /search on Enter from search input", async () => {
+    const user = userEvent.setup();
     render(
       <MemoryRouter initialEntries={["/"]}>
         <Routes>
@@ -62,8 +64,7 @@ describe("BuyerNav", () => {
       </MemoryRouter>
     );
     const input = screen.getByPlaceholderText(/Search/i);
-    fireEvent.change(input, { target: { value: "bread" } });
-    fireEvent.keyDown(input, { key: "Enter", code: "Enter" });
+    await user.type(input, "bread{enter}");
     expect(screen.getByTestId("search-location")).toHaveTextContent("/search?q=bread");
   });
 
@@ -91,17 +92,66 @@ describe("BuyerNav", () => {
         <BuyerNav />
       </MemoryRouter>
     );
-    expect(screen.getByText("Naveen")).toBeInTheDocument();
-    expect(screen.getByText("Logout")).toBeInTheDocument();
-    expect(screen.queryByText("Login")).not.toBeInTheDocument();
+    // Updated expectation: Profile should be icon-only in the nav
+    expect(screen.queryByText("Naveen")).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/profile/i)).toBeInTheDocument();
   });
 
-  it("calls backend logout before clearing local session", async () => {
-    postMock.mockResolvedValue({ data: { success: true } });
+  it("does not render the Orders button in the navbar", () => {
+    useAuthStore.setState({
+      accessToken: "access",
+      role: "BUYER",
+      userId: "buyer_1"
+    });
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+    expect(screen.queryByText(/Orders/i)).not.toBeInTheDocument();
+  });
+
+  it("renders Cart button as icon-only", () => {
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+    const cartButton = screen.getByRole("button", { name: /cart/i });
+    expect(cartButton).toBeInTheDocument();
+    // It should have the icon but NO text "Cart"
+    expect(cartButton).not.toHaveTextContent("Cart");
+  });
+
+  it("opens dropdown menu with Profile and Logout when clicking profile icon", async () => {
+    const user = userEvent.setup();
     useAuthStore.setState({
       accessToken: "access",
       name: "Naveen",
-      phone: "+919876543210",
+      role: "BUYER",
+      userId: "buyer_1"
+    });
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+
+    const profileButton = screen.getByLabelText(/profile/i);
+    await user.click(profileButton);
+
+    // Dropdown items should appear
+    expect(await screen.findByText("Profile")).toBeInTheDocument();
+    expect(await screen.findByText("Logout")).toBeInTheDocument();
+    // Orders should NOT be in the dropdown
+    expect(screen.queryByText("Orders")).not.toBeInTheDocument();
+  });
+
+  it("calls backend logout when clicking Logout in dropdown", async () => {
+    const user = userEvent.setup();
+    postMock.mockResolvedValue({ data: { success: true } });
+    useAuthStore.setState({
+      accessToken: "access",
       refreshToken: "refresh-token",
       role: "BUYER",
       userId: "buyer_1"
@@ -111,7 +161,11 @@ describe("BuyerNav", () => {
         <BuyerNav />
       </MemoryRouter>
     );
-    fireEvent.click(screen.getByRole("button", { name: /logout/i }));
+
+    await user.click(screen.getByLabelText(/profile/i));
+    const logoutItem = await screen.findByText("Logout");
+    await user.click(logoutItem);
+
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith("/api/v1/auth/buyer/logout", {
         refreshToken: "refresh-token"

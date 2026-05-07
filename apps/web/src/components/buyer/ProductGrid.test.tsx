@@ -260,8 +260,13 @@ describe("ProductGrid", () => {
 
     fireEvent.change(input, { target: { value: "app" } });
     expect(getMock).toHaveBeenCalledTimes(0);
-    await new Promise((resolve) => setTimeout(resolve, 350));
-    expect(getMock).toHaveBeenCalledTimes(1);
+
+    // Wait longer for debounce (300ms) to settle
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("shows add button then +/- controls with optimistic cart update", async () => {

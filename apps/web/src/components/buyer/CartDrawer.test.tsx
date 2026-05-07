@@ -60,7 +60,7 @@ describe("CartDrawer", () => {
 
   it("opens from nav cart button and shows empty state", async () => {
     renderShell();
-    fireEvent.click(screen.getByRole("button", { name: "Open cart" }));
+    fireEvent.click(screen.getByRole("button", { name: "Cart" }));
     expect(await screen.findByText("Your cart is empty - go find something good")).toBeInTheDocument();
   });
 

@@ -1,9 +1,17 @@
-import { Clock, MapPin, Search, ShoppingCart, UserRound } from "lucide-react";
+import { Clock, LogOut, MapPin, Search, ShoppingCart, UserRound } from "lucide-react";
 import type { KeyboardEvent, ReactElement } from "react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import { GorolaMountainMark } from "@/components/shared/GorolaMountainMark";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
@@ -63,7 +71,7 @@ export function BuyerNav(): ReactElement {
 
         <div className="flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-gorola-fog">
           <MapPin size={14} className="text-gorola-saffron" />
-          <span>Kulri, Mussoorie</span>
+          <span className="hidden sm:inline">Kulri, Mussoorie</span>
         </div>
 
         <div className="order-4 relative mt-2 flex w-full basis-full items-center md:order-none md:mt-0 md:max-w-sm md:basis-auto">
@@ -81,14 +89,13 @@ export function BuyerNav(): ReactElement {
 
         <button
           type="button"
-          aria-label="Open cart"
+          aria-label="Cart"
           onClick={openCart}
-          className="relative inline-flex items-center gap-2 rounded-full bg-gorola-saffron px-3 py-2 text-sm font-semibold text-white"
+          className="relative inline-flex items-center justify-center rounded-full bg-gorola-saffron p-2.5 text-white transition-transform hover:scale-105 active:scale-95"
         >
-          <ShoppingCart size={15} />
-          <span className="inline">Cart</span>
+          <ShoppingCart size={18} />
           <span
-            className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gorola-amber px-1 text-[11px] font-bold text-gorola-charcoal"
+            className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gorola-amber px-1 text-[11px] font-bold text-gorola-charcoal shadow-sm"
             aria-label="Cart items"
           >
             {count}
@@ -96,38 +103,46 @@ export function BuyerNav(): ReactElement {
         </button>
 
         {role === "BUYER" ? (
-          <div className="inline-flex items-center gap-2">
-            <Link
-              to="/profile"
-              className="hidden rounded-full border border-white/20 px-3 py-2 text-sm text-gorola-fog md:inline hover:bg-white/10 transition-colors"
-            >
-              {buyerLabel}
-            </Link>
-            <Link
-              to="/account/orders"
-              className="inline-flex items-center gap-1 rounded-full border border-white/30 px-3 py-2 text-sm text-gorola-fog hover:bg-white/10"
-            >
-              <Clock size={15} />
-              <span className="inline">Orders</span>
-            </Link>
-            <button
-              type="button"
-              onClick={() => {
-                void logoutBuyer();
-              }}
-              className="inline-flex items-center gap-1 rounded-full border border-white/30 px-3 py-2 text-sm text-gorola-fog"
-            >
-              <UserRound size={15} />
-              <span className="inline">Logout</span>
-            </button>
-          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                aria-label="Profile"
+                className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20"
+              >
+                <UserRound size={18} />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56 bg-gorola-pine text-gorola-fog border-white/10">
+              <DropdownMenuLabel className="font-playfair text-lg text-white">
+                {buyerLabel}
+              </DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem asChild className="cursor-pointer focus:bg-white/10 focus:text-gorola-fog">
+                <Link to="/profile" className="flex items-center gap-2 w-full">
+                  <UserRound size={16} />
+                  <span>Profile</span>
+                </Link>
+              </DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-white/10" />
+              <DropdownMenuItem
+                onClick={() => {
+                  void logoutBuyer();
+                }}
+                className="cursor-pointer text-red-400 focus:bg-red-400/10 focus:text-red-400"
+              >
+                <LogOut size={16} className="mr-2" />
+                <span>Logout</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         ) : (
           <Link
             to="/login"
-            className="inline-flex items-center gap-1 rounded-full border border-white/30 px-3 py-2 text-sm text-gorola-fog"
+            aria-label="Login"
+            className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20"
           >
-            <UserRound size={15} />
-            <span className="inline">Login</span>
+            <UserRound size={18} />
           </Link>
         )}
       </div>
