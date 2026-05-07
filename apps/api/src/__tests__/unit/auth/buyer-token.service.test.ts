@@ -17,7 +17,7 @@ describe("createBuyerTokenService", () => {
     }
   };
 
-  it("issueTokens persists refresh opaque and rotates on refresh flow", async () => {
+  it("issueTokens persists refresh opaque and verifies correctly", async () => {
     const svc = createBuyerTokenService({
       accessTtlSeconds: 60,
       privateKey,
@@ -34,15 +34,12 @@ describe("createBuyerTokenService", () => {
     expect(payload.sub).toBe("u1");
     expect(payload.role).toBe("BUYER");
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const second = (await svc.rotateRefreshToken(first.refreshToken)) as any;
-    expect(second.accessToken.length).toBeGreaterThan(20);
-    expect(second.userId).toBe("u1");
-    expect(second.phone).toBe("+919900000099");
+    const refreshPayload = await svc.verifyRefreshToken(first.refreshToken);
+    expect(refreshPayload.userId).toBe("u1");
+    expect(refreshPayload.phone).toBe("+919900000099");
+    expect(refreshPayload.name).toBe("Test User");
 
-    await expect(svc.rotateRefreshToken(first.refreshToken)).rejects.toThrow();
-
-    await svc.revokeRefreshToken(second.refreshToken);
-    await expect(svc.rotateRefreshToken(second.refreshToken)).rejects.toThrow();
+    await svc.revokeRefreshToken(first.refreshToken);
+    await expect(svc.verifyRefreshToken(first.refreshToken)).rejects.toThrow();
   });
 });

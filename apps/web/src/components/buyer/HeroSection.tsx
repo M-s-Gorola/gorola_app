@@ -9,6 +9,7 @@ import { useWeatherStore } from "@/store/weather.store";
 export function HeroSection(): ReactElement {
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
   const name = useAuthStore((s) => s.name);
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const rootRef = useRef<HTMLElement | null>(null);
 
   // Randomize messaging on mount
@@ -51,7 +52,9 @@ export function HeroSection(): ReactElement {
   if (hour >= 5 && hour < 12) greeting = "Good morning";
   else if (hour >= 12 && hour < 17) greeting = "Good afternoon";
 
-  const displayName = name && name.trim().length > 0 ? name.trim() : "Mussoorie";
+  const displayName = isBootstrapPending
+    ? "..."
+    : (name && name.trim().length > 0 ? name.trim() : "Mussoorie");
 
   useEffect(() => {
     const ctx = gsap.context(() => {

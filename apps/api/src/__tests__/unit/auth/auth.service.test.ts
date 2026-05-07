@@ -3,7 +3,7 @@ import { hash } from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AuthService } from "../../../modules/auth/auth.service.js";
-import type { AuthTokenPair, BuyerRefreshSuccess, OtpStoreRecord } from "../../../modules/auth/auth.types.js";
+import type { BuyerRefreshSuccess, OtpStoreRecord } from "../../../modules/auth/auth.types.js";
 
 type MockRedisClient = {
   del: ReturnType<typeof vi.fn>;
@@ -17,7 +17,7 @@ type MockOtpProvider = {
 
 type MockTokenService = {
   issueTokens: ReturnType<typeof vi.fn>;
-  rotateRefreshToken: ReturnType<typeof vi.fn>;
+  verifyRefreshToken: ReturnType<typeof vi.fn>;
   revokeRefreshToken: ReturnType<typeof vi.fn>;
 };
 
@@ -32,13 +32,15 @@ describe("AuthService", () => {
   };
   const tokenService: MockTokenService = {
     issueTokens: vi.fn(),
-    rotateRefreshToken: vi.fn(),
+    verifyRefreshToken: vi.fn(),
     revokeRefreshToken: vi.fn()
   };
   const ensureBuyerUser = vi.fn();
+  const findUserById = vi.fn();
 
   const service = new AuthService({
     ensureBuyerUser,
+    findUserById,
     otpProvider,
     otpTtlSeconds: 300,
     redis,
@@ -53,6 +55,11 @@ describe("AuthService", () => {
     ensureBuyerUser.mockResolvedValue({
       id: "user_test_1",
       name: "",
+      phone: "+919876543210"
+    });
+    findUserById.mockResolvedValue({
+      id: "user_test_1",
+      name: "Latest Name",
       phone: "+919876543210"
     });
   });
@@ -105,9 +112,12 @@ describe("AuthService", () => {
   describe("verifyOtp", () => {
     it("should return tokens and user when OTP is valid", async () => {
       const validOtpHash = await hash("123456", 8);
-      const tokenPair: AuthTokenPair = {
+      const tokenPair: BuyerRefreshSuccess = {
         accessToken: "access-token",
-        refreshToken: "refresh-token"
+        refreshToken: "refresh-token",
+        name: null,
+        phone: "+919876543210",
+        userId: "user_test_1"
       };
       redis.get.mockResolvedValueOnce(
         JSON.stringify({
@@ -208,10 +218,20 @@ describe("AuthService", () => {
   });
 
   describe("refreshToken", () => {
-    it("should issue new tokens and return user profile", async () => {
-      tokenService.rotateRefreshToken.mockResolvedValueOnce({
+    it("should issue new tokens and return latest user profile from DB", async () => {
+      tokenService.verifyRefreshToken.mockResolvedValueOnce({
+        name: "Old Name",
+        phone: "+919999999999",
+        userId: "user_1"
+      });
+      findUserById.mockResolvedValueOnce({
+        id: "user_1",
+        name: "Fresh Name From DB",
+        phone: "+919999999999"
+      });
+      tokenService.issueTokens.mockResolvedValueOnce({
         accessToken: "new-access",
-        name: "Test User",
+        name: "Fresh Name From DB",
         phone: "+919999999999",
         refreshToken: "new-refresh",
         userId: "user_1"
@@ -219,9 +239,12 @@ describe("AuthService", () => {
 
       const result = await service.refreshToken({ refreshToken: "old-refresh" });
 
+      expect(tokenService.verifyRefreshToken).toHaveBeenCalledWith("old-refresh");
+      expect(tokenService.revokeRefreshToken).toHaveBeenCalledWith("old-refresh");
+      expect(findUserById).toHaveBeenCalledWith("user_1");
       expect(result).toEqual({
         accessToken: "new-access",
-        name: "Test User",
+        name: "Fresh Name From DB",
         phone: "+919999999999",
         refreshToken: "new-refresh",
         userId: "user_1"
@@ -229,11 +252,11 @@ describe("AuthService", () => {
     });
 
     it("should throw UnauthorizedError for revoked refresh token", async () => {
-      tokenService.rotateRefreshToken.mockRejectedValueOnce(
-        new UnauthorizedError("Refresh token is revoked.")
+      tokenService.verifyRefreshToken.mockRejectedValueOnce(
+        new UnauthorizedError("Refresh token is invalid.")
       );
 
-      await expect(service.refreshToken({ refreshToken: "revoked" })).rejects.toBeInstanceOf(
+      await expect(service.refreshToken({ refreshToken: "invalid" })).rejects.toBeInstanceOf(
         UnauthorizedError
       );
     });

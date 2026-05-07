@@ -23,6 +23,7 @@ export type BuyerUserLookup = {
 
 export type AuthServiceDependencies = {
   ensureBuyerUser: (phone: string) => Promise<BuyerUserLookup>;
+  findUserById: (id: string) => Promise<BuyerUserLookup | null>;
   otpProvider: OtpProvider;
   otpTtlSeconds: number;
   redis: RedisLikeClient;
@@ -131,7 +132,19 @@ export class AuthService {
   }
 
   public async refreshToken(input: RefreshTokenInput): Promise<BuyerRefreshSuccess> {
-    return this.deps.tokenService.rotateRefreshToken(input.refreshToken);
+    const payload = await this.deps.tokenService.verifyRefreshToken(input.refreshToken);
+    await this.deps.tokenService.revokeRefreshToken(input.refreshToken);
+
+    const user = await this.deps.findUserById(payload.userId);
+    if (user === null) {
+      throw new UnauthorizedError("User session no longer valid.");
+    }
+
+    return this.deps.tokenService.issueTokens({
+      name: user.name.trim().length === 0 ? null : user.name,
+      phone: user.phone,
+      userId: user.id
+    });
   }
 
   public async logout(input: LogoutInput): Promise<void> {

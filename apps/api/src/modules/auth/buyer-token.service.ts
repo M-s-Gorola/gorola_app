@@ -71,13 +71,12 @@ export function createBuyerTokenService(options: BuyerTokenServiceOptions): Buye
     };
   }
 
-  async function rotateRefreshToken(oldRefreshRaw: string): Promise<BuyerRefreshSuccess> {
-    const rtKey = redisRefreshKey(oldRefreshRaw);
+  async function verifyRefreshToken(refreshToken: string): Promise<IssueTokensInput> {
+    const rtKey = redisRefreshKey(refreshToken);
     const payload = await redis.get(rtKey);
     if (payload === null || payload.length === 0) {
       throw new UnauthorizedError("Refresh token is invalid.");
     }
-    await redis.del(rtKey);
 
     let parsed: { name?: unknown; phone?: unknown; userId?: unknown };
     try {
@@ -93,7 +92,7 @@ export function createBuyerTokenService(options: BuyerTokenServiceOptions): Buye
       throw new UnauthorizedError("Refresh token is invalid.");
     }
 
-    return issueTokens({ name, phone, userId });
+    return { name, phone, userId };
   }
 
   async function revokeRefreshToken(refreshRaw: string): Promise<void> {
@@ -123,7 +122,7 @@ export function createBuyerTokenService(options: BuyerTokenServiceOptions): Buye
   return {
     issueTokens,
     revokeRefreshToken,
-    rotateRefreshToken,
+    verifyRefreshToken,
     verifyAccessToken
   };
 }

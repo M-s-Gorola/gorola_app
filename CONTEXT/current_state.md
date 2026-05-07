@@ -9,7 +9,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-08
-- **Session Summary:** **Session 109 — Hero Messaging Refinement.** Finalized the Hero section's random messaging pool by removing generic and redundant lines from both Normal and Weather modes, achieving a perfectly synchronized set of 3 headings per mode.
+- **Session Summary:** **Session 111 — Profile Persistence Bug Fix.** Resolved a bug where user name updates would revert on page reload. Re-engineered the `AuthService` refresh flow to perform a database lookup for the latest user profile before issuing new tokens. Added a dedicated regression test and verified full CI quality gate (GREEN).
 - **Next Session Must Start With:** Phase 2.23 — E2E Tests (Playwright).
 
 
@@ -136,6 +136,8 @@
 - **Session 107 (Dynamic Messaging):** Implemented randomization for Hero headings and ETA lines across both modes on page reload.
 - **Session 108 (CI/CD Test Stabilization):** Resolved flaky CI test failure in `ProfilePage.test.tsx` by migrating from `userEvent` to `fireEvent` for input changes, preventing race conditions during typing.
 - **Session 109 (Hero Messaging Refinement):** Finalized the Hero section's random messaging pool by removing generic marketing and redundant lines from both Normal and Weather modes. Headings are now limited to 3 curated options per mode.
+- **Session 110 (Production UI Polish):** Fixed Hero name hydration flicker and removed default browser focus rings from navigation elements.
+- **Session 111 (Profile Persistence Fix):** Resolved name-reversion-on-reload bug by decoupling token rotation from profile snapshots. Refactored `AuthService` to sync with the database during refresh.
 
 ---
 
@@ -147,7 +149,7 @@
 
 **Current Task:** **Phase 2.23** — E2E Tests (Playwright).
 
-**Exact stopping point:** Session 109 (Messaging Refinement) complete. Full CI quality gate GREEN.
+**Exact stopping point:** Session 111 (Persistence Fix) complete. Full CI quality gate GREEN.
 
 **Current Blocker:** None.
 
@@ -1848,3 +1850,16 @@ _(Append new entries — never delete old ones)_
 - **Messaging Audit**: Removed generic marketing headings ("Tap. Order. Delivered." and "Quick delivery for everyday needs.") from the Normal Mode pool.
 - **Weather Mode Cleanup**: Removed redundant lines ("Delivering with extra care today." and "Conditions are tough...") from the Weather Mode pool to ensure a focused, 3-heading set.
 - **Atmospheric Alignment**: The final randomized sets now focus exclusively on user-centric questions and situational reassurances, perfectly matching the project's premium, high-contrast aesthetic.
+
+**Session 110 (Production UI Polish):**
+- **Hydration Fix**: Resolved a flicker in `HeroSection.tsx` where "Mussoorie" would render before the authenticated name. Implemented a `isBootstrapPending` check to show a placeholder ("...") during session verification.
+- **Focus Ring Removal**: Eliminated unsightly blue browser outlines on the Profile button, Cart button, and Login link by applying `focus:outline-none`. This preserves the premium design while relying on existing hover/active visual feedback.
+- **Verification**: Confirmed that navigation remains accessible while maintaining visual consistency across different browser environments. Full CI quality gate: GREEN.
+
+**Session 111 (Profile Persistence Fix):**
+- **Bug Analysis**: Identified a critical flaw where the `refreshToken` flow relied on a stale user snapshot stored in Redis. This caused user profile updates (like name changes) to be overwritten by old data upon session refresh or page reload.
+- **Architectural Refactor**: Decoupled token verification from rotation. Modified `BuyerTokenService` to provide `verifyRefreshToken` and `issueTokens` separately.
+- **Database Sync**: Updated `AuthService.refreshToken` to perform a real-time database lookup using `findUserById` before issuing new session tokens. This ensures the JWT and Redis session record always contain the most recent user profile data.
+- **Wiring**: Integrated the new flow into `routes.ts` and verified that name updates now persist across reloads and session expirations.
+- **Regression Testing**: Implemented `auth-profile-sync.test.ts` to programmatically verify that profile updates are preserved through the refresh handshake. Updated `HeroSection.test.tsx` and other unit tests to align with the new auth architecture.
+- **CI Readiness**: Successfully executed the full `pnpm ci:quality` gate, confirming 100% pass rate for linting, typechecking, unit tests, and integration tests monorepo-wide. Full CI quality gate: GREEN.

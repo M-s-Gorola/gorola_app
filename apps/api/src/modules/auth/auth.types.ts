@@ -48,9 +48,10 @@ export type OtpProvider = {
 };
 
 export type TokenService = {
-  issueTokens: (input: IssueTokensInput) => Promise<AuthTokenPair>;
+  issueTokens: (input: IssueTokensInput) => Promise<BuyerRefreshSuccess>;
   revokeRefreshToken: (refreshToken: string) => Promise<void>;
-  rotateRefreshToken: (refreshToken: string) => Promise<BuyerRefreshSuccess>;
+  /** Verifies and returns the payload of a refresh token. Does NOT revoke or rotate. */
+  verifyRefreshToken: (refreshToken: string) => Promise<IssueTokensInput>;
 };
 
 export type AccessTokenPayload = {

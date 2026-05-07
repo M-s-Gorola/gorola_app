@@ -101,6 +101,15 @@ export function registerAppRoutes(app: FastifyInstance): void {
         phone: row.phone
       };
     },
+    findUserById: async (id) => {
+      const row = await userRepo.findById(id);
+      if (row === null) return null;
+      return {
+        id: row.id,
+        name: row.name,
+        phone: row.phone
+      };
+    },
     otpProvider: createNoopOtpProvider(),
     otpTtlSeconds: 5 * 60,
     redis,

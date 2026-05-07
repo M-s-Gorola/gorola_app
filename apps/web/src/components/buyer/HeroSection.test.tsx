@@ -47,6 +47,9 @@ describe("HeroSection", () => {
 
   it("shows morning greeting for unauthenticated user", () => {
     vi.setSystemTime(new Date("2026-05-07T08:00:00"));
+    act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
+    });
     render(<HeroSection />);
     expect(screen.getByText(/Good morning/i)).toBeInTheDocument();
     expect(screen.getByText(/Mussoorie/i)).toBeInTheDocument();
@@ -54,6 +57,9 @@ describe("HeroSection", () => {
 
   it("shows afternoon greeting for unauthenticated user", () => {
     vi.setSystemTime(new Date("2026-05-07T14:00:00"));
+    act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
+    });
     render(<HeroSection />);
     expect(screen.getByText(/Good afternoon/i)).toBeInTheDocument();
     expect(screen.getByText(/Mussoorie/i)).toBeInTheDocument();
@@ -61,6 +67,9 @@ describe("HeroSection", () => {
 
   it("shows evening greeting for unauthenticated user", () => {
     vi.setSystemTime(new Date("2026-05-07T20:00:00"));
+    act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
+    });
     render(<HeroSection />);
     expect(screen.getByText(/Good evening/i)).toBeInTheDocument();
     expect(screen.getByText(/Mussoorie/i)).toBeInTheDocument();
@@ -69,7 +78,7 @@ describe("HeroSection", () => {
   it("shows personalized greeting for authenticated user with name", () => {
     vi.setSystemTime(new Date("2026-05-07T08:00:00"));
     act(() => {
-      useAuthStore.setState({ name: "Naveen", role: "BUYER" });
+      useAuthStore.setState({ name: "Naveen", role: "BUYER", isBootstrapPending: false });
     });
     render(<HeroSection />);
     expect(screen.getByText(/Good morning/i)).toBeInTheDocument();
@@ -77,13 +86,14 @@ describe("HeroSection", () => {
   });
 
   it("renders normal mode subheadings and ETA copy from the random sets", () => {
+    act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
+    });
     render(<HeroSection />);
     const normalHeadings = [
       "What do you need delivered today?",
       "What should arrive at your door today?",
-      "Tap. Order. Delivered.",
-      "Quick delivery for everyday needs.",
-      "Last-minute? We’ve got you.",
+      "Last-minute? We’ve got you."
     ];
     const heading = screen.getByRole("heading", { level: 1 }).textContent;
     expect(normalHeadings).toContain(heading);
@@ -96,7 +106,7 @@ describe("HeroSection", () => {
       "Good things take time in the mountains.",
       "Blame the mountains",
       "Our riders are basically mountain goats now.",
-      "We brake for blind turns.",
+      "We brake for blind turns."
     ];
     const etaText = screen.getByText((content) => normalETAs.some(eta => content.includes(eta)));
     expect(etaText).toBeInTheDocument();
@@ -105,16 +115,15 @@ describe("HeroSection", () => {
   it("renders weather mode messages and modified ETA copy from the random sets", () => {
     act(() => {
       useWeatherStore.getState().setWeatherMode(true);
+      useAuthStore.setState({ isBootstrapPending: false });
     });
     render(<HeroSection />);
     expect(screen.getByText(/Weather mode active/i)).toBeInTheDocument();
     
     const weatherHeadings = [
-      "Delivering with extra care today.",
       "We’re out there so you can stay in.",
       "Roads are slow — we're still coming!",
-      "Conditions are tough. Our service isn’t.",
-      "The weather showed up. So did we.",
+      "The weather showed up. So did we."
     ];
     const heading = screen.getByRole("heading", { level: 1 }).textContent;
     expect(weatherHeadings).toContain(heading);
@@ -125,7 +134,7 @@ describe("HeroSection", () => {
       "We are delivering safely.",
       "We’re driving safe so you don’t have to.",
       "Our riders aren’t auditioning for action movies.",
-      "Even the clouds are slowing traffic today",
+      "Even the clouds are slowing traffic today"
     ];
     const etaText = screen.getByText((content) => weatherETAs.some(eta => content.includes(eta)));
     expect(etaText).toBeInTheDocument();
