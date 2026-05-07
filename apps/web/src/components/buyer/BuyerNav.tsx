@@ -114,7 +114,7 @@ export function BuyerNav(): ReactElement {
                 <button
                   type="button"
                   aria-label="Profile"
-                  className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20 focus:outline-none"
+                  className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-all hover:bg-white/10 active:bg-white/20 focus:outline-none ring-2 ring-gorola-saffron"
                 >
                   <UserRound size={18} />
                 </button>
@@ -155,7 +155,7 @@ export function BuyerNav(): ReactElement {
             <Link
               to="/login"
               aria-label="Login"
-              className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20 focus:outline-none"
+              className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-all hover:bg-white/10 active:bg-white/20 focus:outline-none ring-2 ring-gorola-saffron"
             >
               <UserRound size={18} />
             </Link>
