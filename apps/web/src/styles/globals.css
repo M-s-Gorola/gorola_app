@@ -83,7 +83,6 @@
 @layer base {
   body {
     @apply m-0 min-h-dvh font-sans antialiased bg-background text-foreground transition-colors duration-500 ease-in-out;
-    background-color: var(--gorola-fog);
   }
   * {
     @apply border-border outline-ring/50;
@@ -200,6 +199,7 @@
 /* Weather Mode Overrides (Phase 2.16) — Refined in Session 89 */
 body.weather-mode {
   --gorola-fog: var(--gorola-slate-mist);
+  --background: var(--gorola-slate-mist);
   background-color: var(--gorola-slate-mist);
 
   .nav-blur {
@@ -255,7 +255,7 @@ body.weather-mode {
 }
 
 :root {
-  --background: oklch(1 0 0);
+  --background: var(--gorola-fog);
   --foreground: oklch(0.145 0 0);
   --card: oklch(1 0 0);
   --card-foreground: oklch(0.145 0 0);

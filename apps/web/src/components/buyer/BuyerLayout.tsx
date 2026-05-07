@@ -11,7 +11,7 @@ type BuyerLayoutProps = {
 
 export function BuyerLayout({ children }: BuyerLayoutProps): ReactElement {
   return (
-    <div className="flex min-h-screen flex-col bg-gorola-fog">
+    <div className="flex min-h-screen flex-col bg-background transition-colors duration-500 ease-in-out">
       <BuyerCartHydration />
       <BuyerNav />
       <CartDrawer />

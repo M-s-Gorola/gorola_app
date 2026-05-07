@@ -11,10 +11,10 @@ describe("TopographicBg", () => {
     expect(svg).toHaveAttribute("aria-hidden", "true");
   });
 
-  it("applies opacity style from prop (default 0.12)", () => {
+  it("applies opacity style from prop (default 0.2)", () => {
     const { container } = render(<TopographicBg />);
     const svg = container.querySelector("svg");
-    expect(svg).toHaveStyle({ opacity: "0.12" });
+    expect(svg).toHaveStyle({ opacity: "0.2" });
   });
 
   it("applies custom opacity", () => {

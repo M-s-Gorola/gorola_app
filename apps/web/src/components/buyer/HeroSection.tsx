@@ -58,7 +58,7 @@ export function HeroSection(): ReactElement {
           : "bg-gorola-pine text-gorola-fog"
       )}
     >
-      <TopographicBg opacity={isWeatherMode ? 0.08 : 0.12} />
+      <TopographicBg opacity={isWeatherMode ? 0.1 : 0.07} />
       <div className="noise-overlay pointer-events-none absolute inset-0" aria-hidden />
 
       <div className="relative z-10 flex max-w-none flex-col gap-6">

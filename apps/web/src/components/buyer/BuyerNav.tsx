@@ -61,20 +61,24 @@ export function BuyerNav(): ReactElement {
       data-weather={isWeatherMode ? "on" : "off"}
       aria-label="Buyer navigation"
     >
-      <div className="mx-auto flex w-full max-w-6xl flex-wrap items-center gap-2 md:flex-nowrap md:gap-3">
-        <Link to="/" className="flex items-center gap-2 text-gorola-fog">
-          <span aria-label="GoRola mountain logo">
-            <GorolaMountainMark />
-          </span>
-          <span className="font-playfair text-xl tracking-wide">GoRola</span>
-        </Link>
+      <div className="mx-auto flex w-full max-w-6xl items-center gap-4">
+        {/* Left: Logo & Location */}
+        <div className="flex shrink-0 items-center gap-3">
+          <Link to="/" className="flex items-center gap-2 text-gorola-fog">
+            <span aria-label="GoRola mountain logo">
+              <GorolaMountainMark />
+            </span>
+            <span className="font-playfair text-xl tracking-wide">GoRola</span>
+          </Link>
 
-        <div className="flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-gorola-fog">
-          <MapPin size={14} className="text-gorola-saffron" />
-          <span className="hidden sm:inline">Kulri, Mussoorie</span>
+          <div className="flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-gorola-fog">
+            <MapPin size={14} className="text-gorola-saffron" />
+            <span className="hidden sm:inline">Kulri, Mussoorie</span>
+          </div>
         </div>
 
-        <div className="order-4 relative mt-2 flex w-full basis-full items-center md:order-none md:mt-0 md:max-w-sm md:basis-auto">
+        {/* Center: Fluid Search */}
+        <div className="relative flex flex-1 items-center">
           <Search size={15} className="pointer-events-none absolute left-3 text-white/60" />
           <input
             value={search}
@@ -83,68 +87,80 @@ export function BuyerNav(): ReactElement {
             }}
             onKeyDown={handleEnter}
             placeholder="Search products"
-            className="w-full rounded-xl border border-white/20 bg-white/10 py-2 pl-9 pr-3 text-sm text-gorola-fog outline-none placeholder:text-white/60"
+            className="w-full rounded-xl border border-white/20 bg-white/10 py-2 pl-9 pr-3 text-sm text-gorola-fog outline-none transition-all placeholder:text-white/60 focus:bg-white/15 focus:border-white/30"
           />
         </div>
 
-        <button
-          type="button"
-          aria-label="Cart"
-          onClick={openCart}
-          className="relative inline-flex items-center justify-center rounded-full bg-gorola-saffron p-2.5 text-white transition-transform hover:scale-105 active:scale-95"
-        >
-          <ShoppingCart size={18} />
-          <span
-            className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gorola-amber px-1 text-[11px] font-bold text-gorola-charcoal shadow-sm"
-            aria-label="Cart items"
+        {/* Right: Cart & Profile */}
+        <div className="flex shrink-0 items-center gap-3">
+          <button
+            type="button"
+            aria-label="Cart"
+            onClick={openCart}
+            className="relative inline-flex items-center justify-center rounded-full bg-gorola-saffron p-2.5 text-white transition-transform hover:scale-105 active:scale-95"
           >
-            {count}
-          </span>
-        </button>
+            <ShoppingCart size={18} />
+            <span
+              className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gorola-amber px-1 text-[11px] font-bold text-gorola-charcoal shadow-sm"
+              aria-label="Cart items"
+            >
+              {count}
+            </span>
+          </button>
 
-        {role === "BUYER" ? (
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                aria-label="Profile"
-                className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20"
+          {role === "BUYER" ? (
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  aria-label="Profile"
+                  className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20"
+                >
+                  <UserRound size={18} />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent
+                align="end"
+                className={cn(
+                  "w-56 text-gorola-fog border-white/10 transition-colors duration-300",
+                  isWeatherMode ? "bg-gorola-slate" : "bg-gorola-pine"
+                )}
               >
-                <UserRound size={18} />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56 bg-gorola-pine text-gorola-fog border-white/10">
-              <DropdownMenuLabel className="font-playfair text-lg text-white">
-                {buyerLabel}
-              </DropdownMenuLabel>
-              <DropdownMenuSeparator className="bg-white/10" />
-              <DropdownMenuItem asChild className="cursor-pointer focus:bg-white/10 focus:text-gorola-fog">
-                <Link to="/profile" className="flex items-center gap-2 w-full">
-                  <UserRound size={16} />
-                  <span>Profile</span>
-                </Link>
-              </DropdownMenuItem>
-              <DropdownMenuSeparator className="bg-white/10" />
-              <DropdownMenuItem
-                onClick={() => {
-                  void logoutBuyer();
-                }}
-                className="cursor-pointer text-red-400 focus:bg-red-400/10 focus:text-red-400"
-              >
-                <LogOut size={16} className="mr-2" />
-                <span>Logout</span>
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        ) : (
-          <Link
-            to="/login"
-            aria-label="Login"
-            className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20"
-          >
-            <UserRound size={18} />
-          </Link>
-        )}
+                <DropdownMenuLabel className="font-playfair text-lg text-white">
+                  {buyerLabel}
+                </DropdownMenuLabel>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuItem
+                  asChild
+                  className="cursor-pointer focus:bg-white/10 focus:text-gorola-fog"
+                >
+                  <Link to="/profile" className="flex items-center gap-2 w-full">
+                    <UserRound size={16} />
+                    <span>Profile</span>
+                  </Link>
+                </DropdownMenuItem>
+                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuItem
+                  onClick={() => {
+                    void logoutBuyer();
+                  }}
+                  className="cursor-pointer text-red-400 focus:bg-red-400/10 focus:text-red-400"
+                >
+                  <LogOut size={16} className="mr-2" />
+                  <span>Logout</span>
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <Link
+              to="/login"
+              aria-label="Login"
+              className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-colors hover:bg-white/10 active:bg-white/20"
+            >
+              <UserRound size={18} />
+            </Link>
+          )}
+        </div>
       </div>
     </nav>
   );
