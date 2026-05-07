@@ -76,22 +76,60 @@ describe("HeroSection", () => {
     expect(screen.getByText(/Naveen/i)).toBeInTheDocument();
   });
 
-  it("renders normal mode subheadings and ETA copy", () => {
+  it("renders normal mode subheadings and ETA copy from the random sets", () => {
     render(<HeroSection />);
-    expect(screen.getByText("What do you need delivered today?")).toBeInTheDocument();
+    const normalHeadings = [
+      "What do you need delivered today?",
+      "What should arrive at your door today?",
+      "Tap. Order. Delivered.",
+      "Quick delivery for everyday needs.",
+      "Last-minute? We’ve got you.",
+    ];
+    const heading = screen.getByRole("heading", { level: 1 }).textContent;
+    expect(normalHeadings).toContain(heading);
+
     expect(screen.getByText("25-35 mins")).toBeInTheDocument();
-    expect(screen.getByText(/These are hill roads!/i)).toBeInTheDocument();
+    
+    const normalETAs = [
+      "These are hill roads!",
+      "Hill roads. Scenic, not speedy.",
+      "Good things take time in the mountains.",
+      "Blame the mountains",
+      "Our riders are basically mountain goats now.",
+      "We brake for blind turns.",
+    ];
+    const etaText = screen.getByText((content) => normalETAs.some(eta => content.includes(eta)));
+    expect(etaText).toBeInTheDocument();
   });
 
-  it("renders weather mode messages and modified ETA copy", () => {
+  it("renders weather mode messages and modified ETA copy from the random sets", () => {
     act(() => {
       useWeatherStore.getState().setWeatherMode(true);
     });
     render(<HeroSection />);
     expect(screen.getByText(/Weather mode active/i)).toBeInTheDocument();
-    expect(screen.getByText("Roads are foggy — we're still coming!")).toBeInTheDocument();
+    
+    const weatherHeadings = [
+      "Delivering with extra care today.",
+      "We’re out there so you can stay in.",
+      "Roads are slow — we're still coming!",
+      "Conditions are tough. Our service isn’t.",
+      "The weather showed up. So did we.",
+    ];
+    const heading = screen.getByRole("heading", { level: 1 }).textContent;
+    expect(weatherHeadings).toContain(heading);
+
     expect(screen.getByText("45-55 mins")).toBeInTheDocument();
-    expect(screen.getByText(/We are delivering safely./i)).toBeInTheDocument();
+    
+    const weatherETAs = [
+      "We are delivering safely.",
+      "We’re driving safe so you don’t have to.",
+      "Our riders aren’t auditioning for action movies.",
+      "Even the clouds are slowing traffic today",
+    ];
+    const etaText = screen.getByText((content) => weatherETAs.some(eta => content.includes(eta)));
+    expect(etaText).toBeInTheDocument();
+
     // Greeting should NOT be visible in weather mode
     expect(screen.queryByText(/Good morning/i)).not.toBeInTheDocument();
   });

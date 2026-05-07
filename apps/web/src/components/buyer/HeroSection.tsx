@@ -1,5 +1,5 @@
 import gsap from "gsap";
-import { type ReactElement, useEffect, useRef } from "react";
+import { type ReactElement, useEffect, useMemo, useRef } from "react";
 
 import { TopographicBg } from "@/components/shared/TopographicBg";
 import { cn } from "@/lib/utils";
@@ -10,6 +10,45 @@ export function HeroSection(): ReactElement {
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
   const name = useAuthStore((s) => s.name);
   const rootRef = useRef<HTMLElement | null>(null);
+
+  // Randomize messaging on mount
+  const messages = useMemo(() => {
+    const weatherHeadings = [
+      "Delivering with extra care today.",
+      "We’re out there so you can stay in.",
+      "Roads are slow — we're still coming!",
+      "Conditions are tough. Our service isn’t.",
+      "The weather showed up. So did we.",
+    ];
+    const weatherETAs = [
+      "We are delivering safely.",
+      "We’re driving safe so you don’t have to.",
+      "Our riders aren’t auditioning for action movies.",
+      "Even the clouds are slowing traffic today",
+    ];
+    const normalHeadings = [
+      "What do you need delivered today?",
+      "What should arrive at your door today?",
+      "Tap. Order. Delivered.",
+      "Quick delivery for everyday needs.",
+      "Last-minute? We’ve got you.",
+    ];
+    const normalETAs = [
+      "These are hill roads!",
+      "Hill roads. Scenic, not speedy.",
+      "Good things take time in the mountains.",
+      "Blame the mountains",
+      "Our riders are basically mountain goats now.",
+      "We brake for blind turns.",
+    ];
+
+    return {
+      weatherHeading: weatherHeadings[Math.floor(Math.random() * weatherHeadings.length)],
+      weatherETA: weatherETAs[Math.floor(Math.random() * weatherETAs.length)],
+      normalHeading: normalHeadings[Math.floor(Math.random() * normalHeadings.length)],
+      normalETA: normalETAs[Math.floor(Math.random() * normalETAs.length)],
+    };
+  }, []);
 
   const hour = new Date().getHours();
   let greeting = "Good evening";
@@ -73,7 +112,7 @@ export function HeroSection(): ReactElement {
             )}
           </p>
           <h1 className="hero-subheading font-playfair text-4xl leading-[1.1] tracking-tight sm:text-5xl md:text-[52px] lg:text-6xl text-white">
-            {isWeatherMode ? "Roads are foggy — we're still coming!" : "What do you need delivered today?"}
+            {isWeatherMode ? messages.weatherHeading : messages.normalHeading}
           </h1>
         </div>
 
@@ -100,7 +139,7 @@ export function HeroSection(): ReactElement {
             </div>
             <span className="h-4 w-px bg-white/20" aria-hidden />
             <span className="opacity-80">
-              {isWeatherMode ? "We are delivering safely." : "These are hill roads!"}
+              {isWeatherMode ? messages.weatherETA : messages.normalETA}
             </span>
           </div>
         </div>

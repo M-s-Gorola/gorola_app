@@ -9,7 +9,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-07
-- **Session Summary:** **Session 106 — Phase 2.21 UI Overhaul (Topographic System & Final Polish).** Consolidated the organic topographic design system with 5 curated clusters, absolute coordinate stability via nested SVGs, and final contrast balancing (0.07/0.10 opacity).
+- **Session Summary:** **Session 107 — Phase 2.21 UI Overhaul (Dynamic Messaging).** Implemented a randomization system for the Hero main heading and ETA text, picking from curated sets for both Normal and Weather modes on every page reload. This completes the Phase 2.21 UI polish.
 - **Next Session Must Start With:** Phase 2.23 — E2E Tests (Playwright).
 
 
@@ -133,6 +133,7 @@
 - **Session 104 (Phase 2.21 Navbar & Hero Overhaul):** Modernized `BuyerNav` (icon-only buttons, DropdownMenu) and `HeroSection` (dynamic greetings, branding removal).
 - **Session 105 (Phase 2.21 UI Polishing):** Synchronized colors and contrast for Weather Mode harmony.
 - **Session 106 (Phase 2.21 Topographic System & Final Polish):** Implemented an organic, 5-cluster topographic background system using nested percentage-based SVGs for stability across all aspect ratios. Tuned opacity to 0.07 (Normal) and 0.10 (Weather) for optimal visual hierarchy.
+- **Session 107 (Phase 2.21 Dynamic Messaging):** Implemented randomization for Hero headings and ETA lines across both modes on page reload.
 ---
 
 ## 🔨 In Progress Right Now
@@ -1828,3 +1829,8 @@ _(Append new entries — never delete old ones)_
 - **Edge-to-Edge Immersion**: Added specific clusters for "Top Right" (near-complete peak) and "Bottom Left" (ridge peek) positions.
 - **Subtle Branding**: Tuned opacity to **0.07 (Normal)** and **0.10 (Weather)** to maintain a premium feel without distracting from content.
 - **Verification**: Updated `TopographicBg.test.tsx` and confirmed all 5 clusters render correctly in visual checks. Full CI gate: GREEN.
+
+**Session 107 (Phase 2.21 Dynamic Messaging):**
+- **UX Randomization**: Implemented a dynamic messaging system in `HeroSection.tsx` that selects a random line from curated arrays for both the main heading and ETA text on every reload.
+- **Thematic Consistency**: Mapped specific humorous and safety-oriented sets to both Normal and Weather modes, ensuring the tone remains appropriate to the atmospheric state.
+- **Implementation**: Used `useMemo` to ensure selection stability per session while allowing fresh variety upon refresh.
