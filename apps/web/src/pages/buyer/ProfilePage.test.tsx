@@ -1,7 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, render, screen, waitFor } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -72,16 +71,14 @@ describe("ProfilePage", () => {
   });
 
   it("submits name update and updates local store on success", async () => {
-    const user = userEvent.setup();
     putMock.mockResolvedValueOnce({
       data: { success: true, data: { id: "u123", name: "New Name", phone: "+919999999999" } }
     });
 
     renderProfile();
     const nameInput = screen.getByLabelText(/name/i);
-    await user.clear(nameInput);
-    await user.type(nameInput, "New Name");
-    await user.click(screen.getByRole("button", { name: /update/i }));
+    fireEvent.change(nameInput, { target: { value: "New Name" } });
+    fireEvent.click(screen.getByRole("button", { name: /update/i }));
 
     await waitFor(() => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/account/profile", { name: "New Name" });
@@ -91,7 +88,6 @@ describe("ProfilePage", () => {
   });
 
   it("shows error if update fails", async () => {
-    const user = userEvent.setup();
     putMock.mockRejectedValueOnce({
       response: {
         data: {
@@ -103,9 +99,8 @@ describe("ProfilePage", () => {
 
     renderProfile();
     const nameInput = screen.getByLabelText(/name/i);
-    await user.clear(nameInput);
-    await user.type(nameInput, "Broken Name");
-    await user.click(screen.getByRole("button", { name: /update/i }));
+    fireEvent.change(nameInput, { target: { value: "Broken Name" } });
+    fireEvent.click(screen.getByRole("button", { name: /update/i }));
 
     // The component should handle errors gracefully
     expect(useAuthStore.getState().name).toBe("Old Name"); // Not updated

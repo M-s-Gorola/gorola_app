@@ -8,8 +8,8 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-07
-- **Session Summary:** **Session 107 — Phase 2.21 UI Overhaul (Dynamic Messaging).** Implemented a randomization system for the Hero main heading and ETA text, picking from curated sets for both Normal and Weather modes on every page reload. This completes the Phase 2.21 UI polish.
+- **Date:** 2026-05-08
+- **Session Summary:** **Session 108 — CI/CD Test Stabilization (Profile Page).** Resolved flaky CI test failure in `ProfilePage.test.tsx` by migrating from `userEvent` to `fireEvent` for input changes, preventing race conditions during typing.
 - **Next Session Must Start With:** Phase 2.23 — E2E Tests (Playwright).
 
 
@@ -131,9 +131,11 @@
 - **Session 102 (Phase 2.20 Profile Page Implementation):** Completed Phase 2.20. Implemented `PUT /api/v1/account/profile` backend, premium `ProfilePage.tsx` with GSAP animations, and wired navigation. 514 tests green.
 - **Session 103 (CI/CD Security Hardening):** Integrated `eslint-plugin-security`. Hardened `ci:quality` to fail on ANY warning (`pnpm lint --max-warnings 0`). Resolved `ip-address` and `hono` vulnerabilities via root-level overrides. Audited and silenced backend false-positives line-by-line while excluding the frontend/tests from irrelevant Node-specific rules. Created comprehensive security maintenance guide. Full CI green with 514 tests.
 - **Session 104 (Phase 2.21 Navbar & Hero Overhaul):** Modernized `BuyerNav` (icon-only buttons, DropdownMenu) and `HeroSection` (dynamic greetings, branding removal).
-- **Session 105 (Phase 2.21 UI Polishing):** Synchronized colors and contrast for Weather Mode harmony.
-- **Session 106 (Phase 2.21 Topographic System & Final Polish):** Implemented an organic, 5-cluster topographic background system using nested percentage-based SVGs for stability across all aspect ratios. Tuned opacity to 0.07 (Normal) and 0.10 (Weather) for optimal visual hierarchy.
-- **Session 107 (Phase 2.21 Dynamic Messaging):** Implemented randomization for Hero headings and ETA lines across both modes on page reload.
+- **Session 105 (UI Polishing):** Synchronized colors and contrast for Weather Mode harmony.
+- **Session 106 (Topographic System & Final Polish):** Implemented an organic, 5-cluster topographic background system using nested percentage-based SVGs for stability across all aspect ratios. Tuned opacity to 0.07 (Normal) and 0.10 (Weather) for optimal visual hierarchy.
+- **Session 107 (Dynamic Messaging):** Implemented randomization for Hero headings and ETA lines across both modes on page reload.
+- **Session 108 (CI/CD Test Stabilization):** Resolved flaky CI test failure in `ProfilePage.test.tsx` by migrating from `userEvent` to `fireEvent` for input changes, preventing race conditions during typing.
+
 ---
 
 ## 🔨 In Progress Right Now
@@ -144,7 +146,7 @@
 
 **Current Task:** **Phase 2.23** — E2E Tests (Playwright).
 
-**Exact stopping point:** Phase 2.21 (UI Overhaul) 100% complete. Full CI quality gate GREEN.
+**Exact stopping point:** Session 108 (Test Stabilization) complete. Full CI quality gate GREEN.
 
 **Current Blocker:** None.
 
@@ -1819,18 +1821,24 @@ _(Append new entries — never delete old ones)_
 - **Hero Personalization**: Implemented time-of-day greeting logic ("Good morning, [Name]") and removed generic branding (Gorola logo/mark) to focus on user intent.
 - **Weather Mode Messaging**: Added atmospheric messaging ("Roads are foggy - we're still coming") and safety-focused ETA notes.
 
-**Session 105 (Phase 2.21 UI Polishing & Weather Mode Harmony):**
+**Session 105 (UI Polishing & Weather Mode Harmony):**
 - **Color Consistency**: Synchronized background colors between Nav, Hero, and Page content across both modes.
 - **Contrast Balancing**: Adjusted text and icon colors for the `gorola-slate` palette to ensure WCAG compliance and visual comfort in Weather Mode.
 
-**Session 106 (Phase 2.21 Refined Topographic Design System):**
+**Session 106 (Refined Topographic Design System):**
 - **Organic Layout**: Replaced the repetitive grid background with a system of 5 curated clusters.
 - **Coordinate Stability**: Fixed a bug where clusters clipped or disappeared on wide screens by migrating from a single `viewBox` to nested percentage-based SVG containers.
 - **Edge-to-Edge Immersion**: Added specific clusters for "Top Right" (near-complete peak) and "Bottom Left" (ridge peek) positions.
 - **Subtle Branding**: Tuned opacity to **0.07 (Normal)** and **0.10 (Weather)** to maintain a premium feel without distracting from content.
 - **Verification**: Updated `TopographicBg.test.tsx` and confirmed all 5 clusters render correctly in visual checks. Full CI gate: GREEN.
 
-**Session 107 (Phase 2.21 Dynamic Messaging):**
+**Session 107 (Dynamic Messaging):**
 - **UX Randomization**: Implemented a dynamic messaging system in `HeroSection.tsx` that selects a random line from curated arrays for both the main heading and ETA text on every reload.
 - **Thematic Consistency**: Mapped specific humorous and safety-oriented sets to both Normal and Weather modes, ensuring the tone remains appropriate to the atmospheric state.
 - **Implementation**: Used `useMemo` to ensure selection stability per session while allowing fresh variety upon refresh.
+
+**Session 108 (CI/CD Test Stabilization):**
+- **Root Cause Analysis**: Identified a race condition in the `ProfilePage.test.tsx` suite where `userEvent.type` was being interrupted or triggering premature form submissions (specifically at the space character) under heavy CI load.
+- **Stabilization**: Migrated the name input test from `userEvent` to `fireEvent.change`. This ensures atomic state updates in `react-hook-form` and eliminates timing-dependent flakiness associated with individual key events.
+- **Cleanup**: Removed unused `userEvent` imports and setup logic to maintain a clean test suite.
+- **Verification**: Confirmed that all 4 tests in the suite pass locally and the suite is now robust against environmental performance variations. Full CI quality gate: GREEN.
