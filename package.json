@@ -36,11 +36,13 @@
   "pnpm": {
     "overrides": {
       "ip-address": "^10.1.1",
-      "hono": "^4.12.16"
+      "hono": "^4.12.16",
+      "fast-uri": "^3.1.1"
     }
   },
   "_pnpm_overrides_comments": {
     "ip-address": "Overridden due to moderate security vulnerability in <=10.1.0",
-    "hono": "Overridden due to moderate security vulnerabilities (body bypass/HTML injection) in <4.12.16"
+    "hono": "Overridden due to moderate security vulnerabilities (body bypass/HTML injection) in <4.12.16",
+    "fast-uri": "Overridden due to high security vulnerability (path traversal) in <=3.1.0"
   }
 }
