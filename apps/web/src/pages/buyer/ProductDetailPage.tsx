@@ -160,6 +160,7 @@ export function ProductDetailPage(): ReactElement {
             <button
               key={variant.id}
               type="button"
+              data-testid="variant-pill"
               onClick={() => {
                 setSelectedVariantIndex(index);
               }}
@@ -176,7 +177,7 @@ export function ProductDetailPage(): ReactElement {
 
         <div className="mt-auto space-y-6 pt-4">
           <div className="flex items-baseline gap-3">
-            <p className="font-dm-sans text-3xl font-bold text-gorola-charcoal">
+            <p className="font-dm-sans text-3xl font-bold text-gorola-charcoal" data-testid="product-price">
               Rs {selected?.price ?? "0.00"}
             </p>
             {activeQuantity > 1 && (

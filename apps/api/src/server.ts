@@ -119,7 +119,7 @@ export function createServer(options: CreateServerOptions = {}): FastifyInstance
     process.env.NODE_ENV === "test" || options.disableRedis ? null : getRedisClient();
   void app.register(rateLimit, {
     global: true,
-    max: 100,
+    max: process.env.NODE_ENV === "production" ? 100 : 1000,
     timeWindow: "1 minute",
     ...(redisClient
       ? {
@@ -166,9 +166,9 @@ export function createServer(options: CreateServerOptions = {}): FastifyInstance
     const appError =
       error instanceof AppError
         ? error
-        : new AppError("Internal server error", {
-            code: "INTERNAL_SERVER_ERROR",
-            statusCode: 500
+        : new AppError(error.message || "Internal server error", {
+            code: (error as any).code || "INTERNAL_SERVER_ERROR",
+            statusCode: error.statusCode || 500
           });
     const payload: ErrorEnvelope = {
       success: false,

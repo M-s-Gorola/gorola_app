@@ -509,10 +509,10 @@ export function OrderConfirmationPage(): ReactElement {
                 </ul>
 
                 <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
-                  <p>Subtotal: Rs {query.data.subtotal}</p>
+                  <p data-testid="order-subtotal">Subtotal: Rs {query.data.subtotal}</p>
                   <p>Delivery fee: Rs {query.data.deliveryFee}</p>
                   {discountAmount !== "0.00" ? <p>Discount: -Rs {discountAmount}</p> : null}
-                  <p className="font-semibold">Total: Rs {query.data.total}</p>
+                  <p className="font-semibold" data-testid="order-total">Total: Rs {query.data.total}</p>
                   <p>Payment: {formatPayment(query.data.paymentMethod)}</p>
                 </div>
 

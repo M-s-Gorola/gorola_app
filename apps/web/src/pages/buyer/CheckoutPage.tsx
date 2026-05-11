@@ -244,6 +244,7 @@ export function CheckoutPage(): ReactElement {
                     </span>
                     <textarea
                       className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                      name="landmarkDescription"
                       onChange={(e) => {
                         setLandmarkInput(e.target.value);
                       }}
@@ -258,6 +259,7 @@ export function CheckoutPage(): ReactElement {
                     </span>
                     <input
                       className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                      name="flatRoom"
                       onChange={(e) => {
                         setFlatRoom(e.target.value);
                       }}

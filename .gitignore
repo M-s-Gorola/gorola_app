@@ -6,3 +6,7 @@ coverage/
 .env.*.local
 *.log
 *.txt
+test-results/
+playwright-report/
+blob-report/
+playwright-report/

@@ -295,6 +295,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
           <article
             key={item.id}
             data-product-card="true"
+            data-testid="product-card"
             className="flex flex-col rounded-2xl border border-gorola-pine/10 bg-white p-4 shadow-sm"
           >
             <Link to={`/products/${item.productId}`} className="group block cursor-pointer">
@@ -308,7 +309,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                   }}
                 />
               </div>
-              <p className="font-dm-sans text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors">
+              <p className="font-dm-sans text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors" data-testid="product-name">
                 {item.name}
               </p>
             </Link>

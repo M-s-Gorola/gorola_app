@@ -121,6 +121,7 @@ export function OrderHistoryPage() {
         {orders.map((order) => (
           <div
             key={order.id}
+            data-testid="order-card"
             className="group relative bg-white border border-gorola-charcoal/10 rounded-2xl overflow-hidden hover:border-gorola-pine/30 transition-all duration-300 shadow-sm hover:shadow-md"
           >
             <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
