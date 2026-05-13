@@ -20,10 +20,10 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-13
-- **Session Summary:** E2E Suite Stabilization. Fixed Playwright browser issues, auth hydration race conditions, and data envelope access bugs. 14/16 E2E tests are Green.
-- **Next Session Must Start With:** Phase 2.23 — Finalizing E2E-008 and E2E-009 with GSAP speed-up fix.
-- **In Progress Right Now:** Phase 2.23 — E2E-008 (Checkout) and E2E-009 (Status Machine) stabilization.
-- **Current Blocker:** Intermittent UI assertion timeouts due to hydration/animation timing.
+- **Session Summary:** Session 118 — Deep-investigated E2E failures, identified 5 root-cause defects (OCP envelope bug, `isBootstrapPending` unit test gap, GSAP animation blocking, `server.ts` `any` cast, security audit gaps), and authored Phase 2.23.1 with explicit TDD checklists for all 5 fixes.
+- **Next Session Must Start With:** **Phase 2.23.1** — Work through Fixes 1–5 in order. Start with Fix 1: write the RED tests for `OrderConfirmationPage.test.tsx` first, confirm they fail, then apply the `query.data?.data` → `query.data` correction.
+- **In Progress Right Now:** Phase 2.23.1 — E2E stabilization (all 5 fixes pending implementation).
+- **Current Blocker:** 5 confirmed defects blocking E2E-008 and E2E-009. All documented in Phase 2.23.1 with full TDD instructions.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom.
 
@@ -145,7 +145,8 @@
 - **Session 114 (Mobile UI Refinement Planning):** Performed a detailed UI audit for small screens (375px). Created a TDD-based implementation plan (W-020, W-021) to resolve navbar crowding, search form accessibility, and hero banner layout stability.
 - **Session 115 (Phase 2.22 Mobile UI Refinement Completion):** Implemented form-based search submission and hidden branding/location elements for mobile optimization in `BuyerNav.tsx`. Stabilized the Hero ETA banner in `HeroSection.tsx` using `whitespace-nowrap` and adaptive font sizing. Verified with new unit tests in `BuyerNav.test.tsx` and `HeroSection.test.tsx`. All 164 web tests are GREEN.
 - **Session 116 (Hero ETA Banner Wrap Refinement & Documentation Decoupling):** Refined the ETA banner for multi-line wrapping and transitioned to a modular documentation architecture.
-- **Session 117 (E2E Suite Stabilization & Infrastructure Restoration):** Hardened Playwright E2E suite, fixed hydration race conditions, and resolved API data envelope bugs.
+- **Session 117 (E2E Suite Stabilization & Infrastructure Restoration):** Hardened Playwright E2E suite. Fixed hydration race conditions (`isBootstrapPending` guards). Identified `OrderConfirmationPage` envelope bug (`query.data?.data` always `undefined`). Investigated GSAP animation timing and security audit gaps. 14/16 E2E tests GREEN; E2E-008 and E2E-009 remain failing.
+- **Session 118 (Phase 2.23.1 Planning — E2E Root Cause Analysis & Fix Specification):** Performed deep root-cause analysis of all 5 remaining E2E blockers. Authored Phase 2.23.1 in `phase1_2_state.md` with explicit TDD-format instructions (RED→GREEN→Verification Chain) for: (1) OCP `query.data?.data` envelope bug, (2) missing `isBootstrapPending: false` in page unit tests, (3) `window.isE2E` GSAP speed-up, (4) `server.ts` `any` cast type safety, (5) `pnpm audit` security overrides. Unchecked Phase 2.23 Quality Gate — it was incorrectly pre-checked. Phase 2.23.1 checklist is now ready for implementation.
 
 ---
 
@@ -1465,14 +1466,281 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 ---
 
+### 2.23.1 — E2E Stabilization: Bug Fixes, Type Safety & Security
+
+> **Purpose:** Five concrete defects were uncovered during the Phase 2.23 E2E run. All must be resolved before the Quality Gate can be marked complete. Each fix below follows the strict TDD format from `TDD_INSTRUCTION_GUIDE.md`: Root Cause → RED test (confirmed failing) → GREEN implementation → Verification Chain.
+>
+> ⚠️ **Rule:** Do NOT remove or weaken existing tests. Every existing passing test must remain passing. All changes to test files must add or correct assertions — never delete them.
+
+---
+
+#### Fix 1 — `OrderConfirmationPage` Renders Nothing Due to Wrong Envelope Access
+
+**Root cause / Goal:**
+`OrderConfirmationPage.tsx` line 414 has the condition `query.data?.data` but the `queryFn` (lines 271–282) returns `BuyerOrderDetail` directly — NOT an envelope like `{ data: BuyerOrderDetail }`. As a result, `query.data?.data` is always `undefined`, and the block containing `#occ-heading` never renders. This makes E2E-008 (`checkout.spec.ts`) and E2E-009 (`order.spec.ts`) fail because both assert `#occ-heading` is visible with a timeout.
+
+**Fix / Approach:**
+In `OrderConfirmationPage.tsx`, change the rendering condition from `query.data?.data` to `query.data`, and update all references inside that block from `query.data.data` to `query.data`. The `OrderConfirmationEnvelope` wrapper type is also incorrect and should be removed — `queryFn` should declare its return type as `Promise<BuyerOrderDetail>` (which it already does correctly) and the `useQuery` generic should match.
+
+---
+
+- [ ] **RED — Unit / Component (`OrderConfirmationPage.test.tsx`):**
+  - [ ] Set up: Mock `api.get('/api/v1/orders/test-order-id')` to return `{ success: true, data: { id: 'test-order-id', status: 'PLACED', items: [], subtotal: '500', deliveryFee: '30', total: '530', paymentMethod: 'COD', landmarkDescription: 'Near clock tower', store: { id: 's1', name: 'Hillside Mart', phone: '9876543210' }, discount: null } }`. Set `useAuthStore` state to `{ isBootstrapPending: false, accessToken: 'token' }`.
+  - [ ] Test: After the query resolves, the element with `id="occ-heading"` is present in the DOM and contains the text `"Thank you"`.
+  - [ ] Test: When `status` is `"PREPARING"`, `#occ-heading` contains `"Store is picking items"`.
+  - [ ] Test: When `status` is `"DELIVERED"`, `#occ-heading` contains `"Order Delivered"`.
+  - [ ] Test: When `status` is `"CANCELLED"`, `#occ-heading` contains `"Order Cancelled"`.
+  - [ ] **Run — confirm RED (all four tests fail because `#occ-heading` is never rendered today due to the `query.data?.data` bug).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] In `OrderConfirmationPage.tsx`, remove the `OrderConfirmationEnvelope` type entirely (it was a mistake — `queryFn` returns the unwrapped `BuyerOrderDetail`).
+  - [ ] [Component] Change line 414 from:
+    ```typescript
+    {query.isSuccess && query.data?.data ? (
+      (() => {
+        const order = query.data.data;
+    ```
+    to:
+    ```typescript
+    {query.isSuccess && query.data ? (
+      (() => {
+        const order = query.data;
+    ```
+  - [ ] Remove the leftover `console.log('[DEBUG] ...')` statements (lines 266, 272, 277) — debug logs must not ship.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] E2E-008: User completes checkout → navigates to `/orders/:id` → page fetches order → `#occ-heading` displays `"Thank you"` → `[data-testid="order-subtotal"]` is visible → test passes.
+  - [ ] E2E-009: Playwright navigates to `/orders/e2e_order_placed` → `#occ-heading` displays `"Thank you"`; navigates to `/orders/e2e_order_preparing` → `#occ-heading` displays `"Store is picking items"`; navigates to `/orders/e2e_order_delivered` → `"Order Delivered"`; navigates to `/orders/e2e_order_cancelled` → `"Order Cancelled"` → all 4 assertions pass.
+
+---
+
+#### Fix 2 — Unit Tests Broken by `isBootstrapPending` Gate (Pages Not Setting Flag)
+
+**Root cause / Goal:**
+`isBootstrapPending` initializes to `true` in `auth.store.ts`. Several page components — `CheckoutPage`, `SavedAddressesPage`, `SubCategoryPage`, `SearchResultsPage`, and `OrderConfirmationPage` — gate their `useQuery` calls with `enabled: !isBootstrapPending`. Their **unit test files do not set** `isBootstrapPending: false` in the Zustand store before rendering, so every query remains disabled and the components stay in a loading/empty state. Tests that assert data-loaded UI will fail or silently pass the wrong assertion.
+
+**Fix / Approach:**
+For each affected test file, add a `beforeEach` (or per-test) call `useAuthStore.setState({ isBootstrapPending: false })` before rendering the component. Do NOT change or remove any existing assertions. The mock API responses and all existing test cases must stay exactly as-is — you are only adding the missing store setup.
+
+---
+
+- [ ] **RED — Unit (`CheckoutPage.test.tsx`):**
+  - [ ] Inspect the existing tests: identify any test that mocks an API response and then asserts the resulting rendered content (e.g. saved address list rendering, form appearing, checkout summary visible).
+  - [ ] Temporarily set `useAuthStore.setState({ isBootstrapPending: true })` (the default) in a `beforeEach` to reproduce the failure — confirm those tests fail because the query is disabled.
+  - [ ] **Run — confirm RED (data-dependent assertions fail; component shows loader or empty state).**
+
+- [ ] **GREEN — Frontend (Test Setup Only — `CheckoutPage.test.tsx`):**
+  - [ ] In the `beforeEach` block (or at the top of each test that renders `CheckoutPage`), add:
+    ```typescript
+    useAuthStore.setState({ isBootstrapPending: false, accessToken: 'test-token', role: 'BUYER' });
+    ```
+  - [ ] Do NOT remove or alter any existing `expect(...)` assertion.
+  - [ ] Run — **confirm GREEN (all pre-existing assertions now pass)**.
+
+- [ ] **RED — Unit (`SavedAddressesPage.test.tsx`):**
+  - [ ] Identify tests that assert address list items are rendered.
+  - [ ] Reproduce failure by confirming `isBootstrapPending: true` blocks the query.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (`SavedAddressesPage.test.tsx`):**
+  - [ ] Add `useAuthStore.setState({ isBootstrapPending: false, accessToken: 'test-token', role: 'BUYER' })` to the `beforeEach`.
+  - [ ] Run — **confirm GREEN**.
+
+- [ ] **RED — Unit (`SubCategoryPage.test.tsx`):**
+  - [ ] Identify tests that assert product grid or subcategory content appears.
+  - [ ] Confirm RED with default `isBootstrapPending: true`.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (`SubCategoryPage.test.tsx`):**
+  - [ ] Add `useAuthStore.setState({ isBootstrapPending: false })` to the `beforeEach`.
+  - [ ] Run — **confirm GREEN**.
+
+- [ ] **RED — Unit (`SearchResultsPage.test.tsx`):**
+  - [ ] Identify tests that assert search results appear after a debounced query.
+  - [ ] Confirm RED with default `isBootstrapPending: true`.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (`SearchResultsPage.test.tsx`):**
+  - [ ] Add `useAuthStore.setState({ isBootstrapPending: false })` to the `beforeEach`.
+  - [ ] Run — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Run `pnpm --filter @gorola/web test -- --run` — all web unit tests that were previously failing due to disabled queries now pass. Total test count is the same or higher (no tests were removed). No existing passing test is broken.
+
+---
+
+#### Fix 3 — GSAP Animations Block E2E Assertions (window.isE2E Speed-Up)
+
+**Root cause / Goal:**
+GSAP's global defaults are `duration: 0.8` with additional delays in `OrderConfirmationPage.tsx`'s entrance timeline (0.75s hold + 1.1s bloom fade + 0.8s draw + 0.8s content reveal = ~3.45 seconds of animation before `#occ-heading` becomes fully visible). While Playwright's 30s timeout is theoretically sufficient, GSAP animations also affect `autoAlpha` (opacity + visibility together), meaning elements can exist in the DOM but be visually hidden (`visibility: hidden`) during animation. Playwright's default `toBeVisible()` check respects CSS visibility. Any animation-related timing jitter can cause intermittent failures.
+
+**Fix / Approach:**
+Inject `window.isE2E = true` via Playwright's `use.launchOptions` script before any page loads. In `gsap.ts`, add a one-time check after `initGorolaGsapOnce()` that sets `gsap.globalTimeline.timeScale(100)` when `window.isE2E` is truthy. This makes all GSAP animations complete in milliseconds during E2E runs without affecting production or unit tests.
+
+---
+
+- [ ] **RED — E2E (`checkout.spec.ts` and `order.spec.ts`):**
+  - [ ] Before applying the fix, confirm that E2E-008 and E2E-009 fail intermittently (or consistently after Fix 1 is applied) due to assertion timeouts on animated elements.
+  - [ ] **Run `pnpm --filter @gorola/web test:e2e` — confirm RED (or flaky) on E2E-008/E2E-009 due to animation timing.**
+
+- [ ] **GREEN — Infrastructure + Frontend:**
+  - [ ] [Playwright Config] In `apps/web/playwright.config.ts`, add the following to the `use` block:
+    ```typescript
+    use: {
+      baseURL: 'http://localhost:5173',
+      trace: 'on-first-retry',
+      launchOptions: {
+        args: ['--disable-web-security'],
+      },
+    },
+    ```
+    And add a global `setup` script via `globalSetup` or use `page.addInitScript` in a `beforeEach` in each spec file. The recommended approach for this project is to add it to each spec's `beforeEach` using:
+    ```typescript
+    await page.addInitScript(() => {
+      (window as Window & { isE2E?: boolean }).isE2E = true;
+    });
+    ```
+    Add this line as the **very first line** of every `test.beforeEach` block in `checkout.spec.ts` and `order.spec.ts`, before the `page.goto('/login')` call.
+  - [ ] [GSAP Lib] In `apps/web/src/lib/gsap.ts`, update `initGorolaGsapOnce()` to add the E2E speed-up:
+    ```typescript
+    export function initGorolaGsapOnce(): void {
+      if (configured) {
+        return;
+      }
+      gsap.registerPlugin(ScrollTrigger);
+      gsap.defaults({ ease: 'power2.out', duration: 0.8 });
+      // Speed up all animations in E2E test environments so Playwright assertions
+      // are never blocked by animation timing. window.isE2E is injected by
+      // Playwright's beforeEach addInitScript — it is never set in production.
+      if (typeof window !== 'undefined' && (window as Window & { isE2E?: boolean }).isE2E === true) {
+        gsap.globalTimeline.timeScale(100);
+      }
+      configured = true;
+    }
+    ```
+  - [ ] **Run E2E suite — confirm GREEN on E2E-008 and E2E-009 (animations complete in < 50ms).**
+
+- [ ] **RED — Unit (`gsap-context-cleanup.test.tsx` and `useGorolaMotion.test.tsx`):**
+  - [ ] Confirm the existing GSAP unit tests still pass after the `initGorolaGsapOnce` change. These tests run in jsdom where `window.isE2E` is `undefined`, so the `timeScale` branch should never be hit.
+  - [ ] Add one new test to `gsap-context-cleanup.test.tsx`: in a jsdom environment, calling `initGorolaGsapOnce()` should NOT set `timeScale(100)` on the global timeline — assert `gsap.globalTimeline.timeScale()` returns `1` (the default).
+  - [ ] **Run — confirm RED (test does not exist yet).**
+
+- [ ] **GREEN — Unit (`gsap-context-cleanup.test.tsx`):**
+  - [ ] Implement the new test. The test should: call `initGorolaGsapOnce()`, then assert `expect(gsap.globalTimeline.timeScale()).toBe(1)` (jsdom does not set `window.isE2E`).
+  - [ ] Run — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] E2E runner launches Chromium → `beforeEach` injects `window.isE2E = true` before the first navigation → GSAP initializes and detects the flag → `timeScale(100)` is applied → all entrance animations on `OrderConfirmationPage` complete in < 50ms → Playwright's `toBeVisible()` finds `#occ-heading` immediately → E2E-008 and E2E-009 pass consistently without flakiness.
+
+---
+
+#### Fix 4 — `server.ts` `any` Type Cast and Unknown Error Handler Bug
+
+**Root cause / Goal:**
+`apps/api/src/server.ts` line 170 uses `(error as any).code` — an explicit `any` cast that violates the project's `no-any` TypeScript rule and would cause `pnpm typecheck` to fail under strict settings. On the same line, `error.statusCode` is accessed on a value typed as `Error` by Fastify's error handler signature — `statusCode` does not exist on the base `Error` type, which also fails typecheck. Both issues block the production build.
+
+**Fix / Approach:**
+Replace the `any` cast with a proper type-safe narrowing helper inside `server.ts`. Extract a `toAppError(error: unknown)` private function that type-narrows `error` to check for `.code` (string) and `.statusCode` (number) using `typeof` guards before accessing them.
+
+---
+
+- [ ] **RED — Integration (`server.bootstrap.test.ts` or a new `server.error-handler.test.ts`):**
+  - [ ] Test: Send a request to a registered route that throws a plain `new Error('something broke')` (not an `AppError`). Assert the response body is `{ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'something broke' }, meta: { requestId: <string> } }` with HTTP status `500`.
+  - [ ] Test: Send a request that throws an object with `{ code: 'CUSTOM_CODE', statusCode: 422, message: 'custom' }`. Assert the response is `{ success: false, error: { code: 'CUSTOM_CODE', message: 'custom' } }` with HTTP status `422`.
+  - [ ] **Run — confirm RED (the tests do not exist yet; write them first).**
+
+- [ ] **GREEN — Backend (`server.ts`):**
+  - [ ] Remove the `(error as any).code` cast. Replace the error-coercion block (lines ~166–172) with:
+    ```typescript
+    function coerceToAppError(error: unknown): AppError {
+      if (error instanceof AppError) return error;
+      const message =
+        error instanceof Error ? error.message : 'Internal server error';
+      const code =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        typeof (error as Record<string, unknown>).code === 'string'
+          ? (error as Record<string, unknown>).code as string
+          : 'INTERNAL_SERVER_ERROR';
+      const statusCode =
+        typeof error === 'object' &&
+        error !== null &&
+        'statusCode' in error &&
+        typeof (error as Record<string, unknown>).statusCode === 'number'
+          ? (error as Record<string, unknown>).statusCode as number
+          : 500;
+      return new AppError(message, { code, statusCode });
+    }
+    ```
+  - [ ] Update `setErrorHandler` to use `coerceToAppError(error)` instead of the inline `any` block.
+  - [ ] Run `pnpm --filter @gorola/api typecheck` — **confirm zero errors**.
+  - [ ] Run integration test — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] `pnpm --filter @gorola/api typecheck` returns exit code 0 with zero errors → `pnpm ci:quality` no longer blocks on typecheck → production build succeeds.
+
+---
+
+#### Fix 5 — Security Audit: Missing `pnpm.overrides` for Remaining High/Moderate Vulnerabilities
+
+**Root cause / Goal:**
+`pnpm audit --audit-level=moderate` reports vulnerabilities in `protobufjs` and potentially other transitive dependencies that are not yet covered by the `pnpm.overrides` block in the root `package.json`. The `ci:quality` script runs `pnpm security:audit` which calls `pnpm audit --audit-level=high` — any unfixed high-severity vulnerability causes the full CI pipeline to fail. The current overrides (lines 37–43 of root `package.json`) cover `ip-address`, `hono`, `fast-uri`, `@opentelemetry/sdk-node`, and `@opentelemetry/exporter-prometheus`, but not `protobufjs` or other remaining vulnerabilities.
+
+**Fix / Approach:**
+Run `pnpm audit --json` to get the current full vulnerability list. For each vulnerability at `high` or `moderate` severity, add a corresponding entry to the `pnpm.overrides` block in root `package.json` pinning to the patched version. Add a matching entry to the `_pnpm_overrides_comments` block explaining the CVE or advisory. After each override is added, run `pnpm install` and re-run `pnpm audit` to confirm resolution.
+
+> **Note:** Overrides must be the minimum version that patches the vulnerability. Do NOT override to a version that introduces breaking API changes unless you have verified compatibility across the monorepo.
+
+---
+
+- [ ] **Pre-Check — Audit:**
+  - [ ] Run `pnpm audit --audit-level=moderate` from the monorepo root and capture the full JSON output.
+  - [ ] List every package at `high` or `moderate` severity that is NOT already in the `pnpm.overrides` block.
+  - [ ] For each listed package, look up the patched version from the npm advisory or the GHSA link provided in the audit output.
+
+- [ ] **GREEN — Root `package.json` (`pnpm.overrides` block):**
+  - [ ] For `protobufjs` (high — prototype pollution vulnerability GHSA-h755-8qp9-cq85 and related): add:
+    ```json
+    "protobufjs": ">=7.2.5"
+    ```
+  - [ ] For every OTHER package reported as high or moderate severity by `pnpm audit --audit-level=moderate` that is not already overridden: add the appropriate override entry using the same pattern.
+  - [ ] For every override added, add a matching comment entry to the `_pnpm_overrides_comments` object:
+    ```json
+    "protobufjs": "Override for GHSA-h755-8qp9-cq85 — prototype pollution vulnerability in <7.2.5"
+    ```
+  - [ ] Run `pnpm install` to apply the new overrides.
+  - [ ] Run `pnpm audit --audit-level=moderate` — **confirm zero moderate or high vulnerabilities remain**.
+  - [ ] Run `pnpm audit --audit-level=high` — **confirm zero high vulnerabilities** (this is what `ci:quality` checks).
+
+- [ ] **Verification chain:**
+  - [ ] `pnpm security:audit` (which runs `pnpm audit --audit-level=high`) returns exit code 0 → `pnpm ci:quality` no longer fails at the audit step → full CI pipeline proceeds to lint and tests.
+
+---
+
+#### Phase 2.23.1 Quality Gate
+
+- [ ] Fix 1: `#occ-heading` renders correctly for all 4 order statuses — unit tests pass
+- [ ] Fix 2: All page-level unit tests that gate on `isBootstrapPending` now pass without removing any assertion
+- [ ] Fix 3: `window.isE2E` is injected in `checkout.spec.ts` and `order.spec.ts`; `gsap.ts` applies `timeScale(100)`; new unit test for the flag guard passes
+- [ ] Fix 4: `server.ts` has zero `any` casts; `pnpm --filter @gorola/api typecheck` is clean
+- [ ] Fix 5: `pnpm audit --audit-level=moderate` reports zero vulnerabilities; all overrides documented in `_pnpm_overrides_comments`
+- [ ] `pnpm --filter @gorola/web test -- --run` — all web unit tests GREEN (count same or higher)
+- [ ] `pnpm --filter @gorola/api test -- --run` — all API tests GREEN
+- [ ] `pnpm --filter @gorola/web test:e2e` — all 16 E2E flows pass (including E2E-008 and E2E-009)
+- [ ] `pnpm ci:quality` — full pipeline GREEN (security audit + lint + typecheck + all tests + build)
+
+---
+
 #### Phase 2.23 Quality Gate
 
-- [x] All 16 E2E flows pass in Playwright headless mode (`pnpm --filter @gorola/web test:e2e`)
-- [x] No uncaught console errors during any E2E run
-- [x] Full `pnpm ci:quality` (unit + integration + build) still GREEN after adding E2E config
-- [x] E2E runs against Vite dev server + local Fastify API
-- [x] `playwright.config.ts` added to `apps/web/` with `baseURL`, `webServer` config, and test dir pointing to `tests/e2e/`
-- [x] GSAP animations handled via `timeScale(100)` or `window.isE2E` flag injection.
+- [ ] All 16 E2E flows pass in Playwright headless mode (`pnpm --filter @gorola/web test:e2e`)
+- [ ] No uncaught console errors during any E2E run
+- [ ] Full `pnpm ci:quality` (unit + integration + build) still GREEN after adding E2E config
+- [ ] E2E runs against Vite dev server + local Fastify API
+- [ ] `playwright.config.ts` added to `apps/web/` with `baseURL`, `webServer` config, and test dir pointing to `tests/e2e/`
+- [ ] GSAP animations handled via `timeScale(100)` or `window.isE2E` flag injection.
 ---
 
 ## Session Notes and Decisions Made (Phase 1 and 2 - All Sessions)
@@ -1680,10 +1948,21 @@ _(Append new entries ” never delete old ones)_
 **Session 117 (E2E Suite Stabilization & Infrastructure Restoration):**
 - **Infrastructure**: Resolved `browserType.launch` failures by installing missing Playwright binaries.
 - **Hydration Hardening**: Implemented `isBootstrapPending` gates in `BuyerNav` and `ProfilePage` to eliminate 401 Unauthorized race conditions during session hydration.
-- **Bug Fix (Checkout)**: Fixed `OrderConfirmationPage` data envelope access by correctly drilling into `query.data.data`.
-- **E2E Seeding**: Hardened `seed-e2e.ts` with explicit order cleanup and support for multiple test phone numbers.
-- **Quality Audit**: Investigated `ci:quality` failures, identifying dependency-drift security vulnerabilities and strict TypeScript `unknown` error type mismatches in `server.ts`.
-- **GSAP Design**: Proposed `window.isE2E` environment-gated animation scaling to eliminate test flakiness without affecting production aesthetics.
+- **Bug Identification (OCP)**: Identified — but did NOT fix — a broken envelope access in `OrderConfirmationPage.tsx` line 414. `query.data?.data` is always `undefined` because `queryFn` returns `BuyerOrderDetail` directly. The `#occ-heading` element therefore never renders. Fix deferred to Phase 2.23.1 Fix 1.
+- **E2E Seeding**: Hardened `seed-e2e.ts` with explicit order cleanup in FK-safe order and support for multiple test phone numbers.
+- **Quality Audit**: Investigated `ci:quality` failures. Identified `(error as any).code` cast in `server.ts` line 170 and missing `pnpm.overrides` for `protobufjs` and other packages. Fixes deferred to Phase 2.23.1.
+- **GSAP Design**: Proposed `window.isE2E` flag injection via `page.addInitScript` and `gsap.globalTimeline.timeScale(100)` guard in `gsap.ts`. Implementation deferred to Phase 2.23.1 Fix 3.
+- **Result**: 14/16 E2E flows GREEN. E2E-008 (`checkout.spec.ts`) and E2E-009 (`order.spec.ts`) remain failing pending Phase 2.23.1.
+
+**Session 118 (Phase 2.23.1 — Root Cause Analysis & Fix Specification):**
+- **Objective**: Deep-investigate all remaining E2E failures to identify every root cause before writing any code, then produce an explicit TDD-format fix plan for a base model to execute.
+- **Fix 1 — OCP Envelope Bug (PRIMARY BLOCKER)**: Confirmed `OrderConfirmationPage.tsx` line 414 uses `query.data?.data` but `queryFn` (lines 271-282) resolves to `BuyerOrderDetail` directly — not wrapped in an envelope. `query.data?.data` is always `undefined`. The entire content block including `#occ-heading` never renders. This is the primary reason both E2E-008 and E2E-009 fail. Fix: change condition to `query.data`, remove `OrderConfirmationEnvelope` type, remove 3 `console.log('[DEBUG]...')` statements.
+- **Fix 2 — isBootstrapPending Unit Test Gap**: Confirmed 5 page components (`CheckoutPage`, `SavedAddressesPage`, `SubCategoryPage`, `SearchResultsPage`, `OrderConfirmationPage`) gate `useQuery` with `enabled: !isBootstrapPending`. Their test files never call `useAuthStore.setState({ isBootstrapPending: false })`, leaving all queries permanently disabled in tests. Fix: add `isBootstrapPending: false` to `beforeEach` in each affected test file without removing any existing assertion.
+- **Fix 3 — GSAP window.isE2E**: Confirmed zero code implementation exists — only documentation references. GSAP defaults `duration: 0.8` plus the OCP timeline adds ~3.45s of animation where `autoAlpha` keeps elements at `visibility: hidden`. Fix: inject `window.isE2E = true` via `page.addInitScript()` in each spec's `beforeEach`; add `if (window.isE2E) gsap.globalTimeline.timeScale(100)` to `initGorolaGsapOnce()` in `gsap.ts`; add a unit test asserting the flag does not fire in jsdom.
+- **Fix 4 — server.ts Type Safety**: Confirmed `(error as any).code` on line 170 is an explicit `any` cast violating strict TypeScript. `error.statusCode` is also accessed without a type guard. Fix: extract a `coerceToAppError(error: unknown)` helper with proper `typeof` narrowing — no `any` casts.
+- **Fix 5 — Security Overrides**: Confirmed `pnpm.overrides` in root `package.json` does not cover `protobufjs` (GHSA-h755-8qp9-cq85, prototype pollution) or other packages still flagged by `pnpm audit`. Fix: run `pnpm audit --json`, add every remaining high/moderate package to `pnpm.overrides` with a matching `_pnpm_overrides_comments` entry.
+- **Documentation**: Authored Phase 2.23.1 section in `phase1_2_state.md` with full TDD checklists for all 5 fixes. Each fix has: Root Cause, RED test instructions with exact file names and assertions, GREEN implementation steps, and a Verification Chain. Unchecked the Phase 2.23 Quality Gate which had been incorrectly pre-marked `[x]` complete.
+- **Result**: Zero code changes made this session. Phase 2.23.1 is fully specified. Next session starts with Fix 1.
 
 ---
 
