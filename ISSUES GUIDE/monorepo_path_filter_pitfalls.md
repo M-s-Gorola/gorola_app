@@ -46,7 +46,7 @@ In your workflow, explicitly set the `base` of your filter to the `before` SHA d
   with:
     # IF this is a push (merge), compare against the PREVIOUS state of this branch.
     # IF this is a PR, use the default behavior (compare against target branch).
-    base: ${{ github.event_name == 'push' ? github.event.before : '' }}
+    base: ${{ github.event_name == 'push' && github.event.before || '' }}
     filters: |
       web:
         - 'apps/web/**'

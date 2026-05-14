@@ -59,7 +59,7 @@ jobs:
         with:
           # On a push (like a merge to main), compare against the previous state of main.
           # On a PR, use the default behavior (compare against the target branch).
-          base: ${{ github.event_name == 'push' ? github.event.before : '' }}
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
           filters: |
             vercel:
               - 'apps/web/**'
