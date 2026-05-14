@@ -44,9 +44,8 @@ docker run -d --name gorola-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_D
 3.  Update the `.env` file with these values (using quotes for safety):
     ```env
     DATABASE_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
+    DATABASE_URL_TEST="postgresql://postgres:postgres@localhost:5432/gorola_test"
     REDIS_URL="redis://localhost:6379"
-    
-    # JWT keys can be left blank for local development
     ```
 
 ---
@@ -78,7 +77,23 @@ Run these commands from the `GoRola_app` root:
 
 ---
 
-## 5. Running the Application
+## 5. Setting Up the Test Database (Mandatory for E2E)
+
+The Quality Gate (`pnpm ci:quality`) and E2E tests run against a separate isolated database (`gorola_test`) to prevent data corruption in your dev environment.
+
+1.  **Create the test database** (if not already existing in Docker):
+    ```powershell
+    docker exec -it gorola-postgres psql -U postgres -c "CREATE DATABASE gorola_test;"
+    ```
+2.  **Initialize and Seed the Test DB**:
+    ```powershell
+    pnpm db:test:prepare
+    ```
+    *This runs the cross-platform bootstrap script that auto-migrates and double-seeds (Catalog + E2E) the test database.*
+
+---
+
+## 6. Running the Application
 
 ### Start the Backend (API)
 ```powershell
@@ -97,7 +112,7 @@ The app will be available at:
 
 ---
 
-## 6. Database Management (Prisma Studio)
+## 7. Database Management (Prisma Studio)
 
 To view and edit your local database data via a GUI, you can use Prisma Studio:
 (Note: This follows the env values inside apps/api/.env not the .env file in the root directory)
@@ -115,7 +130,7 @@ pnpm --filter @gorola/api exec prisma studio
 
 ---
 
-## Alternative: Using Docker Compose
+## 8. Alternative: Using Docker Compose
 If you prefer, you can create a `docker-compose.yml` in the root and run `docker-compose up -d` to start both services at once:
 
 ```yaml

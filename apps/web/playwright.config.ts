@@ -15,6 +15,7 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 export default defineConfig({
   testDir: './tests/e2e',
   timeout: 60000,
+  globalSetup: './tests/e2e/global-setup.ts',
   expect: {
     timeout: 10000,
   },
@@ -59,20 +60,21 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
       env: {
-        VITE_API_BASE_URL: 'http://127.0.0.1:3001',
+        VITE_API_BASE_URL: 'http://127.0.0.1:3002',
       }
     },
     {
       command: process.env.CI 
-        ? 'pnpm --filter @gorola/api exec node dist/app.js' 
-        : 'pnpm --filter @gorola/api exec prisma migrate reset --force && pnpm --filter @gorola/api exec prisma db seed && pnpm --filter @gorola/api exec tsx scripts/seed-e2e.ts && pnpm --filter @gorola/api dev',
-      url: 'http://127.0.0.1:3001/api/health',
-      reuseExistingServer: !process.env.CI,
+        ? 'PORT=3002 pnpm --filter @gorola/api exec node dist/app.js' 
+        : 'pnpm --filter @gorola/api dev',
+      url: 'http://127.0.0.1:3002/api/health',
+      reuseExistingServer: false,
       timeout: 180000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL_TEST!,
         CORS_ALLOWED_ORIGINS: 'http://127.0.0.1:5180',
         HOST: '127.0.0.1',
+        PORT: '3002',
         GOROLA_DUMMY_OTP: '123456',
         NODE_ENV: 'test'
       }

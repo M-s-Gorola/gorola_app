@@ -24,7 +24,7 @@ In Phase 2.18, we transitioned the GoRola catalog from a flat `Category -> Produ
 5.  **Database Desynchronization (Dev vs. Test):**
     A major point of confusion was the separation between `gorola_dev` and `gorola_test`. 
     *   **The Struggle:** `prisma migrate dev` only applies changes to the primary development database. The test database, which integration tests use, remained on the old schema. Running tests resulted in "Column not found" or "Table not found" errors even though the app seemed fine in the browser.
-    *   **The Rectification:** We had to implement `apps/api/scripts/migrate-test-db.cjs` and `reset-test-db.cjs`. These scripts explicitly point Prisma at the `DATABASE_URL_TEST` and run `migrate reset` or `migrate deploy`. We then wired these into the `pnpm test` and `pnpm ci:quality` pipelines to ensure the test environment is automatically synchronized before any code is evaluated.
+    *   **The Rectification:** We implemented `apps/api/scripts/bootstrap-test-db.cjs`. This script explicitly points Prisma at the `DATABASE_URL_TEST` and runs `migrate deploy` followed by a double-seed (Catalog + E2E). We then wired this into the `pnpm ci:quality` pipeline to ensure the test environment is automatically synchronized before any code is evaluated.
 
 ### Lessons Learned
 

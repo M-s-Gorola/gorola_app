@@ -12,8 +12,9 @@
     "test": "pnpm -r test",
     "build": "pnpm -r build",
     "security:audit": "pnpm audit --audit-level=high",
-    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm test && pnpm build",
+    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm db:test:prepare && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm build && pnpm test && pnpm --filter @gorola/web test:e2e",
     "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
+    "db:test:prepare": "pnpm --filter @gorola/api prisma:bootstrap:test",
     "db:local:bootstrap": "pnpm --filter @gorola/api prisma:bootstrap:local",
     "db:local:seed": "pnpm --filter @gorola/api prisma:seed",
     "db:local:verify-seed": "pnpm --filter @gorola/api prisma:verify:seed"

@@ -5,9 +5,10 @@ GoRola is a premium quick-commerce platform for Mussoorie, India. This repositor
 ## Current Status
 
 - **Phase 1 (NFR Foundation)**: ✅ Completed.
-- **Phase 2 (Core Features)**: In progress.
-  - Buyer Profile and Account management implemented.
-  - UI Overhaul and Hero Section refinements active.
+- **Phase 2 (Buyer Web Experience)**: ✅ Completed.
+  - Full E2E stability achieved (34/34 passing).
+  - Hardened full-stack quality gate.
+- **Phase 3 (Store Owner Foundation)**: 🕒 Next.
 
 ## Tech Stack
 
@@ -82,13 +83,15 @@ Before pushing any code, you **MUST** run the quality gate check locally to ensu
 pnpm ci:quality
 ```
 
-This command runs:
-1. Build shared packages
-2. Security audit
-3. Linting (strict)
-4. Typechecking
-5. Unit tests
-6. Full build
+This command runs the **exact** same sequence as the GitHub Actions CI pipeline:
+1. **Build Shared Lib**: Compiles `@gorola/shared` (mandatory for type-safety).
+2. **Security Audit**: High-level audit of all dependencies.
+3. **Database Prepare**: Auto-migrates and Double-seeds the **Test DB** (Catalog + E2E).
+4. **Linting**: Strict zero-warning enforcement.
+5. **Typechecking**: Full-stack TypeScript validation.
+6. **Build**: Verifies the production bundle.
+7. **Unit/Integration Tests**: 500+ Vitest tests.
+8. **E2E Tests**: 34 Playwright user-journey flows.
 
 ## Root Workspace Commands
 

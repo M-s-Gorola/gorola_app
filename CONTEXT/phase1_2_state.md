@@ -1949,6 +1949,7 @@ _(Append new entries ” never delete old ones)_
 - **Environment Security:** Removed all hardcoded database URL fallbacks. The system now strictly requires a `.env` file loaded via `dotenv`, ensuring that tests never accidentally run against production or dev databases if the test env is missing.
 - **Race Condition Resolution:** Hardened asynchronous synchronization using content-aware `waitForResponse` listeners, ensuring the UI only proceeds after the API has successfully committed data.
 - **Composite Seeding:** Resolved a major blocker where catalog navigation failed due to an empty database. Updated `playwright.config.ts` to implement a deterministic "Double Seed" (Core Catalog + E2E Identities) after every database reset.
+- **CI-Alignment Hardening:** Synchronized the local `pnpm ci:quality` command with the GitHub Actions workflow. Created `bootstrap-test-db.cjs` to automate test-database preparation. The quality gate now includes: Audit -> DB Setup -> Lint -> Typecheck -> Build -> Unit/Int Tests -> E2E.
 - **Quality Gate:** Achieved a perfect 34/34 E2E pass rate alongside a full `ci:quality` pass.
 
 
