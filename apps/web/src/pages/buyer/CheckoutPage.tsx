@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -95,8 +95,10 @@ export function CheckoutPage(): ReactElement {
   /** Sync guard — double-clicks can fire two POSTs before mutation pending state updates in the DOM. */
   const placeOrderInFlightRef = useRef(false);
 
+  const queryClient = useQueryClient();
   const placeMutation = useMutation({
     mutationFn: async (): Promise<string> => {
+      // ... (existing code inside mutationFn)
       if (api === null) {
         throw new Error("Cannot place order offline");
       }
@@ -147,6 +149,10 @@ export function CheckoutPage(): ReactElement {
     },
     onSuccess: (orderId) => {
       clearCart();
+      // Ensure UI updates instantly by clearing the stale cache for orders and addresses
+      void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
+      void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
+      
       navigate(`/orders/${orderId}`);
     }
   });

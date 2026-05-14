@@ -81,7 +81,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --prefer-offline
 
       # @gorola/shared compiles to dist/ — api and web typecheck both need that output.
       - name: Build @gorola/shared
@@ -142,9 +142,32 @@ jobs:
       - name: Test
         run: pnpm test
 
+      # Cache Playwright browser binaries based on the version of @playwright/test.
+      # This saves ~1.5 - 2 minutes of download time on every CI run.
+      - name: Get Playwright version
+        id: playwright-version
+        shell: bash
+        run: |
+          VERSION=$(pnpm list --filter @gorola/web @playwright/test --json | jq -r '.[0].devDependencies["@playwright/test"].version')
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Cache Playwright Browsers
+        uses: actions/cache@v4
+        id: playwright-cache
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
+
       # Install Playwright browser binaries and system dependencies.
+      # If cache hit, only system dependencies are installed (which is fast).
       - name: Install Playwright Browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
         run: pnpm --filter @gorola/web exec playwright install --with-deps
+
+      - name: Install Playwright OS Dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: pnpm --filter @gorola/web exec playwright install-deps
+
       # Executes the full Playwright E2E suite against a live dev server and API.
       # This validates the complete user journey from Login to Order Confirmation.
       - name: Run E2E tests

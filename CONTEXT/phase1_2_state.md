@@ -20,7 +20,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-14
-- **Session Summary:** Session 121 — Hardened E2E infrastructure by implementing a strict **Isolation Strategy** (unique user accounts) and **API Port Isolation** (shifting tests to port 3002). Resolved a critical CI blocker by implementing a **Dynamic Proxy Target** in `vite.config.ts`, ensuring that static production builds in CI can correctly route to the isolated test backend. Successfully cleared the 34/34 E2E quality gate alongside a full `ci:quality` pass.
+- **Session Summary:** Session 122 — Finalized E2E infrastructure hardening. Implemented strict **Proxy Isolation** via `VITE_E2E_PROXY` to prevent local dev "ghost connections" to test backends. Fixed **Cache Invalidation** in the checkout flow so new orders and addresses appear instantly without page reload. Optimized CI performance with pnpm and Playwright browser caching.
 - **Next Session Must Start With:** **Phase 3 (Store Owner Foundation)** — Initialize store owner dashboard and authentication modules in `phase3_4_state.md`.
 - **In Progress Right Now:** None. Phase 2 complete.
 - **Current Blocker:** None.
@@ -150,6 +150,7 @@
 - **Session 119 (Phase 2.23.1 Stabilization):** Implemented five critical fixes for E2E stabilization: resolved OrderConfirmationPage envelope bug, added bootstrap gating to page unit tests, implemented GSAP window.isE2E speed-up, hardened server.ts type safety, and resolved all security audit vulnerabilities via pnpm overrides.
 - **Session 120 (Final E2E Stabilization & Phase 2 Completion):** Resolved intermittent Radix UI dropdown failures in SavedAddressesPage unit tests. Confirmed 100% stability across all 34 E2E flows and monorepo-wide ci:quality. Formally marked Phase 2 as complete.
 - **Session 121 (Infrastructure Hardening & Isolation):** Implemented "Isolation Strategy" (unique users) and **API Port Isolation** (shifting E2E to port 3002) to prevent conflicts with dev tools. Hardened environment config by removing DB fallbacks and implemented content-aware `waitForResponse` synchronization for race condition resolution. Total suite at 34/34 green with full quality gate pass.
+- **Session 122 (E2E Proxy Hardening & DX Improvements):** Implemented strict `VITE_E2E_PROXY: 'true'` requirement in `vite.config.ts` to prevent local dev "ghost connections" to test backends. Fixed cache invalidation in `CheckoutPage.tsx` so new orders and addresses appear instantly without page reload. **Optimized CI performance by implementing pnpm dependency caching and Playwright browser binary caching in GitHub Actions.**
 
 ---
 
@@ -1945,13 +1946,17 @@ _(Append new entries ” never delete old ones)_
 
 **Session 121 (Infrastructure Hardening & Isolation Strategy):**
 - **Decision 035:** Implemented a strict **User Isolation Strategy** for E2E. Each test suite (Checkout, Profile, CRUD) is assigned a unique user identity (phone number) to prevent data leakage and "ghost" state between test runs.
-- **Parallel Environment Isolation:** Reconfigured `playwright.config.ts` to use a non-standard port for the API (**3002**) and explicit `127.0.0.1` binding. This prevents `EADDRINUSE` conflicts when developers are running their local API server (3001) while tests are executing. The frontend continues to use port **5180** (standard for this project).
-- **Environment Security:** Removed all hardcoded database URL fallbacks. The system now strictly requires a `.env` file loaded via `dotenv`, ensuring that tests never accidentally run against production or dev databases if the test env is missing.
+- **Parallel Environment Isolation:** Reconfigured `playwright.config.ts` to use a non-standard port for the API (**3002**) and explicit `127.0.0.1` binding. This prevents `EADDRINUSE` conflicts when developers are running their local API server (3001) while tests are executing.
 - **Race Condition Resolution:** Hardened asynchronous synchronization using content-aware `waitForResponse` listeners, ensuring the UI only proceeds after the API has successfully committed data.
 - **Composite Seeding:** Resolved a major blocker where catalog navigation failed due to an empty database. Updated `playwright.config.ts` to implement a deterministic "Double Seed" (Core Catalog + E2E Identities) after every database reset.
-- **CI-Alignment Hardening:** Synchronized the local `pnpm ci:quality` command with the GitHub Actions workflow. Created `bootstrap-test-db.cjs` to automate test-database preparation. The quality gate now includes: Audit -> DB Setup -> Lint -> Typecheck -> Build -> Unit/Int Tests -> E2E.
-- **API Shutdown Hardening:** Resolved a hang issue where the E2E suite stayed active after completion. Updated `app.ts` to explicitly disconnect Prisma and Redis clients on `SIGTERM`, ensuring a clean process exit.
-- **Quality Gate:** Achieved a perfect 34/34 E2E pass rate alongside a full `ci:quality` pass.
+- **CI-Alignment Hardening:** Synchronized the local `pnpm ci:quality` command with the GitHub Actions workflow. Created `bootstrap-test-db.cjs` to automate test-database preparation.
+- **Quality Gate:** Achieved a perfect 34/34 E2E pass rate.
+
+**Session 122 (E2E Proxy Hardening & DX Improvements):**
+- **Decision 036 (Proxy Hardening)**: Implemented a strict `VITE_E2E_PROXY: 'true'` requirement in `vite.config.ts`. This ensures that local development (port 3001) is protected from accidental "Ghost Connections" to E2E test backends (port 3002) even if environment variables leak in the developer's shell.
+- **Cache Invalidation Fix**: Resolved a persistent UX bug where new orders and addresses would not appear in the buyer's profile until a hard page reload. Added `queryClient.invalidateQueries` calls to the `CheckoutPage` order mutation success handler for both `["orders", "history"]` and `["buyer-addresses"]`.
+- **CI Performance**: Finalized deep caching for `pnpm` dependencies and Playwright browser binaries in `.github/workflows/ci.yml`. This significantly reduces CI cycle time by skipping redundant downloads and installations on every run.
+- **Verification**: Confirmed a clean 34/34 E2E pass rate with the new isolation flags. Verified that local dev (3001) and E2E (3002) can now safely run simultaneously without data leakage between databases.
 
 
 ---

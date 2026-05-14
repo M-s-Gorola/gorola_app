@@ -13,7 +13,10 @@ export default defineConfig({
     port: 5180,
     proxy: {
       "/api": {
-        target: `http://127.0.0.1:${process.env.PORT_API || "3001"}`,
+        // Only shift the port if explicitly in E2E mode to avoid local dev "leaks"
+        target: process.env.VITE_E2E_PROXY === "true"
+          ? `http://127.0.0.1:${process.env.PORT_API || "3002"}`
+          : "http://127.0.0.1:3001",
         changeOrigin: true
       }
     }

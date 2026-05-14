@@ -62,6 +62,7 @@ export default defineConfig({
       env: {
         VITE_API_BASE_URL: 'http://127.0.0.1:3002',
         PORT_API: '3002',
+        VITE_E2E_PROXY: 'true',
       }
     },
     {

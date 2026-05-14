@@ -107,7 +107,39 @@ This ensures that the CI pipeline remains stable, even when running against a pr
 
 ---
 
-## 6. Summary for Future Projects
+## 6. Local Hardening: Preventing "Proxy Leaks"
+
+While dynamic proxying (Step 5) is great for CI, it can create a "Footgun" for local development. If a developer runs `pnpm dev` in a terminal that has a stale `PORT_API` variable (e.g., from a crashed test run), the **Dev Frontend** might accidentally talk to a **Test Backend**.
+
+### **The Solution: Explicit E2E Proxy Flag**
+We protect against this by requiring an explicit "Opt-In" flag for port shifting.
+
+**GoRola Hardened Implementation:**
+
+1. **Vite Config:**
+```typescript
+// apps/web/vite.config.ts
+target: process.env.VITE_E2E_PROXY === "true"
+  ? `http://127.0.0.1:${process.env.PORT_API || "3002"}`
+  : "http://127.0.0.1:3001"
+```
+
+2. **Playwright Config:**
+```typescript
+// apps/web/playwright.config.ts
+env: { 
+  VITE_E2E_PROXY: 'true',
+  PORT_API: '3002' 
+}
+```
+
+**Result:**
+- **Local Dev**: Always defaults to `3001` (Safe).
+- **E2E Tests**: Explicitly switches to `3002` (Isolated).
+
+---
+
+## 7. Summary for Future Projects
 1. **Assign** a unique, non-colliding port range for your E2E suite (e.g., `+10` or `+100` from defaults).
 2. **Inject** these ports into your application via environment variables during the test boot sequence.
 3. **Bind** explicitly to `127.0.0.1` to ensure cross-platform consistency.
