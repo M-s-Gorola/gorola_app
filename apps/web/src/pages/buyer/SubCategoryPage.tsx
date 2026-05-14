@@ -4,17 +4,19 @@ import { useParams } from "react-router-dom";
 
 import { ProductGrid } from "@/components/buyer/ProductGrid";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 function toTitleCase(value: string): string {
   return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
 }
 
 export function SubCategoryPage(): ReactElement {
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const { categorySlug, subCategorySlug } = useParams<{ categorySlug: string; subCategorySlug: string }>();
   const heading = subCategorySlug !== undefined ? toTitleCase(subCategorySlug) : "Sub-Category";
 
   const subCategoryQuery = useQuery({
-    enabled: api !== null && categorySlug !== undefined && subCategorySlug !== undefined,
+    enabled: !isBootstrapPending && categorySlug !== undefined && subCategorySlug !== undefined,
     queryKey: ["buyer-subcategory-by-slug", categorySlug, subCategorySlug],
     queryFn: async () => {
       if (api === null || categorySlug === undefined || subCategorySlug === undefined) {

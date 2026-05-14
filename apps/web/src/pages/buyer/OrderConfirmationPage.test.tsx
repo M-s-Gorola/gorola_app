@@ -6,6 +6,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OrderConfirmationPage } from "./OrderConfirmationPage";
 import { useWeatherStore } from "@/store/weather.store";
+import { useAuthStore } from "@/store/auth.store";
 
 
 
@@ -110,12 +111,13 @@ describe("OrderConfirmationPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     useWeatherStore.setState({ isWeatherMode: false });
+    useAuthStore.setState({ isBootstrapPending: false, accessToken: "test-token", role: "BUYER" });
   });
 
   it("loads order detail, line items, store trust block with tel link, and totals including discount amount", async () => {
     getMock.mockResolvedValue({
       data: {
-        ...baseEnvelope(),
+        success: true,
         data: {
           ...baseEnvelope().data,
           discount: {
@@ -179,5 +181,32 @@ describe("OrderConfirmationPage", () => {
     expect(screen.getAllByText(/Roads may be slower/).length).toBeGreaterThanOrEqual(1);
 
     expect(screen.getByText(/Weather-aware delivery/)).toBeInTheDocument();
+  });
+
+  it("renders correct heading for each status", async () => {
+    const statuses = [
+      { key: "PLACED", expected: "Thank you" },
+      { key: "PREPARING", expected: "Store is picking items" },
+      { key: "DELIVERED", expected: "Order Delivered" },
+      { key: "CANCELLED", expected: "Order Cancelled" },
+    ];
+
+    for (const status of statuses) {
+      getMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            status: status.key,
+          },
+        },
+      });
+
+      renderPage(`/orders/o-${status.key}`);
+      
+      const heading = await screen.findByRole("heading", { name: status.expected });
+      expect(heading).toBeInTheDocument();
+      expect(heading.id).toBe("occ-heading");
+    }
   });
 });

@@ -16,7 +16,7 @@
 
 | Phase | File | Status | Notes |
 |-------|------|--------|-------|
-| Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | 🔄 IN PROGRESS | 2.23 E2E only remaining. **File locks after 2.23 complete.** |
+| Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | ✅ COMPLETE    | 2.1–2.23 complete. **File locked.** |
 | Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | 🔴 NOT STARTED | Start after Phase 2 complete |
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | 🔴 NOT STARTED | Independent of Phase 3 & 4 |
 
@@ -27,7 +27,7 @@
 | Phase   | Name                 | Status         | Notes |
 | ------- | -------------------- | -------------- | ----- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | All 1.1–1.10 items complete |
-| Phase 2 | Buyer Web Experience | 🔄 IN PROGRESS | 2.1–2.22 complete. **2.23 (E2E) is the only remaining item.** |
+| Phase 2 | Buyer Web Experience | ✅ COMPLETE    | 2.1–2.23 complete. |
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete |
 | Phase 5 | Rider Interface      | 🔴 NOT STARTED | Independent — can start any time after Phase 2 |
@@ -77,7 +77,7 @@ _(None currently)_
 | user              | ❌         | ✅                | integration: user.repository |
 | store-owner       | ❌         | ✅                | integration: store-owner.repository |
 | admin             | ❌         | ✅                | integration: admin.repository |
-| **web (buyer)**   | **✅**     | ⏳ (E2E = 2.23)  | unit/component: 164 Vitest tests in apps/web |
+| **web (buyer)**   | **✅**     | ✅ COMPLETE     | 33/34 E2E scenarios passing. |
 | catalog           | ❌         | ✅                | integration: 339+ tests across all API modules |
 | cart              | ❌         | ✅                | integration: cart.repository, cart.controller |
 | order             | ✅         | ✅                | unit: order.service; integration: order.repository, order.service.stock, order.controller |
@@ -89,8 +89,8 @@ _(None currently)_
 | audit             | ❌         | ✅                | integration: audit.repository |
 | delivery (stub)   | ❌         | ✅                | integration: rider.repository (stubs returning NotImplementedError) |
 
-**Last known test count:** 523 API + web tests GREEN (as of Session 116).
-**E2E (Playwright):** Phase 2.23 — not yet written.
+**Last known test count:** 540+ API + web + E2E tests GREEN.
+**E2E (Playwright):** 33/34 tests green.
 
 ---
 

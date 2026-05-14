@@ -138,6 +138,7 @@ export function CategoryGrid(): ReactElement {
         <button
           key={category.id}
           type="button"
+          data-testid="category-card"
           className={cn(
             "category-card rounded-2xl border border-gorola-pine/10 bg-white px-4 py-5 text-left shadow-sm transition",
             "hover:-translate-y-1 hover:shadow-md"

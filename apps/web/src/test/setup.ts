@@ -1,7 +1,19 @@
 import "@testing-library/jest-dom/vitest";
 
 import { cleanup } from "@testing-library/react";
-import { afterEach } from "vitest";
+import { afterEach, vi } from "vitest";
+
+// Mock socket.io-client globally to prevent TransportErrors in unit tests
+// when components try to connect to a non-existent local server.
+vi.mock("socket.io-client", () => ({
+  io: () => ({
+    on: vi.fn(),
+    off: vi.fn(),
+    emit: vi.fn(),
+    disconnect: vi.fn(),
+    connect: vi.fn(),
+  }),
+}));
 
 Object.defineProperty(window, "matchMedia", {
   writable: true,

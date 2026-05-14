@@ -1,4 +1,4 @@
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -28,9 +28,10 @@ export function CheckoutPage(): ReactElement {
   const discountCode = useCartStore((s) => s.discountCode);
   const discountSavedAmount = useCartStore((s) => s.discountSavedAmount);
   const clearCart = useCartStore((s) => s.clear);
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
 
   const addressesQuery = useQuery({
-    enabled: api !== null,
+    enabled: !isBootstrapPending,
     queryFn: async () => {
       const response = await api!.get<{ data?: { addresses: AddrRow[] } }>(
         "/api/v1/addresses"
@@ -94,8 +95,10 @@ export function CheckoutPage(): ReactElement {
   /** Sync guard — double-clicks can fire two POSTs before mutation pending state updates in the DOM. */
   const placeOrderInFlightRef = useRef(false);
 
+  const queryClient = useQueryClient();
   const placeMutation = useMutation({
     mutationFn: async (): Promise<string> => {
+      // ... (existing code inside mutationFn)
       if (api === null) {
         throw new Error("Cannot place order offline");
       }
@@ -146,6 +149,10 @@ export function CheckoutPage(): ReactElement {
     },
     onSuccess: (orderId) => {
       clearCart();
+      // Ensure UI updates instantly by clearing the stale cache for orders and addresses
+      void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
+      void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
+      
       navigate(`/orders/${orderId}`);
     }
   });
@@ -244,6 +251,7 @@ export function CheckoutPage(): ReactElement {
                     </span>
                     <textarea
                       className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                      name="landmarkDescription"
                       onChange={(e) => {
                         setLandmarkInput(e.target.value);
                       }}
@@ -258,6 +266,7 @@ export function CheckoutPage(): ReactElement {
                     </span>
                     <input
                       className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                      name="flatRoom"
                       onChange={(e) => {
                         setFlatRoom(e.target.value);
                       }}

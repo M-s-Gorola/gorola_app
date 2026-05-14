@@ -5,8 +5,9 @@ import type { MockInstance } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
-import { OrderConfirmationEnvelope, OrderConfirmationPage } from "./OrderConfirmationPage";
+import { OrderConfirmationPage } from "./OrderConfirmationPage";
 
 // Mock Socket.IO hook
 vi.mock("@/hooks/useOrderSocket", () => ({
@@ -22,6 +23,7 @@ describe("OrderConfirmationPage States", () => {
       defaultOptions: { queries: { retry: false } }
     });
     vi.clearAllMocks();
+    useAuthStore.setState({ isBootstrapPending: false });
 
     apiGetSpy = vi.spyOn(api!, "get");
   });
@@ -53,7 +55,7 @@ describe("OrderConfirmationPage States", () => {
 
     apiGetSpy.mockResolvedValue({
       data: { success: true, data: mockOrder }
-    } as unknown as { data: OrderConfirmationEnvelope });
+    });
 
     renderComponent("order-123");
 
@@ -82,7 +84,7 @@ describe("OrderConfirmationPage States", () => {
 
     apiGetSpy.mockResolvedValue({
       data: { success: true, data: mockOrder }
-    } as unknown as { data: OrderConfirmationEnvelope });
+    });
 
     renderComponent("order-completed");
 
@@ -118,7 +120,7 @@ describe("OrderConfirmationPage States", () => {
 
     apiGetSpy.mockResolvedValue({
       data: { success: true, data: mockOrder }
-    } as unknown as { data: OrderConfirmationEnvelope });
+    });
 
     renderComponent("order-completed-fast");
 
@@ -145,7 +147,7 @@ describe("OrderConfirmationPage States", () => {
 
     apiGetSpy.mockResolvedValue({
       data: { success: true, data: mockOrder }
-    } as unknown as { data: OrderConfirmationEnvelope });
+    });
 
     renderComponent("order-addr");
 
@@ -169,7 +171,7 @@ describe("OrderConfirmationPage States", () => {
 
     apiGetSpy.mockResolvedValue({
       data: { success: true, data: mockOrder }
-    } as unknown as { data: OrderConfirmationEnvelope });
+    });
 
     renderComponent("order-cancelled");
 
@@ -197,7 +199,7 @@ describe("OrderConfirmationPage States", () => {
 
     apiGetSpy.mockResolvedValue({
       data: { success: true, data: mockOrder }
-    } as unknown as { data: OrderConfirmationEnvelope });
+    });
 
     renderComponent("order-preparing");
 

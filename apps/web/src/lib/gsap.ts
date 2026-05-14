@@ -15,6 +15,14 @@ export function initGorolaGsapOnce(): void {
   }
   gsap.registerPlugin(ScrollTrigger);
   gsap.defaults({ ease: "power2.out", duration: 0.8 });
+  
+  // Speed up all animations in E2E test environments so Playwright assertions
+  // are never blocked by animation timing. window.isE2E is injected by
+  // Playwright's beforeEach addInitScript — it is never set in production.
+  if (typeof window !== "undefined" && (window as Window & { isE2E?: boolean }).isE2E === true) {
+    gsap.globalTimeline.timeScale(100);
+  }
+
   configured = true;
 }
 

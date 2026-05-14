@@ -2,10 +2,9 @@ import { PrismaClient } from '@prisma/client';
 const prisma = new PrismaClient();
 async function main() {
   const count = await prisma.order.count();
-  const orders = await prisma.order.findMany({
-    select: { id: true, userId: true, status: true }
-  });
-  console.log(`Total orders: ${count}`);
-  console.log(JSON.stringify(orders, null, 2));
+  const order = await prisma.order.findUnique({ where: { id: 'e2e_order_cancelled' }, include: { items: true } });
+  console.log('ORDER ITEMS:', order.items);
+  const cart = await prisma.cart.findFirst({ where: { userId: order.userId }, include: { items: true } });
+  console.log('CART ITEMS:', cart.items);
 }
 main().catch(console.error).finally(() => prisma.$disconnect());

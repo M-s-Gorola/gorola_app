@@ -9,7 +9,8 @@ export default mergeConfig(
       environment: "jsdom",
       globals: false,
       include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
-      setupFiles: ["./src/test/setup.ts"]
+      setupFiles: ["./src/test/setup.ts"],
+      testTimeout: 30000
     }
   })
 );

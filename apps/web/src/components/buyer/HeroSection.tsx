@@ -136,9 +136,10 @@ export function HeroSection(): ReactElement {
               "w-full"
             )}
             role="status"
+            data-testid="eta-banner"
           >
             <div className="flex shrink-0 items-center gap-2">
-              <span className="hero-pulse h-2 w-2 rounded-full bg-gorola-amber" />
+              <span className="hero-pulse h-2 w-2 rounded-full bg-gorola-amber" data-testid="pulse-dot" />
               <span className="font-bold text-white">
                 {isWeatherMode ? "45-55 mins" : "25-35 mins"}
               </span>

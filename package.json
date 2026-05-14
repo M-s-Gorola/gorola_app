@@ -10,10 +10,12 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
+    "test:e2e": "pnpm --filter @gorola/web test:e2e",
     "build": "pnpm -r build",
     "security:audit": "pnpm audit --audit-level=high",
-    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm test && pnpm build",
+    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm db:test:prepare && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm build && pnpm test && pnpm --filter @gorola/web test:e2e",
     "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
+    "db:test:prepare": "pnpm --filter @gorola/api prisma:bootstrap:test",
     "db:local:bootstrap": "pnpm --filter @gorola/api prisma:bootstrap:local",
     "db:local:seed": "pnpm --filter @gorola/api prisma:seed",
     "db:local:verify-seed": "pnpm --filter @gorola/api prisma:verify:seed"
@@ -39,7 +41,9 @@
       "hono": "^4.12.16",
       "fast-uri": "^3.1.1",
       "@opentelemetry/sdk-node": "^0.217.0",
-      "@opentelemetry/exporter-prometheus": "^0.217.0"
+      "@opentelemetry/exporter-prometheus": "^0.217.0",
+      "protobufjs": "^7.5.6",
+      "@protobufjs/utf8": "^1.1.1"
     }
   },
   "_pnpm_overrides_comments": {
@@ -47,6 +51,8 @@
     "hono": "Overridden due to moderate security vulnerabilities (body bypass/HTML injection) in <4.12.16",
     "fast-uri": "Overridden due to high security vulnerability (path traversal) in <=3.1.0",
     "@opentelemetry/sdk-node": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
-    "@opentelemetry/exporter-prometheus": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0"
+    "@opentelemetry/exporter-prometheus": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
+    "protobufjs": "Overridden due to high security vulnerability (DoS/recursion) in <=7.5.5 and <=8.0.1",
+    "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0"
   }
 }

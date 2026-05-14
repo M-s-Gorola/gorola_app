@@ -3,6 +3,8 @@ import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useAuthStore } from "@/store/auth.store";
+
 import { SearchResultsPage } from "./SearchResultsPage";
 
 const { getMock, navigateMock } = vi.hoisted(() => ({
@@ -51,6 +53,7 @@ describe("SearchResultsPage", () => {
     vi.clearAllMocks();
     getMock.mockReset();
     navigateMock.mockReset();
+    useAuthStore.setState({ isBootstrapPending: false });
   });
 
   it("navigates to the correct category route when a category result is clicked", async () => {

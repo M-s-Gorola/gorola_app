@@ -96,16 +96,20 @@ export function BuyerNav(): ReactElement {
           <button
             type="button"
             aria-label="Cart"
+            data-testid="cart-button"
             onClick={openCart}
             className="relative inline-flex items-center justify-center rounded-full bg-gorola-saffron p-2.5 text-white transition-transform hover:scale-105 active:scale-95 focus:outline-none"
           >
             <ShoppingCart size={18} />
-            <span
-              className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gorola-amber px-1 text-[11px] font-bold text-gorola-charcoal shadow-sm"
-              aria-label="Cart items"
-            >
-              {count}
-            </span>
+            {count > 0 && (
+              <span
+                className="absolute -right-1 -top-1 inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-gorola-amber px-1 text-[11px] font-bold text-gorola-charcoal shadow-sm"
+                aria-label="Cart items"
+                data-testid="cart-badge"
+              >
+                {count}
+              </span>
+            )}
           </button>
 
           {role === "BUYER" ? (

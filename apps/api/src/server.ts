@@ -72,7 +72,27 @@ function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
   return reply.getHeader("x-request-id")?.toString() ?? request.id;
 }
 
-function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): SuccessEnvelope<T> {
+function coerceToAppError(error: unknown): AppError {
+  if (error instanceof AppError) return error;
+  const message = error instanceof Error ? error.message : "Internal server error";
+  const code =
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    typeof (error as Record<string, unknown>).code === "string"
+      ? ((error as Record<string, unknown>).code as string)
+      : "INTERNAL_SERVER_ERROR";
+  const statusCode =
+    typeof error === "object" &&
+    error !== null &&
+    "statusCode" in error &&
+    typeof (error as Record<string, unknown>).statusCode === "number"
+      ? ((error as Record<string, unknown>).statusCode as number)
+      : 500;
+  return new AppError(message, { code, statusCode });
+}
+
+export function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): SuccessEnvelope<T> {
   return {
     success: true,
     data,
@@ -119,7 +139,7 @@ export function createServer(options: CreateServerOptions = {}): FastifyInstance
     process.env.NODE_ENV === "test" || options.disableRedis ? null : getRedisClient();
   void app.register(rateLimit, {
     global: true,
-    max: 100,
+    max: process.env.NODE_ENV === "production" ? 100 : 1000,
     timeWindow: "1 minute",
     ...(redisClient
       ? {
@@ -163,13 +183,7 @@ export function createServer(options: CreateServerOptions = {}): FastifyInstance
     if (!(error instanceof AppError)) {
       request.log.error({ err: error }, "unhandled_route_error");
     }
-    const appError =
-      error instanceof AppError
-        ? error
-        : new AppError("Internal server error", {
-            code: "INTERNAL_SERVER_ERROR",
-            statusCode: 500
-          });
+    const appError = coerceToAppError(error);
     const payload: ErrorEnvelope = {
       success: false,
       error: {

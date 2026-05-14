@@ -139,6 +139,7 @@ export function SubCategoryGrid({ categorySlug }: { categorySlug: string }): Rea
         <button
           key={subCategory.id}
           type="button"
+          data-testid="subcategory-card"
           className={cn(
             "subcategory-card flex flex-col items-center justify-center rounded-2xl border border-gorola-pine/10 bg-white p-4 text-center shadow-sm transition",
             "hover:-translate-y-1 hover:shadow-md"

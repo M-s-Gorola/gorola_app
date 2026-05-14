@@ -1,6 +1,8 @@
 import gsap from "gsap";
 import { expect, it } from "vitest";
 
+import { initGorolaGsapOnce } from "./gsap";
+
 /**
  * Same cleanup model as @gsap/react’s `useGSAP()` (gsap.context under the hood).
  * Asserts `revert()` drops active tweens so work in `gsap.context()` / `useGSAP`
@@ -26,4 +28,11 @@ it("repeated revert does not accumulate orphan tweens", () => {
     ctx.revert();
     expect(gsap.getTweensOf(el).length).toBe(0);
   }
+});
+
+it("initGorolaGsapOnce does not set E2E timescale in standard jsdom", () => {
+  // Clear any previous configuration if possible (configured is local to gsap.ts)
+  // But since we just want to verify the current state:
+  initGorolaGsapOnce();
+  expect(gsap.globalTimeline.timeScale()).toBe(1);
 });

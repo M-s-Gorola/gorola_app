@@ -1,4 +1,4 @@
-﻿# GoRola — Phase 1 & 2 State
+# GoRola — Phase 1 & 2 State
 
 > **This file covers Phase 1 (NFR Foundation) and Phase 2 (Buyer Web Experience).**
 > Phase 1 is 100% complete. Phase 2 is complete except for 2.23 (E2E Tests — the only remaining item).
@@ -13,16 +13,16 @@
 | Phase   | Name                 | Status         | Notes |
 | ------- | -------------------- | -------------- | ----- |
 | Phase 1 | NFR Foundation       | COMPLETE       | All 1.1-1.10 items complete |
-| Phase 2 | Buyer Web Experience | IN PROGRESS    | 2.1-2.22 complete. 2.23 (E2E) is the only remaining item. |
+| Phase 2 | Buyer Web Experience | COMPLETE       | 2.1-2.23 complete. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-11
-- **Session Summary:** Context Split. Broke `current_state.md` into phase-specific files. Phase 2.23 expanded with all 16 E2E flows. Encoding fixed (mojibake cleaned from session history).
-- **Next Session Must Start With:** Phase 2.23 — E2E Tests (Playwright). Start at E2E-001 in the checklist below.
-- **In Progress Right Now:** Phase 2.23 — Playwright setup + all 16 E2E flows. Full CI gate GREEN (523 tests). Playwright not yet configured.
+- **Date:** 2026-05-14
+- **Session Summary:** Session 122 — Finalized E2E infrastructure hardening. Implemented strict **Proxy Isolation** via `VITE_E2E_PROXY` and **Idempotency Hardening** (unique labels per retry) to ensure deterministic CI runs. Fixed **Cache Invalidation** in the checkout flow. Optimized CI performance with pnpm and Playwright browser caching.
+- **Next Session Must Start With:** **Phase 3 (Store Owner Foundation)** — Initialize store owner dashboard and authentication modules in `phase3_4_state.md`.
+- **In Progress Right Now:** None. Phase 2 complete.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom.
@@ -144,7 +144,13 @@
 - **Session 113 (UI Polish & Hydration):** Fixed production blue ring bug via global CSS cleanup and eliminated "Mussoorie" hydration flicker in HeroSection.
 - **Session 114 (Mobile UI Refinement Planning):** Performed a detailed UI audit for small screens (375px). Created a TDD-based implementation plan (W-020, W-021) to resolve navbar crowding, search form accessibility, and hero banner layout stability.
 - **Session 115 (Phase 2.22 Mobile UI Refinement Completion):** Implemented form-based search submission and hidden branding/location elements for mobile optimization in `BuyerNav.tsx`. Stabilized the Hero ETA banner in `HeroSection.tsx` using `whitespace-nowrap` and adaptive font sizing. Verified with new unit tests in `BuyerNav.test.tsx` and `HeroSection.test.tsx`. All 164 web tests are GREEN.
-- **Session 116 (Hero ETA Banner Wrap Refinement):** Refined the ETA banner to support multi-line wrapping on small screens. Used `self-stretch` for the vertical separator and `max-w-[280px]` to prevent card overflow. Verified with TDD and manual browser checks at 375px.
+- **Session 116 (Hero ETA Banner Wrap Refinement & Documentation Decoupling):** Refined the ETA banner for multi-line wrapping and transitioned to a modular documentation architecture.
+- **Session 117 (E2E Suite Stabilization & Infrastructure Restoration):** Hardened Playwright E2E suite. Fixed hydration race conditions (`isBootstrapPending` guards). Identified `OrderConfirmationPage` envelope bug (`query.data?.data` always `undefined`). Investigated GSAP animation timing and security audit gaps. 14/16 E2E tests GREEN; E2E-008 and E2E-009 remain failing.
+- **Session 118 (Phase 2.23.1 Planning — E2E Root Cause Analysis & Fix Specification):** Performed deep root-cause analysis of all 5 remaining E2E blockers. Authored Phase 2.23.1 in `phase1_2_state.md` with explicit TDD-format instructions (RED→GREEN→Verification Chain) for: (1) OCP `query.data?.data` envelope bug, (2) missing `isBootstrapPending: false` in page unit tests, (3) `window.isE2E` GSAP speed-up, (4) `server.ts` `any` cast type safety, (5) `pnpm audit` security overrides. Unchecked Phase 2.23 Quality Gate — it was incorrectly pre-checked. Phase 2.23.1 checklist is now ready for implementation.
+- **Session 119 (Phase 2.23.1 Stabilization):** Implemented five critical fixes for E2E stabilization: resolved OrderConfirmationPage envelope bug, added bootstrap gating to page unit tests, implemented GSAP window.isE2E speed-up, hardened server.ts type safety, and resolved all security audit vulnerabilities via pnpm overrides.
+- **Session 120 (Final E2E Stabilization & Phase 2 Completion):** Resolved intermittent Radix UI dropdown failures in SavedAddressesPage unit tests. Confirmed 100% stability across all 34 E2E flows and monorepo-wide ci:quality. Formally marked Phase 2 as complete.
+- **Session 121 (Infrastructure Hardening & Isolation):** Implemented "Isolation Strategy" (unique users) and **API Port Isolation** (shifting E2E to port 3002) to prevent conflicts with dev tools. Hardened environment config by removing DB fallbacks and implemented content-aware `waitForResponse` synchronization for race condition resolution. Total suite at 34/34 green with full quality gate pass.
+- **Session 122 (E2E Proxy Hardening & DX Improvements):** Implemented strict `VITE_E2E_PROXY: 'true'` requirement in `vite.config.ts` to prevent local dev "ghost connections" to test backends. Resolved CI "Strict Mode" crashes by implementing **Test Idempotency** (unique labels per retry) in the Address CRUD suite. Fixed cache invalidation in `CheckoutPage.tsx` and optimized CI performance via pnpm/Playwright caching.
 
 ---
 
@@ -1249,62 +1255,62 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 #### E2E-001 — Home Page Loads Correctly
 
-- [ ] Navigate to `http://localhost:5173/`
-- [ ] Assert `<nav>` is visible and contains the GoRola mountain mark SVG
-- [ ] Assert hero heading is visible (matches regex `/delivered|need|today/i`)
-- [ ] Assert ETA banner is visible and contains the amber pulse dot
-- [ ] Assert category grid renders >= 2 cards (Groceries, Medical) each with a non-empty `<img src>`
-- [ ] Assert advertisement carousel renders >= 1 slide (`[data-testid="ad-slide"]`)
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** `/` loads → hero + nav + categories + ad carousel visible → no console errors.
+- [x] Navigate to `http://localhost:5173/`
+- [x] Assert `<nav>` is visible and contains the GoRola mountain mark SVG
+- [x] Assert hero heading is visible (matches regex `/delivered|need|today/i`)
+- [x] Assert ETA banner is visible and contains the amber pulse dot
+- [x] Assert category grid renders >= 2 cards (Groceries, Medical) each with a non-empty `<img src>`
+- [x] Assert advertisement carousel renders >= 1 slide (`[data-testid="ad-slide"]`)
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** `/` loads → hero + nav + categories + ad carousel visible → no console errors.
 
 ---
 
 #### E2E-002 — Sub-Category Navigation (Category → SubCategory → Product)
 
-- [ ] From home page, click "Groceries" category card — assert URL = `/categories/groceries`
-- [ ] Assert sub-category grid renders >= 1 tile with a non-empty `<img src>`
-- [ ] Click first sub-category tile — assert URL matches regex `/^\/categories\/groceries\/[a-z-]+$/`
-- [ ] Assert product grid renders >= 1 product card with product name text and non-empty `<img src>`
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Home → Groceries → sub-category tiles → click → product list with images.
+- [x] From home page, click "Groceries" category card — assert URL = `/categories/groceries`
+- [x] Assert sub-category grid renders >= 1 tile with a non-empty `<img src>`
+- [x] Click first sub-category tile — assert URL matches regex `/^\/categories\/groceries\/[a-z-]+$/`
+- [x] Assert product grid renders >= 1 product card with product name text and non-empty `<img src>`
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Home → Groceries → sub-category tiles → click → product list with images.
 
 ---
 
 #### E2E-003 — Product Detail Page Navigation
 
-- [ ] From sub-category product grid, click the product card image or name link
-- [ ] Assert URL matches regex `/^\/products\/[a-z0-9-]+$/`
-- [ ] Assert product name heading is visible
-- [ ] Assert >= 1 variant pill button is visible
-- [ ] Click a variant pill — assert price display updates to a non-zero value
-- [ ] Assert "Add to Cart" button is visible and enabled (stock > 0)
-- [ ] Click "Add to Cart" — assert nav cart badge shows count >= 1
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Product grid → click card → detail → select variant → add to cart → badge updates.
+- [x] From sub-category product grid, click the product card image or name link
+- [x] Assert URL matches regex `/^\/products\/[a-z0-9-]+$/`
+- [x] Assert product name heading is visible
+- [x] Assert >= 1 variant pill button is visible
+- [x] Click a variant pill — assert price display updates to a non-zero value
+- [x] Assert "Add to Cart" button is visible and enabled (stock > 0)
+- [x] Click "Add to Cart" — assert nav cart badge shows count >= 1
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Product grid → click card → detail → select variant → add to cart → badge updates.
 
 ---
 
 #### E2E-004 — Global Search End-to-End
 
-- [ ] Click search input in `BuyerNav` — type `"milk"` — press Enter
-- [ ] Assert URL = `/search?q=milk`
-- [ ] Assert `SearchResultsPage` renders >= 1 result in any section (categories / sub-categories / products)
-- [ ] If a sub-category result is visible: click it — assert URL = `/categories/<categorySlug>/<subSlug>` (NOT `/search?q=...`)
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Nav search → results page → click subcategory → correct route (not search re-query).
+- [x] Click search input in `BuyerNav` — type `"milk"` — press Enter
+- [x] Assert URL = `/search?q=milk`
+- [x] Assert `SearchResultsPage` renders >= 1 result in any section (categories / sub-categories / products)
+- [x] If a sub-category result is visible: click it — assert URL = `/categories/<categorySlug>/<subSlug>` (NOT `/search?q=...`)
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Nav search → results page → click subcategory → correct route (not search re-query).
 
 ---
 
 #### E2E-005 — Cart Add / Remove / Subtotal
 
-- [ ] On a product grid, click "Add" on a product — assert nav cart badge shows `1`
-- [ ] Click cart icon — assert cart drawer opens, product name is visible, subtotal contains `₹`
-- [ ] Click "+" button — assert quantity shown = `2`
-- [ ] Click "-" button — assert quantity shown = `1`
-- [ ] Click "Remove" — assert cart shows empty state text, nav badge shows `0` or is hidden
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Add → open cart → increment/decrement → remove → empty state.
+- [x] On a product grid, click "Add" on a product — assert nav cart badge shows `1`
+- [x] Click cart icon — assert cart drawer opens, product name is visible, subtotal contains `₹`
+- [x] Click "+" button — assert quantity shown = `2`
+- [x] Click "-" button — assert quantity shown = `1`
+- [x] Click "Remove" — assert cart shows empty state text, nav badge shows `0` or is hidden
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Add → open cart → increment/decrement → remove → empty state.
 
 ---
 
@@ -1312,27 +1318,27 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 > Uses `GOROLA_TEST_OTP` env var so OTP step accepts a known fixed code.
 
-- [ ] Navigate to `/login` — assert phone input is visible
-- [ ] Enter `9876543210` — assert no validation error on blur
-- [ ] Click "Send OTP" — assert UI transitions to OTP input step
-- [ ] Enter the test OTP (value of `GOROLA_TEST_OTP`, e.g. `123456`)
-- [ ] Click "Verify" — assert redirect to `/`
-- [ ] Assert nav shows Profile icon (not Login text) — confirming authenticated state
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** `/login` → phone → OTP → verify → home → authenticated nav.
+- [x] Navigate to `/login` — assert phone input is visible
+- [x] Enter `9876543210` — assert no validation error on blur
+- [x] Click "Send OTP" — assert UI transitions to OTP input step
+- [x] Enter the test OTP (value of `GOROLA_TEST_OTP`, e.g. `123456`)
+- [x] Click "Verify" — assert redirect to `/`
+- [x] Assert nav shows Profile icon (not Login text) — confirming authenticated state
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** `/login` → phone → OTP → verify → home → authenticated nav.
 
 ---
 
 #### E2E-007 — Auth Persistence (Page Reload)
 
-- [ ] Log in using E2E-006 steps
-- [ ] Reload the page (`page.reload()`)
-- [ ] Assert nav STILL shows Profile icon (not Login text) — session restored from refresh cookie
-- [ ] Assert hero greeting shows `"..."` placeholder during bootstrap then resolves to user name or "Mussoorie"
-- [ ] Navigate directly to `/account/orders` — assert page loads (not redirect to `/login`)
-- [ ] Navigate directly to `/checkout` without being logged in (new incognito context) — assert redirect to `/login`
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Reload → session restored via httpOnly refresh cookie → protected routes accessible → unauth routes redirect.
+- [x] Log in using E2E-006 steps
+- [x] Reload the page (`page.reload()`)
+- [x] Assert nav STILL shows Profile icon (not Login text) — session restored from refresh cookie
+- [x] Assert hero greeting shows `"..."` placeholder during bootstrap then resolves to user name or "Mussoorie"
+- [x] Navigate directly to `/account/orders` — assert page loads (not redirect to `/login`)
+- [x] Navigate directly to `/checkout` without being logged in (new incognito context) — assert redirect to `/login`
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Reload → session restored via httpOnly refresh cookie → protected routes accessible → unauth routes redirect.
 
 ---
 
@@ -1340,16 +1346,16 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 > Prerequisite: authenticated session (E2E-006) + at least 1 item in cart.
 
-- [ ] Open cart drawer — click "Proceed to Checkout" — assert URL = `/checkout`
-- [ ] Assert address form visible with landmark description input
-- [ ] Assert NO "Pin Code" input exists anywhere on page (confirmed by spec)
-- [ ] Type landmark: `"Near the old clock tower"` (>= 10 chars)
-- [ ] Click "Place Order" — assert button shows loading state
-- [ ] Assert redirect to URL matching `/^\/orders\/[a-z0-9-]+$/`
-- [ ] Assert order confirmation page shows: status "PLACED" text, subtotal amount with `₹`, store name, and the landmark description entered
-- [ ] Assert green check SVG animation renders (stroke-dashoffset element exists in DOM)
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Cart → checkout → landmark → place order → confirmation with PLACED status.
+- [x] Open cart drawer — click "Proceed to Checkout" — assert URL = `/checkout`
+- [x] Assert address form visible with landmark description input
+- [x] Assert NO "Pin Code" input exists anywhere on page (confirmed by spec)
+- [x] Type landmark: `"Near the old clock tower"` (>= 10 chars)
+- [x] Click "Place Order" — assert button shows loading state
+- [x] Assert redirect to URL matching `/^\/orders\/[a-z0-9-]+$/`
+- [x] Assert order confirmation page shows: status "PLACED" text, subtotal amount with `₹`, store name, and the landmark description entered
+- [x] Assert green check SVG animation renders (stroke-dashoffset element exists in DOM)
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Cart → checkout → landmark → place order → confirmation with PLACED status.
 
 ---
 
@@ -1357,51 +1363,51 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 > `beforeAll` seeds 4 orders with statuses: PLACED, PREPARING, DELIVERED, CANCELLED.
 
-- [ ] Navigate to `/orders/<placed-id>` — assert status text matches `/placed|thanks for ordering/i` — assert bloom overlay not permanently visible
-- [ ] Navigate to `/orders/<preparing-id>` — assert status text matches `/preparing|store is picking/i`
-- [ ] Navigate to `/orders/<delivered-id>` — assert "Delivered in" badge with a numeric duration is visible — assert rating thumbs buttons visible — assert ETA block NOT visible
-- [ ] Navigate to `/orders/<cancelled-id>` — assert status text matches `/cancelled/i` — assert in-progress UI (Contact, ETA) is NOT visible
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Each order ID → correct status rendering → correct UI shown/hidden per status.
+- [x] Navigate to `/orders/<placed-id>` — assert status text matches `/placed|thanks for ordering/i` — assert bloom overlay not permanently visible
+- [x] Navigate to `/orders/<preparing-id>` — assert status text matches `/preparing|store is picking/i`
+- [x] Navigate to `/orders/<delivered-id>` — assert "Delivered in" badge with a numeric duration is visible — assert rating thumbs buttons visible — assert ETA block NOT visible
+- [x] Navigate to `/orders/<cancelled-id>` — assert status text matches `/cancelled/i` — assert in-progress UI (Contact, ETA) is NOT visible
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Each order ID → correct status rendering → correct UI shown/hidden per status.
 
 ---
 
 #### E2E-010 — Order History and Reorder
 
-- [ ] Navigate to `/account/orders` (authenticated)
-- [ ] Assert >= 1 order card visible with store name, total `₹`, and status text
-- [ ] Click "Reorder" — assert loading indicator on THAT button only (other order buttons NOT disabled)
-- [ ] Assert nav cart badge increments after reorder completes
-- [ ] Assert rating section (Thumbs Up / Down buttons) is present on at least one order card
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Order history → reorder scoped loading → cart updates → rating buttons present.
+- [x] Navigate to `/account/orders` (authenticated)
+- [x] Assert >= 1 order card visible with store name, total `₹`, and status text
+- [x] Click "Reorder" — assert loading indicator on THAT button only (other order buttons NOT disabled)
+- [x] Assert nav cart badge increments after reorder completes
+- [x] Assert rating section (Thumbs Up / Down buttons) is present on at least one order card
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Order history → reorder scoped loading → cart updates → rating buttons present.
 
 ---
 
 #### E2E-011 — Profile Page Flow
 
-- [ ] Click Profile icon in nav — assert dropdown shows "Profile" and "Logout" options
-- [ ] Click "Profile" — assert URL = `/profile`
-- [ ] Assert masked phone number is visible (format `+91XXXXX<last4>`)
-- [ ] Assert "Order History" link navigates to `/account/orders`
-- [ ] Assert "Saved Addresses" link navigates to `/account/addresses`
-- [ ] Navigate back to `/profile` — clear name input — type `"Playwright Tester"` — click Save
-- [ ] Assert success toast appears (text matches `/updated|saved/i`)
-- [ ] Navigate to `/` — assert hero greeting contains "Playwright Tester"
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Profile icon → /profile → update name → home greeting reflects new name.
+- [x] Click Profile icon in nav — assert dropdown shows "Profile" and "Logout" options
+- [x] Click "Profile" — assert URL = `/profile`
+- [x] Assert masked phone number is visible (format `+91XXXXX<last4>`)
+- [x] Assert "Order History" link navigates to `/account/orders`
+- [x] Assert "Saved Addresses" link navigates to `/account/addresses`
+- [x] Navigate back to `/profile` — clear name input — type `"Playwright Tester"` — click Save
+- [x] Assert success toast appears (text matches `/updated|saved/i`)
+- [x] Navigate to `/` — assert hero greeting contains "Playwright Tester"
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Profile icon → /profile → update name → home greeting reflects new name.
 
 ---
 
 #### E2E-012 — Saved Addresses CRUD
 
-- [ ] Navigate to `/account/addresses`
-- [ ] Click "Add New Address" — fill landmark: `"Opposite Savoy Hotel, Landour"` — fill label: `"Home"` — submit
-- [ ] Assert address card appears with label "Home"
-- [ ] Click "Set as Default" — assert "Default" badge appears on the card
-- [ ] Click "Delete" — assert card is removed from the list
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Add address → default badge → delete → list empty again.
+- [x] Navigate to `/account/addresses`
+- [x] Click "Add New Address" — fill landmark: `"Opposite Savoy Hotel, Landour"` — fill label: `"Home"` — submit
+- [x] Assert address card appears with label "Home"
+- [x] Click "Set as Default" — assert "Default" badge appears on the card
+- [x] Click "Delete" — assert card is removed from the list
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Add address → default badge → delete → list empty again.
 
 ---
 
@@ -1409,15 +1415,15 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 > `beforeAll` inserts: `{ code: 'TESTDEAL10', discountType: 'PERCENTAGE', discountValue: 10, isActive: true }`.
 
-- [ ] Add a product to cart — open cart drawer
-- [ ] Find discount code input — type `"TESTDEAL10"` — click "Apply"
-- [ ] Assert success message matches `/discount applied|code applied/i`
-- [ ] Assert "Saved ₹X" line visible in cart summary where X > 0
-- [ ] Assert total shown is less than (subtotal + delivery fee)
-- [ ] Click "Proceed to Checkout" — assert discount line is visible on checkout review screen
-- [ ] Place order — assert order confirmation page shows the discounted total (not full price)
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Cart → apply code → saved amount → checkout carries discount → confirmation shows discounted total.
+- [x] Add a product to cart — open cart drawer
+- [x] Find discount code input — type `"TESTDEAL10"` — click "Apply"
+- [x] Assert success message matches `/discount applied|code applied/i`
+- [x] Assert "Saved ₹X" line visible in cart summary where X > 0
+- [x] Assert total shown is less than (subtotal + delivery fee)
+- [x] Click "Proceed to Checkout" — assert discount line is visible on checkout review screen
+- [x] Place order — assert order confirmation page shows the discounted total (not full price)
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Cart → apply code → saved amount → checkout carries discount → confirmation shows discounted total.
 
 ---
 
@@ -1425,59 +1431,289 @@ The current UI needs a refresh to feel more personalized, compact, and intuitive
 
 > `DevWeatherToggle` button visible only in `import.meta.env.DEV` — Playwright targets Vite dev server so this button is in the DOM.
 
-- [ ] Navigate to home page — assert body does NOT have class `weather-mode` (normal mode)
-- [ ] Assert nav background is pine-green (CSS computed or class check)
-- [ ] Assert ETA banner dot is amber/orange
-- [ ] Click `[data-testid="dev-weather-toggle"]`
-- [ ] Assert `body` element has class `weather-mode`
-- [ ] Assert nav background shifts to slate color
-- [ ] Assert hero heading text matches `/fog|weather|road|safely/i`
-- [ ] Assert ETA banner text contains "Scheduled" or weather-mode ETA copy
-- [ ] Click `[data-testid="dev-weather-toggle"]` again — assert `weather-mode` class removed and colors revert
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** Toggle ON → full slate theme → Toggle OFF → reverts to pine theme.
+- [x] Navigate to home page — assert body does NOT have class `weather-mode` (normal mode)
+- [x] Assert nav background is pine-green (CSS computed or class check)
+- [x] Assert ETA banner dot is amber/orange
+- [x] Click `[data-testid="dev-weather-toggle"]`
+- [x] Assert `body` element has class `weather-mode`
+- [x] Assert nav background shifts to slate color
+- [x] Assert hero heading text matches `/fog|weather|road|safely/i`
+- [x] Assert ETA banner text contains "Scheduled" or weather-mode ETA copy
+- [x] Click `[data-testid="dev-weather-toggle"]` again — assert `weather-mode` class removed and colors revert
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** Toggle ON → full slate theme → Toggle OFF → reverts to pine theme.
 
 ---
 
 #### E2E-015 — Mobile Search Form Submit (375px viewport)
 
-- [ ] Set viewport to `{ width: 375, height: 667 }` (iPhone SE)
-- [ ] Assert "GoRola" branding text is NOT visible in nav (hidden on mobile)
-- [ ] Assert location pill is NOT visible (hidden on mobile)
-- [ ] Assert search input IS visible and spans most nav width
-- [ ] Click search input — type `"tomato"` — press Enter
-- [ ] Assert URL = `/search?q=tomato`
-- [ ] Assert search results page loads (not 404 or placeholder)
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** 375px viewport → search bar full-width → Enter → navigates to /search?q= → results load.
+- [x] Set viewport to `{ width: 375, height: 667 }` (iPhone SE)
+- [x] Assert "GoRola" branding text is NOT visible in nav (hidden on mobile)
+- [x] Assert location pill is NOT visible (hidden on mobile)
+- [x] Assert search input IS visible and spans most nav width
+- [x] Click search input — type `"tomato"` — press Enter
+- [x] Assert URL = `/search?q=tomato`
+- [x] Assert search results page loads (not 404 or placeholder)
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** 375px viewport → search bar full-width → Enter → navigates to /search?q= → results load.
 
 ---
 
 #### E2E-016 — Rider Stub Endpoints Return 501
 
-- [ ] `POST http://localhost:3000/api/v1/rider/auth/login` → assert status `501`, body `{ success: false, error: { code: 'NOT_IMPLEMENTED' } }`
-- [ ] `GET http://localhost:3000/api/v1/rider/orders/active` → assert status `501`
-- [ ] `PUT http://localhost:3000/api/v1/rider/orders/test-id/status` → assert status `501`
-- [ ] `PUT http://localhost:3000/api/v1/rider/location` → assert status `501`
-- [ ] **Run — confirm GREEN.**
-- [ ] **Verification chain:** All 4 rider stubs → 501 NOT_IMPLEMENTED → no 404 ambiguity → Phase 5 fills implementations.
+- [x] `POST http://localhost:3000/api/v1/rider/auth/login` → assert status `501`, body `{ success: false, error: { code: 'NOT_IMPLEMENTED' } }`
+- [x] `GET http://localhost:3000/api/v1/rider/orders/active` → assert status `501`
+- [x] `PUT http://localhost:3000/api/v1/rider/orders/test-id/status` → assert status `501`
+- [x] `PUT http://localhost:3000/api/v1/rider/location` → assert status `501`
+- [x] **Run — confirm GREEN.**
+- [x] **Verification chain:** All 4 rider stubs → 501 NOT_IMPLEMENTED → no 404 ambiguity → Phase 5 fills implementations.
+
+---
+
+### 2.23.1 — E2E Stabilization: Bug Fixes, Type Safety & Security
+
+> **Purpose:** Five concrete defects were uncovered during the Phase 2.23 E2E run. All must be resolved before the Quality Gate can be marked complete. Each fix below follows the strict TDD format from `TDD_INSTRUCTION_GUIDE.md`: Root Cause → RED test (confirmed failing) → GREEN implementation → Verification Chain.
+>
+> ⚠️ **Rule:** Do NOT remove or weaken existing tests. Every existing passing test must remain passing. All changes to test files must add or correct assertions — never delete them.
+
+---
+
+#### Fix 1 — `OrderConfirmationPage` Renders Nothing Due to Wrong Envelope Access
+
+**Root cause / Goal:**
+`OrderConfirmationPage.tsx` line 414 has the condition `query.data?.data` but the `queryFn` (lines 271–282) returns `BuyerOrderDetail` directly — NOT an envelope like `{ data: BuyerOrderDetail }`. As a result, `query.data?.data` is always `undefined`, and the block containing `#occ-heading` never renders. This makes E2E-008 (`checkout.spec.ts`) and E2E-009 (`order.spec.ts`) fail because both assert `#occ-heading` is visible with a timeout.
+
+**Fix / Approach:**
+In `OrderConfirmationPage.tsx`, change the rendering condition from `query.data?.data` to `query.data`, and update all references inside that block from `query.data.data` to `query.data`. The `OrderConfirmationEnvelope` wrapper type is also incorrect and should be removed — `queryFn` should declare its return type as `Promise<BuyerOrderDetail>` (which it already does correctly) and the `useQuery` generic should match.
+
+---
+
+  - [x] [Types] In `OrderConfirmationPage.tsx`, remove the `OrderConfirmationEnvelope` type entirely (it was a mistake — `queryFn` returns the unwrapped `BuyerOrderDetail`).
+  - [x] [Component] Change line 414 from:
+    ```typescript
+    {query.isSuccess && query.data?.data ? (
+      (() => {
+        const order = query.data.data;
+    ```
+    to:
+    ```typescript
+    {query.isSuccess && query.data ? (
+      (() => {
+        const order = query.data;
+    ```
+  - [x] Remove the leftover `console.log('[DEBUG] ...')` statements (lines 266, 272, 277) — debug logs must not ship.
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] E2E-008: User completes checkout → navigates to `/orders/:id` → page fetches order → `#occ-heading` displays `"Thank you"` → `[data-testid="order-subtotal"]` is visible → test passes.
+  - [x] E2E-009: Playwright navigates to `/orders/e2e_order_placed` → `#occ-heading` displays `"Thank you"`; navigates to `/orders/e2e_order_preparing` → `#occ-heading` displays `"Store is picking items"`; navigates to `/orders/e2e_order_delivered` → `"Order Delivered"`; navigates to `/orders/e2e_order_cancelled` → `"Order Cancelled"` → all 4 assertions pass.
+
+---
+
+#### Fix 2 — Unit Tests Broken by `isBootstrapPending` Gate (Pages Not Setting Flag)
+
+**Root cause / Goal:**
+`isBootstrapPending` initializes to `true` in `auth.store.ts`. Several page components — `CheckoutPage`, `SavedAddressesPage`, `SubCategoryPage`, `SearchResultsPage`, and `OrderConfirmationPage` — gate their `useQuery` calls with `enabled: !isBootstrapPending`. Their **unit test files do not set** `isBootstrapPending: false` in the Zustand store before rendering, so every query remains disabled and the components stay in a loading/empty state. Tests that assert data-loaded UI will fail or silently pass the wrong assertion.
+
+**Fix / Approach:**
+For each affected test file, add a `beforeEach` (or per-test) call `useAuthStore.setState({ isBootstrapPending: false })` before rendering the component. Do NOT change or remove any existing assertions. The mock API responses and all existing test cases must stay exactly as-is — you are only adding the missing store setup.
+
+---
+
+- [x] **RED — Unit (`CheckoutPage.test.tsx`):**
+  - [x] Inspect the existing tests: identify any test that mocks an API response and then asserts the resulting rendered content (e.g. saved address list rendering, form appearing, checkout summary visible).
+  - [x] Temporarily set `useAuthStore.setState({ isBootstrapPending: true })` (the default) in a `beforeEach` to reproduce the failure — confirm those tests fail because the query is disabled.
+  - [x] **Run — confirm RED (data-dependent assertions fail; component shows loader or empty state).**
+
+- [x] **GREEN — Frontend (Test Setup Only — `CheckoutPage.test.tsx`):**
+  - [x] In the `beforeEach` block (or at the top of each test that renders `CheckoutPage`), add:
+    ```typescript
+    useAuthStore.setState({ isBootstrapPending: false, accessToken: 'test-token', role: 'BUYER' });
+    ```
+
+- [x] **RED — Unit (`SubCategoryPage.test.tsx`):**
+  - [x] Identify tests that assert product grid or subcategory content appears.
+  - [x] Confirm RED with default `isBootstrapPending: true`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`SubCategoryPage.test.tsx`):**
+  - [x] Add `useAuthStore.setState({ isBootstrapPending: false })` to the `beforeEach`.
+  - [x] Run — **confirm GREEN**.
+
+- [x] **RED — Unit (`SearchResultsPage.test.tsx`):**
+  - [x] Identify tests that assert search results appear after a debounced query.
+  - [x] Confirm RED with default `isBootstrapPending: true`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`SearchResultsPage.test.tsx`):**
+  - [x] Add `useAuthStore.setState({ isBootstrapPending: false })` to the `beforeEach`.
+  - [x] Run — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Run `pnpm --filter @gorola/web test -- --run` — all web unit tests that were previously failing due to disabled queries now pass. Total test count is the same or higher (no tests were removed). No existing passing test is broken.
+
+---
+
+#### Fix 3 — GSAP Animations Block E2E Assertions (window.isE2E Speed-Up)
+
+**Root cause / Goal:**
+GSAP's global defaults are `duration: 0.8` with additional delays in `OrderConfirmationPage.tsx`'s entrance timeline (0.75s hold + 1.1s bloom fade + 0.8s draw + 0.8s content reveal = ~3.45 seconds of animation before `#occ-heading` becomes fully visible). While Playwright's 30s timeout is theoretically sufficient, GSAP animations also affect `autoAlpha` (opacity + visibility together), meaning elements can exist in the DOM but be visually hidden (`visibility: hidden`) during animation. Playwright's default `toBeVisible()` check respects CSS visibility. Any animation-related timing jitter can cause intermittent failures.
+
+**Fix / Approach:**
+Inject `window.isE2E = true` via Playwright's `use.launchOptions` script before any page loads. In `gsap.ts`, add a one-time check after `initGorolaGsapOnce()` that sets `gsap.globalTimeline.timeScale(100)` when `window.isE2E` is truthy. This makes all GSAP animations complete in milliseconds during E2E runs without affecting production or unit tests.
+
+---
+
+- [x] **RED — E2E (`checkout.spec.ts` and `order.spec.ts`):**
+  - [x] Before applying the fix, confirm that E2E-008 and E2E-009 fail intermittently (or consistently after Fix 1 is applied) due to assertion timeouts on animated elements.
+  - [x] **Run `pnpm --filter @gorola/web test:e2e` — confirm RED (or flaky) on E2E-008/E2E-009 due to animation timing.**
+
+- [x] **GREEN — Infrastructure + Frontend:**
+  - [x] [Playwright Spec] In `checkout.spec.ts` and `order.spec.ts`, inject `window.isE2E = true` via `page.addInitScript()`:
+    ```typescript
+    test.beforeEach(async ({ page }) => {
+      await page.addInitScript(() => {
+        (window as Window & { isE2E?: boolean }).isE2E = true;
+      });
+    });
+    ```
+    Add this line as the **very first line** of every `test.beforeEach` block in `checkout.spec.ts` and `order.spec.ts`, before the `page.goto('/login')` call.
+  - [x] [GSAP Lib] In `apps/web/src/lib/gsap.ts`, update `initGorolaGsapOnce()` to add the E2E speed-up:
+    ```typescript
+    export function initGorolaGsapOnce(): void {
+      if (configured) {
+        return;
+      }
+      gsap.registerPlugin(ScrollTrigger);
+      gsap.defaults({ ease: 'power2.out', duration: 0.8 });
+      // Speed up all animations in E2E test environments so Playwright assertions
+      // are never blocked by animation timing. window.isE2E is injected by
+      // Playwright's beforeEach addInitScript — it is never set in production.
+      if (typeof window !== 'undefined' && (window as Window & { isE2E?: boolean }).isE2E === true) {
+        gsap.globalTimeline.timeScale(100);
+      }
+      configured = true;
+    }
+    ```
+  - [x] Implement the new test. The test should: call `initGorolaGsapOnce()`, then assert `expect(gsap.globalTimeline.timeScale()).toBe(1)` (jsdom does not set `window.isE2E`).
+  - [x] Run — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] E2E runner launches Chromium → `beforeEach` injects `window.isE2E = true` before the first navigation → GSAP initializes and detects the flag → `timeScale(100)` is applied → all entrance animations on `OrderConfirmationPage` complete in < 50ms → Playwright's `toBeVisible()` finds `#occ-heading` immediately → E2E-008 and E2E-009 pass consistently without flakiness.
+
+---
+
+#### Fix 4 — `server.ts` `any` Type Cast and Unknown Error Handler Bug
+
+**Root cause / Goal:**
+`apps/api/src/server.ts` line 170 uses `(error as any).code` — an explicit `any` cast that violates the project's `no-any` TypeScript rule and would cause `pnpm typecheck` to fail under strict settings. On the same line, `error.statusCode` is accessed on a value typed as `Error` by Fastify's error handler signature — `statusCode` does not exist on the base `Error` type, which also fails typecheck. Both issues block the production build.
+
+**Fix / Approach:**
+Replace the `any` cast with a proper type-safe narrowing helper inside `server.ts`. Extract a `toAppError(error: unknown)` private function that type-narrows `error` to check for `.code` (string) and `.statusCode` (number) using `typeof` guards before accessing them.
+
+---
+
+- [x] **RED — Integration (`server.bootstrap.test.ts` or a new `server.error-handler.test.ts`):**
+  - [x] Test: Send a request to a registered route that throws a plain `new Error('something broke')` (not an `AppError`). Assert the response body is `{ success: false, error: { code: 'INTERNAL_SERVER_ERROR', message: 'something broke' }, meta: { requestId: <string> } }` with HTTP status `500`.
+  - [x] Test: Send a request that throws an object with `{ code: 'CUSTOM_CODE', statusCode: 422, message: 'custom' }`. Assert the response is `{ success: false, error: { code: 'CUSTOM_CODE', message: 'custom' } }` with HTTP status `422`.
+  - [x] **Run — confirm RED (the tests do not exist yet; write them first).**
+
+- [x] **GREEN — Backend (`server.ts`):**
+  - [x] Remove the `(error as any).code` cast. Replace the error-coercion block (lines ~166–172) with:
+    ```typescript
+    function coerceToAppError(error: unknown): AppError {
+      if (error instanceof AppError) return error;
+      const message =
+        error instanceof Error ? error.message : 'Internal server error';
+      const code =
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        typeof (error as Record<string, unknown>).code === 'string'
+          ? (error as Record<string, unknown>).code as string
+          : 'INTERNAL_SERVER_ERROR';
+      const statusCode =
+        typeof error === 'object' &&
+        error !== null &&
+        'statusCode' in error &&
+        typeof (error as Record<string, unknown>).statusCode === 'number'
+          ? (error as Record<string, unknown>).statusCode as number
+          : 500;
+      return new AppError(message, { code, statusCode });
+    }
+    ```
+  - [x] Update `setErrorHandler` to use `coerceToAppError(error)` instead of the inline `any` block.
+  - [x] Run `pnpm --filter @gorola/api typecheck` — **confirm zero errors**.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] `pnpm --filter @gorola/api typecheck` returns exit code 0 with zero errors → `pnpm ci:quality` no longer blocks on typecheck → production build succeeds.
+
+---
+
+#### Fix 5 — Security Audit: Missing `pnpm.overrides` for Remaining High/Moderate Vulnerabilities
+
+**Root cause / Goal:**
+`pnpm audit --audit-level=moderate` reports vulnerabilities in `protobufjs` and potentially other transitive dependencies that are not yet covered by the `pnpm.overrides` block in the root `package.json`. The `ci:quality` script runs `pnpm security:audit` which calls `pnpm audit --audit-level=high` — any unfixed high-severity vulnerability causes the full CI pipeline to fail. The current overrides (lines 37–43 of root `package.json`) cover `ip-address`, `hono`, `fast-uri`, `@opentelemetry/sdk-node`, and `@opentelemetry/exporter-prometheus`, but not `protobufjs` or other remaining vulnerabilities.
+
+**Fix / Approach:**
+Run `pnpm audit --json` to get the current full vulnerability list. For each vulnerability at `high` or `moderate` severity, add a corresponding entry to the `pnpm.overrides` block in root `package.json` pinning to the patched version. Add a matching entry to the `_pnpm_overrides_comments` block explaining the CVE or advisory. After each override is added, run `pnpm install` and re-run `pnpm audit` to confirm resolution.
+
+---
+
+- [x] **Pre-Check — Audit:**
+  - [x] Run `pnpm audit --audit-level=moderate` from the monorepo root and capture the full JSON output.
+  - [x] List every package at `high` or `moderate` severity that is NOT already in the `pnpm.overrides` block.
+  - [x] For each listed package, look up the patched version from the npm advisory or the GHSA link provided in the audit output.
+
+- [x] **GREEN — Root `package.json` (`pnpm.overrides` block):**
+  - [x] For `protobufjs` (high — prototype pollution vulnerability GHSA-h755-8qp9-cq85 and related): add:
+    ```json
+    "protobufjs": ">=7.2.5"
+    ```
+  - [x] For every OTHER package reported as high or moderate severity by `pnpm audit --audit-level=moderate` that is not already overridden: add the appropriate override entry using the same pattern.
+  - [x] For every override added, add a matching comment entry to the `_pnpm_overrides_comments` object:
+    ```json
+    "protobufjs": "Override for GHSA-h755-8qp9-cq85 — prototype pollution vulnerability in <7.2.5"
+    ```
+  - [x] Run `pnpm install` to apply the new overrides.
+  - [x] Run `pnpm audit --audit-level=moderate` — **confirm zero moderate or high vulnerabilities remain**.
+  - [x] Run `pnpm audit --audit-level=high` — **confirm zero high vulnerabilities** (this is what `ci:quality` checks).
+
+- [x] **Verification chain:**
+  - [x] `pnpm security:audit` (which runs `pnpm audit --audit-level=high`) returns exit code 0 → `pnpm ci:quality` no longer fails at the audit step → full CI pipeline proceeds to lint and tests.
+
+---
+
+#### Phase 2.23.1 Quality Gate
+
+- [x] Fix 1: `#occ-heading` renders correctly for all 4 order statuses — unit tests pass
+- [x] Fix 2: All page-level unit tests that gate on `isBootstrapPending` now pass without removing any assertion
+- [x] Fix 3: `window.isE2E` is injected in `checkout.spec.ts` and `order.spec.ts`; `gsap.ts` applies `timeScale(100)`; new unit test for the flag guard passes
+- [x] Fix 4: `server.ts` has zero `any` casts; `pnpm --filter @gorola/api typecheck` is clean
+- [x] Fix 5: `pnpm audit --audit-level=moderate` reports zero vulnerabilities; all overrides documented in `_pnpm_overrides_comments`
+- [x] `pnpm --filter @gorola/web test -- --run` — all web unit tests GREEN (count same or higher)
+- [x] `pnpm --filter @gorola/api test -- --run` — all API tests GREEN
+- [x] `pnpm --filter @gorola/web test:e2e` — all 16 E2E flows pass (including E2E-008 and E2E-009)
+- [x] `pnpm ci:quality` — full pipeline GREEN (security audit + lint + typecheck + all tests + build)
 
 ---
 
 #### Phase 2.23 Quality Gate
 
-- [ ] All 16 E2E flows pass in Playwright headless mode (`pnpm --filter @gorola/web test:e2e`)
-- [ ] No uncaught console errors during any E2E run
-- [ ] Full `pnpm ci:quality` (unit + integration + build) still GREEN after adding E2E config
-- [ ] E2E runs against Vite dev server + local Fastify API
-- [ ] `playwright.config.ts` added to `apps/web/` with `baseURL`, `webServer` config, and test dir pointing to `tests/e2e/`
+- [x] All 16 E2E flows pass in Playwright headless mode (`pnpm --filter @gorola/web test:e2e`)
+- [x] No uncaught console errors during any E2E run
+- [x] Full `pnpm ci:quality` (unit + integration + build) still GREEN after adding E2E config
+- [x] E2E runs against Vite dev server + local Fastify API
+- [x] `playwright.config.ts` added to `apps/web/` with `baseURL`, `webServer` config, and test dir pointing to `tests/e2e/`
+- [x] GSAP animations handled via `timeScale(100)` or `window.isE2E` flag injection.
 ---
 
 ## Session Notes and Decisions Made (Phase 1 and 2 - All Sessions)
 
 _(This section is append-only. Sessions 0-80 are in the Archive subsection below.)_
 
-### Sessions 81-116
+### Sessions 81-120
 
 ## ðŸ’¡ Session Notes & Decisions Made
 
@@ -1662,11 +1898,67 @@ _(Append new entries ” never delete old ones)_
 - **Hero Banner Stability**: Decided to apply `whitespace-nowrap`, reduced mobile font sizes (`text-xs`), and tighter gaps (`gap-2`) to the ETA banner to maintain a premium single-line "status pill" look on small screens.
 - **Heading Decision**: Confirmed with the user to keep the main Hero heading large (`text-4xl`/`text-3xl`) and wrapping on mobile to preserve its "Big" impact, rather than shrinking it to an insignificant single line.
 
+- **Verification**: Verified via RED/GREEN TDD in `BuyerNav.test.tsx` and `HeroSection.test.tsx`. Manually confirmed the layout on iPhone SE (375px) using the browser simulator.
+
 **Session 115 (Mobile UI Refinement Completion):**
 - **Decision 032 (Search Form Architecture)**: Switched from `onKeyDown` listeners to a native HTML `<form>` submission for the search bar. This is the most reliable way to ensure the "Go" or "Search" buttons on iOS/Android keyboards behave correctly across different mobile browsers.
 - **Responsive Disclosure**: Applied `hidden sm:block` to auxiliary navbar elements (branding and location pill). On iPhone SE (375px), this recovers ~120px of horizontal space, allowing the search bar to span nearly the full width of the viewport.
 - **ETA Banner Stability**: Used `whitespace-nowrap` to prevent the multi-segment ETA banner from breaking into two lines on small screens. Combined with `text-[11px]` and `gap-2` on mobile, this maintains a premium "status pill" aesthetic without truncation.
-- **Verification**: Verified via RED/GREEN TDD in `BuyerNav.test.tsx` and `HeroSection.test.tsx`. Manually confirmed the layout on iPhone SE (375px) using the browser simulator.
+
+**Session 116 (Hero ETA Banner Wrap Refinement & Documentation Decoupling):**
+- **Refinement**: Refined the ETA banner to support multi-line wrapping on small screens. Used `self-stretch` for the vertical separator and `max-w-[280px]` to prevent card overflow.
+- **Architecture Shift**: Transitioned from a monolithic `current_state.md` to a modular, phase-specific documentation system (`phase1_2_state.md`, `phase3_4_state.md`, `phase5_state.md`).
+- **Conflict Prevention**: Isolated daily write operations to per-phase files to prevent Git merge conflicts during parallel development cycles.
+- **TDD Enforcement**: Standardized the implementation journal format to ensure strict adherence to Red-Stub-Green TDD gating.
+
+**Session 117 (E2E Suite Stabilization & Infrastructure Restoration):**
+- **Infrastructure**: Resolved `browserType.launch` failures by installing missing Playwright binaries.
+- **Hydration Hardening**: Implemented `isBootstrapPending` gates in `BuyerNav` and `ProfilePage` to eliminate 401 Unauthorized race conditions during session hydration.
+- **Bug Identification (OCP)**: Identified — but did NOT fix — a broken envelope access in `OrderConfirmationPage.tsx` line 414. `query.data?.data` is always `undefined` because `queryFn` returns `BuyerOrderDetail` directly. The `#occ-heading` element therefore never renders. Fix deferred to Phase 2.23.1 Fix 1.
+- **E2E Seeding**: Hardened `seed-e2e.ts` with explicit order cleanup in FK-safe order and support for multiple test phone numbers.
+- **Quality Audit**: Investigated `ci:quality` failures. Identified `(error as any).code` cast in `server.ts` line 170 and missing `pnpm.overrides` for `protobufjs` and other packages. Fixes deferred to Phase 2.23.1.
+- **GSAP Design**: Proposed `window.isE2E` flag injection via `page.addInitScript` and `gsap.globalTimeline.timeScale(100)` guard in `gsap.ts`. Implementation deferred to Phase 2.23.1 Fix 3.
+- **Result**: 14/16 E2E flows GREEN. E2E-008 (`checkout.spec.ts`) and E2E-009 (`order.spec.ts`) remain failing pending Phase 2.23.1.
+
+**Session 118 (Phase 2.23.1 — Root Cause Analysis & Fix Specification):**
+- **Objective**: Deep-investigate all remaining E2E failures to identify every root cause before writing any code, then produce an explicit TDD-format fix plan for a base model to execute.
+- **Fix 1 — OCP Envelope Bug (PRIMARY BLOCKER)**: Confirmed `OrderConfirmationPage.tsx` line 414 uses `query.data?.data` but `queryFn` (lines 271-282) resolves to `BuyerOrderDetail` directly — not wrapped in an envelope. `query.data?.data` is always `undefined`. The entire content block including `#occ-heading` never renders. This is the primary reason both E2E-008 and E2E-009 fail. Fix: change condition to `query.data`, remove `OrderConfirmationEnvelope` type, remove 3 `console.log('[DEBUG]...')` statements.
+- **Fix 2 — isBootstrapPending Unit Test Gap**: Confirmed 5 page components (`CheckoutPage`, `SavedAddressesPage`, `SubCategoryPage`, `SearchResultsPage`, `OrderConfirmationPage`) gate `useQuery` with `enabled: !isBootstrapPending`. Their test files never call `useAuthStore.setState({ isBootstrapPending: false })`, leaving all queries permanently disabled in tests. Fix: add `isBootstrapPending: false` to `beforeEach` in each affected test file without removing any existing assertion.
+- **Fix 3 — GSAP window.isE2E**: Confirmed zero code implementation exists — only documentation references. GSAP defaults `duration: 0.8` plus the OCP timeline adds ~3.45s of animation where `autoAlpha` keeps elements at `visibility: hidden`. Fix: inject `window.isE2E = true` via `page.addInitScript()` in each spec's `beforeEach`; add `if (window.isE2E) gsap.globalTimeline.timeScale(100)` to `initGorolaGsapOnce()` in `gsap.ts`; add a unit test asserting the flag does not fire in jsdom.
+- **Fix 4 — server.ts Type Safety**: Confirmed `(error as any).code` on line 170 is an explicit `any` cast violating strict TypeScript. `error.statusCode` is also accessed without a type guard. Fix: extract a `coerceToAppError(error: unknown)` helper with proper `typeof` narrowing — no `any` casts.
+- **Fix 5 — Security Overrides**: Confirmed `pnpm.overrides` in root `package.json` does not cover `protobufjs` (GHSA-h755-8qp9-cq85, prototype pollution) or other packages still flagged by `pnpm audit`. Fix: run `pnpm audit --json`, add every remaining high/moderate package to `pnpm.overrides` with a matching `_pnpm_overrides_comments` entry.
+- **Documentation**: Authored Phase 2.23.1 section in `phase1_2_state.md` with full TDD checklists for all 5 fixes. Each fix has: Root Cause, RED test instructions with exact file names and assertions, GREEN implementation steps, and a Verification Chain. Unchecked the Phase 2.23 Quality Gate which had been incorrectly pre-marked `[x]` complete.
+- **Result**: Zero code changes made this session. Phase 2.23.1 is fully specified. Next session starts with Fix 1.
+
+**Session 119 (Phase 2.23.1 Stabilization):**
+
+- **Fix 1 (OCP Envelope Bug):** Removed redundant `OrderConfirmationEnvelope` wrapping from `OrderConfirmationPage.tsx`. Updated conditional rendering to use `query.data` directly, ensuring `#occ-heading` and content reveal correctly.
+- **Fix 2 (Unit Test Bootstrap Gating):** Added `useAuthStore.setState({ isBootstrapPending: false })` to the `beforeEach` hooks of `CheckoutPage.test.tsx`, `SavedAddressesPage.test.tsx`, `SubCategoryPage.test.tsx`, and `SearchResultsPage.test.tsx`. This unblocks API queries in unit tests.
+- **Fix 3 (GSAP E2E Speed-up):** Implemented `window.isE2E` flag detection in `gsap.ts`. When true, `gsap.globalTimeline.timeScale(100)` is applied, speeding up all animations for E2E suites. Injected the flag via `page.addInitScript()` in `checkout.spec.ts` and `order.spec.ts`.
+- **Fix 4 (Type Safe Error Handler):** Replaced unsafe `(error as any)` casts in `server.ts` with a robust `coerceToAppError` helper using `typeof` narrowing. Resolved all typecheck issues.
+- **Fix 5 (Security Overrides):** Resolved high-severity `protobufjs` and moderate `@protobufjs/utf8` vulnerabilities via root-level `pnpm.overrides`. Confirmed with `pnpm audit --audit-level=moderate` returning zero vulnerabilities.
+- **Verification:** All 16 E2E flows are now GREEN. Full `pnpm ci:quality` pipeline is GREEN. Phase 2.23 (Buyer Web Experience E2E) is now 100% complete.
+
+**Session 120 (Final E2E Stabilization & Phase 2 Completion):**
+- Resolved intermittent failures in `SavedAddressesPage.test.tsx` caused by Radix UI dropdown interactions failing in JSDOM.
+- Confirmed 100% stability across the entire suite (34/34).
+- Verified `pnpm ci:quality` passes monorepo-wide.
+
+**Session 121 (Infrastructure Hardening & Isolation Strategy):**
+- **Decision 035:** Implemented a strict **User Isolation Strategy** for E2E. Each test suite (Checkout, Profile, CRUD) is assigned a unique user identity (phone number) to prevent data leakage and "ghost" state between test runs.
+- **Parallel Environment Isolation:** Reconfigured `playwright.config.ts` to use a non-standard port for the API (**3002**) and explicit `127.0.0.1` binding. This prevents `EADDRINUSE` conflicts when developers are running their local API server (3001) while tests are executing.
+- **Race Condition Resolution:** Hardened asynchronous synchronization using content-aware `waitForResponse` listeners, ensuring the UI only proceeds after the API has successfully committed data.
+- **Composite Seeding:** Resolved a major blocker where catalog navigation failed due to an empty database. Updated `playwright.config.ts` to implement a deterministic "Double Seed" (Core Catalog + E2E Identities) after every database reset.
+- **CI-Alignment Hardening:** Synchronized the local `pnpm ci:quality` command with the GitHub Actions workflow. Created `bootstrap-test-db.cjs` to automate test-database preparation.
+- **Quality Gate:** Achieved a perfect 34/34 E2E pass rate.
+
+**Session 122 (E2E Proxy Hardening & DX Improvements):**
+- **Decision 036 (Proxy Hardening)**: Implemented a strict `VITE_E2E_PROXY: 'true'` requirement in `vite.config.ts`. This ensures that local development (port 3001) is protected from accidental "Ghost Connections" to E2E test backends (port 3002).
+- **Idempotency Hardening**: Resolved a critical CI blocker where test retries caused "Strict Mode" violations due to duplicate address labels. Implemented a **Unique Label Strategy** using `testInfo.project.name` and `testInfo.retry` to ensure every test attempt creates isolated data.
+- **Cache Invalidation Fix**: Resolved a persistent UX bug where new orders and addresses would not appear in the buyer's profile until a hard page reload. Added `queryClient.invalidateQueries` calls to the `CheckoutPage` order mutation success handler.
+- **CI Performance**: Finalized deep caching for `pnpm` dependencies and Playwright browser binaries in `.github/workflows/ci.yml`.
+- **Verification**: Confirmed a clean 34/34 E2E pass rate with the new isolation and idempotency flags.
+
 
 ---
 
@@ -1796,3 +2088,4 @@ _(Append new entries ” never delete old ones)_
 - **Components (TDD):** `TopographicBg` (decorative SVG, `opacity` default `0.12`); `WeatherBanner` (pine vs slate from `useWeatherStore`, `data-weather` + `role="status"`); `ETABanner` (`.eta-pulse` on amber dot, static `etaLabel` prop for now). **`HomePage`:** “Design system ” Phase 2.2 preview” section with the three for visual smoke-testing.
 - **Tooling:** `WeatherBanner.test.tsx` needs **`eslint-disable simple-import-sort/imports, import/order`** (conflict between `import/order` and `@/` + `./` ordering).
 - **Verify:** `pnpm ci:quality` (API 277, web 30, build).
+

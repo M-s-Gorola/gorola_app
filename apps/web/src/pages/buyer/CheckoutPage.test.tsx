@@ -74,6 +74,7 @@ describe("CheckoutPage", () => {
     getMock.mockReset();
     postMock.mockReset();
     act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
       useAuthStore.getState().setBuyerSession({
         accessToken: "at",
         name: null,

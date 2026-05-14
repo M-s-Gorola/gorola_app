@@ -30,6 +30,7 @@ export function GorolaMountainMark({
       viewBox="0 0 72 64"
       fill="none"
       className={className}
+      data-testid="gorola-mountain-mark"
       aria-hidden="true"
       focusable="false"
     >

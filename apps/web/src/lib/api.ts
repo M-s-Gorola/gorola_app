@@ -68,9 +68,6 @@ export type CreateApiClientOptions = {
  */
 export function createApiClient(options: CreateApiClientOptions) {
   const baseURL = getNormalizedApiBaseUrl(options.baseURL);
-  if (baseURL.length === 0) {
-    throw new Error("createApiClient: baseURL is required");
-  }
 
   const instance = axios.create({
     baseURL,
@@ -150,12 +147,10 @@ async function handle401(
  * Shared axios instance wired to in-memory `useAuthStore` (null when `VITE_API_BASE_URL` is unset).
  */
 export const api: ReturnType<typeof createApiClient> | null = (() => {
-  const base = getNormalizedApiBaseUrl(import.meta.env.VITE_API_BASE_URL || (import.meta.env.MODE === 'test' ? 'http://test-api' : ''));
-  if (base.length === 0) {
-    return null;
-  }
+  const base = getNormalizedApiBaseUrl(import.meta.env.VITE_API_BASE_URL || "");
+  // We allow empty base for relative path proxying in dev/e2e
   return createApiClient({
-    baseURL: base,
+    baseURL: base, 
     getAccessToken: () => useAuthStore.getState().accessToken,
     getRefreshToken: () => useAuthStore.getState().refreshToken,
     setTokens: (t) => {
@@ -167,28 +162,39 @@ export const api: ReturnType<typeof createApiClient> | null = (() => {
   });
 })();
 
+let bootstrapPromise: Promise<void> | null = null;
+
 /**
  * Startup auth bootstrap: try cookie-backed refresh once so reload keeps buyer session.
+ * Deduplicated via bootstrapPromise to prevent race conditions during React StrictMode double-mount.
  */
 export async function bootstrapBuyerAuthSession(): Promise<void> {
-  if (api === null) {
-    useAuthStore.getState().setBootstrapPending(false);
-    return;
+  if (bootstrapPromise) {
+    return bootstrapPromise;
   }
-  if (useAuthStore.getState().accessToken !== null) {
-    useAuthStore.getState().setBootstrapPending(false);
-    return;
-  }
-  useAuthStore.getState().setBootstrapPending(true);
-  try {
-    const res = await api.post<unknown>(BUYER_REFRESH_PATH, {});
-    const session = parseRefreshEnvelope(res.data);
-    useAuthStore.getState().setBuyerSession(session);
-  } catch {
-    // No valid refresh cookie/token on startup; keep anonymous state.
-  } finally {
-    useAuthStore.getState().setBootstrapPending(false);
-  }
+
+  bootstrapPromise = (async () => {
+    if (api === null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    if (useAuthStore.getState().accessToken !== null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    useAuthStore.getState().setBootstrapPending(true);
+    try {
+      const res = await api.post<unknown>(BUYER_REFRESH_PATH, {});
+      const session = parseRefreshEnvelope(res.data);
+      useAuthStore.getState().setBuyerSession(session);
+    } catch {
+      // No valid refresh cookie/token on startup; keep anonymous state.
+    } finally {
+      useAuthStore.getState().setBootstrapPending(false);
+    }
+  })();
+
+  return bootstrapPromise;
 }
 
 /**

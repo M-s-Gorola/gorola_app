@@ -5,6 +5,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { ProductGrid } from "@/components/buyer/ProductGrid";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 type SearchResultItem = {
   id: string;
@@ -40,6 +41,7 @@ async function fetchSearchResults(query: string): Promise<SearchResult | null> {
 }
 
 export function SearchResultsPage(): ReactElement {
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const [searchParams, setSearchParams] = useSearchParams();
   const queryParam = searchParams.get("q") ?? "";
   const [searchInput, setSearchInput] = useState(queryParam);
@@ -50,7 +52,7 @@ export function SearchResultsPage(): ReactElement {
   }, [queryParam]);
 
   const searchQuery = useQuery({
-    enabled: api !== null && queryParam.trim().length > 0,
+    enabled: !isBootstrapPending && api !== null && queryParam.trim().length > 0,
     queryKey: ["buyer-search", queryParam],
     queryFn: () => fetchSearchResults(queryParam)
   });
@@ -107,7 +109,7 @@ export function SearchResultsPage(): ReactElement {
       )}
 
       {hasResults && (
-        <div className="space-y-6">
+        <div className="space-y-6" data-testid="search-results-grid">
           {results.categories.length > 0 && (
             <div className="rounded-2xl bg-white/70 px-6 py-8">
               <h2 className="font-playfair text-xl text-gorola-charcoal mb-4">Categories</h2>
@@ -115,6 +117,7 @@ export function SearchResultsPage(): ReactElement {
                 {results.categories.map((cat) => (
                   <button
                     key={`cat-${cat.id}`}
+                    data-testid="search-result-category"
                     onClick={() => navigate(`/categories/${cat.slug}`)}
                     className="flex flex-col items-center justify-center rounded-2xl border border-gorola-pine/10 bg-white p-4 shadow-sm transition hover:-translate-y-1 hover:shadow-md"
                   >
@@ -139,6 +142,7 @@ export function SearchResultsPage(): ReactElement {
                 {results.subCategories.map((sub) => (
                   <button
                     key={`sub-${sub.id}`}
+                    data-testid="search-result-subcategory"
                     onClick={() => {
                       if (sub.categorySlug && sub.slug) {
                         navigate(`/categories/${sub.categorySlug}/${sub.slug}`);

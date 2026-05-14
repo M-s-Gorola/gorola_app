@@ -1,46 +1,44 @@
-# CI/CD Environment Stabilization (Mocking vs. Spying)
+# CI/CD Environment Stabilization: Mocking vs. Spying
 
-## 1. The Problem
-After introducing new features like **Order Ratings** and **Advertisements**, the project's CI/CD pipeline (GitHub Actions) began failing, even though all tests passed perfectly on the developer's local machine.
-
-There were two distinct types of failures:
-1.  **Frontend**: `TypeError: Cannot convert undefined or null to object`
-2.  **Backend**: `Foreign key constraint violated: Advertisement_storeId_fkey`
+A common challenge in modern CI/CD pipelines is the "Local Pass, CI Fail" phenomenon. This occurs when tests rely on environmental assumptions that hold true on a developer's machine but break in a clean, virtualized runner. This guide establishes principles for **Test-Safe Initializations** and **Hierarchical Data Cleanups**.
 
 ---
 
-## 2. The Root Causes
+## 1. The "Ghost" Environment Variable Problem
 
-### A. The "Ghost" Environment Variables (Frontend)
-In the GoRola codebase, the `api` instance (Axios) is designed to be `null` if the `VITE_API_BASE_URL` is missing. 
-*   **Locally**: Your `.env` file provides this URL, so the `api` object is created.
-*   **In CI**: GitHub Actions doesn't have your `.env` file. The `api` object became `null`.
-*   **Mock vs. Spy**:
-    *   Tests using `vi.mock` passed because they replaced the entire file with a "toy" version before it even tried to check for the URL.
-    *   Tests using `vi.spyOn` failed because they tried to "watch" the real `api` object, which was `null` in CI. You can't put a tracker on a phone that doesn't exist!
+Applications often use environment variables (e.g., `BASE_URL`) to initialize core services (like API clients or SDKs).
+*   **The Issue**: Locally, these variables are provided via `.env`. In CI, they may be missing, leading to `null` or `undefined` service objects.
+*   **The Pattern (Mock vs. Spy)**:
+    *   **Mocks (`vi.mock`)**: These replace the entire module with a "toy" version before the code even runs. They are robust against missing environment variables because they bypass the real initialization logic.
+    *   **Spies (`vi.spyOn`)**: These "watch" the real object. If the real object failed to initialize because of a missing variable, the spy will fail.
 
-### B. The Cleanup Chain-Reaction (Backend)
-To keep tests fast and isolated, we wipe the database before every test.
-*   **The Conflict**: We recently added the `Advertisement` model, which points to a `Store`.
-*   **The Failure**: The cleanup code in some older tests was trying to delete the **Store** first. The database blocked this because the **Advertisement** still existed, and it didn't want to leave an advertisement pointing to a non-existent store.
+**Best Practice**: Ensure that core services have a "Safe-for-Testing" fallback. If the application detects it is running in `test` mode, it should initialize a dummy instance of the service rather than crashing.
 
 ---
 
-## 3. The Resolution
+## 2. Hierarchical Database Cleanup
 
-### Fix 1: Test-Safe API Initialization
-We updated `apps/web/src/lib/api.ts` to ensure that if the app detects it is running in "Test Mode" (`import.meta.env.MODE === 'test'`), it will always create a dummy API instance even if the URL is missing. This makes both Spies and Mocks work instantly in any environment.
+In stateful applications, tests often perform a "Clean Slate" operation before or after each run.
+*   **The Issue**: As database schemas grow, **Foreign Key Constraints** create a dependency web. Deleting a "Parent" record (e.g., a Store) while a "Child" record (e.g., an Advertisement) still exists will trigger a database error.
+*   **The Pattern**: Implement a hierarchical cleanup function that respects the database's relational graph.
 
-### Fix 2: Hierarchical Database Cleanup
-We updated the `cleanGraph` functions in the backend integration tests to follow the correct "deletion order":
-1.  Delete **Advertisements**, **Offers**, and **Discounts** first.
-2.  Delete **Stores** and **Categories** second.
-3.  Delete **Users** and **Addresses** last.
-This respects the database's rules (Foreign Key Constraints) and prevents cleanup crashes.
+**Universal Deletion Order:**
+1.  **Leaf Nodes**: Delete records with the most dependencies (e.g., Transactions, Ratings, Ads).
+2.  **Intermediate Nodes**: Delete records that group leaf nodes (e.g., Products, Categories).
+3.  **Root Nodes**: Delete the foundational records (e.g., Users, Organizations).
 
 ---
 
-## 4. Key Learnings
-1.  **Don't rely on local `.env` for tests**: Always provide fallbacks for critical objects in test mode.
-2.  **Mocks > Spies for CI**: Mocking the entire module (`vi.mock`) is safer in CI because it skips the execution of the real file entirely.
-3.  **Update Cleanups**: Every time a new database model is added, check the integration test cleanup functions to see if they need to be updated.
+## 3. The "Leaky" Library Problem
+
+Unit tests must be 100% isolated from the network. If a unit test triggers a real network request, it is "leaking."
+*   **The Symptom**: Unit tests pass, but the terminal is filled with "Connection Refused" or "Socket Error" noise.
+*   **The Cause**: A library (e.g., `socket.io-client` or `axios`) was not mocked, and it is attempting to connect to a default `localhost` port that doesn't exist in the test environment.
+*   **The Pattern**: Use a **Global Mock** in your test setup file to intercept these libraries at the root level. This ensures that even if a developer forgets to mock it in a specific test, the global safeguard prevents network leaks.
+
+---
+
+## Summary of Learnings
+1.  **Mocks > Spies for CI**: Prefer mocking entire modules for foundational services to avoid environmental dependency.
+2.  **Relational Cleanups**: Always update your cleanup logic whenever a new relational model is added to the database.
+3.  **Zero Network Leaks**: Any network-related error in a unit test is a sign of poor isolation. Implement global intercepts for all networking libraries.

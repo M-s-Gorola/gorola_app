@@ -98,7 +98,7 @@ export function CartDrawer(): ReactElement | null {
                 <article key={line.productVariantId} className="rounded-2xl border border-gorola-pine/10 p-4 shadow-sm">
                   <div className="flex justify-between items-start">
                     <div>
-                      <p className="font-dm-sans text-sm font-bold text-gorola-charcoal">{line.productName ?? "Item"}</p>
+                      <p className="font-dm-sans text-sm font-bold text-gorola-charcoal" data-testid="cart-item-name">{line.productName ?? "Item"}</p>
                       <p className="font-dm-sans text-xs text-gorola-slate">{line.variantLabel ?? "Variant"}</p>
                     </div>
                     <p className="font-dm-sans text-sm font-bold text-gorola-charcoal">
@@ -109,6 +109,7 @@ export function CartDrawer(): ReactElement | null {
                     <button
                       type="button"
                       aria-label={`Decrease ${line.productName ?? "item"} quantity`}
+                      data-testid="quantity-minus"
                       onClick={() => {
                         const next = line.quantity - 1;
                         setQty(line.productVariantId, next);
@@ -130,10 +131,11 @@ export function CartDrawer(): ReactElement | null {
                     >
                       -
                     </button>
-                    <span className="font-dm-sans text-sm font-bold text-gorola-charcoal min-w-[1.5rem] text-center">{line.quantity}</span>
+                    <span className="font-dm-sans text-sm font-bold text-gorola-charcoal min-w-[1.5rem] text-center" data-testid="item-quantity">{line.quantity}</span>
                     <button
                       type="button"
                       aria-label={`Increase ${line.productName ?? "item"} quantity`}
+                      data-testid="quantity-plus"
                       onClick={() => {
                         const next = line.quantity + 1;
                         setQty(line.productVariantId, next);
@@ -165,6 +167,7 @@ export function CartDrawer(): ReactElement | null {
                         }
                       }}
                       className="ml-auto text-xs font-bold text-gorola-slate hover:text-red-600 transition-colors"
+                      data-testid="remove-item"
                     >
                       Remove
                     </button>
@@ -183,7 +186,7 @@ export function CartDrawer(): ReactElement | null {
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
-                <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {subtotal.toFixed(2)}</span>
+                <span className="font-dm-sans text-sm text-gorola-charcoal" data-testid="cart-subtotal">Rs {subtotal.toFixed(2)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee</span>
@@ -197,7 +200,7 @@ export function CartDrawer(): ReactElement | null {
               )}
               <div className="flex justify-between border-t border-gorola-pine/5 pt-2">
                 <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Total</span>
-                <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Rs {total.toFixed(2)}</span>
+                <span className="font-dm-sans text-base font-bold text-gorola-charcoal" data-testid="cart-total">Rs {total.toFixed(2)}</span>
               </div>
             </div>
 

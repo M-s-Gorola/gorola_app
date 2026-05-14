@@ -16,6 +16,7 @@
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "prisma:bootstrap:local": "node ./scripts/bootstrap-local-db.cjs",
+    "prisma:bootstrap:test": "node ./scripts/bootstrap-test-db.cjs",
     "prisma:verify:seed": "node ./scripts/verify-local-seed.cjs",
     "dev": "tsx watch src/app.ts",
     "start": "prisma migrate deploy && node dist/app.js",

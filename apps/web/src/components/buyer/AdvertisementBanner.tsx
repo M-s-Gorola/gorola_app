@@ -70,7 +70,7 @@ export function AdvertisementBanner(): ReactElement | null {
             );
 
             return (
-              <div key={ad.id} className="embla__slide min-w-0 flex-[0_0_100%] pr-4">
+              <div key={ad.id} data-testid="ad-slide" className="embla__slide min-w-0 flex-[0_0_100%] pr-4">
                 {ad.linkUrl ? (
                   <Link to={ad.linkUrl} className="block outline-none ring-gorola-saffron focus-visible:ring-2">
                     {content}

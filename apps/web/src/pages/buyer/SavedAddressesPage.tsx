@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 type Address = {
   id: string;
@@ -46,9 +47,10 @@ export function SavedAddressesPage(): ReactElement {
   const [isDefault, setIsDefault] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
 
   const { data: addresses, isLoading, error } = useQuery({
-    enabled: api !== null,
+    enabled: !isBootstrapPending,
     queryFn: async () => {
       const response = await api!.get<{ data?: { addresses: Address[] } }>("/api/v1/addresses");
       return response.data.data?.addresses ?? [];
@@ -211,12 +213,12 @@ export function SavedAddressesPage(): ReactElement {
       ) : (
         <div className="space-y-3">
           {addresses?.map((addr) => (
-            <div key={addr.id} className="relative flex flex-col justify-between rounded-xl border border-gorola-pine/15 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-start">
+            <div key={addr.id} data-testid="address-card" className="relative flex flex-col justify-between rounded-xl border border-gorola-pine/15 bg-white p-4 shadow-sm transition-shadow hover:shadow-md sm:flex-row sm:items-start">
               <div className="space-y-1">
                 <div className="flex items-center gap-2">
                   <h3 className="font-dm-sans font-semibold text-gorola-charcoal">{addr.label}</h3>
                   {addr.isDefault && (
-                    <span className="inline-flex items-center rounded-full bg-gorola-pine/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gorola-pine">
+                    <span data-testid="default-badge" className="inline-flex items-center rounded-full bg-gorola-pine/10 px-2 py-0.5 text-[10px] font-medium tracking-wide text-gorola-pine">
                       DEFAULT
                     </span>
                   )}
@@ -278,6 +280,7 @@ export function SavedAddressesPage(): ReactElement {
               <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Label (e.g., Home, Work)</span>
               <input
                 className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                name="label"
                 value={label}
                 onChange={(e) => setLabel(e.target.value)}
                 placeholder="Home"
@@ -298,6 +301,7 @@ export function SavedAddressesPage(): ReactElement {
               <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Landmark (required)</span>
               <textarea
                 className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                name="landmarkDescription"
                 value={landmark}
                 onChange={(e) => setLandmark(e.target.value)}
                 placeholder="E.g. — near the red gate, behind Hotel Padmini"

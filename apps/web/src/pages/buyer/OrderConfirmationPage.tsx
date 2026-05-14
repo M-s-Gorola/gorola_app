@@ -13,7 +13,9 @@ import { useParams } from "react-router-dom";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
+import { useAuthStore } from "@/store/auth.store";
 import { useWeatherStore } from "@/store/weather.store";
+
 
 export type BuyerOrderConfirmationItem = {
   id: string;
@@ -56,10 +58,6 @@ export type BuyerOrderDetail = {
   total: string;
 };
 
-export type OrderConfirmationEnvelope = {
-  data?: BuyerOrderDetail;
-  success?: boolean;
-};
 
 function formatPayment(method: string): string {
   if (method === "COD") return "Cash on delivery";
@@ -258,13 +256,15 @@ export function OrderConfirmationPage(): ReactElement {
   const bloomRef = useRef<HTMLDivElement | null>(null);
   const entranceDoneRef = useRef(false);
 
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
-
+ 
+ 
   const query = useQuery({
-    enabled: api !== null && id !== undefined,
+    enabled: !isBootstrapPending && id !== undefined,
     queryKey: ["buyer-order-confirmation", id ?? null],
     queryFn: async (): Promise<BuyerOrderDetail> => {
-      const response = await api!.get<OrderConfirmationEnvelope>(
+      const response = await api!.get<{ success: boolean; data: BuyerOrderDetail }>(
         `/api/v1/orders/${id}`
       );
       const payload = response.data;
@@ -404,9 +404,10 @@ export function OrderConfirmationPage(): ReactElement {
         </div>
       ) : null}
 
-      {query.isSuccess ? (
+      {query.isSuccess && query.data ? (
         (() => {
-          const discountAmount = query.data.discount?.amount ?? "0.00";
+          const order = query.data;
+          const discountAmount = order.discount?.amount ?? "0.00";
 
           const weatherPulse =
             isWeatherMode ?
@@ -458,31 +459,31 @@ export function OrderConfirmationPage(): ReactElement {
               <div className="space-y-1">
                 <div className="flex flex-col items-center gap-2">
                   <h1 className="font-playfair text-3xl text-gorola-charcoal" id="occ-heading">
-                    {query.data.status === "DELIVERED" ? "Order Delivered" : 
-                     query.data.status === "PLACED" ? "Thank you" :
-                     query.data.status === "PREPARING" ? "Store is picking items" :
-                     query.data.status === "OUT_FOR_DELIVERY" ? "On the way" :
-                     query.data.status === "CANCELLED" ? "Order Cancelled" : "Order Status"}
+                    {order.status === "DELIVERED" ? "Order Delivered" : 
+                     order.status === "PLACED" ? "Thank you" :
+                     order.status === "PREPARING" ? "Store is picking items" :
+                     order.status === "OUT_FOR_DELIVERY" ? "On the way" :
+                     order.status === "CANCELLED" ? "Order Cancelled" : "Order Status"}
                   </h1>
-                  {query.data.status === "DELIVERED" && (
+                  {order.status === "DELIVERED" && (
                     <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                       <CheckCircle2 className="h-3 w-3" />
-                      Delivered in {calculateDeliveryDuration(query.data.statusHistory ?? [], query.data.createdAt) ?? "15m"}
+                      Delivered in {calculateDeliveryDuration(order.statusHistory ?? [], order.createdAt) ?? "15m"}
                     </div>
                   )}
                 </div>
                 <p className="font-dm-sans text-sm text-gorola-slate">
-                  <span className="sr-only">Full order reference {query.data.id}. </span>
+                  <span className="sr-only">Full order reference {order.id}. </span>
                   Order{" "}
                   <span
                     className="font-mono font-semibold text-gorola-charcoal"
-                    title={`Full order reference: ${query.data.id}`}
+                    title={`Full order reference: ${order.id}`}
                   >
-                    {formatOrderRefForUi(query.data.id)}
+                    {formatOrderRefForUi(order.id)}
                   </span>{" "}
-                  {query.data.status === "DELIVERED" ? "was delivered from" : 
-                   query.data.status === "CANCELLED" ? "from" : "is being handled by"}{" "}
-                  <span className="font-semibold text-gorola-charcoal">{query.data.store.name}</span>.
+                  {order.status === "DELIVERED" ? "was delivered from" : 
+                   order.status === "CANCELLED" ? "from" : "is being handled by"}{" "}
+                  <span className="font-semibold text-gorola-charcoal">{order.store.name}</span>.
                 </p>
               </div>
 
@@ -492,7 +493,7 @@ export function OrderConfirmationPage(): ReactElement {
               <div className="w-full space-y-2 rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm">
                 <h2 className="font-playfair text-lg text-gorola-charcoal">Your items</h2>
                 <ul aria-label="Order items" className="space-y-2">
-                  {query.data.items.map((line) => (
+                  {order.items.map((line) => (
                     <li
                       className="flex justify-between gap-3 border-b border-gorola-pine/10 pb-2 font-dm-sans text-sm last:border-0 last:pb-0"
                       key={line.id}
@@ -509,24 +510,24 @@ export function OrderConfirmationPage(): ReactElement {
                 </ul>
 
                 <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
-                  <p>Subtotal: Rs {query.data.subtotal}</p>
-                  <p>Delivery fee: Rs {query.data.deliveryFee}</p>
+                  <p data-testid="order-subtotal">Subtotal: Rs {order.subtotal}</p>
+                  <p>Delivery fee: Rs {order.deliveryFee}</p>
                   {discountAmount !== "0.00" ? <p>Discount: -Rs {discountAmount}</p> : null}
-                  <p className="font-semibold">Total: Rs {query.data.total}</p>
-                  <p>Payment: {formatPayment(query.data.paymentMethod)}</p>
+                  <p className="font-semibold" data-testid="order-total">Total: Rs {order.total}</p>
+                  <p>Payment: {formatPayment(order.paymentMethod)}</p>
                 </div>
 
                 <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-slate">
-                  {query.data.status !== "DELIVERED" && query.data.status !== "CANCELLED" && (
+                  {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                     <p className="font-semibold text-gorola-charcoal">Delivery Address</p>
                   )}
-                  <AddressBlock order={query.data} />
-                  {query.data.status !== "DELIVERED" && query.data.status !== "CANCELLED" && estimatedDeliveryCopy(query.data, isWeatherMode)}
+                  <AddressBlock order={order} />
+                  {order.status !== "DELIVERED" && order.status !== "CANCELLED" && estimatedDeliveryCopy(order, isWeatherMode)}
                   <StatusStepper
-                    history={query.data.statusHistory ?? []}
-                    status={query.data.status}
+                    history={order.statusHistory ?? []}
+                    status={order.status}
                   />
-                  {query.data.status !== "DELIVERED" && query.data.status !== "CANCELLED" && (
+                  {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                     <p className="font-dm-sans text-xs text-gorola-slate">
                       Tracking is live — updates appear here automatically as your order moves through
                       the store and neighborhood.
@@ -535,27 +536,27 @@ export function OrderConfirmationPage(): ReactElement {
                 </div>
               </div>
 
-              {query.data.status !== "DELIVERED" && query.data.status !== "CANCELLED" && (
+              {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                 <blockquote className="w-full rounded-2xl border border-gorola-pine/10 bg-gorola-fog/80 p-4 text-left shadow-inner">
                   <p className="font-dm-sans text-sm leading-relaxed text-gorola-charcoal">
                     Your order from{" "}
-                    <span className="font-semibold">{query.data.store.name}</span> is being handled. Reach the store directly
+                    <span className="font-semibold">{order.store.name}</span> is being handled. Reach the store directly
                     if something urgent comes up:
                   </p>
                   <a
-                    aria-label={`Call ${query.data.store.name}`}
+                    aria-label={`Call ${order.store.name}`}
                     className="mt-3 inline-flex rounded-full bg-gorola-pine px-5 py-2 font-dm-sans text-sm font-semibold text-white hover:bg-gorola-pine/90"
-                    href={telHref(query.data.store.phone)}
+                    href={telHref(order.store.phone)}
                     rel="noopener noreferrer"
                   >
-                    Call {query.data.store.phone}
+                    Call {order.store.phone}
                   </a>
                 </blockquote>
               )}
 
               <p className="max-w-md font-dm-sans text-xs text-gorola-slate">
-                {query.data.status === "DELIVERED" ? "Hope you enjoy your purchase!" : 
-                 query.data.status === "CANCELLED" ? "We apologize for the inconvenience." :
+                {order.status === "DELIVERED" ? "Hope you enjoy your purchase!" : 
+                 order.status === "CANCELLED" ? "We apologize for the inconvenience." :
                  "Built for honest shopper expectations—no artificial urgency ribbons or mystery ETAs unless you have a scheduled slot above."}
               </p>
               </div>

@@ -3,6 +3,8 @@ import { render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useAuthStore } from "@/store/auth.store";
+
 import { SubCategoryPage } from "./SubCategoryPage";
 
 const { getMock } = vi.hoisted(() => ({
@@ -38,6 +40,7 @@ function renderPage(initialPath: string): void {
 describe("SubCategoryPage", () => {
   beforeEach(() => {
     getMock.mockReset();
+    useAuthStore.setState({ isBootstrapPending: false });
   });
 
   it("resolves slug to subCategoryId and requests products with subCategoryId filter", async () => {
