@@ -40,12 +40,20 @@ Optional: mirror the same `DATABASE_URL` / `DIRECT_URL` in the monorepo root **`
 
 ## Commands (run from monorepo root)
 
+### 1. Main Catalog Seed
+Runs `apps/api/prisma/seed.ts` (Stores, Categories, and a small sample of products).
 ```bash
 pnpm --filter @gorola/api exec prisma migrate deploy
 pnpm --filter @gorola/api prisma:seed
 ```
 
-The second command runs `apps/api/prisma/seed.ts` (stores, categories, sample products, store owners stubs, feature flags). You should see a **`Seed completed`** log on success.
+### 2. Specialized Medical Tests Seed
+Runs `apps/api/prisma/seed-medical-tests.ts` (Adds the 75+ diagnostic tests for manual verification).
+```bash
+pnpm --filter @gorola/api exec tsx prisma/seed-medical-tests.ts
+```
+
+Note: The **`prisma:seed`** command only covers the basic catalog. You must run the second command specifically to populate the large "Medical tests" inventory. You should see a **`Successfully seeded 75 medical tests`** log on success.
 
 Equivalent root script for seed only:
 

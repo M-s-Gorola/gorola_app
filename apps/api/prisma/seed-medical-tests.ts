@@ -121,24 +121,33 @@ async function main() {
       { id: "test_75", name: "Total Protein", price: "250.00" }
     ];
 
-    for (const t of tests) {
-      await prisma.product.upsert({
-        where: { id: `prod_med_${t.id}` },
-        update: { categoryId: category.id, subCategoryId: subCategory.id },
-        create: {
-          id: `prod_med_${t.id}`,
-          storeId: store.id,
-          categoryId: category.id,
-          subCategoryId: subCategory.id,
-          name: t.name,
-          description: `Professional medical diagnostic test for ${t.name}. Result TAT: 24 hours.`,
-          imageUrl: `https://picsum.photos/seed/${t.id}/400/400`,
-          isActive: true,
-          variants: {
-            create: [{ label: "Test", price: t.price, stockQty: 999, unit: "Test", isActive: true }]
-          }
-        }
-      });
+    console.info(`Seeding ${tests.length} tests in chunks of 5...`);
+
+    // Process in chunks to avoid overwhelming the connection pool (limited to 9)
+    const chunkSize = 5;
+    for (let i = 0; i < tests.length; i += chunkSize) {
+      const chunk = tests.slice(i, i + chunkSize);
+      await Promise.all(
+        chunk.map((t) =>
+          prisma.product.upsert({
+            where: { id: `prod_med_${t.id}` },
+            update: { categoryId: category.id, subCategoryId: subCategory.id },
+            create: {
+              id: `prod_med_${t.id}`,
+              storeId: store.id,
+              categoryId: category.id,
+              subCategoryId: subCategory.id,
+              name: t.name,
+              description: `Professional medical diagnostic test for ${t.name}. Result TAT: 24 hours.`,
+              imageUrl: `https://picsum.photos/seed/${t.id}/400/400`,
+              isActive: true,
+              variants: {
+                create: [{ label: "Test", price: t.price, stockQty: 999, unit: "Test", isActive: true }]
+              }
+            }
+          })
+        )
+      );
     }
 
     console.info(`Successfully seeded ${tests.length} medical tests for Mountain Medico.`);

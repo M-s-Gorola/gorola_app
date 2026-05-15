@@ -174,64 +174,64 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
   };
 
   // -------------------------
-  // PRODUCTS - Groceries (Rice & Atta)
+  // SEED ALL PRODUCTS IN CHUNKS
   // -------------------------
-  await createProduct("prod_rice_1", storeAId, groceriesCategory.id, subGrocRiceAtta.id, "Basmati Rice Premium", "525.00", 40, "5 kg");
-  await createProduct("prod_rice_2", storeAId, groceriesCategory.id, subGrocRiceAtta.id, "Daily Sona Masoori Rice", "450.00", 30, "5 kg");
-  await createProduct("prod_atta_1", storeAId, groceriesCategory.id, subGrocRiceAtta.id, "Whole Wheat Atta", "220.00", 50, "5 kg");
-  await createProduct("prod_atta_2", storeAId, groceriesCategory.id, subGrocRiceAtta.id, "Multigrain Atta", "260.00", 25, "5 kg");
-  await createProduct("prod_dal_1", storeAId, groceriesCategory.id, subGrocRiceAtta.id, "Yellow Toor Dal", "140.00", 60, "1 kg");
+  const productData = [
+    // Groceries (Rice & Atta)
+    { id: "prod_rice_1", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocRiceAtta.id, name: "Basmati Rice Premium", price: "525.00", stockQty: 40, unit: "5 kg" },
+    { id: "prod_rice_2", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocRiceAtta.id, name: "Daily Sona Masoori Rice", price: "450.00", stockQty: 30, unit: "5 kg" },
+    { id: "prod_atta_1", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocRiceAtta.id, name: "Whole Wheat Atta", price: "220.00", stockQty: 50, unit: "5 kg" },
+    { id: "prod_atta_2", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocRiceAtta.id, name: "Multigrain Atta", price: "260.00", stockQty: 25, unit: "5 kg" },
+    { id: "prod_dal_1", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocRiceAtta.id, name: "Yellow Toor Dal", price: "140.00", stockQty: 60, unit: "1 kg" },
 
-  // -------------------------
-  // PRODUCTS - Groceries (Snacks)
-  // -------------------------
-  await createProduct("prod_snack_1", storeAId, groceriesCategory.id, subGrocSnacks.id, "Potato Chips Salted", "20.00", 100, "1 pack");
-  await createProduct("prod_snack_2", storeAId, groceriesCategory.id, subGrocSnacks.id, "Spicy Bhujia", "45.00", 80, "200 g");
-  await createProduct("prod_snack_3", storeAId, groceriesCategory.id, subGrocSnacks.id, "Chocolate Chip Cookies", "60.00", 50, "150 g");
-  await createProduct("prod_snack_4", storeAId, groceriesCategory.id, subGrocSnacks.id, "Digestive Biscuits", "40.00", 70, "250 g");
-  await createProduct("prod_snack_5", storeAId, groceriesCategory.id, subGrocSnacks.id, "Roasted Peanuts", "35.00", 90, "200 g");
+    // Groceries (Snacks)
+    { id: "prod_snack_1", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocSnacks.id, name: "Potato Chips Salted", price: "20.00", stockQty: 100, unit: "1 pack" },
+    { id: "prod_snack_2", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocSnacks.id, name: "Spicy Bhujia", price: "45.00", stockQty: 80, unit: "200 g" },
+    { id: "prod_snack_3", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocSnacks.id, name: "Chocolate Chip Cookies", price: "60.00", stockQty: 50, unit: "150 g" },
+    { id: "prod_snack_4", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocSnacks.id, name: "Digestive Biscuits", price: "40.00", stockQty: 70, unit: "250 g" },
+    { id: "prod_snack_5", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocSnacks.id, name: "Roasted Peanuts", price: "35.00", stockQty: 90, unit: "200 g" },
 
-  // -------------------------
-  // PRODUCTS - Groceries (Beverages)
-  // -------------------------
-  await createProduct("prod_bev_1", storeAId, groceriesCategory.id, subGrocBeverages.id, "Assam Tea Leaves", "150.00", 40, "250 g");
-  await createProduct("prod_bev_2", storeAId, groceriesCategory.id, subGrocBeverages.id, "Instant Coffee", "180.00", 30, "50 g");
-  await createProduct("prod_bev_3", storeAId, groceriesCategory.id, subGrocBeverages.id, "Mango Juice", "110.00", 50, "1 L");
-  await createProduct("prod_bev_4", storeAId, groceriesCategory.id, subGrocBeverages.id, "Cola Soft Drink", "40.00", 100, "750 ml");
-  await createProduct("prod_bev_5", storeAId, groceriesCategory.id, subGrocBeverages.id, "Sparkling Water", "60.00", 80, "1 L");
+    // Groceries (Beverages)
+    { id: "prod_bev_1", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocBeverages.id, name: "Assam Tea Leaves", price: "150.00", stockQty: 40, unit: "250 g" },
+    { id: "prod_bev_2", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocBeverages.id, name: "Instant Coffee", price: "180.00", stockQty: 30, unit: "50 g" },
+    { id: "prod_bev_3", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocBeverages.id, name: "Mango Juice", price: "110.00", stockQty: 50, unit: "1 L" },
+    { id: "prod_bev_4", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocBeverages.id, name: "Cola Soft Drink", price: "40.00", stockQty: 100, unit: "750 ml" },
+    { id: "prod_bev_5", storeId: storeAId, categoryId: groceriesCategory.id, subCategoryId: subGrocBeverages.id, name: "Sparkling Water", price: "60.00", stockQty: 80, unit: "1 L" },
 
-  // -------------------------
-  // PRODUCTS - Medical (Pain Relief)
-  // -------------------------
-  await createProduct("prod_pain_1", storeBId, medicalCategory.id, subMedPain.id, "Paracetamol 650", "42.00", 120, "1 strip");
-  await createProduct("prod_pain_2", storeBId, medicalCategory.id, subMedPain.id, "Ibuprofen 400", "55.00", 100, "1 strip");
-  await createProduct("prod_pain_3", storeBId, medicalCategory.id, subMedPain.id, "Pain Relief Spray", "145.00", 40, "50 g");
-  await createProduct("prod_pain_4", storeBId, medicalCategory.id, subMedPain.id, "Aspirin 75mg", "25.00", 150, "1 strip");
-  await createProduct("prod_pain_5", storeBId, medicalCategory.id, subMedPain.id, "Muscle Relaxant Ointment", "85.00", 60, "30 g");
+    // Medical (Pain Relief)
+    { id: "prod_pain_1", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedPain.id, name: "Paracetamol 650", price: "42.00", stockQty: 120, unit: "1 strip" },
+    { id: "prod_pain_2", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedPain.id, name: "Ibuprofen 400", price: "55.00", stockQty: 100, unit: "1 strip" },
+    { id: "prod_pain_3", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedPain.id, name: "Pain Relief Spray", price: "145.00", stockQty: 40, unit: "50 g" },
+    { id: "prod_pain_4", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedPain.id, name: "Aspirin 75mg", price: "25.00", stockQty: 150, unit: "1 strip" },
+    { id: "prod_pain_5", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedPain.id, name: "Muscle Relaxant Ointment", price: "85.00", stockQty: 60, unit: "30 g" },
 
-  // -------------------------
-  // PRODUCTS - Medical (First Aid)
-  // -------------------------
-  await createProduct("prod_fa_1", storeBId, medicalCategory.id, subMedFirstAid.id, "Adhesive Bandages", "30.00", 200, "1 box");
-  await createProduct("prod_fa_2", storeBId, medicalCategory.id, subMedFirstAid.id, "Antiseptic Liquid", "65.00", 80, "100 ml");
-  await createProduct("prod_fa_3", storeBId, medicalCategory.id, subMedFirstAid.id, "Cotton Roll", "20.00", 150, "50 g");
-  await createProduct("prod_fa_4", storeBId, medicalCategory.id, subMedFirstAid.id, "Medical Tape", "40.00", 100, "1 roll");
-  await createProduct("prod_fa_5", storeBId, medicalCategory.id, subMedFirstAid.id, "Crepe Bandage", "90.00", 50, "1 roll");
+    // Medical (First Aid)
+    { id: "prod_fa_1", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedFirstAid.id, name: "Adhesive Bandages", price: "30.00", stockQty: 200, unit: "1 box" },
+    { id: "prod_fa_2", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedFirstAid.id, name: "Antiseptic Liquid", price: "65.00", stockQty: 80, unit: "100 ml" },
+    { id: "prod_fa_3", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedFirstAid.id, name: "Cotton Roll", price: "20.00", stockQty: 150, unit: "50 g" },
+    { id: "prod_fa_4", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedFirstAid.id, name: "Medical Tape", price: "40.00", stockQty: 100, unit: "1 roll" },
+    { id: "prod_fa_5", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedFirstAid.id, name: "Crepe Bandage", price: "90.00", stockQty: 50, unit: "1 roll" },
 
-  // -------------------------
-  // PRODUCTS - Medical (Supplements)
-  // -------------------------
-  await createProduct("prod_sup_1", storeBId, medicalCategory.id, subMedSupplements.id, "Vitamin C 500mg", "110.00", 90, "1 strip");
-  await createProduct("prod_sup_2", storeBId, medicalCategory.id, subMedSupplements.id, "Multivitamin Capsules", "250.00", 60, "1 bottle");
-  await createProduct("prod_sup_3", storeBId, medicalCategory.id, subMedSupplements.id, "Calcium + D3", "140.00", 80, "1 strip");
-  await createProduct("prod_sup_4", storeBId, medicalCategory.id, subMedSupplements.id, "Iron Supplements", "130.00", 70, "1 strip");
-  await createProduct("prod_sup_5", storeBId, medicalCategory.id, subMedSupplements.id, "Protein Powder", "950.00", 20, "500 g");
+    // Medical (Supplements)
+    { id: "prod_sup_1", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Vitamin C 500mg", price: "110.00", stockQty: 90, unit: "1 strip" },
+    { id: "prod_sup_2", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Multivitamin Capsules", price: "250.00", stockQty: 60, unit: "1 bottle" },
+    { id: "prod_sup_3", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Calcium + D3", price: "140.00", stockQty: 80, unit: "1 strip" },
+    { id: "prod_sup_4", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Iron Supplements", price: "130.00", stockQty: 70, unit: "1 strip" },
+    { id: "prod_sup_5", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Protein Powder", price: "950.00", stockQty: 20, unit: "500 g" },
 
-  // -------------------------
-  // PRODUCTS - Medical Tests
-  // -------------------------
-  await createProduct("prod_test_1", storeBId, medicalTestsCategory.id, subMedTestsAll.id, "CBC (Complete Blood Count)", "300.00", 999, "Test");
-  await createProduct("prod_test_2", storeBId, medicalTestsCategory.id, subMedTestsAll.id, "HbA1c", "550.00", 999, "Test");
+    // Medical Tests (Sample)
+    { id: "prod_test_1", storeId: storeBId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "CBC (Complete Blood Count)", price: "300.00", stockQty: 999, unit: "Test" },
+    { id: "prod_test_2", storeId: storeBId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "HbA1c", price: "550.00", stockQty: 999, unit: "Test" }
+  ];
+
+  console.info(`Seeding ${productData.length} products in chunks of 5...`);
+  const chunkSize = 5;
+  for (let i = 0; i < productData.length; i += chunkSize) {
+    const chunk = productData.slice(i, i + chunkSize);
+    await Promise.all(
+      chunk.map((p) => createProduct(p.id, p.storeId, p.categoryId, p.subCategoryId, p.name, p.price, p.stockQty, p.unit))
+    );
+  }
 
   // -------------------------
   // ADVERTISEMENTS

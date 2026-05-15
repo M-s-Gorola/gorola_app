@@ -54,4 +54,6 @@ Implemented a `useEffect` hook in `SubCategoryGrid` that detects when only one s
 - **Solution:** Added `OTEL_ENABLED: 'false'` to `playwright.config.ts` and added a 10s failsafe to `app.ts` shutdown.
 - **Problem:** "Medical tests" category was hidden in UI.
 - **Solution:** Removed hardcoded filter list in `CategoryGrid.tsx`.
-- **Result:** E2E suite is now 100% stable and the "Smart Redirect" logic is verified.
+- **Problem:** Seeding to Railway (staging) was slow and caused `Timed out fetching a new connection from the connection pool` (P2024).
+- **Solution:** Refactored `seed-medical-tests.ts` and `dummy-data.ts` to use **Chunked Parallel Seeding** (batches of 5). This bypasses network latency without exceeding the database connection limit.
+- **Result:** E2E suite is stable, and remote seeding is now fast and reliable.
