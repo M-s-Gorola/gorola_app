@@ -10,7 +10,10 @@ export function getRedisClient(): Redis | null {
 
   if (!redisSingleton) {
     redisSingleton = new Redis(redisUrl, {
-      lazyConnect: true
+      lazyConnect: true,
+      maxRetriesPerRequest: 3,
+      connectTimeout: 5000,
+      enableOfflineQueue: false // Fail fast if not connected
     });
   }
 
@@ -19,7 +22,8 @@ export function getRedisClient(): Redis | null {
 
 export async function disconnectRedis(): Promise<void> {
   if (redisSingleton) {
-    await redisSingleton.quit();
+    // Use disconnect() for immediate closure during teardown
+    redisSingleton.disconnect();
     redisSingleton = null;
   }
 }

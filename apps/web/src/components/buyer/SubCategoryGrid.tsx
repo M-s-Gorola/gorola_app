@@ -95,6 +95,12 @@ export function SubCategoryGrid({ categorySlug }: { categorySlug: string }): Rea
     };
   }, [subCategories.length]);
 
+  useEffect(() => {
+    if (subCategories.length === 1 && subCategories[0]?.slug) {
+      navigate(`/categories/${categorySlug}/${subCategories[0].slug}`, { replace: true });
+    }
+  }, [subCategories, categorySlug, navigate]);
+
   if (subCategoriesQuery.isLoading) {
     return (
       <section aria-label="SubCategory grid" className="space-y-3">

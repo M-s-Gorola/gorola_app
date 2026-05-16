@@ -9,7 +9,7 @@ export async function warmupExternalConnections(): Promise<void> {
   await getPrismaClient().$connect();
 
   const redis = getRedisClient();
-  if (redis !== null) {
+  if (redis !== null && process.env.NODE_ENV !== "test") {
     if (redis.status !== "ready") {
       await redis.connect();
     }

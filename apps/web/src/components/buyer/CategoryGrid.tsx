@@ -30,7 +30,7 @@ async function fetchCategories(): Promise<CategoryDto[]> {
   if (payload.success !== true || payload.data === undefined) {
     throw new Error("Invalid category response");
   }
-  return payload.data.filter((category) => category.slug === "groceries" || category.slug === "medical");
+  return payload.data;
 }
 
 export function CategoryGrid(): ReactElement {

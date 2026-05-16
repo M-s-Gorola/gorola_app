@@ -78,7 +78,8 @@ export default defineConfig({
         HOST: '127.0.0.1',
         PORT: '3002',
         GOROLA_DUMMY_OTP: '123456',
-        NODE_ENV: 'test'
+        NODE_ENV: 'test',
+        OTEL_ENABLED: 'false'
       }
     },
   ],
