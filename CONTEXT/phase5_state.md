@@ -1,4 +1,4 @@
-﻿# GoRola — Phase 5 State (Rider Interface)
+# GoRola — Phase 5 State (Rider Interface)
 
 > **This file covers Phase 5: the Rider Interface.**
 > Phase 5 can start independently of Phase 3 and 4 — it only requires Phase 2 backend infrastructure.
@@ -25,6 +25,24 @@
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 5 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
 
+
+## ⚠️ Booking Commerce Awareness (READ BEFORE STARTING PHASE 5)
+
+Phase 7 introduces `BOOKING_COMMERCE` stores (Medical Tests, Repairs). For these stores, a **field technician** visits the buyer's home at a scheduled timeslot — they do NOT carry goods from a store. The rider app becomes a **dual-mode app**:
+
+| Mode | Triggered by | What they do |
+|---|---|---|
+| **Delivery mode** | Order has `orderType: QUICK` | Rider picks up goods from store, delivers to buyer |
+| **Field visit mode** | Order has `orderType: BOOKING` | Technician goes directly to buyer's address at scheduled time; no pickup from store |
+
+**Implementation approach (Recommended — simpler):**
+- One app (`apps/web/src/pages/rider/`), one JWT role (`RIDER`), one login page.
+- `DeliveryRider` model already exists. Add `riderType: RiderType` enum (`DELIVERY | FIELD_TECHNICIAN`).
+- The `RiderOrdersPage` detects `order.orderType` and renders different UI: delivery orders show pickup address + drop address; booking orders show only the buyer's address and the scheduled timeslot.
+- **Section 5.1–5.6** build the core delivery rider app as planned. **Section 5.7** (new) adds the field technician mode on top.
+- **Do not build a separate app.** The cost is not worth it for v1.
+
+---
 
 ## Architecture
 
@@ -239,6 +257,61 @@ Rider interface needs to be mobile-first (riders use smartphones). The layout mu
   - [ ] Click "Mark as Delivered" → DB status = DELIVERED → buyer sees delivered state
   - [ ] Location update: mock `navigator.geolocation` → PUT location called with valid lat/lng → 200 response
   - [ ] Unauth access to `/rider/orders` redirects to `/rider/login`
+
+---
+
+### 5.7 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
+
+> ⚠️ **Prerequisite: Phase 7.1 (Schema Migration) must be complete before starting 5.7.**
+> The `BookingOrder` table, `OrderType` enum, and `riderType` field on `DeliveryRider` must exist in the DB.
+
+**Root Cause / Goal:**
+When Phase 7 goes live, booking orders (`orderType: BOOKING`) will be assigned to `FIELD_TECHNICIAN` type riders. These riders do not pick up from a store — they go directly to the buyer's home at a scheduled timeslot. The current `RiderOrdersPage` only handles delivery orders. It must detect `order.orderType` and render the correct UI for each.
+
+**Fix / Approach:**
+1. [Schema] `DeliveryRider` already has `storeId`. Add `riderType RiderType @default(DELIVERY)` where `RiderType` is a new enum `{ DELIVERY, FIELD_TECHNICIAN }`. Migration in Phase 7.1.
+2. [Backend] Update `GET /api/v1/rider/orders/active` to also return `APPROVED` booking orders (not just `PREPARING`/`OUT_FOR_DELIVERY`) when rider is a `FIELD_TECHNICIAN`.
+3. [Backend] Booking order status transitions for field technicians: `APPROVED → OUT_FOR_DELIVERY` (technician departed) → `DELIVERED` (visit complete). Same `PUT /api/v1/rider/orders/:id/status` endpoint; just different valid transitions.
+4. [Frontend] In `RiderOrdersPage`, check `order.orderType`. If `BOOKING`, render field-visit card; if `QUICK`, render delivery card.
+
+---
+
+- [ ] **RED — Integration (`rider.field-technician.test.ts` — new file):**
+  - [ ] Test setup: `FIELD_TECHNICIAN` type rider seeded. A `BookingOrder` with `approvalStatus: APPROVED`, `scheduledDate: tomorrow`, `timeslot: '09:00-11:00'` attached to an `Order` with `orderType: BOOKING` and `status: APPROVED`
+  - [ ] Test: `GET /api/v1/rider/orders/active` with `FIELD_TECHNICIAN` JWT → HTTP 200; response includes the APPROVED booking order with fields `{ id, orderType: 'BOOKING', bookingOrder: { scheduledDate, timeslot, requiresFasting }, deliveryAddress: { landmark, lat, lng } }`
+  - [ ] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → booking orders are **absent** (delivery riders only see QUICK orders)
+  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (technician departed) → HTTP 200; `Order.status = OUT_FOR_DELIVERY` in DB; buyer receives `order_status_changed` Socket.IO event
+  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'DELIVERED' }` (visit complete) → HTTP 200; `Order.status = DELIVERED`; `BookingOrder.approvalStatus = COMPLETED` in DB
+  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (technicians cannot cancel)
+  - [ ] **Run — confirm RED (endpoint returns 404 or ignores booking orders).**
+
+- [ ] **GREEN — Backend (Schema → Service → Controller):**
+  - [ ] [Schema] Confirm `riderType RiderType @default(DELIVERY)` exists on `DeliveryRider` (added in Phase 7.1 migration). If Phase 7.1 is not yet done, **stop here and complete 7.1 first**.
+  - [ ] [Service] Update `RiderOrderService.getActiveOrders(storeId, riderId)` in `rider-order.service.ts`:
+    - Fetch the rider row to get `riderType`
+    - If `DELIVERY`: filter `Order` where `orderType = QUICK` AND `status IN [PREPARING, OUT_FOR_DELIVERY]` — unchanged behaviour
+    - If `FIELD_TECHNICIAN`: filter `Order` where `orderType = BOOKING` AND `status IN [APPROVED, OUT_FOR_DELIVERY]`; include `bookingOrder { scheduledDate, timeslot, requiresFasting }` in the response
+  - [ ] [Service] Update `RiderOrderService.updateOrderStatus` to allow `APPROVED → OUT_FOR_DELIVERY → DELIVERED` transitions for booking orders (in addition to existing PREPARING → OUT_FOR_DELIVERY → DELIVERED for quick orders). When a booking order reaches `DELIVERED`, also update `BookingOrder.approvalStatus = COMPLETED` in the same DB transaction.
+  - [ ] Run integration tests — **confirm GREEN.**
+
+- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests for booking cards):**
+  - [ ] Test: when `order.orderType === 'BOOKING'`, the order card renders `data-testid="booking-order-card"` (not `data-testid="delivery-order-card"`)
+  - [ ] Test: booking card shows `scheduledDate` formatted as `"Mon, 19 May"`, `timeslot` as `"09:00 – 11:00"`, and a fasting banner `"⚠️ Patient must be fasting"` when `requiresFasting: true`
+  - [ ] Test: booking card shows only the buyer's delivery address (no "Pick up from store" section)
+  - [ ] Test: booking card in `APPROVED` status shows "Mark as Departed" button (not "Mark as Out for Delivery")
+  - [ ] Test: clicking "Mark as Departed" calls `PUT /api/v1/rider/orders/:id/status` with `{ status: 'OUT_FOR_DELIVERY' }`
+  - [ ] Test: booking card in `OUT_FOR_DELIVERY` status shows "Mark Visit Complete" button
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend:**
+  - [ ] [Types] Add `orderType: 'QUICK' | 'BOOKING'` and `bookingOrder?: { scheduledDate: string; timeslot: string; requiresFasting: boolean }` to the `RiderOrder` type in `RiderOrdersPage.tsx`
+  - [ ] [Component] In `RiderOrdersPage.tsx`, replace the single card renderer with a conditional: `order.orderType === 'BOOKING' ? <BookingVisitCard> : <DeliveryOrderCard>`
+  - [ ] [Component] Create `BookingVisitCard` sub-component (inline or separate file): shows scheduled date + timeslot + fasting banner + buyer address + action button based on current status
+  - [ ] [Component] `DeliveryOrderCard` is the existing card renamed — no logic changes
+  - [ ] Run unit tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Field technician logs into rider app → `/rider/orders` shows a booking visit card with scheduled time "09:00–11:00 tomorrow" and a fasting warning → taps "Mark as Departed" → buyer's order page updates to "Technician is on the way" → technician arrives, taps "Mark Visit Complete" → buyer's order page shows "Visit Completed" → `BookingOrder.approvalStatus = COMPLETED` in DB → ✅ Done.
 
 ---
 
