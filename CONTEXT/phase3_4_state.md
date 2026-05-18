@@ -1,4 +1,4 @@
-﻿# GoRola — Phase 3 & 4 State
+# GoRola — Phase 3 & 4 State
 
 > **This file covers Phase 3 (Store Owner Panel) and Phase 4 (Admin Panel).**
 > Phase 3 starts after Phase 2.23 is complete. Phase 4 starts after Phase 3 is complete.
@@ -30,6 +30,24 @@
 ## In Progress Right Now
 
 _(Nothing — Phase 3 has not started. Begin at Phase 3.1.)_
+
+---
+
+## ⚠️ Booking Commerce Awareness (READ BEFORE STARTING PHASE 3)
+
+GoRola now supports **two store types** (introduced in Phase 7):
+
+| `StoreType` | Examples | Order flow |
+|---|---|---|
+| `QUICK_COMMERCE` | Groceries, Medical Store, Electronics | Instant cart → place order → rider delivers |
+| `BOOKING_COMMERCE` | Medical Tests, Repairs | Browse → pick timeslot → book → store approves → field staff visits |
+
+**What this means for Phase 3 and 4:**
+- Every store owner dashboard, order list, and product form built here works for **BOTH** store types.
+- The approval queue, timeslot engine, and booking-specific fields are built in **Phase 7** — not here.
+- The only Phase 3 item that changes is **3.8a** (Store Availability Toggles — new section below). Build it here because the store dashboard is where these toggles live.
+- Phase 4.5 (Admin Store Management) must include `storeType` when creating a store — noted in that section.
+- Build everything generically now. Phase 7 layering will not require you to undo anything here.
 
 ---
 
@@ -442,6 +460,71 @@ Create `GET /api/v1/store/settings` and `PUT /api/v1/store/settings` for store p
 
 ---
 
+### 3.8a — Store & Service Availability Toggles
+
+**Root Cause / Goal:**
+Phase 7 introduces `BOOKING_COMMERCE` stores (Medical Tests, Repairs). Unlike quick commerce stores, a booking store or individual service can be turned off temporarily (e.g. lab technician on leave, equipment under maintenance). Buyers must not see unavailable stores or services in the UI. This applies to ALL store types — even a Groceries store may need to close for the day. This is the "on/off buttons" requirement.
+
+Two levels of control:
+1. **Store-level toggle** — `isAcceptingOrders` on `Store`. When `false`, the store's products are hidden from the buyer catalog entirely.
+2. **Variant-level toggle** — `isAvailableForBooking` on `ProductVariant` (booking stores only). When `false`, that specific service/test is hidden from buyers but the store remains visible.
+
+**Fix / Approach:**
+1. [Schema] Add `isAcceptingOrders Boolean @default(true)` to `Store`. Add `isAvailableForBooking Boolean @default(true)` to `ProductVariant`. Migration named `add_availability_toggles`.
+2. [Backend] Add `PUT /api/v1/store/availability` (store-level) and `PUT /api/v1/store/products/:id/variants/:variantId/availability` (variant-level). Update buyer `GET /api/v1/products` to filter `store.isAcceptingOrders = true` and `variant.isAvailableForBooking = true`.
+3. [Frontend] Add an "Availability" card to `StoreDashboardPage` with a prominent toggle switch.
+
+---
+
+- [ ] **RED — Integration (`store-owner.availability.test.ts` — new file):**
+  - [ ] Test setup: store with `isAcceptingOrders: true`, 2 active products each with 1 variant (`isAvailableForBooking: true`)
+  - [ ] Test: `PUT /api/v1/store/availability` with body `{ isAcceptingOrders: false }` with STORE_OWNER JWT → HTTP 200; `store.isAcceptingOrders = false` in DB
+  - [ ] Test: after toggling store off, `GET /api/v1/products?categoryId=<id>` (buyer endpoint) → returns **0 products** for this store (store is hidden from buyers)
+  - [ ] Test: `PUT /api/v1/store/availability` with body `{ isAcceptingOrders: true }` → HTTP 200; products visible again in buyer catalog
+  - [ ] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/availability` with body `{ isAvailableForBooking: false }` → HTTP 200; `variant.isAvailableForBooking = false` in DB
+  - [ ] Test: after toggling variant off, `GET /api/v1/products/:productId` (buyer endpoint) → that specific variant **absent** from the `variants` array in the response
+  - [ ] Test: `PUT /api/v1/store/availability` with BUYER JWT → HTTP 403 `FORBIDDEN`
+  - [ ] Test: `PUT .../variants/<variantId>/availability` for a variant belonging to a different store → HTTP 403 `FORBIDDEN`
+  - [ ] **Run — confirm RED (endpoints do not exist; 404).**
+
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] Add `isAcceptingOrders Boolean @default(true)` to `Store` model in `schema.prisma`
+  - [ ] [Schema] Add `isAvailableForBooking Boolean @default(true)` to `ProductVariant` model in `schema.prisma`
+  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_availability_toggles`. Apply to test DB: `pnpm --filter @gorola/api prisma:migrate:test-db`
+  - [ ] [Repository] In `store.repository.ts`, add `setAcceptingOrders(storeId: string, value: boolean): Promise<Store>` — simple `prisma.store.update`
+  - [ ] [Repository] In `variant.repository.ts` (or `product.repository.ts`), add `setVariantAvailability(variantId: string, value: boolean): Promise<ProductVariant>`
+  - [ ] [Repository] In `product.repository.ts`, update `listForBuyer()` to add `store: { isAcceptingOrders: true }` filter in the Prisma `where` clause
+  - [ ] [Repository] In `product.repository.ts`, update `getDetailForBuyer()` to filter `variants` to only those where `isAvailableForBooking: true AND isActive: true`
+  - [ ] [Service] Add `setStoreAvailability(storeId: string, value: boolean)` to `store-owner.service.ts` — calls `StoreRepository.setAcceptingOrders`
+  - [ ] [Service] Add `setVariantAvailability(storeId: string, productId: string, variantId: string, value: boolean)` to `store-owner.service.ts` — validates product ownership, calls repository
+  - [ ] [Controller] Add handler for `PUT /api/v1/store/availability` in `store-owner.controller.ts` — Zod body: `{ isAcceptingOrders: z.boolean() }`; calls service; returns updated store
+  - [ ] [Controller] Add handler for `PUT /api/v1/store/products/:productId/variants/:variantId/availability` — Zod body: `{ isAvailableForBooking: z.boolean() }`; calls service
+  - [ ] [Routes] Register both routes with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
+  - [ ] Run integration tests — **confirm GREEN.**
+
+- [ ] **RED — Unit/Component (`StoreDashboardPage.test.tsx` — additional tests):**
+  - [ ] Test: renders an "Availability" card with `data-testid="store-availability-toggle"` — a toggle switch showing current `isAcceptingOrders` state (ON = green, OFF = red)
+  - [ ] Test: toggling the switch to OFF opens a confirmation modal with text "Hiding your store will remove all your products from the buyer app. Are you sure?"
+  - [ ] Test: confirming the modal calls `PUT /api/v1/store/availability` with `{ isAcceptingOrders: false }` and shows a toast "Store is now hidden from buyers"
+  - [ ] Test: while the API call is pending, the toggle is disabled (prevents double-click)
+  - [ ] **Run — confirm RED (no availability card exists in dashboard yet).**
+
+- [ ] **RED — Unit/Component (`StoreProductsPage.test.tsx` — additional tests):**
+  - [ ] Test: each variant row in the product list has an "Available" toggle switch (`data-testid="variant-availability-toggle-<variantId>"`)
+  - [ ] Test: toggling a variant to unavailable calls `PUT /api/v1/store/products/:id/variants/:variantId/availability` with `{ isAvailableForBooking: false }`
+  - [ ] Test: an unavailable variant row shows a "Hidden from buyers" pill badge in amber/orange color
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend:**
+  - [ ] [Component] In `StoreDashboardPage.tsx`, add an "Availability" card above the KPI cards: large toggle switch, store name, current status text ("Accepting orders" / "Hidden from buyers"), last-toggled timestamp
+  - [ ] [Component] In `StoreProductsPage.tsx`, add an "Available" toggle per variant row. Booking-commerce stores show this prominently; quick-commerce stores show it as a smaller secondary control
+  - [ ] Run all unit tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Store owner opens dashboard → sees green "Accepting Orders" toggle → taps it → confirmation modal → confirms → toggle turns red → buyer app immediately shows 0 products for this store → store owner taps again → toggle turns green → products reappear for buyers → ✅ Done.
+
+---
+
 ### 3.9 — Inventory Management (Stock Movements)
 
 **Root Cause / Goal:**
@@ -666,34 +749,43 @@ No admin user management endpoints exist. Admin needs to search buyers by phone 
 **Root Cause / Goal:**
 Admin needs to create new stores (with an auto-created store owner account), view all stores, see a per-store detail page, and suspend/unsuspend stores. Suspending a store hides all its products from the buyer catalog and blocks new orders.
 
+> **Phase 7 impact:** Every store must have a `storeType` — either `QUICK_COMMERCE` (groceries, medical store, electronics) or `BOOKING_COMMERCE` (medical tests, repairs). This is set at creation time by the admin and cannot be changed later without a data migration. `storeType` controls the entire order flow for that store. The `storeType` field **must be included in the create-store form and API** even though Phase 7 is not built yet — it future-proofs the schema.
+
 ---
 
 - [ ] **RED — Integration (`admin.stores.test.ts`):**
-  - [ ] Test: `POST /api/v1/admin/stores` with body `{ storeName: 'New Store', description: '...', phone: '+919000000000', landmarkAddress: '...', ownerEmail: 'owner@test.com', ownerTempPassword: 'TempPass123!' }` → HTTP 201 with `{ storeId, ownerId }`; both `Store` and `StoreOwner` rows created in DB atomically
+  - [ ] Test: `POST /api/v1/admin/stores` with body `{ storeName: 'New Store', description: '...', phone: '+919000000000', landmarkAddress: '...', storeType: 'QUICK_COMMERCE', ownerEmail: 'owner@test.com', ownerTempPassword: 'TempPass123!' }` → HTTP 201 with `{ storeId, storeType: 'QUICK_COMMERCE', ownerId }`; both `Store` and `StoreOwner` rows created in DB atomically; `store.storeType = 'QUICK_COMMERCE'` confirmed in DB
+  - [ ] Test: `POST /api/v1/admin/stores` with body containing `storeType: 'BOOKING_COMMERCE'` → HTTP 201; `store.storeType = 'BOOKING_COMMERCE'` in DB
+  - [ ] Test: `POST /api/v1/admin/stores` with `storeType` omitted → HTTP 400 `VALIDATION_ERROR` (storeType is required — no guessing)
+  - [ ] Test: `POST /api/v1/admin/stores` with `storeType: 'INVALID_TYPE'` → HTTP 400 `VALIDATION_ERROR`
   - [ ] Test: `POST /api/v1/admin/stores` with duplicate `ownerEmail` → HTTP 409 `CONFLICT`
-  - [ ] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, ownerEmail, orderCount, revenue, productCount, status }`
-  - [ ] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail with orders list, products list, revenue chart data, ads list
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/suspend` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?storeId=<storeId>` (buyer endpoint) returns empty array
+  - [ ] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, status }`
+  - [ ] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail including `storeType` field
+  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/suspend` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
   - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/unsuspend` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
   - [ ] Test: all store create/suspend/unsuspend actions create `AuditLog` entries
   - [ ] **Run — confirm RED**
 
 - [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `createStore(dto, adminId)` (transaction: create Store + StoreOwner with hashed temp password + audit log), `getStores()`, `getStoreDetail(storeId)`, `suspendStore(storeId, adminId)`, `unsuspendStore(storeId, adminId)` to `admin.service.ts`
-  - [ ] [Controller] Add `POST /api/v1/admin/stores`, `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/suspend`, `PUT /api/v1/admin/stores/:id/unsuspend` with `requireAuth` + `requireRole('ADMIN')`
+  - [ ] [Schema] Confirm `storeType StoreType @default(QUICK_COMMERCE)` exists on `Store` model and `enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE }` exists in `schema.prisma`. **This is added in Phase 7.1.** If working on Phase 4.5 before Phase 7.1: add the enum and field now with a migration named `add_store_type`. Do not wait for Phase 7.
+  - [ ] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `suspendStore(storeId, adminId)`, `unsuspendStore(storeId, adminId)`.
+  - [ ] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/suspend`, `PUT /api/v1/admin/stores/:id/unsuspend` with `requireAuth` + `requireRole('ADMIN')`
   - [ ] Run integration tests — **confirm GREEN**
 
 - [ ] **RED — Unit/Component (`AdminStoresPage.test.tsx`):**
-  - [ ] Test: table with "Store Name", "Owner Email", "Orders", "Revenue", "Products", "Status" columns
-  - [ ] Test: "Add Store" form: store name, description, phone, landmark address, owner email, temp password fields — all required; submitting calls `POST /api/v1/admin/stores`
+  - [ ] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Status" columns
+  - [ ] Test: "Add Store" form has a required `storeType` radio group with two options: "Quick Commerce (groceries, medicines, electronics)" and "Booking Commerce (tests, repairs)"; submitting without selecting one shows validation error "Store type is required"
+  - [ ] Test: submitting a valid form with `storeType: 'BOOKING_COMMERCE'` calls `POST /api/v1/admin/stores` with `{ storeType: 'BOOKING_COMMERCE', ... }` in the request body
+  - [ ] Test: the store type badge in the table shows "Quick" in pine-green and "Booking" in amber so admins can distinguish at a glance
   - [ ] Test: clicking store row navigates to `/admin/stores/:id`
+  - [ ] Test: store detail page shows `storeType` prominently so admins know which order flow applies
   - [ ] Test: suspend button shows confirmation modal before calling API; after suspend, status badge changes to "Suspended"
   - [ ] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx`; run unit tests — **confirm GREEN**
+- [ ] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` field. Add `storeType` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
 
 - [ ] **Verification chain:**
-  - [ ] Admin creates store + owner → new store owner logs in with temp password → admin suspends store → buyer catalog shows no products from that store → admin unsuspends → products visible again → ✅
+  - [ ] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin suspends store → buyer catalog shows 0 products from that store → admin unsuspends → products reappear → ✅
 
 ---
 

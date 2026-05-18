@@ -19,6 +19,7 @@
 | Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | ✅ COMPLETE    | 2.1–2.23 complete. **File locked.** |
 | Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | 🔴 NOT STARTED | Start after Phase 2 complete |
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | 🔴 NOT STARTED | Independent of Phase 3 & 4 |
+| Phase 7 | [`phase7_state.md`](./phase7_state.md) | 🔴 NOT STARTED | Independent — Booking Commerce |
 
 ---
 
@@ -31,6 +32,7 @@
 | Phase 3 | Store Owner Panel    | 🔴 NOT STARTED | After Phase 2 complete |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete |
 | Phase 5 | Rider Interface      | 🔴 NOT STARTED | Independent — can start any time after Phase 2 |
+| Phase 7 | Booking Commerce     | 🔴 NOT STARTED | Independent — can start any time after Phase 2 |
 
 ---
 
