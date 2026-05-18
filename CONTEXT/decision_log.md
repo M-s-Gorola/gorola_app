@@ -1010,3 +1010,31 @@ The only booking-specific fields — `allowedTimeslots String[]` and `requiresFa
 1. Separate `Service` + `ServiceVariant` tables — rejected: ~90% field duplication, doubles repository/service/controller/frontend-type surface area, breaks the unified buyer browse experience.
 2. Abstract base table with `Product` and `Service` inheriting from it — rejected: Prisma does not support table inheritance; would require complex manual joins or union queries.
 3. JSON `metadata` field on `Product` for booking-specific config — rejected: loses type safety, makes Prisma queries against `allowedTimeslots` impossible, harder to validate in Zod.
+
+---
+
+## [DECISION-034] Strict Store Type Isolation (No Hybrid Stores)
+
+**Date:** 2026-05-19
+**Status:** Accepted
+
+**Context:**
+A business or merchant (e.g., "Electrico" or a pharmacy/clinic) may offer both physical products suitable for immediate delivery (like light bulbs, chargers, standard painkillers) and appointment-based services (like AC repair, home electrical troubleshooting, home diagnostic lab tests). We needed to decide if a single `Store` record could act as a "hybrid" (supporting both `QUICK_COMMERCE` and `BOOKING_COMMERCE` simultaneously) or if stores must be strictly separated.
+
+**Decision:**
+Enforce strict store type isolation at the database and application levels. A single `Store` entity must have exactly one `storeType` (`QUICK_COMMERCE` or `BOOKING_COMMERCE`). If a merchant offers both physical items and scheduled services, they register **two separate stores** under the GoRola catalog:
+1. **Electrico** (Store Type: `QUICK_COMMERCE`): Manage quick physical deliveries (chargers, cords, plugs).
+2. **Electrico Services** (Store Type: `BOOKING_COMMERCE`): Manage appointment scheduling and dispatch field technicians (AC repair, rewiring).
+
+**Rationale:**
+- **Operational & Dashboard Clarity**: The merchant interface needs to support entirely different operational workflows for quick-commerce (packaging, matching with active riders, immediate stock updates) vs. booking-commerce (calendar views, technician availability, slot assignment, manual approval queues). Combining these would clutter the store dashboard under conflicting paradigms.
+- **Cart & Checkout Simplicity**: A hybrid store introduces major cart collision risks. If a buyer places a physical light bulb and an AC repair service in the same cart, the checkout pipeline would have to calculate dynamic delivery fees for the bulb (quick) while zeroing fees and gathering a date/time for the repair (booking). This would require splitting a single order into multiple delivery pipelines, introducing massive database tracking and state machine overhead.
+- **Buyer UX Gating**: By using separate stores, the buyer is guided into the correct visual flow: clicking "Electronics" shows a retail shop interface, whereas clicking "Repairs" shows a calendar scheduling interface.
+
+**Tradeoffs:**
+- Merchants must manage two profiles/dashboards if they provide both physical items and home services.
+- Slight data redundancy (e.g. duplicate merchant bank details, store locations, or contact information across both store profiles).
+
+**Alternatives Considered:**
+1. **Hybrid Stores with Order Splitting**: Allow a single store to list both types of variants. During checkout, if a mixed cart is detected, split it into separate `QUICK` and `BOOKING` orders. Rejected: massive overhead in the checkout service, complicates order matching, and increases developer cognitive load and bug rate.
+2. **Cart Blockers**: Allow hybrid stores, but reject checkout if the buyer has a mixed cart. Rejected: poor UX, as it doesn't solve the messy combined merchant dashboard problem.

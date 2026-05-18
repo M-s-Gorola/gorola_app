@@ -11,6 +11,8 @@ import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { useWeatherSync } from "@/hooks/useWeatherSync";
 import { bootstrapBuyerAuthSession } from "@/lib/api";
 import { createAppQueryClient } from "@/lib/query-client";
+import { BookingConfirmationPage } from "@/pages/buyer/BookingConfirmationPage";
+import { BookingTimeslotPage } from "@/pages/buyer/BookingTimeslotPage";
 import { CategoryPage } from "@/pages/buyer/CategoryPage";
 import { CheckoutPage } from "@/pages/buyer/CheckoutPage";
 import { HomePage } from "@/pages/buyer/HomePage";
@@ -165,6 +167,26 @@ export function App(): ReactElement {
             <ProtectedRoute>
               <BuyerLayout>
                 <CheckoutPage />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookings/new"
+          element={
+            <ProtectedRoute>
+              <BuyerLayout>
+                <BookingTimeslotPage />
+              </BuyerLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/bookings/:id"
+          element={
+            <ProtectedRoute>
+              <BuyerLayout>
+                <BookingConfirmationPage />
               </BuyerLayout>
             </ProtectedRoute>
           }
