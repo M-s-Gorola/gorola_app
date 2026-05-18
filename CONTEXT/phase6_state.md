@@ -57,3 +57,12 @@ Implemented a `useEffect` hook in `SubCategoryGrid` that detects when only one s
 - **Problem:** Seeding to Railway (staging) was slow and caused `Timed out fetching a new connection from the connection pool` (P2024).
 - **Solution:** Refactored `seed-medical-tests.ts` and `dummy-data.ts` to use **Chunked Parallel Seeding** (batches of 5). This bypasses network latency without exceeding the database connection limit.
 - **Result:** E2E suite is stable, and remote seeding is now fast and reliable.
+
+### 2026-05-18: Staging Deployment Mismatch Fix
+- **Problem:** The staging API was successfully updated and seeded with 3 active categories (including "Medical tests"), but the live staging website (`gorola-staging.vercel.app`) was still rendering only 2 categories (Groceries and Medical).
+- **Investigation:** 
+  1. Verified that the staging database successfully holds the new "Medical tests" category and all 77 products, and that the staging API is returning all 3 categories in the browser network panel.
+  2. Inspected `.github/workflows/deploy-vercel.yml` and found a configuration mismatch: for the `staging` environment, Vercel was deploying without the `--prod` flag (`vercel deploy --yes`).
+  3. In a multi-project Vercel setup (where staging and production are separate Vercel projects), deploying without `--prod` only creates a Preview deployment and does not update the project's production domain (`gorola-staging.vercel.app`).
+- **Solution:** Modified `deploy-vercel.yml` to always use the `--prod` flag (`vercel deploy --prod --yes`) since staging and production are isolated by their respective `VERCEL_PROJECT_ID` environment variables.
+- **Result:** Pushing/merging to `develop` branch will now correctly promote the staging Vercel deployment to production for that project, updating the staging link (`gorola-staging.vercel.app`) immediately.
