@@ -75,8 +75,26 @@ const closeWithTelemetry = async (): Promise<void> => {
 
 ---
 
+## Principle 4: E2E Server Reuse Locally (`reuseExistingServer`)
+
+To prevent the Windows process teardown hang when running the E2E suite sequentially or inside automated quality runners (`pnpm ci:quality`) locally, the backend `webServer` block in `playwright.config.ts` must use `reuseExistingServer: !process.env.CI`.
+
+### The Conflict: The "Orphaned Port 3002" Paradox
+If `reuseExistingServer: false` is configured for the backend, Playwright is forced to spawn a new server process (`pnpm --filter @gorola/api dev`) on every local E2E run.
+* **On Windows**: Terminating the parent process group does not kill the child processes (`tsx watch` -> `node`). The actual API server is left orphaned and alive in the background holding Port `3002` open.
+* **Stream Pipe Leak**: Because the orphaned child processes are still alive, they hold open the standard output/error stream pipes (`stdout`/`stderr`). The parent terminal hangs **indefinitely** at the very end of the run waiting for these pipes to close.
+* **The Paradox**: If you run `pnpm test:e2e` standalone first, the server remains running on port `3002`. During a subsequent `pnpm ci:quality` run, the newly spawned duplicate server crashes immediately with `EADDRINUSE`. Since the duplicate server crashes on boot, there are no active stream pipes from a newly spawned child process tree during teardown. Playwright checks the health endpoint of the existing stale server, receives `200 OK`, runs the E2E tests, and exits **instantly without hanging**! However, if port `3002` is free, a fresh server starts successfully, leading to the orphaned process tree and the stream leak.
+
+### The Solution:
+Setting `reuseExistingServer: !process.env.CI` instructs Playwright to reuse the active E2E server on Port `3002` locally, completely avoiding the duplicate process spawning and the Windows stream hang.
+* **Why it is 100% Safe**: The backend is stateless, and the `gorola_test` database is reset and seeded during the E2E `globalSetup` phase anyway. Furthermore, since the backend runs via `tsx watch`, any source code changes you make will automatically hot-reload in the background.
+
+---
+
 ## Summary for Developers
 
 1. **Isolation**: Tests should not rely on graceful shutdowns; the environment is ephemeral.
 2. **Timeouts**: Every background connection (Redis, DB) must have a `connectTimeout` and `maxRetries` configured for test mode.
 3. **Deadlocks**: If a worker hangs, use `node --trace-exit` or `why-is-node-running` to identify the specific handle keeping the event loop alive.
+4. **Local Reuse**: Set `reuseExistingServer: !process.env.CI` for both frontend and backend to avoid duplicate process stream leaks on Windows.
+

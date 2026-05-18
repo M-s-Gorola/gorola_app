@@ -8,19 +8,26 @@ import { BookingOrderRepository } from "../../../modules/booking/booking-order.r
 import { BookingOrderService } from "../../../modules/booking/booking-order.service.js";
 
 async function cleanDatabase(db: PrismaClient): Promise<void> {
-  await db.bookingOrder.deleteMany().catch(() => {});
+  await db.stockMovement.deleteMany().catch(() => {});
   await db.orderStatusHistory.deleteMany().catch(() => {});
   await db.orderItem.deleteMany().catch(() => {});
-  await db.stockMovement.deleteMany().catch(() => {});
+  await db.bookingOrder.deleteMany().catch(() => {});
   await db.order.deleteMany().catch(() => {});
+  await db.discount.deleteMany().catch(() => {});
+  await db.cartItem.deleteMany().catch(() => {});
+  await db.cart.deleteMany().catch(() => {});
+  await db.address.deleteMany().catch(() => {});
+  await db.riderLocation.deleteMany().catch(() => {});
+  await db.deliveryRider.deleteMany().catch(() => {});
+  await db.advertisement.deleteMany().catch(() => {});
+  await db.offer.deleteMany().catch(() => {});
+  await db.user.deleteMany().catch(() => {});
   await db.productVariant.deleteMany().catch(() => {});
   await db.product.deleteMany().catch(() => {});
-  await db.subCategory.deleteMany().catch(() => {});
-  await db.category.deleteMany().catch(() => {});
-  await db.address.deleteMany().catch(() => {});
   await db.storeOwner.deleteMany().catch(() => {});
   await db.store.deleteMany().catch(() => {});
-  await db.user.deleteMany().catch(() => {});
+  await db.subCategory.deleteMany().catch(() => {});
+  await db.category.deleteMany().catch(() => {});
 }
 
 describe("BookingOrderService Integration", () => {

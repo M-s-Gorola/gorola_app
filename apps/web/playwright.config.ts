@@ -70,7 +70,7 @@ export default defineConfig({
         ? 'PORT=3002 pnpm --filter @gorola/api exec node dist/app.js' 
         : 'pnpm --filter @gorola/api dev',
       url: 'http://127.0.0.1:3002/api/health',
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       timeout: 180000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL_TEST!,
