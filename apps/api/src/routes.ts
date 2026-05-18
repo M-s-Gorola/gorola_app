@@ -10,6 +10,9 @@ import { AuthService } from "./modules/auth/auth.service.js";
 import { createBuyerTokenService } from "./modules/auth/buyer-token.service.js";
 import { resolveBuyerJwtKeyPair } from "./modules/auth/jwt-keys.js";
 import { createNoopOtpProvider } from "./modules/auth/noop-otp-provider.js";
+import { registerBookingRoutes } from "./modules/booking/booking.controller.js";
+import { BookingOrderRepository } from "./modules/booking/booking-order.repository.js";
+import { BookingOrderService } from "./modules/booking/booking-order.service.js";
 import { registerCartRoutes } from "./modules/cart/cart.controller.js";
 import { CartRepository } from "./modules/cart/cart.repository.js";
 import { registerCategoryRoutes } from "./modules/catalog/category.controller.js";
@@ -153,6 +156,14 @@ export function registerAppRoutes(app: FastifyInstance): void {
     orders: orderRepoOrders,
     tokenVerifier: tokenService,
     redis
+  });
+
+  const bookingRepo = new BookingOrderRepository(prisma);
+  const bookingService = new BookingOrderService(prisma, bookingRepo, orderEmitter);
+
+  registerBookingRoutes(app, {
+    bookingService,
+    tokenVerifier: tokenService
   });
 
   registerBuyerAddressRoutes(app, {
