@@ -124,6 +124,11 @@ Extend the Prisma schema (`apps/api/prisma/schema.prisma`) with the required enu
 - [ ] **Verification chain:**
   - [ ] Run seed verification script → verify new models can be queried and have all specified fields → ✅ Done.
 
+> **✅ After completing 7.1, mark these items as done in `phase3_4_state.md` section 4.5:**
+> - [x] `[Schema] Confirm storeType StoreType @default(QUICK_COMMERCE) exists on Store model` — done by migration `add_booking_commerce_schema`
+> - [x] `[Schema] Confirm enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE } exists in schema.prisma` — done by migration `add_booking_commerce_schema`
+> They are already in the DB. Whoever does Phase 4.5 skips straight to the `[Service]` step.
+
 ---
 
 ### 7.2 — Booking Order Service (Backend Core)
