@@ -14,6 +14,31 @@ enum OrderStatus {
   OUT_FOR_DELIVERY
   DELIVERED
   CANCELLED
+  PENDING_APPROVAL
+  APPROVED
+}
+
+enum StoreType {
+  QUICK_COMMERCE
+  BOOKING_COMMERCE
+}
+
+enum OrderType {
+  QUICK
+  BOOKING
+}
+
+enum BookingApprovalStatus {
+  PENDING_APPROVAL
+  APPROVED
+  REJECTED
+  COMPLETED
+  CANCELLED
+}
+
+enum RiderType {
+  DELIVERY
+  FIELD_TECHNICIAN
 }
 
 enum PaymentMethod {
@@ -66,6 +91,9 @@ model Store {
   address                   String
   isActive                  Boolean         @default(true)
   weatherModeDeliveryWindow String?
+  storeType                 StoreType       @default(QUICK_COMMERCE)
+  bookingLeadDays           Int             @default(1)
+  isAcceptingBookings       Boolean         @default(true)
   isDeleted                 Boolean         @default(false)
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
@@ -175,6 +203,8 @@ model ProductVariant {
   isInStock  Boolean     @default(true)
   unit       String
   isActive   Boolean     @default(true)
+  allowedTimeslots String[]
+  requiresFasting  Boolean     @default(false)
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
   product    Product     @relation(fields: [productId], references: [id], onDelete: Restrict)
@@ -234,6 +264,7 @@ model Order {
   userId              String
   storeId             String
   status              OrderStatus          @default(PLACED)
+  orderType           OrderType            @default(QUICK)
   subtotal            Decimal              @db.Decimal(10, 2)
   deliveryFee         Decimal              @db.Decimal(10, 2)
   total               Decimal              @db.Decimal(10, 2)
@@ -252,6 +283,7 @@ model Order {
   items               OrderItem[]
   statusHistory       OrderStatusHistory[]
   stockMovements      StockMovement[]
+  bookingOrder        BookingOrder?
 
   @@index([userId, createdAt])
   @@index([storeId, status, createdAt])
@@ -397,6 +429,7 @@ model DeliveryRider {
   phone     String
   storeId   String
   isActive  Boolean         @default(true)
+  riderType RiderType       @default(DELIVERY)
   isDeleted Boolean         @default(false)
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
@@ -415,4 +448,20 @@ model RiderLocation {
   rider     DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Cascade)
 
   @@index([riderId, updatedAt])
+}
+
+model BookingOrder {
+  id                   String                @id @default(cuid())
+  orderId              String                @unique
+  scheduledDate        DateTime
+  timeslot             String
+  requiresFasting      Boolean               @default(false)
+  approvalStatus       BookingApprovalStatus @default(PENDING_APPROVAL)
+  approvedAt           DateTime?
+  approvedByOwnerId    String?
+  rejectionReason      String?
+  assignedTechnicianId String?
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }

@@ -16,10 +16,10 @@
 
 ## 📍 Last Updated
 
-- **Date:** NOT STARTED
-- **Session Summary:** Phase 7 checklist fully drafted and formatted to the exact TDD guide spec. Ready to begin database migration.
-- **Next Session Must Start With:** Phase 7.1 — Schema Migration. Run prisma migrate for new booking enums, fields, and models.
-- **In Progress Right Now:** Nothing — Phase 7 has not started. Begin at Phase 7.1.
+- **Date:** 2026-05-19
+- **Session Summary:** Successfully completed Phase 7.1 — Schema Migration. Wrote RED integration test, added StoreType, OrderType, BookingApprovalStatus, and RiderType enums/fields to the database schema, ran migrations on dev/test DB, and confirmed GREEN test execution.
+- **Next Session Must Start With:** Phase 7.2 — Booking Order Service (Backend Core). Implement placeBookingRequest, approveBooking, rejectBooking, and cancelBookingByBuyer methods in repository and service.
+- **In Progress Right Now:** Ready for Phase 7.2.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 7 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -50,29 +50,29 @@ Extend the Prisma schema (`apps/api/prisma/schema.prisma`) with the required enu
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/modules/booking/booking-schema.integration.test.ts`):**
-  - [ ] Test: DB client can successfully insert a `BookingOrder` row with scheduledDate, timeslot, and `requiresFasting`.
-  - [ ] Test: `OrderStatus.PENDING_APPROVAL` and `OrderStatus.APPROVED` are successfully saved and queried as valid `OrderStatus` values.
-  - [ ] Test: A `ProductVariant` record with `requiresFasting: true` and `allowedTimeslots: ["06:00-09:00"]` is successfully stored and retrieved.
-  - [ ] Test: `StoreType.BOOKING_COMMERCE` is successfully saved on a `Store` record.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`apps/api/src/modules/booking/booking-schema.integration.test.ts`):**
+  - [x] Test: DB client can successfully insert a `BookingOrder` row with scheduledDate, timeslot, and `requiresFasting`.
+  - [x] Test: `OrderStatus.PENDING_APPROVAL` and `OrderStatus.APPROVED` are successfully saved and queried as valid `OrderStatus` values.
+  - [x] Test: A `ProductVariant` record with `requiresFasting: true` and `allowedTimeslots: ["06:00-09:00"]` is successfully stored and retrieved.
+  - [x] Test: `StoreType.BOOKING_COMMERCE` is successfully saved on a `Store` record.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Schema):**
-  - [ ] [Schema] Add `StoreType` enum to `schema.prisma`:
+- [x] **GREEN — Backend (Schema):**
+  - [x] [Schema] Add `StoreType` enum to `schema.prisma`:
     ```prisma
     enum StoreType {
       QUICK_COMMERCE
       BOOKING_COMMERCE
     }
     ```
-  - [ ] [Schema] Add `OrderType` enum to `schema.prisma`:
+  - [x] [Schema] Add `OrderType` enum to `schema.prisma`:
     ```prisma
     enum OrderType {
       QUICK
       BOOKING
     }
     ```
-  - [ ] [Schema] Add `BookingApprovalStatus` enum to `schema.prisma`:
+  - [x] [Schema] Add `BookingApprovalStatus` enum to `schema.prisma`:
     ```prisma
     enum BookingApprovalStatus {
       PENDING_APPROVAL
@@ -82,24 +82,24 @@ Extend the Prisma schema (`apps/api/prisma/schema.prisma`) with the required enu
       CANCELLED
     }
     ```
-  - [ ] [Schema] Add `RiderType` enum to `schema.prisma`:
+  - [x] [Schema] Add `RiderType` enum to `schema.prisma`:
     ```prisma
     enum RiderType {
       DELIVERY
       FIELD_TECHNICIAN
     }
     ```
-  - [ ] [Schema] Add `PENDING_APPROVAL` and `APPROVED` to the `OrderStatus` enum.
-  - [ ] [Schema] Add fields to `Store` model:
+  - [x] [Schema] Add `PENDING_APPROVAL` and `APPROVED` to the `OrderStatus` enum.
+  - [x] [Schema] Add fields to `Store` model:
     - `storeType` `StoreType` `@default(QUICK_COMMERCE)`
     - `bookingLeadDays` `Int` `@default(1)`
     - `isAcceptingBookings` `Boolean` `@default(true)`
-  - [ ] [Schema] Add fields to `ProductVariant` model:
+  - [x] [Schema] Add fields to `ProductVariant` model:
     - `allowedTimeslots` `String[]` (e.g. `["06:00-09:00","10:00-12:00"]`)
     - `requiresFasting` `Boolean` `@default(false)`
-  - [ ] [Schema] Add field to `DeliveryRider` model:
+  - [x] [Schema] Add field to `DeliveryRider` model:
     - `riderType` `RiderType` `@default(DELIVERY)`
-  - [ ] [Schema] Add `BookingOrder` model with relations:
+  - [x] [Schema] Add `BookingOrder` model with relations:
     ```prisma
     model BookingOrder {
       id                   String                @id @default(cuid())
@@ -117,12 +117,12 @@ Extend the Prisma schema (`apps/api/prisma/schema.prisma`) with the required enu
       order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
     }
     ```
-  - [ ] [Schema] Add relation `bookingOrder BookingOrder?` on the `Order` model.
-  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_booking_commerce_schema`. Apply to the test database.
-  - [ ] Run integration tests — **confirm GREEN**.
+  - [x] [Schema] Add relation `bookingOrder BookingOrder?` on the `Order` model.
+  - [x] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_booking_commerce_schema`. Apply to the test database.
+  - [x] Run integration tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Run seed verification script → verify new models can be queried and have all specified fields → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Run seed verification script → verify new models can be queried and have all specified fields → ✅ Done.
 
 > **✅ After completing 7.1, mark these items as done in `phase3_4_state.md` section 4.5:**
 > - [x] `[Schema] Confirm storeType StoreType @default(QUICK_COMMERCE) exists on Store model` — done by migration `add_booking_commerce_schema`
@@ -481,3 +481,9 @@ Write E2E test file `tests/e2e/booking-journey.spec.ts` using Playwright.
 ## Session Notes (Phase 7)
 
 _(Append new entries here — never delete old entries.)_
+
+### Session 1 — 2026-05-19 — Phase 7.1 Schema Migration
+- **Test File Location:** Located the integration tests at [booking-schema.integration.test.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/__tests__/integration/booking/booking-schema.integration.test.ts) because the Vitest configuration only matches patterns under `src/__tests__/**/*.test.ts`.
+- **Database Unique Constraints:** Handled parallel test race conditions by using hyper-unique phone numbers and entity slugs (e.g. `+9199999971xx` and `*-71`), ensuring zero test failures from shared DB state.
+- **Migration & Bootstrapping:** Successfully deployed `add_booking_commerce_schema` to the development DB, and synced the test DB via `pnpm --filter @gorola/api prisma:bootstrap:test`.
+- **Type Safety Polish:** Removed all initial `@ts-ignore` directives once the database client was generated with the new schema, achieving zero ESLint and TypeScript compilation errors.

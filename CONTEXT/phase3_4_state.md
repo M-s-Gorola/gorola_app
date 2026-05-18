@@ -767,7 +767,7 @@ Admin needs to create new stores (with an auto-created store owner account), vie
   - [ ] **Run — confirm RED**
 
 - [ ] **GREEN — Backend:**
-  - [ ] [Schema] Confirm `storeType StoreType @default(QUICK_COMMERCE)` exists on `Store` model and `enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE }` exists in `schema.prisma`. **This is added in Phase 7.1.** If working on Phase 4.5 before Phase 7.1: add the enum and field now with a migration named `add_store_type`. Do not wait for Phase 7.
+  - [x] [Schema] Confirm `storeType StoreType @default(QUICK_COMMERCE)` exists on `Store` model and `enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE }` exists in `schema.prisma`. **This is added in Phase 7.1.** If working on Phase 4.5 before Phase 7.1: add the enum and field now with a migration named `add_store_type`. Do not wait for Phase 7.
   - [ ] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `suspendStore(storeId, adminId)`, `unsuspendStore(storeId, adminId)`.
   - [ ] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/suspend`, `PUT /api/v1/admin/stores/:id/unsuspend` with `requireAuth` + `requireRole('ADMIN')`
   - [ ] Run integration tests — **confirm GREEN**
@@ -946,3 +946,6 @@ No admin audit log endpoint exists. Admin needs read-only access to all system a
 ## Session Notes (Phase 3 & 4)
 
 _(Append new entries here — never delete old entries.)_
+
+### Session 1 — 2026-05-19 — Schema Prep via Phase 7.1
+- **Section 4.5 Schema Confirmation:** Marked the `StoreType` database schema check as completed under Phase 4.5. The database migration `add_booking_commerce_schema` has successfully deployed `storeType StoreType @default(QUICK_COMMERCE)` and the `StoreType` enum. The developer working on Phase 4.5 can immediately proceed with service, controller, and UI creation, bypassing DB schema changes.
