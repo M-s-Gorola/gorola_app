@@ -28,15 +28,16 @@ export function StoreRoute({ children }: GuardProps): ReactElement {
   const accessToken = useAuthStore((s) => s.accessToken);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const role = useAuthStore((s) => s.role);
+  const twoFactorVerified = useAuthStore((s) => s.twoFactorVerified);
   const location = useLocation();
   if (isBootstrapPending) {
     return <p className="font-dm-sans text-sm text-gorola-slate">Restoring your session...</p>;
   }
-  if (!hasSession(accessToken)) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!hasSession(accessToken) || role !== "STORE_OWNER") {
+    return <Navigate to="/store/login" replace state={{ from: location }} />;
   }
-  if (role !== "STORE_OWNER") {
-    return <Navigate to="/" replace />;
+  if (twoFactorVerified !== true) {
+    return <Navigate to="/store/2fa" replace state={{ from: location }} />;
   }
   return <>{children}</>;
 }

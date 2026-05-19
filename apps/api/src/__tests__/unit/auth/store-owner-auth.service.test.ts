@@ -1,4 +1,4 @@
-import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { RateLimitError, UnauthorizedError } from "@gorola/shared";
 import { hash } from "bcryptjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -120,7 +120,7 @@ describe("StoreOwnerAuthService", () => {
       ).rejects.toBeInstanceOf(RateLimitError);
     });
 
-    it("should require totp code when 2FA is enabled", async () => {
+    it("should return requiresTwoFactor: true when 2FA is enabled and no totpCode is provided", async () => {
       const passwordHash = await hash("Password#123", 8);
       const owner: StoreOwner = {
         email: "owner@gorola.in",
@@ -133,12 +133,11 @@ describe("StoreOwnerAuthService", () => {
       storeOwnerRepository.findByEmail.mockResolvedValueOnce(owner);
       redis.get.mockResolvedValueOnce(null);
 
-      await expect(
-        service.login({
-          email: "owner@gorola.in",
-          password: "Password#123"
-        })
-      ).rejects.toBeInstanceOf(ValidationError);
+      const result = await service.login({
+        email: "owner@gorola.in",
+        password: "Password#123"
+      });
+      expect(result).toEqual({ requiresTwoFactor: true });
     });
 
     it("should throw UnauthorizedError for wrong totp code", async () => {

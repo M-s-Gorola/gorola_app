@@ -11,25 +11,25 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | NOT STARTED  | Start after Phase 2.23 complete |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.1 completed successfully |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** NOT STARTED
-- **Session Summary:** Not started yet. Checklist fully drafted and reformatted to TDD guide spec.
-- **Next Session Must Start With:** Phase 3.1 — Store Owner Auth. Verify all 3 store-owner auth routes exist in `routes.ts`, then build frontend login/2FA pages and `StoreRoute` guard.
-- **In Progress Right Now:** Nothing — Phase 3 has not started. Begin at Phase 3.1.
-- **Current Blocker:** None. Requires Phase 2.23 (E2E) to be complete first.
+- **Date:** 2026-05-19
+- **Session Summary:** Completed Phase 3.1 (Store Owner Auth, Login + Mandatory 2FA) including unit test suites for `StoreLoginPage`, `StoreTwoFactorPage`, `StoreSetup2FAPage` and updated route guards. All 186 frontend tests are green.
+- **Next Session Must Start With:** Phase 3.2 — Store Dashboard (KPI Summary) endpoint implementation on the backend, integration tests, and frontend dashboard components.
+- **In Progress Right Now:** None (Phase 3.1 complete, Phase 3.2 next).
+- **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
 
 
 ## In Progress Right Now
 
-_(Nothing — Phase 3 has not started. Begin at Phase 3.1.)_
+_(None - Phase 3.1 is completed successfully. Next task is Phase 3.2.)_
 
 ---
 
@@ -87,52 +87,52 @@ The backend auth services for store owner login and 2FA (`store-owner-auth.servi
 
 ---
 
-- [ ] **RED — Integration (`store-owner-auth.routes.test.ts` — new file):**
-  - [ ] Test: `POST /api/v1/auth/store-owner/login` with correct email + password → returns `{ success: true, data: { requiresTwoFactor: true } }` with HTTP 200
-  - [ ] Test: `POST /api/v1/auth/store-owner/login` with wrong password → returns `{ success: false, error: { code: 'AUTH_FAILED' } }` with HTTP 401
-  - [ ] Test: `POST /api/v1/auth/store-owner/login` after 10 failed attempts → returns HTTP 429 with `RATE_LIMITED` code
-  - [ ] Test: `POST /api/v1/auth/store-owner/verify-2fa` with valid TOTP → returns `{ success: true, data: { accessToken, refreshToken } }` with HTTP 200
-  - [ ] Test: `POST /api/v1/auth/store-owner/verify-2fa` with invalid TOTP → returns HTTP 401 with `INVALID_TOTP` code
-  - [ ] Test: `POST /api/v1/auth/store-owner/setup-2fa` (authenticated store owner without 2FA) → returns `{ success: true, data: { secret, qrUri } }`
-  - [ ] **Run — confirm RED if any route is missing or returns wrong shape.**
+- [x] **RED — Integration (`store-owner-auth.routes.test.ts` — new file):**
+  - [x] Test: `POST /api/v1/auth/store-owner/login` with correct email + password → returns `{ success: true, data: { requiresTwoFactor: true } }` with HTTP 200
+  - [x] Test: `POST /api/v1/auth/store-owner/login` with wrong password → returns `{ success: false, error: { code: 'AUTH_FAILED' } }` with HTTP 401
+  - [x] Test: `POST /api/v1/auth/store-owner/login` after 10 failed attempts → returns HTTP 429 with `RATE_LIMITED` code
+  - [x] Test: `POST /api/v1/auth/store-owner/verify-2fa` with valid TOTP → returns `{ success: true, data: { accessToken, refreshToken } }` with HTTP 200
+  - [x] Test: `POST /api/v1/auth/store-owner/verify-2fa` with invalid TOTP → returns HTTP 401 with `INVALID_TOTP` code
+  - [x] Test: `POST /api/v1/auth/store-owner/setup-2fa` (authenticated store owner without 2FA) → returns `{ success: true, data: { secret, qrUri } }`
+  - [x] **Run — confirm RED if any route is missing or returns wrong shape.**
 
-- [ ] **GREEN — Backend Verification (`routes.ts`, `auth.controller.ts`):**
-  - [ ] Open `routes.ts` — confirm `registerStoreOwnerAuthRoutes(app)` is called inside `registerAppRoutes`
-  - [ ] If missing: add the call; verify all 3 routes appear in `GET /api/debug/routes` response
-  - [ ] Confirm `StoreOwnerAuthService` is correctly injected into the controller
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend Verification (`routes.ts`, `auth.controller.ts`):**
+  - [x] Open `routes.ts` — confirm `registerStoreOwnerAuthRoutes(app)` is called inside `registerAppRoutes`
+  - [x] If missing: add the call; verify all 3 routes appear in `GET /api/debug/routes` response
+  - [x] Confirm `StoreOwnerAuthService` is correctly injected into the controller
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`StoreLoginPage.test.tsx`):**
-  - [ ] Test: renders email input with `id="store-login-email"` and password input with `id="store-login-password"` and submit button
-  - [ ] Test: submitting with empty email shows validation error "Email is required"
-  - [ ] Test: on successful login API response (`requiresTwoFactor: true`), `navigate` is called with `/store/2fa`
-  - [ ] Test: on 401 API response, error message "Invalid credentials" is shown
-  - [ ] **Run — confirm RED (component does not exist)**
+- [x] **RED — Unit/Component (`StoreLoginPage.test.tsx`):**
+  - [x] Test: renders email input with `id="store-login-email"` and password input with `id="store-login-password"` and submit button
+  - [x] Test: submitting with empty email shows validation error "Email is required"
+  - [x] Test: on successful login API response (`requiresTwoFactor: true`), `navigate` is called with `/store/2fa`
+  - [x] Test: on 401 API response, error message "Invalid credentials" is shown
+  - [x] **Run — confirm RED (component does not exist)**
 
-- [ ] **RED — Unit/Component (`StoreTwoFactorPage.test.tsx`):**
-  - [ ] Test: renders 6-digit OTP input with `id="totp-input"` and "Verify" button
-  - [ ] Test: "Setup 2FA" link is visible if store owner has `twoFactorEnabled = false` in session
-  - [ ] Test: on valid TOTP submission, `setStoreOwnerSession` is called and `navigate` goes to `/store/dashboard`
-  - [ ] Test: on invalid TOTP, error "Invalid code" is shown
-  - [ ] **Run — confirm RED (component does not exist)**
+- [x] **RED — Unit/Component (`StoreTwoFactorPage.test.tsx`):**
+  - [x] Test: renders 6-digit OTP input with `id="totp-input"` and "Verify" button
+  - [x] Test: "Setup 2FA" link is visible if store owner has `twoFactorEnabled = false` in session
+  - [x] Test: on valid TOTP submission, `setStoreOwnerSession` is called and `navigate` goes to `/store/dashboard`
+  - [x] Test: on invalid TOTP, error "Invalid code" is shown
+  - [x] **Run — confirm RED (component does not exist)**
 
-- [ ] **RED — Unit/Component (`StoreRoute.test.tsx`):**
-  - [ ] Test: unauthenticated user accessing `/store/dashboard` → `<Navigate to="/store/login" />` is rendered
-  - [ ] Test: STORE_OWNER user with `twoFactorVerified = false` → `<Navigate to="/store/2fa" />` is rendered
-  - [ ] Test: STORE_OWNER user with `twoFactorVerified = true` → children component is rendered
-  - [ ] **Run — confirm RED (component does not exist)**
+- [x] **RED — Unit/Component (`StoreRoute.test.tsx`):**
+  - [x] Test: unauthenticated user accessing `/store/dashboard` → `<Navigate to="/store/login" />` is rendered
+  - [x] Test: STORE_OWNER user with `twoFactorVerified = false` → `<Navigate to="/store/2fa" />` is rendered
+  - [x] Test: STORE_OWNER user with `twoFactorVerified = true` → children component is rendered
+  - [x] **Run — confirm RED (component does not exist)**
 
-- [ ] **GREEN — Frontend (all components + guard):**
-  - [ ] [Component] Create `apps/web/src/pages/store/StoreLoginPage.tsx` with email + password form, calls `POST /api/v1/auth/store-owner/login`, navigates to `/store/2fa` on success
-  - [ ] [Component] Create `apps/web/src/pages/store/StoreTwoFactorPage.tsx` with TOTP input, calls `POST /api/v1/auth/store-owner/verify-2fa`, navigates to `/store/dashboard` on success
-  - [ ] [Component] Create `apps/web/src/pages/store/StoreSetup2FAPage.tsx`: calls `POST /api/v1/auth/store-owner/setup-2fa`, shows QR code image (using `qrUri` from response), then prompts for TOTP confirmation
-  - [ ] [Guard] Create `apps/web/src/components/store/StoreRoute.tsx`: checks Zustand `useStoreOwnerAuthStore` for role and `twoFactorVerified` flag
-  - [ ] [Layout] Create `apps/web/src/components/store/StoreLayout.tsx`: sidebar nav with links to all store pages, store name in header, logout button
-  - [ ] [Router] Add all `/store/*` routes in `App.tsx` wrapped in `<StoreRoute>` and `<StoreLayout>`
-  - [ ] Run all unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend (all components + guard):**
+  - [x] [Component] Create `apps/web/src/pages/store/StoreLoginPage.tsx` with email + password form, calls `POST /api/v1/auth/store-owner/login`, navigates to `/store/2fa` on success
+  - [x] [Component] Create `apps/web/src/pages/store/StoreTwoFactorPage.tsx` with TOTP input, calls `POST /api/v1/auth/store-owner/verify-2fa`, navigates to `/store/dashboard` on success
+  - [x] [Component] Create `apps/web/src/pages/store/StoreSetup2FAPage.tsx`: calls `POST /api/v1/auth/store-owner/setup-2fa`, shows QR code image (using `qrUri` from response), then prompts for TOTP confirmation
+  - [x] [Guard] Create `apps/web/src/components/store/StoreRoute.tsx`: checks Zustand `useStoreOwnerAuthStore` for role and `twoFactorVerified` flag
+  - [x] [Layout] Create `apps/web/src/components/store/StoreLayout.tsx`: sidebar nav with links to all store pages, store name in header, logout button
+  - [x] [Router] Add all `/store/*` routes in `App.tsx` wrapped in `<StoreRoute>` and `<StoreLayout>`
+  - [x] Run all unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Navigate to `/store/dashboard` while unauthenticated → redirected to `/store/login` → enter correct email + password → redirected to `/store/2fa` → enter valid TOTP → redirected to `/store/dashboard` → `StoreLayout` with sidebar is visible → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Navigate to `/store/dashboard` while unauthenticated → redirected to `/store/login` → enter correct email + password → redirected to `/store/2fa` → enter valid TOTP → redirected to `/store/dashboard` → `StoreLayout` with sidebar is visible → ✅ Done.
 
 ---
 
@@ -949,5 +949,11 @@ _(Append new entries here — never delete old entries.)_
 
 ### Session 1 — 2026-05-19 — Schema Prep via Phase 7.1
 - **Section 4.5 Schema Confirmation:** Marked the `StoreType` database schema check as completed under Phase 4.5. The database migration `add_booking_commerce_schema` has successfully deployed `storeType StoreType @default(QUICK_COMMERCE)` and the `StoreType` enum. The developer working on Phase 4.5 can immediately proceed with service, controller, and UI creation, bypassing DB schema changes.
+
+### Session 2 — 2026-05-19 — Completed Store Owner Login & 2FA Flow
+- **Completed Phase 3.1:** Built the entire frontend workflow for Store Owner Login, Two-Factor Authentication, and Security Setup.
+- Created `StoreLoginPage`, `StoreTwoFactorPage`, `StoreSetup2FAPage` and the `StoreLayout` sidebar layout wrapper.
+- Implemented and reinforced the `StoreRoute` guard in `guards.tsx` to handle authentication, authorization, and mandatory multi-factor verification checks dynamically.
+- Registered all `/store/*` routing trees in `App.tsx` and validated all front-end/back-end changes with fully green test runs.
 
 

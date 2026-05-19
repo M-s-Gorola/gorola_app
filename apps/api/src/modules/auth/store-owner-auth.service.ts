@@ -1,4 +1,4 @@
-import { NotFoundError, RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { NotFoundError, RateLimitError, UnauthorizedError } from "@gorola/shared";
 import { compare } from "bcryptjs";
 
 export type StoreOwnerAuthServiceDependencies = {
@@ -67,7 +67,7 @@ export class StoreOwnerAuthService {
     email: string;
     password: string;
     totpCode?: string | undefined;
-  }): Promise<{ accessToken: string; refreshToken: string }> {
+  }): Promise<{ accessToken: string; refreshToken: string } | { requiresTwoFactor: true }> {
     const now = Date.now();
     const rateLimit = await this.readLoginRateLimit(input.email);
     if (rateLimit) {
@@ -102,7 +102,7 @@ export class StoreOwnerAuthService {
 
     if (owner.totpEnabled) {
       if (!input.totpCode) {
-        throw new ValidationError("TOTP code is required");
+        return { requiresTwoFactor: true };
       }
       if (!owner.totpSecret) {
         throw new UnauthorizedError("2FA is not configured");

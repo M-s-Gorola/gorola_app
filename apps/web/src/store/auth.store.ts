@@ -15,6 +15,11 @@ export type BuyerSession = AuthTokens & {
   phone: string;
 };
 
+export type StoreOwnerSession = AuthTokens & {
+  userId: string;
+  storeId: string;
+};
+
 type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
@@ -24,8 +29,11 @@ type AuthState = {
   userId: string | null;
   name: string | null;
   phone: string | null;
+  storeId: string | null;
+  twoFactorVerified: boolean | null;
   setTokens: (tokens: AuthTokens) => void;
   setBuyerSession: (session: BuyerSession) => void;
+  setStoreOwnerSession: (session: StoreOwnerSession) => void;
   setRole: (role: UserRole | null) => void;
   setBootstrapPending: (pending: boolean) => void;
   clearSession: () => void;
@@ -39,6 +47,8 @@ export const useAuthStore = create<AuthState>((set) => ({
   refreshToken: null,
   role: null,
   userId: null,
+  storeId: null,
+  twoFactorVerified: null,
   clearSession: () => {
     useCartStore.getState().clear();
     set({
@@ -47,7 +57,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       phone: null,
       refreshToken: null,
       role: null,
-      userId: null
+      userId: null,
+      storeId: null,
+      twoFactorVerified: null
     });
   },
   setBuyerSession: (session) =>
@@ -57,11 +69,24 @@ export const useAuthStore = create<AuthState>((set) => ({
       phone: session.phone,
       refreshToken: session.refreshToken,
       role: "BUYER",
-      userId: session.userId
+      userId: session.userId,
+      storeId: null,
+      twoFactorVerified: null
+    }),
+  setStoreOwnerSession: (session) =>
+    set({
+      accessToken: session.accessToken,
+      name: null,
+      phone: null,
+      refreshToken: session.refreshToken,
+      role: "STORE_OWNER",
+      userId: session.userId,
+      storeId: session.storeId,
+      twoFactorVerified: true
     }),
   setRole: (role) => set({ role }),
   setBootstrapPending: (pending) => set({ isBootstrapPending: pending }),
-  /** Refresh flow only — leaves buyer profile untouched */
+  /** Refresh flow only — leaves profile untouched */
   setTokens: (tokens) =>
     set((state) => ({
       ...state,

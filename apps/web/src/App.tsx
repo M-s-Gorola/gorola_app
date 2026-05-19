@@ -6,6 +6,7 @@ import { Link, Route, Routes } from "react-router-dom";
 import { AdminRoute, ProtectedRoute, StoreRoute } from "@/app/routes/guards";
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
 import { DevWeatherToggle } from "@/components/shared/DevWeatherToggle";
+import { StoreLayout } from "@/components/store/StoreLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { useWeatherSync } from "@/hooks/useWeatherSync";
@@ -24,6 +25,9 @@ import { ProfilePage } from "@/pages/buyer/ProfilePage";
 import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
 import { SearchResultsPage } from "@/pages/buyer/SearchResultsPage";
 import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
+import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
+import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
+import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
 import { useWeatherStore } from "@/store/weather.store";
 
 const queryClient = createAppQueryClient();
@@ -201,11 +205,56 @@ export function App(): ReactElement {
             </ProtectedRoute>
           }
         />
+        <Route path="/store/login" element={<StoreLoginPage />} />
+        <Route path="/store/2fa" element={<StoreTwoFactorPage />} />
+        <Route path="/store/setup-2fa" element={<StoreSetup2FAPage />} />
         <Route
           path="/store"
           element={
             <StoreRoute>
-              <PlaceholderPage title="Store Dashboard" />
+              <StoreLayout>
+                <PlaceholderPage title="Store Dashboard" />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/dashboard"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <PlaceholderPage title="Store Dashboard" />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/orders"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <PlaceholderPage title="Orders" />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/catalog"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <PlaceholderPage title="Catalog" />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/settings"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <PlaceholderPage title="Settings" />
+              </StoreLayout>
             </StoreRoute>
           }
         />

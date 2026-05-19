@@ -149,9 +149,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
         totpCode?: string;
       }
     );
-    const tokens = await deps.storeOwnerAuthService.login(payload);
-    reply.setCookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
-    return success(request, reply, tokens);
+    const result = await deps.storeOwnerAuthService.login(payload);
+    if ("requiresTwoFactor" in result) {
+      return success(request, reply, result);
+    }
+    reply.setCookie("refreshToken", result.refreshToken, refreshCookieOptions());
+    return success(request, reply, result);
   });
 
   app.post("/api/v1/auth/store-owner/setup-2fa", async (request, reply) => {

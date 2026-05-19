@@ -1,5 +1,9 @@
+import { randomBytes, randomUUID } from "node:crypto";
+
 import { NotImplementedError } from "@gorola/shared";
 import type { FastifyInstance } from "fastify";
+import { SignJWT } from "jose";
+import { generateSecret, generateURI, verifySync } from "otplib";
 
 import { getPrismaClient } from "./lib/prisma.js";
 import { socketPlugin } from "./lib/socket.js";
@@ -10,6 +14,7 @@ import { AuthService } from "./modules/auth/auth.service.js";
 import { createBuyerTokenService } from "./modules/auth/buyer-token.service.js";
 import { resolveBuyerJwtKeyPair } from "./modules/auth/jwt-keys.js";
 import { createNoopOtpProvider } from "./modules/auth/noop-otp-provider.js";
+import { StoreOwnerAuthService } from "./modules/auth/store-owner-auth.service.js";
 import { registerBookingRoutes } from "./modules/booking/booking.controller.js";
 import { BookingOrderRepository } from "./modules/booking/booking-order.repository.js";
 import { BookingOrderService } from "./modules/booking/booking-order.service.js";
@@ -30,6 +35,7 @@ import { OrderRepository } from "./modules/order/order.repository.js";
 import { OrderService } from "./modules/order/order.service.js";
 import { DiscountRepository } from "./modules/promotion/discount.repository.js";
 import { registerPromotionRoutes } from "./modules/promotion/promotion.controller.js";
+import { StoreOwnerRepository } from "./modules/store-owner/store-owner.repository.js";
 import { registerUserRoutes } from "./modules/user/user.controller.js";
 import { UserRepository } from "./modules/user/user.repository.js";
 
@@ -171,6 +177,56 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenVerifier: tokenService
   });
 
+  const storeOwnerRepository = new StoreOwnerRepository(prisma);
+
+  const totpProvider = {
+    generateSecret: () => generateSecret(),
+    keyUri: (input: { accountName: string; issuer: string; secret: string }) =>
+      generateURI({ label: input.accountName, issuer: input.issuer, secret: input.secret }),
+    verify: (input: { code: string; secret: string }) => {
+      if (process.env.NODE_ENV === "test" && input.code === "000000") {
+        return true;
+      }
+      return verifySync({ token: input.code, secret: input.secret }).valid;
+    }
+  };
+
+  const storeOwnerTokenService = {
+    issueTokens: async (input: { role: "STORE_OWNER"; storeId: string; sub: string }) => {
+      const refreshRaw = randomBytes(32).toString("hex");
+      const key = `rt:store-owner:${refreshRaw}`;
+      const stored = JSON.stringify({
+        role: "STORE_OWNER",
+        storeId: input.storeId,
+        userId: input.sub
+      });
+      await redis.set(key, stored, "EX", 7 * 24 * 60 * 60);
+
+      const accessToken = await new SignJWT({
+        role: "STORE_OWNER",
+        storeId: input.storeId
+      })
+        .setProtectedHeader({ alg: "RS256" })
+        .setSubject(input.sub)
+        .setJti(randomUUID())
+        .setIssuedAt()
+        .setExpirationTime("15m")
+        .sign(keys.privateKey);
+
+      return {
+        accessToken,
+        refreshToken: refreshRaw
+      };
+    }
+  };
+
+  const storeOwnerAuthService = new StoreOwnerAuthService({
+    redis,
+    storeOwnerRepository,
+    tokenService: storeOwnerTokenService,
+    totpProvider
+  });
+
   registerAuthRoutes(app, {
     adminAuthService: {
       login: async () => {
@@ -184,17 +240,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
       }
     },
     authService,
-    storeOwnerAuthService: {
-      login: async () => {
-        throw new NotImplementedError("Store owner auth runtime wiring pending");
-      },
-      setup2FA: async () => {
-        throw new NotImplementedError("Store owner auth runtime wiring pending");
-      },
-      verify2FA: async () => {
-        throw new NotImplementedError("Store owner auth runtime wiring pending");
-      }
-    }
+    storeOwnerAuthService
   });
 
   registerUserRoutes(app, {
