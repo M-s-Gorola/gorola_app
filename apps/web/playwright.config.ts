@@ -36,6 +36,11 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Launch options to map subdomain domains natively inside Chromium */
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP * 127.0.0.1'],
+    },
   },
 
   /* Configure projects for major browsers */

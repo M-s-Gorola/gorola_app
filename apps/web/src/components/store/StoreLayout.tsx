@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 type StoreLayoutProps = {
@@ -14,16 +15,18 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
   const clearSession = useAuthStore((s) => s.clearSession);
   const storeId = useAuthStore((s) => s.storeId);
 
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
   const handleLogout = () => {
     clearSession();
-    navigate("/store/login");
+    navigate(getScopedPath("/store/login", "store", isSubdomainMode));
   };
 
   const navItems = [
-    { label: "Dashboard", path: "/store/dashboard" },
-    { label: "Orders", path: "/store/orders" },
-    { label: "Catalog", path: "/store/catalog" },
-    { label: "Settings", path: "/store/settings" }
+    { label: "Dashboard", path: getScopedPath("/store/dashboard", "store", isSubdomainMode) },
+    { label: "Orders", path: getScopedPath("/store/orders", "store", isSubdomainMode) },
+    { label: "Catalog", path: getScopedPath("/store/catalog", "store", isSubdomainMode) },
+    { label: "Settings", path: getScopedPath("/store/settings", "store", isSubdomainMode) }
   ];
 
   return (
@@ -31,7 +34,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
       {/* Sidebar Navigation */}
       <aside className="hidden md:flex w-64 flex-col bg-white border-r border-gorola-mint/15 shadow-sm">
         <div className="flex h-16 items-center px-6 border-b border-gorola-mint/15">
-          <Link className="flex items-center gap-2" to="/store/dashboard">
+          <Link className="flex items-center gap-2" to={getScopedPath("/store/dashboard", "store", isSubdomainMode)}>
             <span className="font-heading text-xl font-bold text-gorola-charcoal">GoRola <span className="text-gorola-pine">Store</span></span>
           </Link>
         </div>
