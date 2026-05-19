@@ -16,6 +16,8 @@ type StoreOwnerAuthServiceMock = {
   login: ReturnType<typeof vi.fn>;
   setup2FA: ReturnType<typeof vi.fn>;
   verify2FA: ReturnType<typeof vi.fn>;
+  refreshToken: ReturnType<typeof vi.fn>;
+  logout: ReturnType<typeof vi.fn>;
 };
 
 type AdminAuthServiceMock = {
@@ -37,7 +39,9 @@ function createStoreOwnerAuthServiceMock(): StoreOwnerAuthServiceMock {
   return {
     login: vi.fn(),
     setup2FA: vi.fn(),
-    verify2FA: vi.fn()
+    verify2FA: vi.fn(),
+    refreshToken: vi.fn(),
+    logout: vi.fn()
   };
 }
 

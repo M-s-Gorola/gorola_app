@@ -1,15 +1,16 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import type { ReactElement } from "react";
 import { useEffect } from "react";
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, Route, Routes, useLocation } from "react-router-dom";
 
 import { AdminRoute, ProtectedRoute, StoreRoute } from "@/app/routes/guards";
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
 import { DevWeatherToggle } from "@/components/shared/DevWeatherToggle";
+import { StoreLayout } from "@/components/store/StoreLayout";
 import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { useWeatherSync } from "@/hooks/useWeatherSync";
-import { bootstrapBuyerAuthSession } from "@/lib/api";
+import { bootstrapBuyerAuthSession, bootstrapStoreOwnerAuthSession } from "@/lib/api";
 import { createAppQueryClient } from "@/lib/query-client";
 import { BookingConfirmationPage } from "@/pages/buyer/BookingConfirmationPage";
 import { BookingTimeslotPage } from "@/pages/buyer/BookingTimeslotPage";
@@ -24,17 +25,25 @@ import { ProfilePage } from "@/pages/buyer/ProfilePage";
 import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
 import { SearchResultsPage } from "@/pages/buyer/SearchResultsPage";
 import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
+import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
+import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
+import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
+import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
+import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
 import { useWeatherStore } from "@/store/weather.store";
 
 const queryClient = createAppQueryClient();
 
 function PlaceholderPage({ title }: { title: string }): ReactElement {
+  const { pathname } = useLocation();
+  const backTo = pathname.startsWith("/store") ? "/store/dashboard" : "/";
+
   return (
     <section className="space-y-3">
       <h1 className="text-2xl font-semibold text-gorola-charcoal">{title}</h1>
       <p className="font-dm-sans text-sm text-gorola-slate">This page is not ready yet.</p>
       <Link
-        to="/"
+        to={backTo}
         className="inline-flex rounded-full border border-gorola-pine/20 px-3 py-2 text-sm font-semibold text-gorola-pine hover:bg-gorola-pine/5"
       >
         Back to Home
@@ -52,7 +61,11 @@ export function App(): ReactElement {
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
 
   useEffect(() => {
-    void bootstrapBuyerAuthSession();
+    if (window.location.pathname.startsWith("/store")) {
+      void bootstrapStoreOwnerAuthSession();
+    } else {
+      void bootstrapBuyerAuthSession();
+    }
   }, []);
 
   useEffect(() => {
@@ -201,11 +214,56 @@ export function App(): ReactElement {
             </ProtectedRoute>
           }
         />
+        <Route path="/store/login" element={<StoreLoginPage />} />
+        <Route path="/store/2fa" element={<StoreTwoFactorPage />} />
+        <Route path="/store/setup-2fa" element={<StoreSetup2FAPage />} />
         <Route
           path="/store"
           element={
             <StoreRoute>
-              <PlaceholderPage title="Store Dashboard" />
+              <StoreLayout>
+                <PlaceholderPage title="Store Dashboard" />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/dashboard"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <StoreDashboardPage />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/orders"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <StoreOrdersPage />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/catalog"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <PlaceholderPage title="Catalog" />
+              </StoreLayout>
+            </StoreRoute>
+          }
+        />
+        <Route
+          path="/store/settings"
+          element={
+            <StoreRoute>
+              <StoreLayout>
+                <PlaceholderPage title="Settings" />
+              </StoreLayout>
             </StoreRoute>
           }
         />

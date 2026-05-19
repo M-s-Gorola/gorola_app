@@ -9,10 +9,6 @@ function LoginPage() {
   return <h1>Login Page</h1>;
 }
 
-function HomePage() {
-  return <h1>Home Page</h1>;
-}
-
 function SecretPage() {
   return <h1>Protected Content</h1>;
 }
@@ -46,12 +42,11 @@ describe("route guards", () => {
     expect(screen.getByRole("heading", { name: "Login Page" })).toBeInTheDocument();
   });
 
-  it("redirects STORE_OWNER route when role is not store owner", () => {
-    useAuthStore.setState({ accessToken: "a", isBootstrapPending: false, refreshToken: "r", role: "BUYER" });
+  it("redirects to /store/login for unauthenticated store owner routes", () => {
     render(
       <MemoryRouter initialEntries={["/store"]}>
         <Routes>
-          <Route path="/" element={<HomePage />} />
+          <Route path="/store/login" element={<h1>Store Login Page</h1>} />
           <Route
             path="/store"
             element={
@@ -63,7 +58,58 @@ describe("route guards", () => {
         </Routes>
       </MemoryRouter>
     );
-    expect(screen.getByRole("heading", { name: "Home Page" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Store Login Page" })).toBeInTheDocument();
+  });
+
+  it("redirects to /store/2fa for authenticated STORE_OWNER who is not twoFactorVerified", () => {
+    useAuthStore.setState({
+      accessToken: "a",
+      isBootstrapPending: false,
+      refreshToken: "r",
+      role: "STORE_OWNER",
+      twoFactorVerified: false
+    });
+    render(
+      <MemoryRouter initialEntries={["/store"]}>
+        <Routes>
+          <Route path="/store/2fa" element={<h1>Store 2FA Page</h1>} />
+          <Route
+            path="/store"
+            element={
+              <StoreRoute>
+                <SecretPage />
+              </StoreRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Store 2FA Page" })).toBeInTheDocument();
+  });
+
+  it("allows STORE_OWNER when role is STORE_OWNER and twoFactorVerified is true", () => {
+    useAuthStore.setState({
+      accessToken: "a",
+      isBootstrapPending: false,
+      refreshToken: "r",
+      role: "STORE_OWNER",
+      twoFactorVerified: true
+    });
+    render(
+      <MemoryRouter initialEntries={["/store"]}>
+        <Routes>
+          <Route
+            path="/store"
+            element={
+              <StoreRoute>
+                <SecretPage />
+              </StoreRoute>
+            }
+          />
+        </Routes>
+      </MemoryRouter>
+    );
+    expect(screen.getByRole("heading", { name: "Protected Content" })).toBeInTheDocument();
   });
 
   it("allows ADMIN route when role is ADMIN", () => {

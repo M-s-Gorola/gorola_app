@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CheckCircle2, ChevronRight, Clock, MessageSquare, RefreshCcw, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useState } from "react";
+import { useEffect,useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
+import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
 type OrderItem = {
@@ -36,13 +38,59 @@ export function OrderHistoryPage() {
   const [ratingComment, setRatingComment] = useState<Record<string, string>>({});
   const [activeRating, setActiveRating] = useState<string | null>(null);
 
-  const { data: orders, isLoading } = useQuery({
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  const { data: orders, isLoading, isFetching, refetch } = useQuery({
     queryKey: ["orders", "history"],
     queryFn: async () => {
       const res = await api!.get("/api/v1/orders/history");
       return res.data.data.orders as Order[];
     }
   });
+
+  useEffect(() => {
+    if (!accessToken || !orders || orders.length === 0) return;
+
+    // Filter orders that are not in a final state (DELIVERED or CANCELLED)
+    const activeOrders = orders.filter(
+      (o) => o.status !== "DELIVERED" && o.status !== "CANCELLED"
+    );
+    if (activeOrders.length === 0) return;
+
+    console.log("🔌 [OrderHistorySocket] Found active orders to monitor:", activeOrders.map(o => o.id));
+    const host = window.location.hostname;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    
+    const socket = io(baseURL, {
+      auth: { token: accessToken },
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      console.log("🔌 [OrderHistorySocket] Connected. Joining rooms...");
+      activeOrders.forEach((o) => {
+        socket.emit("join_order", o.id);
+      });
+    });
+
+    socket.on("order_status_changed", (data: { orderId: string; status: string }) => {
+      console.log(`🔌 [OrderHistorySocket] Status update received for order ${data.orderId}: ${data.status}`);
+      toast.info(`📦 Order status updated: ${data.status}`, {
+        description: `Order #${data.orderId.substring(0, 8).toUpperCase()} is now ${data.status.replace(/_/g, ' ')}.`
+      });
+      void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
+    });
+
+    socket.on("error", (err: unknown) => {
+      console.error("🔌 [OrderHistorySocket] Socket error:", err);
+    });
+
+    return () => {
+      console.log("🔌 [OrderHistorySocket] Cleaning up connection.");
+      socket.disconnect();
+    };
+  }, [orders, accessToken, queryClient]);
 
   const reorderMutation = useMutation({
     mutationFn: async (orderId: string) => {
@@ -112,9 +160,27 @@ export function OrderHistoryPage() {
 
   return (
     <div className="max-w-4xl mx-auto p-6 pb-24">
-      <header className="mb-8">
-        <h1 className="text-3xl font-bold text-gorola-charcoal">Order History</h1>
-        <p className="text-gorola-charcoal/60 mt-1">Manage and track your past deliveries</p>
+      <header className="mb-8 flex justify-between items-center">
+        <div>
+          <h1 className="text-3xl font-bold text-gorola-charcoal">Order History</h1>
+          <p className="text-gorola-charcoal/60 mt-1">Manage and track your past deliveries</p>
+        </div>
+        <button
+          onClick={async () => {
+            const toastId = toast.loading("Syncing order history...");
+            try {
+              await refetch();
+              toast.success("Order history synchronized!", { id: toastId });
+            } catch {
+              toast.error("Failed to sync order history", { id: toastId });
+            }
+          }}
+          disabled={isFetching}
+          className="p-3 bg-white border border-gorola-pine/10 hover:border-gorola-pine/20 rounded-full text-gorola-pine hover:bg-gorola-pine/5 transition-all shadow-sm flex items-center justify-center disabled:opacity-50"
+          title="Refresh History"
+        >
+          <RefreshCcw className={`w-4 h-4 ${isFetching ? "animate-spin" : ""}`} />
+        </button>
       </header>
 
       <div className="space-y-4">

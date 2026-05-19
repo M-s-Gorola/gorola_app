@@ -1,4 +1,4 @@
-import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { RateLimitError, UnauthorizedError } from "@gorola/shared";
 import { hash } from "bcryptjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -16,7 +16,8 @@ type StoreOwner = {
 describe("StoreOwnerAuthService", () => {
   const redis = {
     get: vi.fn(),
-    set: vi.fn()
+    set: vi.fn(),
+    del: vi.fn()
   };
   const tokenService = {
     issueTokens: vi.fn()
@@ -120,7 +121,7 @@ describe("StoreOwnerAuthService", () => {
       ).rejects.toBeInstanceOf(RateLimitError);
     });
 
-    it("should require totp code when 2FA is enabled", async () => {
+    it("should return requiresTwoFactor: true when 2FA is enabled and no totpCode is provided", async () => {
       const passwordHash = await hash("Password#123", 8);
       const owner: StoreOwner = {
         email: "owner@gorola.in",
@@ -133,12 +134,11 @@ describe("StoreOwnerAuthService", () => {
       storeOwnerRepository.findByEmail.mockResolvedValueOnce(owner);
       redis.get.mockResolvedValueOnce(null);
 
-      await expect(
-        service.login({
-          email: "owner@gorola.in",
-          password: "Password#123"
-        })
-      ).rejects.toBeInstanceOf(ValidationError);
+      const result = await service.login({
+        email: "owner@gorola.in",
+        password: "Password#123"
+      });
+      expect(result).toEqual({ requiresTwoFactor: true });
     });
 
     it("should throw UnauthorizedError for wrong totp code", async () => {
@@ -211,6 +211,50 @@ describe("StoreOwnerAuthService", () => {
       expect(storeOwnerRepository.update).toHaveBeenCalledWith("owner-1", {
         totpEnabled: true
       });
+    });
+  });
+
+  describe("refreshToken", () => {
+    it("should rotate and issue new tokens when refresh token is valid", async () => {
+      const storedSession = {
+        role: "STORE_OWNER",
+        storeId: "store-1",
+        userId: "owner-1"
+      };
+      redis.get.mockResolvedValueOnce(JSON.stringify(storedSession));
+      tokenService.issueTokens.mockResolvedValueOnce({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      });
+
+      const result = await service.refreshToken({ refreshToken: "old-refresh" });
+
+      expect(redis.get).toHaveBeenCalledWith("rt:store-owner:old-refresh");
+      expect(redis.del).toHaveBeenCalledWith("rt:store-owner:old-refresh");
+      expect(tokenService.issueTokens).toHaveBeenCalledWith({
+        role: "STORE_OWNER",
+        storeId: "store-1",
+        sub: "owner-1"
+      });
+      expect(result).toEqual({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      });
+    });
+
+    it("should throw UnauthorizedError when refresh token is invalid/not found", async () => {
+      redis.get.mockResolvedValueOnce(null);
+
+      await expect(
+        service.refreshToken({ refreshToken: "invalid" })
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+    });
+  });
+
+  describe("logout", () => {
+    it("should delete session key from redis", async () => {
+      await service.logout({ refreshToken: "session-token" });
+      expect(redis.del).toHaveBeenCalledWith("rt:store-owner:session-token");
     });
   });
 });

@@ -7,7 +7,7 @@ import { api, bootstrapBuyerAuthSession, createApiClient, type CreateApiClientOp
 
 vi.mock("@/store/auth.store", () => ({
   useAuthStore: {
-    getState: vi.fn(),
+    getState: vi.fn(() => ({ role: "BUYER" })),
   },
 }));
 

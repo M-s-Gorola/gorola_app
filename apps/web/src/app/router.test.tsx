@@ -197,7 +197,11 @@ describe("buyer routes", () => {
     expect(screen.queryByText("This page is not ready yet.")).not.toBeInTheDocument();
     noRoleStoreRender.unmount();
 
-    useAuthStore.getState().setRole("STORE_OWNER");
+    useAuthStore.setState({
+      accessToken: "at",
+      role: "STORE_OWNER",
+      twoFactorVerified: true
+    });
     render(
       <MemoryRouter initialEntries={["/store"]}>
         <App />
