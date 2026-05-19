@@ -35,6 +35,7 @@ import { OrderRepository } from "./modules/order/order.repository.js";
 import { OrderService } from "./modules/order/order.service.js";
 import { DiscountRepository } from "./modules/promotion/discount.repository.js";
 import { registerPromotionRoutes } from "./modules/promotion/promotion.controller.js";
+import { registerStoreOwnerRoutes } from "./modules/store-owner/store-owner.controller.js";
 import { StoreOwnerRepository } from "./modules/store-owner/store-owner.repository.js";
 import { registerUserRoutes } from "./modules/user/user.controller.js";
 import { UserRepository } from "./modules/user/user.repository.js";
@@ -245,6 +246,10 @@ export function registerAppRoutes(app: FastifyInstance): void {
 
   registerUserRoutes(app, {
     userRepository: userRepo,
+    tokenVerifier: tokenService
+  });
+
+  registerStoreOwnerRoutes(app, {
     tokenVerifier: tokenService
   });
 
