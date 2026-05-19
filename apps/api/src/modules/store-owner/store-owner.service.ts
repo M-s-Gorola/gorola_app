@@ -1,4 +1,5 @@
-import type { PrismaClient } from "@prisma/client";
+import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
+import { AppError, ForbiddenError, NotFoundError } from "@gorola/shared";
 
 export type DashboardKpiSummary = {
   todayOrderCount: number;
@@ -11,8 +12,107 @@ export type DashboardKpiSummary = {
   activeOffersCount: number;
 };
 
+function maskPhone(phone: string): string {
+  if (!phone) return "";
+  if (phone.length <= 4) return "****";
+  return "*".repeat(phone.length - 4) + phone.slice(-4);
+}
+
 export class StoreOwnerService {
   public constructor(private readonly db: PrismaClient) {}
+
+  public async getOrders(
+    storeId: string,
+    filters: { status?: OrderStatus; page: number; limit: number }
+  ) {
+    const { status, page, limit } = filters;
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const where: Prisma.OrderWhereInput = {
+      storeId,
+      ...(status ? { status } : {})
+    };
+
+    const [total, orders] = await Promise.all([
+      this.db.order.count({ where }),
+      this.db.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+        include: {
+          items: { orderBy: { id: "asc" } },
+          statusHistory: { orderBy: { changedAt: "asc" } },
+          store: { select: { id: true, name: true, phone: true } },
+          user: { select: { phone: true, name: true } }
+        }
+      })
+    ]);
+
+    const mapped = orders.map((o) => {
+      const { user, ...rest } = o;
+      return {
+        ...rest,
+        buyerMaskedPhone: maskPhone(user?.phone ?? "")
+      };
+    });
+
+    return {
+      data: mapped,
+      meta: {
+        total,
+        page,
+        limit,
+        hasMore: total > page * limit
+      }
+    };
+  }
+
+  public async updateOrderStatus(
+    storeId: string,
+    orderId: string,
+    newStatus: OrderStatus,
+    orderService: any
+  ) {
+    const order = await this.db.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      throw new NotFoundError("Order not found");
+    }
+
+    if (order.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to access this order");
+    }
+
+    const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
+      PLACED: ["PREPARING", "CANCELLED"],
+      PREPARING: ["OUT_FOR_DELIVERY", "CANCELLED"],
+      OUT_FOR_DELIVERY: ["DELIVERED"],
+      DELIVERED: [],
+      CANCELLED: [],
+      PENDING_APPROVAL: ["APPROVED", "CANCELLED"],
+      APPROVED: ["PREPARING", "CANCELLED"]
+    };
+
+    const currentStatus = order.status;
+    const allowed = VALID_TRANSITIONS[currentStatus] || [];
+    if (!allowed.includes(newStatus)) {
+      throw new AppError(`Invalid status transition from ${currentStatus} to ${newStatus}`, {
+        code: "INVALID_STATUS_TRANSITION",
+        statusCode: 422
+      });
+    }
+
+    if (newStatus === "CANCELLED") {
+      return orderService.cancelOrderWithStockRestore(orderId, "STORE_OWNER");
+    } else {
+      return orderService.updateStatus(orderId, newStatus, "STORE_OWNER");
+    }
+  }
+
 
   public async getDashboard(storeId: string): Promise<DashboardKpiSummary> {
     const startOfToday = new Date();

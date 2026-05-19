@@ -26,6 +26,8 @@ async function generateAccessToken(userId: string, role: string, storeId?: strin
 }
 
 async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<void> {
+  await db.bookingOrder.deleteMany();
+  await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
@@ -232,6 +234,7 @@ describe("StoreOwner Dashboard Integration Tests", () => {
         total: 170.0,
         paymentMethod: "COD",
         landmarkDescription: "Near park",
+        createdAt: new Date(),
         items: {
           create: [
             {
@@ -257,6 +260,7 @@ describe("StoreOwner Dashboard Integration Tests", () => {
         total: 730.0,
         paymentMethod: "UPI",
         landmarkDescription: "Near school",
+        createdAt: new Date(),
         items: {
           create: [
             {
@@ -281,7 +285,8 @@ describe("StoreOwner Dashboard Integration Tests", () => {
         deliveryFee: 20.0,
         total: 170.0,
         paymentMethod: "COD",
-        landmarkDescription: "Near park"
+        landmarkDescription: "Near park",
+        createdAt: new Date()
       }
     });
 
@@ -310,7 +315,10 @@ describe("StoreOwner Dashboard Integration Tests", () => {
     // Weekly revenue check
     expect(dataA.weeklyRevenue).toBeInstanceOf(Array);
     expect(dataA.weeklyRevenue.length).toBe(7);
-    const todayStr = new Date().toISOString().split("T")[0];
+    const y = new Date().getFullYear();
+    const m = String(new Date().getMonth() + 1).padStart(2, "0");
+    const d = String(new Date().getDate()).padStart(2, "0");
+    const todayStr = `${y}-${m}-${d}`;
     const todayTrend = dataA.weeklyRevenue.find((item: { date: string }) => item.date === todayStr);
     expect(todayTrend).toBeDefined();
     expect(todayTrend.revenue).toBe(900);

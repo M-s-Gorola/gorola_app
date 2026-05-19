@@ -250,7 +250,9 @@ export function registerAppRoutes(app: FastifyInstance): void {
   });
 
   registerStoreOwnerRoutes(app, {
-    tokenVerifier: tokenService
+    tokenVerifier: tokenService,
+    orderService: buyerOrderSvc,
+    orders: orderRepoOrders
   });
 
   registerRiderStubRoutes(app);

@@ -26,6 +26,7 @@ import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
 import { SearchResultsPage } from "@/pages/buyer/SearchResultsPage";
 import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
 import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
+import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
 import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
 import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
 import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
@@ -234,7 +235,7 @@ export function App(): ReactElement {
           element={
             <StoreRoute>
               <StoreLayout>
-                <PlaceholderPage title="Orders" />
+                <StoreOrdersPage />
               </StoreLayout>
             </StoreRoute>
           }
