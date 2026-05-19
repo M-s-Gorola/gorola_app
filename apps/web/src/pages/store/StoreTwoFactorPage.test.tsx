@@ -67,11 +67,12 @@ describe("StoreTwoFactorPage", () => {
 
   it("on successful verification, sets tokens and navigates to /store/dashboard", async () => {
     const user = userEvent.setup();
+    const mockJwt = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJvd25lci1pZCIsInN0b3JlSWQiOiJzdG9yZS1pZCIsInJvbGUiOiJTVE9SRV9PV05FUiJ9.signature";
     postMock.mockResolvedValueOnce({
       data: {
         success: true,
         data: {
-          accessToken: "store-access-token",
+          accessToken: mockJwt,
           refreshToken: "store-refresh-token",
           userId: "owner-id",
           storeId: "store-id"
@@ -98,7 +99,7 @@ describe("StoreTwoFactorPage", () => {
       expect(screen.getByTestId("store-dashboard")).toBeInTheDocument();
     });
 
-    expect(useAuthStore.getState().accessToken).toBe("store-access-token");
+    expect(useAuthStore.getState().accessToken).toBe(mockJwt);
     expect(useAuthStore.getState().refreshToken).toBe("store-refresh-token");
     expect(useAuthStore.getState().role).toBe("STORE_OWNER");
     expect(useAuthStore.getState().userId).toBe("owner-id");
