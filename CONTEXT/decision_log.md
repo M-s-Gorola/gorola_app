@@ -1033,6 +1033,7 @@ Enforce strict store type isolation at the database and application levels. A si
 
 **Tradeoffs:**
 - Merchants must manage two profiles/dashboards if they provide both physical items and home services.
+  - *Mitigation (Plus-Addressing):* Because the `StoreOwner` database schema enforces a strict `@unique` email constraint, merchants running two stores must register with two separate emails. To prevent the friction of setting up and paying for two distinct email inboxes, merchants can use standard subaddressing (e.g., `merchant+quick@gmail.com` and `merchant+services@gmail.com`). All notification and 2FA emails will automatically route to their single primary inbox (`merchant@gmail.com`), satisfying database constraints with zero administrative overhead.
 - Slight data redundancy (e.g. duplicate merchant bank details, store locations, or contact information across both store profiles).
 
 **Alternatives Considered:**
