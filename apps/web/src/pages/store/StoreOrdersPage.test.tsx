@@ -136,13 +136,14 @@ describe("StoreOrdersPage", () => {
     expect(cancelBtn).toBeInTheDocument();
 
     // Simulate clicking "Mark Preparing" action
+    const firstOrder = mockOrdersData.data[0]!;
     const mockUpdatedOrder = {
       success: true,
       data: {
-        ...mockOrdersData.data[0],
+        ...firstOrder,
         status: "PREPARING",
         statusHistory: [
-          ...mockOrdersData.data[0].statusHistory,
+          ...firstOrder.statusHistory,
           {
             id: "hist-2",
             status: "PREPARING",

@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 const storeLoginSchema = z.object({
   email: z.string().min(1, "Email is required").email("Must be a valid email"),
@@ -21,11 +22,34 @@ type LoginEnvelope = {
   success?: boolean;
   data?: {
     requiresTwoFactor?: boolean;
+    accessToken?: string;
+    refreshToken?: string;
+    userId?: string;
+    storeId?: string;
   };
 };
 
+function decodeJwt(token: string): { sub: string; storeId: string; role: string } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1]!;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
+
 export function StoreLoginPage(): ReactElement {
   const navigate = useNavigate();
+  const setStoreOwnerSession = useAuthStore((s) => s.setStoreOwnerSession);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -54,8 +78,25 @@ export function StoreLoginPage(): ReactElement {
       });
 
       const body = res.data;
-      if (body.success === true && body.data?.requiresTwoFactor === true) {
-        navigate("/store/2fa", { state: { email: vals.email, password: vals.password } });
+      if (body.success === true) {
+        if (body.data?.requiresTwoFactor === true) {
+          navigate("/store/2fa", { state: { email: vals.email, password: vals.password } });
+        } else if (body.data?.accessToken && body.data?.refreshToken) {
+          const decoded = decodeJwt(body.data.accessToken);
+          if (decoded && decoded.sub && decoded.storeId) {
+            setStoreOwnerSession({
+              accessToken: body.data.accessToken,
+              refreshToken: body.data.refreshToken,
+              userId: decoded.sub,
+              storeId: decoded.storeId
+            });
+            navigate("/store/dashboard", { replace: true });
+          } else {
+            setErrorMessage("Invalid session token received.");
+          }
+        } else {
+          setErrorMessage("Unexpected response from server.");
+        }
       } else {
         setErrorMessage("Unexpected response from server.");
       }

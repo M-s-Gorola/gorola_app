@@ -134,6 +134,16 @@ export function registerAppRoutes(app: FastifyInstance): void {
   const orderEmitter = {
     emitStatusChanged: (orderId: string, status: string) => {
       app.io.to(`order:${orderId}`).emit("order_status_changed", { orderId, status });
+      prisma.order.findUnique({
+        where: { id: orderId },
+        select: { storeId: true }
+      }).then((o) => {
+        if (o) {
+          app.io.to(`store:${o.storeId}`).emit("store:order_updated", { orderId, status });
+        }
+      }).catch((err) => {
+        app.log.error(err, "Failed to broadcast order status change to store room");
+      });
     }
   };
 

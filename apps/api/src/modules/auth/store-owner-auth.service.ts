@@ -3,6 +3,7 @@ import { compare } from "bcryptjs";
 
 export type StoreOwnerAuthServiceDependencies = {
   redis: {
+    del: (key: string) => Promise<unknown>;
     get: (key: string) => Promise<string | null>;
     set: (key: string, value: string, mode: "EX", ttlSeconds: number) => Promise<unknown>;
   };
@@ -38,6 +39,28 @@ export type StoreOwnerAuthServiceDependencies = {
 
 export class StoreOwnerAuthService {
   public constructor(private readonly deps: StoreOwnerAuthServiceDependencies) {}
+
+  public async refreshToken(input: { refreshToken: string }): Promise<{ accessToken: string; refreshToken: string }> {
+    const key = `rt:store-owner:${input.refreshToken}`;
+    const raw = await this.deps.redis.get(key);
+    if (!raw) {
+      throw new UnauthorizedError("Session has expired or is invalid.");
+    }
+    const session = JSON.parse(raw) as { role: "STORE_OWNER"; storeId: string; userId: string };
+
+    await this.deps.redis.del(key);
+
+    return this.deps.tokenService.issueTokens({
+      role: "STORE_OWNER",
+      storeId: session.storeId,
+      sub: session.userId
+    });
+  }
+
+  public async logout(input: { refreshToken: string }): Promise<void> {
+    const key = `rt:store-owner:${input.refreshToken}`;
+    await this.deps.redis.del(key);
+  }
 
   private getLoginRateLimitKey(email: string): string {
     return `auth:store-owner:login:${email.toLowerCase()}`;

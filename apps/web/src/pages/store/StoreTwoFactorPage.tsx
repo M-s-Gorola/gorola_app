@@ -25,10 +25,26 @@ type VerifyEnvelope = {
   data?: {
     accessToken: string;
     refreshToken: string;
-    userId: string;
-    storeId: string;
   };
 };
+
+function decodeJwt(token: string): { sub: string; storeId: string; role: string } | null {
+  try {
+    const parts = token.split(".");
+    if (parts.length !== 3) return null;
+    const base64Url = parts[1]!;
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const jsonPayload = decodeURIComponent(
+      atob(base64)
+        .split("")
+        .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+        .join("")
+    );
+    return JSON.parse(jsonPayload);
+  } catch {
+    return null;
+  }
+}
 
 export function StoreTwoFactorPage(): ReactElement {
   const navigate = useNavigate();
@@ -76,19 +92,23 @@ export function StoreTwoFactorPage(): ReactElement {
       if (
         data === undefined ||
         typeof data.accessToken !== "string" ||
-        typeof data.refreshToken !== "string" ||
-        typeof data.userId !== "string" ||
-        typeof data.storeId !== "string"
+        typeof data.refreshToken !== "string"
       ) {
         setErrorMessage("Unexpected response from server.");
+        return;
+      }
+
+      const decoded = decodeJwt(data.accessToken);
+      if (!decoded || !decoded.sub || !decoded.storeId) {
+        setErrorMessage("Invalid session token received.");
         return;
       }
 
       setStoreOwnerSession({
         accessToken: data.accessToken,
         refreshToken: data.refreshToken,
-        userId: data.userId,
-        storeId: data.storeId
+        userId: decoded.sub,
+        storeId: decoded.storeId
       });
 
       navigate("/store/dashboard", { replace: true });

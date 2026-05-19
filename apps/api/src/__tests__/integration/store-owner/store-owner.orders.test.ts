@@ -117,7 +117,7 @@ describe("StoreOwner Orders Integration Tests", () => {
       storeId: storeA.id
     });
 
-    const ownerB = await ownerRepo.create({
+    await ownerRepo.create({
       email: "owner.b@gorola.in",
       passwordHash: "dummy-hash",
       storeId: storeB.id

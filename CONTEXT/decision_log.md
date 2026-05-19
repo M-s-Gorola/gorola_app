@@ -1039,3 +1039,28 @@ Enforce strict store type isolation at the database and application levels. A si
 **Alternatives Considered:**
 1. **Hybrid Stores with Order Splitting**: Allow a single store to list both types of variants. During checkout, if a mixed cart is detected, split it into separate `QUICK` and `BOOKING` orders. Rejected: massive overhead in the checkout service, complicates order matching, and increases developer cognitive load and bug rate.
 2. **Cart Blockers**: Allow hybrid stores, but reject checkout if the buyer has a mixed cart. Rejected: poor UX, as it doesn't solve the messy combined merchant dashboard problem.
+
+---
+
+## [DECISION-035] Privacy-First Buyer Identity Masking & Twilio Proxy Communication
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+For regulatory compliance, user data security, and platform disintermediation prevention, store partners must not have direct access to a buyer's private information (such as their unmasked phone number or full name). However, in real-world quick commerce operations, store owners or delivery personnel occasionally need to contact the buyer (e.g., if a substitute item is required, or for last-mile delivery navigation).
+
+**Decision:**
+1. **Masked Phone Numbers**: Only expose masked phone numbers (e.g., `*********7890`) in the merchant dashboard and store owner API responses.
+2. **Static Buyer Profile**: Hide the buyer's real name under the generic identifier `"Registered User"` or `"Guest"` on the store owner panel.
+3. **Proxy Voice Routing (Twilio Proxy)**: Wire any outgoing phone calls through an automated proxy call routing system (such as Twilio Masked Call Routing). The merchant or rider clicks a "Call" trigger in the UI or dials the virtual proxy number displayed, and the proxy server dynamically redirects the audio channel to the buyer's real mobile phone without exposing private contact numbers.
+
+**Rationale:**
+- **Regulatory Compliance**: Prevents harvesting of buyer phone databases by third-party merchant employees, ensuring tight alignment with modern consumer privacy regulations (such as GDPR or regional IT acts).
+- **Customer Retention**: Prevents merchant disintermediation (merchants taking order transaction flows off-platform to avoid commissions).
+- **Physical Safety**: Protects both customers and delivery agents from unsolicited or inappropriate contact after order completion.
+
+**Tradeoffs:**
+- Adds infrastructure overhead and API integration costs for Twilio/masked proxy calls.
+- Store owners cannot manually type out the buyer's actual number into a traditional phone keypad; all contact must be initiated through the platform's routed channels.
+

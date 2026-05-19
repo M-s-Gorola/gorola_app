@@ -1,10 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  Calendar,
   CheckCircle,
   Clock,
-  DollarSign,
   MapPin,
   Phone,
   ShoppingBag,
@@ -14,9 +12,11 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 type OrderStatus =
   | "PLACED"
@@ -98,6 +98,75 @@ export function StoreOrdersPage(): ReactElement {
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
 
+  const storeId = useAuthStore((s) => s.storeId);
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    console.log("🔌 [StoreSocket] useEffect triggered. storeId:", storeId, "hasToken:", !!accessToken);
+    if (!storeId || !accessToken) {
+      console.log("🔌 [StoreSocket] Returning early: missing storeId or accessToken");
+      return;
+    }
+
+    const host = window.location.hostname;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    console.log("🔌 [StoreSocket] Connecting to socket at:", baseURL);
+    
+    const socket = io(baseURL, {
+      auth: { token: accessToken },
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      console.log("🔌 [StoreSocket] Connected! Emitting join_store for:", storeId);
+      socket.emit("join_store", storeId);
+    });
+
+    const triggerRefresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ["store", "orders"] });
+    };
+
+    const playChime = () => {
+      try {
+        const audio = new Audio("https://assets.mixkit.co/active_storage/sfx/2869/2869-200.wav");
+        audio.volume = 0.5;
+        void audio.play();
+      } catch (err) {
+        console.warn("Failed to play notification sound:", err);
+      }
+    };
+
+    socket.on("store:new_order", () => {
+      console.log("🔌 [StoreSocket] Event: store:new_order received!");
+      triggerRefresh();
+      playChime();
+      toast.success("🔔 New Order Received! Action required.", {
+        description: "A brand new order has just been placed.",
+        duration: 8000,
+      });
+    });
+
+    socket.on("store:order_updated", () => {
+      console.log("🔌 [StoreSocket] Event: store:order_updated received!");
+      triggerRefresh();
+      toast.info("📋 Order status was updated by client/system.");
+    });
+
+    socket.on("error", (err: unknown) => {
+      console.error("🔌 [StoreSocket] Error event:", err);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("🔌 [StoreSocket] Connection error event:", err);
+    });
+
+    return () => {
+      console.log("🔌 [StoreSocket] useEffect cleanup running. Disconnecting socket.");
+      socket.disconnect();
+    };
+  }, [storeId, accessToken, queryClient]);
+
   const limit = 10;
 
   // 1. Query for fetching orders
@@ -105,6 +174,7 @@ export function StoreOrdersPage(): ReactElement {
     data,
     isLoading,
     isError,
+    isFetching,
     refetch
   } = useQuery({
     queryKey: ["store", "orders", { status: selectedStatus, page }],
@@ -135,11 +205,19 @@ export function StoreOrdersPage(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ["store", "orders"] });
       // Update local modal data
       if (selectedOrder && selectedOrder.id === variables.orderId) {
-        setSelectedOrder(res.data);
+        setSelectedOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            status: res.data.status,
+            statusHistory: res.data.statusHistory ?? prev.statusHistory
+          };
+        });
       }
     },
-    onError: (err: any) => {
-      const errMsg = err?.response?.data?.error?.message || "Failed to update order status";
+    onError: (err: unknown) => {
+      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
+      const errMsg = errorResponse?.response?.data?.error?.message || "Failed to update order status";
       toast.error(errMsg);
     }
   });
@@ -225,11 +303,20 @@ export function StoreOrdersPage(): ReactElement {
           </p>
         </div>
         <button
-          onClick={() => void refetch()}
-          className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl transition-all shadow-sm flex items-center gap-2"
+          onClick={async () => {
+            const toastId = toast.loading("Syncing latest incoming orders...");
+            try {
+              await refetch();
+              toast.success("Order queue synchronized!", { id: toastId });
+            } catch {
+              toast.error("Failed to sync order queue", { id: toastId });
+            }
+          }}
+          disabled={isFetching}
+          className="px-4 py-2 text-xs font-bold uppercase tracking-wider bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl transition-all shadow-sm flex items-center gap-2 disabled:opacity-50"
         >
-          <Clock className="h-3.5 w-3.5 text-gorola-pine" />
-          Refresh Queue
+          <Clock className={`h-3.5 w-3.5 text-gorola-pine ${isFetching ? 'animate-spin' : ''}`} />
+          {isFetching ? "Syncing..." : "Refresh Queue"}
         </button>
       </div>
 

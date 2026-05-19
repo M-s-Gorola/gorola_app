@@ -16,7 +16,8 @@ type StoreOwner = {
 describe("StoreOwnerAuthService", () => {
   const redis = {
     get: vi.fn(),
-    set: vi.fn()
+    set: vi.fn(),
+    del: vi.fn()
   };
   const tokenService = {
     issueTokens: vi.fn()
@@ -210,6 +211,50 @@ describe("StoreOwnerAuthService", () => {
       expect(storeOwnerRepository.update).toHaveBeenCalledWith("owner-1", {
         totpEnabled: true
       });
+    });
+  });
+
+  describe("refreshToken", () => {
+    it("should rotate and issue new tokens when refresh token is valid", async () => {
+      const storedSession = {
+        role: "STORE_OWNER",
+        storeId: "store-1",
+        userId: "owner-1"
+      };
+      redis.get.mockResolvedValueOnce(JSON.stringify(storedSession));
+      tokenService.issueTokens.mockResolvedValueOnce({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      });
+
+      const result = await service.refreshToken({ refreshToken: "old-refresh" });
+
+      expect(redis.get).toHaveBeenCalledWith("rt:store-owner:old-refresh");
+      expect(redis.del).toHaveBeenCalledWith("rt:store-owner:old-refresh");
+      expect(tokenService.issueTokens).toHaveBeenCalledWith({
+        role: "STORE_OWNER",
+        storeId: "store-1",
+        sub: "owner-1"
+      });
+      expect(result).toEqual({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      });
+    });
+
+    it("should throw UnauthorizedError when refresh token is invalid/not found", async () => {
+      redis.get.mockResolvedValueOnce(null);
+
+      await expect(
+        service.refreshToken({ refreshToken: "invalid" })
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+    });
+  });
+
+  describe("logout", () => {
+    it("should delete session key from redis", async () => {
+      await service.logout({ refreshToken: "session-token" });
+      expect(redis.del).toHaveBeenCalledWith("rt:store-owner:session-token");
     });
   });
 });

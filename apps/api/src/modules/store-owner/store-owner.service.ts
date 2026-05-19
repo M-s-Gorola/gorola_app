@@ -1,5 +1,5 @@
-import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { AppError, ForbiddenError, NotFoundError } from "@gorola/shared";
+import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
 
 export type DashboardKpiSummary = {
   todayOrderCount: number;
@@ -73,7 +73,10 @@ export class StoreOwnerService {
     storeId: string,
     orderId: string,
     newStatus: OrderStatus,
-    orderService: any
+    orderService: {
+      cancelOrderWithStockRestore: (orderId: string, actor: string) => Promise<unknown>;
+      updateStatus: (orderId: string, newStatus: OrderStatus, actor: string) => Promise<unknown>;
+    }
   ) {
     const order = await this.db.order.findUnique({
       where: { id: orderId }
@@ -98,7 +101,8 @@ export class StoreOwnerService {
     };
 
     const currentStatus = order.status;
-    const allowed = VALID_TRANSITIONS[currentStatus] || [];
+    // eslint-disable-next-line security/detect-object-injection
+    const allowed = currentStatus in VALID_TRANSITIONS ? VALID_TRANSITIONS[currentStatus] : [];
     if (!allowed.includes(newStatus)) {
       throw new AppError(`Invalid status transition from ${currentStatus} to ${newStatus}`, {
         code: "INVALID_STATUS_TRANSITION",

@@ -11,17 +11,17 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.2 completed successfully |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.3 completed with live Sockets! |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-19
-- **Session Summary:** Completed Phase 3.2 (Store Owner Dashboard KPI Summary) including the backend service, controller, integration tests, custom SVG-based frontend dashboard page component with loading skeletons, top products list, and safety threshold alerts, fully verified with green unit, type, and lint checks.
-- **Next Session Must Start With:** Phase 3.3 — Incoming Order Management: paginated store order retrieval and state transition endpoints with socket updates.
-- **In Progress Right Now:** None (Phase 3.2 complete, Phase 3.3 next).
+- **Date:** 2026-05-20
+- **Session Summary:** Solved store session state persistence by isolating store owner sessions to a distinct cookie namespace (`"storeOwnerRefreshToken"`), completely preventing session conflicts on reload. Upgraded HTTP Fastify and Socket.io CORS to dynamically mirror origins in development mode, unblocking Vite port shifts. Added WebSocket real-time updates to the buyer's `OrderHistoryPage.tsx` so merchant status changes propagate instantly with custom notifications. Implemented premium manual refresh mechanisms with active loading spinners (`animate-spin`) and multi-stage Sonner status toasts on both client and merchant pages.
+- **Next Session Must Start With:** Phase 3.4 — Product Management (CRUD + Variants).
+- **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -205,46 +205,46 @@ No store-facing order endpoints exist. Store owners need to see all incoming ord
 
 ---
 
-- [ ] **RED — Integration (`store-owner.orders.test.ts` — new file):**
-  - [ ] Test setup: create store A + store B, each with 2 orders (different statuses)
-  - [ ] Test: `GET /api/v1/store/orders` with store A STORE_OWNER JWT → returns only store A orders (count = 2), store B orders absent
-  - [ ] Test: `GET /api/v1/store/orders?status=PLACED` → returns only PLACED orders for this store
-  - [ ] Test: `GET /api/v1/store/orders?page=1&limit=10` → returns `{ data: [...], meta: { total, page, limit, hasMore } }`
-  - [ ] Test: `PUT /api/v1/store/orders/<storeAOrderId>/status` with body `{ status: 'PREPARING' }` → HTTP 200, order status in DB is now PREPARING, `OrderStatusHistory` has new PREPARING entry
-  - [ ] Test: `PUT /api/v1/store/orders/<orderId>/status` with body `{ status: 'PLACED' }` (backward transition) → HTTP 422 with `INVALID_STATUS_TRANSITION` code
-  - [ ] Test: `PUT /api/v1/store/orders/<storeBOrderId>/status` using store A JWT → HTTP 403 with `FORBIDDEN` code (cannot touch other store's orders)
-  - [ ] Test: `GET /api/v1/store/orders` with no JWT → HTTP 401
-  - [ ] **Run — confirm RED (404 — endpoints do not exist)**
+- [x] **RED — Integration (`store-owner.orders.test.ts` — new file):**
+  - [x] Test setup: create store A + store B, each with 2 orders (different statuses)
+  - [x] Test: `GET /api/v1/store/orders` with store A STORE_OWNER JWT → returns only store A orders (count = 2), store B orders absent
+  - [x] Test: `GET /api/v1/store/orders?status=PLACED` → returns only PLACED orders for this store
+  - [x] Test: `GET /api/v1/store/orders?page=1&limit=10` → returns `{ data: [...], meta: { total, page, limit, hasMore } }`
+  - [x] Test: `PUT /api/v1/store/orders/<storeAOrderId>/status` with body `{ status: 'PREPARING' }` → HTTP 200, order status in DB is now PREPARING, `OrderStatusHistory` has new PREPARING entry
+  - [x] Test: `PUT /api/v1/store/orders/<orderId>/status` with body `{ status: 'PLACED' }` (backward transition) → HTTP 422 with `INVALID_STATUS_TRANSITION` code
+  - [x] Test: `PUT /api/v1/store/orders/<storeBOrderId>/status` using store A JWT → HTTP 403 with `FORBIDDEN` code (cannot touch other store's orders)
+  - [x] Test: `GET /api/v1/store/orders` with no JWT → HTTP 401
+  - [x] **Run — confirm RED (404 — endpoints do not exist)**
 
-- [ ] **GREEN — Backend (Service → Controller → Routes):**
-  - [ ] [Service] Add to `store-owner.service.ts`:
+- [x] **GREEN — Backend (Service → Controller → Routes):**
+  - [x] [Service] Add to `store-owner.service.ts`:
     - `getOrders(storeId, { status?, page, limit })`: calls `OrderRepository.findManyByStore(storeId, filters)` — returns paginated list with `OrderItem[]`, buyer masked phone, total, status, `statusHistory`
     - `updateOrderStatus(storeId, orderId, newStatus)`: validates order belongs to this store (throws `ForbiddenError` if not), validates state machine transition (throws `ValidationError` if invalid), calls `OrderRepository.updateStatus(orderId, newStatus)`
-  - [ ] [Controller] Add to `store-owner.controller.ts`:
+  - [x] [Controller] Add to `store-owner.controller.ts`:
     - `GET /api/v1/store/orders`: parse `status?`, `page`, `limit` from query using Zod schema; call service; return paginated envelope
     - `PUT /api/v1/store/orders/:orderId/status`: parse `{ status }` body using Zod enum (only valid statuses); call service; return updated order
-  - [ ] [Routes] Register both routes with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
-  - [ ] Run integration tests — **confirm GREEN**
+  - [x] [Routes] Register both routes with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`StoreOrdersPage.test.tsx`):**
-  - [ ] Test: renders table with columns "Order ID", "Items", "Total", "Status", "Time", "Action"
-  - [ ] Test: status filter dropdown (All / PLACED / PREPARING / OUT_FOR_DELIVERY / DELIVERED) updates query param and re-fetches
-  - [ ] Test: clicking an order row opens detail modal showing full items list with names, quantities, unit prices
-  - [ ] Test: "Update Status" dropdown in modal shows only valid next states (e.g. if current = PLACED, shows PREPARING and CANCELLED; not DELIVERED)
-  - [ ] Test: confirming a status update calls `PUT /api/v1/store/orders/:id/status` and shows success toast
-  - [ ] Test: while status update is pending, the confirm button shows a spinner and is disabled
-  - [ ] **Run — confirm RED (component does not exist)**
+- [x] **RED — Unit/Component (`StoreOrdersPage.test.tsx`):**
+  - [x] Test: renders table with columns "Order ID", "Items", "Total", "Status", "Time", "Action"
+  - [x] Test: status filter dropdown (All / PLACED / PREPARING / OUT_FOR_DELIVERY / DELIVERED) updates query param and re-fetches
+  - [x] Test: clicking an order row opens detail modal showing full items list with names, quantities, unit prices
+  - [x] Test: "Update Status" dropdown in modal shows only valid next states (e.g. if current = PLACED, shows PREPARING and CANCELLED; not DELIVERED)
+  - [x] Test: confirming a status update calls `PUT /api/v1/store/orders/:id/status` and shows success toast
+  - [x] Test: while status update is pending, the confirm button shows a spinner and is disabled
+  - [x] **Run — confirm RED (component does not exist)**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] [Component] Create `apps/web/src/pages/store/StoreOrdersPage.tsx`
-  - [ ] Use `useQuery` for order list with `status` filter from URL param; `staleTime: 30000`; `refetchInterval: 60000` (auto-refresh every minute)
-  - [ ] Table rows: Order ID (masked, first 8 chars + "..."), items count, total `₹`, status badge (color-coded), elapsed time ("2m ago")
-  - [ ] Order detail modal (shadcn `Dialog`): full items list, buyer masked phone, delivery address landmark, status history timeline
-  - [ ] Status update: dropdown shows only valid transitions; `useMutation` calls `PUT`; invalidates order list query on success
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] [Component] Create `apps/web/src/pages/store/StoreOrdersPage.tsx`
+  - [x] Use `useQuery` for order list with `status` filter from URL param; `staleTime: 30000`; `refetchInterval: 60000` (auto-refresh every minute)
+  - [x] Table rows: Order ID (masked, first 8 chars + "..."), items count, total `₹`, status badge (color-coded), elapsed time ("2m ago")
+  - [x] Order detail modal (shadcn `Dialog`): full items list, buyer masked phone, delivery address landmark, status history timeline
+  - [x] Status update: dropdown shows only valid transitions; `useMutation` calls `PUT`; invalidates order list query on success
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Store orders page loads → shows pending orders → click order → modal with full details → select "PREPARING" from status dropdown → confirm → order status updates in DB → order list refreshes → status badge changes → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Store orders page loads → shows pending orders → click order → modal with full details → select "PREPARING" from status dropdown → confirm → order status updates in DB → order list refreshes → status badge changes → ✅ Done.
 
 ---
 
@@ -962,5 +962,18 @@ _(Append new entries here — never delete old entries.)_
 - Developed `StoreDashboardPage.tsx` under React featuring loading skeleton states (`kpi-skeleton-orders`, `kpi-skeleton-revenue`, `chart-skeleton`), Top Products ranks, and low stock alert triggers.
 - Integrated a custom dynamic SVG weekly trend bar chart that highlights today's revenue, featuring clear tooltip information to avoid duplicate test elements.
 - Wired `/store/dashboard` correctly under the router while maintaining `/store` as the fallback placeholder path, and verified 100% green tests, lint rules, and production bundle compilation.
+
+### Session 4 — 2026-05-20 — Real-Time WebSocket Store Notifications & Order Sync
+- **Wired Store Owner Room Subscriptions**: Integrated a `"join_store"` room subscriber hook in `socket.ts` allowing store owners to register for updates on their specific `storeId` room.
+- **Implemented Instant Real-Time Order Placement Broadcaster**: Embedded a broadcast emitter in `order.controller.ts` triggering a `"store:new_order"` event immediately to the respective store's channel when any buyer places an order.
+- **Implemented Interactive Order Status Update Broadcaster**: Wired the shared `orderEmitter` inside `routes.ts` to trigger a `"store:order_updated"` notification to the merchant's room when any order progresses along the state machine.
+- **Developed Store-Side WebSocket Listener & Sound Alert System**: Custom-integrated a reactive Socket.io listener inside `StoreOrdersPage.tsx` that triggers auto-refreshes for TanStack Query keys, launches alerts, and plays an interactive audio attention chime upon receiving a brand new order.
+- Verified 100% type safety and successful TypeScript compilation for the entire workspace repository.
+
+### Session 5 — 2026-05-20 — Cookie Isolation, Dynamic CORS & Buyer History Live Updates
+- **Isolated Portal Cookie Spaces**: Separated store owner and buyer cookies into distinct namespaces (`"storeOwnerRefreshToken"` vs `"refreshToken"`), resolving concurrent session overwrite bugs and preventing unexpected logouts on reload.
+- **Dynamic CORS & Socket.IO Mirroring**: Configured both HTTP Fastify and Socket.IO servers to dynamically mirror origins in development mode. This robustly resolves cross-origin request blocks when Vite shifts ports or local addresses switch between `127.0.0.1` and `localhost`.
+- **Wired Real-Time Buyer Order History Sync**: Built Socket.IO active-order room subscriptions inside `OrderHistoryPage.tsx`. Buyer orders automatically join their respective socket rooms, receiving immediate `"order_status_changed"` updates from the merchant with elegant Sonner notifications and zero-latency UI status updates.
+- **Crafted Premium Manual Refresh Mechanisms**: Upgraded manual refresh triggers on both client and merchant panels to include `animate-spin` micro-animations, button disabled states during execution, and multi-stage Sonner status toasts (Syncing -> Sync Complete!), creating an extremely satisfying and premium feel.
 
 

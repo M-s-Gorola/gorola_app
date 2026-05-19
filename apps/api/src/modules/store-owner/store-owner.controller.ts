@@ -15,8 +15,8 @@ export function registerStoreOwnerRoutes(
   app: FastifyInstance,
   deps: {
     tokenVerifier: AccessTokenVerifier;
-    orderService?: any;
-    orders?: any;
+    orderService?: unknown;
+    orders?: unknown;
   }
 ): void {
   const prisma = getPrismaClient();
@@ -59,13 +59,17 @@ export function registerStoreOwnerRoutes(
     }
 
     const storeId = owner.storeId;
-    const query = request.query as any;
+    const query = request.query as Record<string, string | undefined>;
 
-    const page = query.page ? parseInt(query.page as string, 10) : 1;
-    const limit = query.limit ? parseInt(query.limit as string, 10) : 10;
-    const status = query.status as any;
+    const page = query.page ? parseInt(query.page, 10) : 1;
+    const limit = query.limit ? parseInt(query.limit, 10) : 10;
+    const status = query.status as import("@prisma/client").OrderStatus | undefined;
 
-    const data = await storeOwnerService.getOrders(storeId, { status, page, limit });
+    const data = await storeOwnerService.getOrders(storeId, {
+      ...(status ? { status } : {}),
+      page,
+      limit
+    });
 
     return {
       success: true,
@@ -92,9 +96,12 @@ export function registerStoreOwnerRoutes(
     }
 
     const storeId = owner.storeId;
-    const params = request.params as any;
+    const params = request.params as Record<string, string>;
     const orderId = params.orderId;
-    const body = request.body as any;
+    if (!orderId) {
+      throw new ValidationError("Order ID is required");
+    }
+    const body = request.body as { status?: string };
     const newStatus = body.status;
 
     if (!newStatus) {
@@ -104,8 +111,15 @@ export function registerStoreOwnerRoutes(
     const order = await storeOwnerService.updateOrderStatus(
       storeId,
       orderId,
-      newStatus,
-      deps.orderService
+      newStatus as import("@prisma/client").OrderStatus,
+      deps.orderService as {
+        cancelOrderWithStockRestore: (orderId: string, actor: string) => Promise<unknown>;
+        updateStatus: (
+          orderId: string,
+          newStatus: import("@prisma/client").OrderStatus,
+          actor: string
+        ) => Promise<unknown>;
+      }
     );
 
     return {

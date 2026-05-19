@@ -7,6 +7,7 @@ import {
   useEffect,
   useLayoutEffect,
   useRef,
+  useState,
 } from "react";
 import { useParams } from "react-router-dom";
 
@@ -255,6 +256,8 @@ export function OrderConfirmationPage(): ReactElement {
   const rootRef = useRef<HTMLElement | null>(null);
   const bloomRef = useRef<HTMLDivElement | null>(null);
   const entranceDoneRef = useRef(false);
+  const [animationFinished, setAnimationFinished] = useState(false);
+  const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
 
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
@@ -306,15 +309,31 @@ export function OrderConfirmationPage(): ReactElement {
 
   useOrderSocket(id, onStatusChanged);
 
+  const currentStatus = query.data?.status;
+  const lastStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (currentStatus && lastStatusRef.current && lastStatusRef.current !== currentStatus) {
+      setShowStatusTransitionBloom(true);
+      setAnimationFinished(false);
+      entranceDoneRef.current = false;
+    }
+    lastStatusRef.current = currentStatus ?? null;
+  }, [currentStatus]);
+
   useEffect(() => {
     entranceDoneRef.current = false;
+    setAnimationFinished(false);
+    setShowStatusTransitionBloom(false);
   }, [id]);
 
   const isRecentlyPlaced = query.isSuccess && query.data.createdAt ? (
     Date.now() - new Date(query.data.createdAt).getTime() < 60000
   ) : false;
 
-  const shouldShowBloom = query.isSuccess && (query.data.status === "PLACED" || isRecentlyPlaced);
+  const shouldShowBloom = query.isSuccess && (
+    (query.data.status === "PLACED" || isRecentlyPlaced || showStatusTransitionBloom) && !animationFinished
+  );
 
   useLayoutEffect(() => {
     if (!query.isSuccess || query.data === undefined || entranceDoneRef.current) {
@@ -329,6 +348,7 @@ export function OrderConfirmationPage(): ReactElement {
     // If we shouldn't show bloom, just show content immediately
     if (!shouldShowBloom) {
       entranceDoneRef.current = true;
+      setAnimationFinished(true);
       gsap.set(".occ-content", { autoAlpha: 1, y: 0 });
       return;
     }
@@ -355,6 +375,10 @@ export function OrderConfirmationPage(): ReactElement {
 
       const tl = gsap.timeline({
         defaults: { ease: "power3.out" },
+        onComplete: () => {
+          setAnimationFinished(true);
+          setShowStatusTransitionBloom(false);
+        }
       });
 
       // 1. Initial hold on the green screen for "Impact"

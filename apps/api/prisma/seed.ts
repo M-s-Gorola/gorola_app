@@ -1,4 +1,5 @@
 import { PrismaClient } from "@prisma/client";
+import { hash } from "bcryptjs";
 import { seedDummyData } from "./dummy-data";
 
 const prisma = new PrismaClient();
@@ -30,22 +31,24 @@ async function main(): Promise<void> {
     }
   });
 
+  const hashedPw = await hash("Owner#123", 10);
+
   await prisma.storeOwner.upsert({
     where: { email: "owner1@gorola.in" },
-    update: {},
+    update: { passwordHash: hashedPw },
     create: {
       email: "owner1@gorola.in",
-      passwordHash: "TEMP_HASH_REPLACE_IN_AUTH_PHASE",
+      passwordHash: hashedPw,
       storeId: storeA.id
     }
   });
 
   await prisma.storeOwner.upsert({
     where: { email: "owner2@gorola.in" },
-    update: {},
+    update: { passwordHash: hashedPw },
     create: {
       email: "owner2@gorola.in",
-      passwordHash: "TEMP_HASH_REPLACE_IN_AUTH_PHASE",
+      passwordHash: hashedPw,
       storeId: storeB.id
     }
   });
