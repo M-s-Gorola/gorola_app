@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 const totpSchema = z.object({
@@ -111,7 +112,8 @@ export function StoreTwoFactorPage(): ReactElement {
         storeId: decoded.storeId
       });
 
-      navigate("/store/dashboard", { replace: true });
+      const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+      navigate(getScopedPath("/store/dashboard", "store", isSubdomainMode), { replace: true });
     } catch (err) {
       const ax = err as AxiosError<{
         error?: { message?: string; code?: string };

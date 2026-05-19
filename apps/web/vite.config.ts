@@ -11,6 +11,7 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5180,
+    allowedHosts: true,
     proxy: {
       "/api": {
         // Only shift the port if explicitly in E2E mode to avoid local dev "leaks"

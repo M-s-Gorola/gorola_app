@@ -9,6 +9,7 @@ import { z } from "zod";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 const storeLoginSchema = z.object({
@@ -77,10 +78,11 @@ export function StoreLoginPage(): ReactElement {
         password: vals.password
       });
 
+      const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
       const body = res.data;
       if (body.success === true) {
         if (body.data?.requiresTwoFactor === true) {
-          navigate("/store/2fa", { state: { email: vals.email, password: vals.password } });
+          navigate(getScopedPath("/store/2fa", "store", isSubdomainMode), { state: { email: vals.email, password: vals.password } });
         } else if (body.data?.accessToken && body.data?.refreshToken) {
           const decoded = decodeJwt(body.data.accessToken);
           if (decoded && decoded.sub && decoded.storeId) {
@@ -90,7 +92,7 @@ export function StoreLoginPage(): ReactElement {
               userId: decoded.sub,
               storeId: decoded.storeId
             });
-            navigate("/store/dashboard", { replace: true });
+            navigate(getScopedPath("/store/dashboard", "store", isSubdomainMode), { replace: true });
           } else {
             setErrorMessage("Invalid session token received.");
           }

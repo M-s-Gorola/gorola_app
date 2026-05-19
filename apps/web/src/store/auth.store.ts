@@ -1,5 +1,7 @@
 import { create } from "zustand";
 
+import { queryClient } from "@/lib/query-client";
+
 import { useCartStore } from "./cart.store";
 
 export type AuthTokens = {
@@ -51,6 +53,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   twoFactorVerified: null,
   clearSession: () => {
     useCartStore.getState().clear();
+    queryClient.clear();
     set({
       accessToken: null,
       name: null,
