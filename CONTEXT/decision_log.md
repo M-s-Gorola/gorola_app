@@ -1064,3 +1064,36 @@ For regulatory compliance, user data security, and platform disintermediation pr
 - Adds infrastructure overhead and API integration costs for Twilio/masked proxy calls.
 - Store owners cannot manually type out the buyer's actual number into a traditional phone keypad; all contact must be initiated through the platform's routed channels.
 
+---
+
+## [DECISION-036] Subdomain Routing over Separate Monorepo Packages (Option A vs. Option B)
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+The platform needs to support dedicated subdomains for Store Owners (`store.gorola.com`) and Administrators (`admin.gorola.com`) instead of relying purely on subpaths (e.g. `/store` and `/admin`) under the main domain (`gorola.com`). We needed to decide between implementing client-side routing based on hostnames within a single Vite SPA (Option A) versus refactoring the monorepo to split the frontend into separate Vite application packages (Option B).
+
+**Decision:**
+Start by implementing **Option A (Subdomain Routing inside a Single Vite SPA)**, with a clear evolutionary roadmap to transition to **Option B (Separate Monorepo Micro-Frontends)** when scaling constraints or strict bundle auditing requirements warrant it.
+
+Under Option A:
+- Add custom domains (`store.gorola.com`, `admin.gorola.com`) to the single Vercel deployment.
+- Read `window.location.hostname` in the React frontend entrypoint (`App.tsx`).
+- Conditionally render/mount separate react-router-dom route trees (buyer routes, store owner routes, or admin routes) based on the matching host subdomain.
+- In development/testing environments, local routing falls back to standard subpaths OR local host headers (e.g., `admin.localhost`) to maintain maximum testing velocity without breaking any existing E2E or unit tests.
+
+**Rationale:**
+- **Zero Deployment Overhead**: Avoids orchestrating three separate deployment pipelines and configuration environments on Vercel during the early launch phase.
+- **Unified Development Ergonomics**: Running `pnpm dev` boots a single development server, keeping manual developer iteration extremely fast.
+- **Future-Proof Structure**: Because the project is already a pnpm monorepo with core logic split into `packages/shared` and `packages/ui`, all business logic, design tokens, and components are completely decoupled. Migrating from Option A to Option B in the future will be a trivial file-moving exercise (copying folders into new app packages) rather than a complex refactoring of coupled code.
+- **Risk Mitigation**: Implementing Option A has almost zero impact on existing E2E/Playwright test flows (which target standard `/store` and `/admin` subpaths) since we can allow fallback routing.
+
+**Tradeoffs:**
+- In Option A, admin/merchant-specific code chunks are theoretically downloadable in the buyer's browser assets, though React code splitting and bundler optimization minimize this. Gated authentication and route guards prevent actual unauthorized API access or UI usage.
+- Requires standard cookie configuration (e.g. `SameSite=None`, `Domain=.gorola.com`) to allow credential sharing across subdomains where required, which is already aligned with existing cross-site cookie decisions (DECISION-020).
+
+**Alternatives Considered:**
+1. **Option B (Separate Monorepo Packages from Day 1)** - Rejected for now: premature operational complexity. Splitting packages requires duplicating boilerplate configurations, managing multiple Vercel environment sets, and rewriting automated E2E pipelines, which would slow down active Phase 3/4 feature development.
+
+
