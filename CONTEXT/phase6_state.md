@@ -181,3 +181,10 @@ Validate that both standard subpath layouts (`http://localhost:5180/store/login`
 - **Problem:** Single monolithic router had absolute paths like `/store/*` and `/admin/*`. In production, store owners and admins wanted to use subdomains like `store.gorola.com` and `admin.gorola.com` directly, but local testing required fallback path routing on localhost.
 - **Solution:** Developed a hostname resolver helper (`subdomain-resolver.ts`) and modular routing files (`buyer.tsx`, `store.tsx`, `admin.tsx`). Dynamic routing was mapped in `App.tsx` and session bootstrapping updated. Refactored dynamic path guards (`guards.tsx`), layouts (`StoreLayout.tsx`), logins (`StoreLoginPage.tsx`), and 2FA pages using `getScopedPath`.
 - **Validation:** Added robust unit/integration tests (`router.subdomain.test.tsx`, `route-guards.subdomain.test.tsx`) in Vitest and E2E subdomain smoke tests (`subdomain.spec.ts`) in Playwright. All tests are fully stable and passing!
+
+### 2026-05-20: Cache Consistency, E2E WebKit Hang, and Workspace Stub Clarification
+- **Problem (Stale Store Data Leak):** When a new merchant logged in, orders from the previously logged-in merchant briefly rendered because TanStack Query's in-memory cache was not cleared on logout.
+- **Solution (Query Cache Wiping):** Centralized `QueryClient` into a central `queryClient` singleton in `query-client.ts` and wired `queryClient.clear()` directly into `clearSession` in `auth.store.ts` to guarantee absolute data isolation.
+- **Problem (E2E iphone-se WebKit Hang):** Local Playwright E2E subdomain tests froze indefinitely on the `iphone-se` project because WebKit does not support the Chromium-specific `--host-resolver-rules` command-line flag, causing it to query public DNS for `store.gorola.com`.
+- **Solution (Chromium Mobile Emulation):** Updated `playwright.config.ts` to run the `iphone-se` project using the `chromium` engine, unblocking local DNS resolution.
+- **Improvement (Informative UI Stubs):** Updated the build, typecheck, lint, and test scripts in `packages/ui` to print concise, helpful console messages explaining their standalone scaffolding purpose.

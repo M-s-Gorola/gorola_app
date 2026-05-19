@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "build": "echo \"UI package build to be added in Phase 2\"",
-    "typecheck": "echo \"UI package typecheck to be added in Phase 2\"",
-    "lint": "echo \"UI package lint to be added in Phase 2\"",
-    "test": "echo \"UI package tests to be added in Phase 2\""
+    "build": "echo \"@gorola/ui: Build stub. Reserved for when we split apps/web into separate standalone apps.\"",
+    "typecheck": "echo \"@gorola/ui: Typecheck stub. Gated until components are shared across separate apps.\"",
+    "lint": "echo \"@gorola/ui: Lint stub. Gated until components are shared across separate apps.\"",
+    "test": "echo \"@gorola/ui: Test stub. Gated until components are shared across separate apps.\""
   }
 }

@@ -162,7 +162,7 @@ jobs:
       # If cache hit, only system dependencies are installed (which is fast).
       - name: Install Playwright Browsers
         if: steps.playwright-cache.outputs.cache-hit != 'true'
-        run: pnpm --filter @gorola/web exec playwright install --with-deps
+        run: pnpm --filter @gorola/web exec playwright install chromium --with-deps
 
       - name: Install Playwright OS Dependencies
         if: steps.playwright-cache.outputs.cache-hit == 'true'
