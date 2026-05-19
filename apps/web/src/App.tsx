@@ -11,11 +11,9 @@ import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { useWeatherSync } from "@/hooks/useWeatherSync";
 import { bootstrapBuyerAuthSession, bootstrapStoreOwnerAuthSession } from "@/lib/api";
-import { createAppQueryClient } from "@/lib/query-client";
+import { queryClient } from "@/lib/query-client";
 import { resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useWeatherStore } from "@/store/weather.store";
-
-const queryClient = createAppQueryClient();
 
 export function App(): ReactElement {
   useGorolaMotion();
