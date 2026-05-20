@@ -65,5 +65,19 @@ describe("resolveSubdomain", () => {
       expect(res.subdomain).toBe(null);
       expect(sessionStorage.getItem("gorola_subdomain_override")).toBeNull();
     });
+
+    it("stops returning subdomain mode after sessionStorage override is cleared manually", () => {
+      sessionStorage.setItem("gorola_subdomain_override", "store");
+
+      let res = resolveSubdomain("localhost");
+      expect(res.isSubdomainMode).toBe(true);
+      expect(res.subdomain).toBe("store");
+
+      sessionStorage.removeItem("gorola_subdomain_override");
+
+      res = resolveSubdomain("localhost");
+      expect(res.isSubdomainMode).toBe(false);
+      expect(res.subdomain).toBe(null);
+    });
   });
 });

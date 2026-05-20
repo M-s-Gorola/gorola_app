@@ -1,11 +1,22 @@
 import { act, renderHook } from "@testing-library/react";
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAuthStore } from "./auth.store";
 import { useCartStore } from "./cart.store";
 
+const { resetBootstrapStateMock } = vi.hoisted(() => ({
+  resetBootstrapStateMock: vi.fn()
+}));
+
+vi.mock("@/lib/bootstrap-state", () => ({
+  resetBootstrapState: resetBootstrapStateMock,
+  setBootstrapPromise: vi.fn(),
+  setStoreBootstrapPromise: vi.fn()
+}));
+
 describe("useAuthStore", () => {
   beforeEach(() => {
+    resetBootstrapStateMock.mockReset();
     act(() => {
       useAuthStore.getState().clearSession();
     });
@@ -57,5 +68,21 @@ describe("useAuthStore", () => {
     expect(result.current.userId).toBeNull();
     expect(result.current.phone).toBeNull();
     expect(useCartStore.getState().lines).toEqual([]);
+  });
+
+  it("clearSession calls resetBootstrapState", () => {
+    act(() => {
+      useAuthStore.getState().setStoreOwnerSession({
+        accessToken: "at",
+        refreshToken: "rt",
+        userId: "u1",
+        storeId: "s1"
+      });
+    });
+    resetBootstrapStateMock.mockReset();
+    act(() => {
+      useAuthStore.getState().clearSession();
+    });
+    expect(resetBootstrapStateMock).toHaveBeenCalledTimes(1);
   });
 });
