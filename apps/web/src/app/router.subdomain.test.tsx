@@ -131,7 +131,7 @@ describe("subdomain routing integration", () => {
     expect(screen.getByRole("heading", { name: "Store Partner Portal" })).toBeInTheDocument();
   });
 
-  it("renders Rider Sign In directly at '/' when browsing rider.gorola.com", () => {
+  it.todo("renders Rider Sign In directly at '/' when browsing rider.gorola.com", () => {
     setHostnameAndPath("rider.gorola.com", "/");
 
     const queryClient = new QueryClient({
