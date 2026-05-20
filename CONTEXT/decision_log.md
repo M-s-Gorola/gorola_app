@@ -1165,5 +1165,31 @@ Buyer pages (`apps/web/src/pages/buyer/`) are **exempt** — they never navigate
 1. Rely on agent memory or code review to catch hardcoded paths — rejected: agents have no cross-session memory; this will silently regress.
 2. Add a lint rule to ban raw `navigate('/store')` strings — possible future improvement, but the decision log + phase plan notes provide sufficient guardrails for now.
 
+---
+
+## [DECISION-039] Unique Variant Label Validation over SKU Field in Phase 3.4
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+Phase 3.4 (Product Management) requirements in the active phase checklist specify TDD cases verifying that creating/updating products with duplicate SKUs across variants throws a `409 Conflict` error. However, the database schema in `schema.prisma` does not have a `sku` column on `ProductVariant`. We need to decide whether to introduce a schema migration to add a `sku` field, or satisfy the duplicate validation requirement using existing database fields.
+
+**Decision:**
+Do not introduce a new `sku` database column or run a database schema migration. Instead, enforce **unique variant label validation within the product** at the service/controller level. The backend and frontend forms will treat the variant `label` (e.g., `"500ml"`, `"1kg"`, `"Single Service"`) as the unique identifier for a variant under a given product. Submitting a product with multiple variants sharing the exact same label will fail with an HTTP 409 Conflict error.
+
+**Rationale:**
+- **No unnecessary schema bloat:** Avoids adding a new column that isn't functionally required by the current application features.
+- **Maintains existing database integrity:** Keeps the schema lean and preserves reference rules.
+- **Frictionless local/QA setups:** Prevents the need to execute database migrations in local/staging environments, minimizing integration churn.
+- **Equivalent functional validation:** From a user experience and business standpoint, having two variants of the same product with the exact same label (e.g., two `"500ml"` variants) is a logical duplication. Validating label uniqueness under a product achieves the exact same business objective.
+
+**Tradeoffs:**
+- Store owners cannot assign arbitrary non-unique labels to different physical items if they wanted to distinguish them solely by a hypothetical hidden SKU. However, under GoRola, variants are shown to buyers directly by their labels, so labels must be unique and descriptive by definition.
+
+**Alternatives Considered:**
+1. **Prisma Schema Migration (Option A)**: Add `sku String?` to `ProductVariant` and run `prisma migrate dev`. Rejected as it introduces unnecessary database complexity when variant labels are already customer-facing unique identifiers under a product.
+
+
 
 

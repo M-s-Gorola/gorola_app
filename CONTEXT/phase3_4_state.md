@@ -251,7 +251,11 @@ No store-facing order endpoints exist. Store owners need to see all incoming ord
 ### 3.4 — Product Management (CRUD + Variants)
 
 **Root Cause / Goal:**
-No store-owner-facing product endpoints exist. Store owners need to create, read, update, and soft-delete products with multiple variants (each with SKU, price, stock quantity). Products must only be manageable for the authenticated owner's store.
+No store-owner-facing product endpoints exist. Store owners need to create, read, update, and soft-delete products with multiple variants (each with label, price, stock quantity, unit). Products must only be manageable for the authenticated owner's store.
+
+> [!NOTE]
+> **Design Decision (DECISION-039):**
+> The database schema `ProductVariant` table does not contain a `sku` column. Per DECISION-039, we are enforcing **unique variant label validation within the product** at the service/controller level. The `label` (e.g. "500ml", "1kg") serves as the unique identifier for a variant of that product. Duplicate labels under the same product will throw a `409 Conflict` error.
 
 **Fix / Approach:**
 1. [Backend] Create `GET /api/v1/store/products`, `POST /api/v1/store/products`, `PUT /api/v1/store/products/:id`, `DELETE /api/v1/store/products/:id` (soft delete), and `PUT /api/v1/store/products/:id/variants/:variantId` in `store-owner.controller.ts`.
@@ -262,8 +266,8 @@ No store-owner-facing product endpoints exist. Store owners need to create, read
 - [ ] **RED — Integration (`store-owner.products.test.ts` — new file):**
   - [ ] Test setup: create 2 stores (A and B) with products
   - [ ] Test: `GET /api/v1/store/products` with store A JWT → returns only store A products; store B products absent
-  - [ ] Test: `POST /api/v1/store/products` with body `{ name: 'Fresh Milk', subCategoryId: '<id>', description: '...', variants: [{ label: '500ml', price: 35, stockQty: 100, sku: 'MILK-500' }] }` → HTTP 201 with `{ id, name, variants: [{ id, label, price, stockQty, isInStock: true }] }`
-  - [ ] Test: `POST /api/v1/store/products` with duplicate SKU across variants → HTTP 409 with `CONFLICT` code
+  - [ ] Test: `POST /api/v1/store/products` with body `{ name: 'Fresh Milk', subCategoryId: '<id>', description: '...', variants: [{ label: '500ml', price: 35, stockQty: 100, unit: 'packet' }] }` → HTTP 201 with `{ id, name, variants: [{ id, label, price, stockQty, isInStock: true }] }`
+  - [ ] Test: `POST /api/v1/store/products` with duplicate variant labels under the same product → HTTP 409 with `CONFLICT` code
   - [ ] Test: `POST /api/v1/store/products` with `subCategoryId` that doesn't exist → HTTP 404 with `NOT_FOUND` code
   - [ ] Test: `PUT /api/v1/store/products/<storeAProductId>` with body `{ name: 'Updated Name' }` → HTTP 200; product name updated in DB
   - [ ] Test: `PUT /api/v1/store/products/<storeBProductId>` using store A JWT → HTTP 403 `FORBIDDEN`
@@ -274,7 +278,7 @@ No store-owner-facing product endpoints exist. Store owners need to create, read
 - [ ] **GREEN — Backend:**
   - [ ] [Service] Add to `store-owner.service.ts`:
     - `getProducts(storeId, { search?, subCategoryId?, page, limit })`: calls `ProductRepository.findManyByStore(storeId, filters)`
-    - `createProduct(storeId, dto)`: validates `subCategoryId` exists; calls `ProductRepository.create` with `{ storeId, ...dto, variants: { create: dto.variants } }`; creates `StockMovement` with type `INITIAL` for each variant in a transaction
+    - `createProduct(storeId, dto)`: validates `subCategoryId` exists; validates that variant labels are unique in the list; calls `ProductRepository.create` with `{ storeId, ...dto, variants: { create: dto.variants } }`; creates `StockMovement` with type `INITIAL` for each variant in a transaction
     - `updateProduct(storeId, productId, dto)`: validates product belongs to storeId; calls `ProductRepository.update`
     - `softDeleteProduct(storeId, productId)`: validates ownership; sets `isDeleted: true`
     - `updateVariant(storeId, productId, variantId, dto)`: validates product belongs to store; if `stockQty` changes, creates `ADJUSTMENT` StockMovement and updates flags atomically in a transaction
@@ -292,7 +296,7 @@ No store-owner-facing product endpoints exist. Store owners need to create, read
 
 - [ ] **RED — Unit/Component (`StoreProductFormPage.test.tsx`):**
   - [ ] Test: form renders name, description, sub-category dropdown, and "Add Variant" section
-  - [ ] Test: each variant row has label, price, stockQty, sku inputs
+  - [ ] Test: each variant row has label, price, stockQty, unit inputs
   - [ ] Test: "Add Variant" button appends a new empty variant row
   - [ ] Test: submitting with empty name shows validation error "Product name is required"
   - [ ] Test: submitting valid form calls `POST /api/v1/store/products` and navigates to `/store/products` on success
