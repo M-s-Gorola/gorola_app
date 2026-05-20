@@ -39,5 +39,6 @@ export function useGorolaMotion(): void {
       return () => cancelAnimationFrame(rafId);
     }
     window.scrollTo(0, 0);
+    return;
   }, [pathname]);
 }

@@ -1,5 +1,5 @@
 import { render, renderHook, waitFor } from "@testing-library/react";
-import { type ReactNode, act } from "react";
+import { act, type ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -136,7 +136,7 @@ describe("useGorolaMotion", () => {
     const { createGorolaLenis } = await import("@/lib/lenis");
     vi.mocked(createGorolaLenis).mockImplementationOnce(() => {
       // Don't set moduleLevenLenis — keep it null so Effect 2 sees null
-      return mockLenisInstance;
+      return mockLenisInstance as unknown as ReturnType<typeof createGorolaLenis>;
     });
 
     renderHook(() => useGorolaMotion(), { wrapper });
