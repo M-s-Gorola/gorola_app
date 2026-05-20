@@ -58,7 +58,7 @@ export function AdminRoute({ children }: GuardProps): ReactElement {
     return <p className="font-dm-sans text-sm text-gorola-slate">Restoring your session...</p>;
   }
   if (!hasSession(accessToken)) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    return <Navigate to={getScopedPath("/admin/login", "admin", isSubdomainMode)} replace state={{ from: location }} />;
   }
   if (role !== "ADMIN") {
     return <Navigate to={getScopedPath("/", "buyer", isSubdomainMode)} replace />;

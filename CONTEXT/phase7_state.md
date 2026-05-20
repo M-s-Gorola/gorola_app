@@ -287,6 +287,7 @@ Build `StoreBookingsPage.tsx` under `/store/bookings` (gated by `StoreRoute` and
   - [ ] [Component] Create `apps/web/src/pages/store/StoreBookingsPage.tsx` with tabs, modals, and mutation query states.
   - [ ] [Layout] Update `apps/web/src/components/store/StoreLayout.tsx` to conditionally render the "Bookings" link.
   - [ ] [Router] Add `/store/bookings` page under `apps/web/src/App.tsx`.
+  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/store/...` strings.
   - [ ] Run unit tests — **confirm GREEN**.
 
 - [ ] **Verification chain:**
