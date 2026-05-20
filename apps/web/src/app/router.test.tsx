@@ -207,8 +207,7 @@ describe("buyer routes", () => {
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByRole("heading", { name: "Store Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText("This page is not ready yet.")).toBeInTheDocument();
+    expect(screen.getByTestId("kpi-skeleton-orders")).toBeInTheDocument();
   });
 
   it("renders query-aware search page for /search?q=", () => {

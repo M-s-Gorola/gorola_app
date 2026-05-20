@@ -2,6 +2,7 @@ import type { ReactElement, ReactNode } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -18,8 +19,24 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
 
   const handleLogout = () => {
-    clearSession();
-    navigate(getScopedPath("/store/login", "store", isSubdomainMode));
+    const refreshToken = useAuthStore.getState().refreshToken;
+    void api?.post("/api/v1/auth/store-owner/logout", { refreshToken }).catch(() => {});
+    
+    // Clear the sessionStorage override so navigating to the base URL
+    // doesn't re-enter store subdomain mode and silently re-authenticate.
+    sessionStorage.removeItem("gorola_subdomain_override");
+
+    // Resolve the new subdomain mode dynamically after clearing the override
+    const { isSubdomainMode: newIsSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+    // Navigate to the correctly resolved scoped path first
+    navigate(getScopedPath("/store/login", "store", newIsSubdomainMode));
+
+    // Defer state clearing to the next tick to prevent concurrent double-navigation
+    // race conditions with the outer route guard during layout unmount.
+    setTimeout(() => {
+      clearSession();
+    }, 0);
   };
 
   const navItems = [

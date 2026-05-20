@@ -1,5 +1,6 @@
 import { create } from "zustand";
 
+import { resetBootstrapState } from "@/lib/bootstrap-state";
 import { queryClient } from "@/lib/query-client";
 
 import { useCartStore } from "./cart.store";
@@ -54,6 +55,9 @@ export const useAuthStore = create<AuthState>((set) => ({
   clearSession: () => {
     useCartStore.getState().clear();
     queryClient.clear();
+    // Reset bootstrap promise singletons so the next login triggers a fresh
+    // bootstrap rather than returning the stale already-resolved promise.
+    resetBootstrapState();
     set({
       accessToken: null,
       name: null,

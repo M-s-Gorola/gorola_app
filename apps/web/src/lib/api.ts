@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig, isAxiosError, type RawAxiosRequestHeaders } from "axios";
 
+import { bootstrapPromise, setBootstrapPromise, setStoreBootstrapPromise, storeBootstrapPromise } from "@/lib/bootstrap-state";
 import { type AuthTokens, useAuthStore } from "@/store/auth.store";
 
 const BUYER_REFRESH_PATH = "/api/v1/auth/buyer/refresh";
@@ -177,9 +178,6 @@ export const api: ReturnType<typeof createApiClient> | null = (() => {
   });
 })();
 
-let bootstrapPromise: Promise<void> | null = null;
-let storeBootstrapPromise: Promise<void> | null = null;
-
 /**
  * Startup auth bootstrap: try cookie-backed refresh once so reload keeps buyer session.
  * Deduplicated via bootstrapPromise to prevent race conditions during React StrictMode double-mount.
@@ -189,7 +187,7 @@ export async function bootstrapBuyerAuthSession(): Promise<void> {
     return bootstrapPromise;
   }
 
-  bootstrapPromise = (async () => {
+  const p = (async () => {
     if (api === null) {
       useAuthStore.getState().setBootstrapPending(false);
       return;
@@ -209,8 +207,8 @@ export async function bootstrapBuyerAuthSession(): Promise<void> {
       useAuthStore.getState().setBootstrapPending(false);
     }
   })();
-
-  return bootstrapPromise;
+  setBootstrapPromise(p);
+  return p;
 }
 
 /**
@@ -221,7 +219,7 @@ export async function bootstrapStoreOwnerAuthSession(): Promise<void> {
     return storeBootstrapPromise;
   }
 
-  storeBootstrapPromise = (async () => {
+  const p = (async () => {
     if (api === null) {
       useAuthStore.getState().setBootstrapPending(false);
       return;
@@ -257,8 +255,8 @@ export async function bootstrapStoreOwnerAuthSession(): Promise<void> {
       useAuthStore.getState().setBootstrapPending(false);
     }
   })();
-
-  return storeBootstrapPromise;
+  setStoreBootstrapPromise(p);
+  return p;
 }
 
 /**

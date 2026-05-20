@@ -1,5 +1,5 @@
 import type { ReactElement } from "react";
-import { Route } from "react-router-dom";
+import { Navigate, Route } from "react-router-dom";
 import { Link } from "react-router-dom";
 
 import { StoreLayout } from "@/components/store/StoreLayout";
@@ -42,9 +42,7 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
       path={prefix || "/"}
       element={
         <StoreRoute>
-          <StoreLayout>
-            <PlaceholderPage title="Store Dashboard" prefix={prefix} />
-          </StoreLayout>
+          <Navigate to={prefix ? `${prefix}/dashboard` : "/dashboard"} replace />
         </StoreRoute>
       }
     />,
