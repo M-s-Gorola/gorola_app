@@ -21,11 +21,11 @@ test.describe('Home Page', () => {
     const pulseDot = page.locator('[data-testid="pulse-dot"]');
     await expect(pulseDot).toBeVisible();
 
-    // Assert category grid renders >= 2 cards (Groceries, Medical) each with a non-empty <img src>
+    // Assert category grid renders >= 3 cards (Groceries, Medical, Medical tests) each with a non-empty <img src>
     const categoryCards = page.locator('[data-testid="category-card"]');
-    await expect(categoryCards).toHaveCount(2);
+    await expect(categoryCards).toHaveCount(3);
     
-    for (let i = 0; i < 2; i++) {
+    for (let i = 0; i < 3; i++) {
       const card = categoryCards.nth(i);
       const img = card.locator('img');
       await expect(img).toBeVisible();

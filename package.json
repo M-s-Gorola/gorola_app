@@ -43,7 +43,9 @@
       "@opentelemetry/sdk-node": "^0.217.0",
       "@opentelemetry/exporter-prometheus": "^0.217.0",
       "protobufjs": "^7.5.6",
-      "@protobufjs/utf8": "^1.1.1"
+      "@protobufjs/utf8": "^1.1.1",
+      "minimatch@10>brace-expansion": "^5.0.6",
+      "ws": "^8.20.1"
     }
   },
   "_pnpm_overrides_comments": {
@@ -53,6 +55,8 @@
     "@opentelemetry/sdk-node": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
     "@opentelemetry/exporter-prometheus": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
     "protobufjs": "Overridden due to high security vulnerability (DoS/recursion) in <=7.5.5 and <=8.0.1",
-    "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0"
+    "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0",
+    "minimatch@10>brace-expansion": "Overridden due to moderate security vulnerability (DoS) in <5.0.6",
+    "ws": "Overridden due to moderate security vulnerability (uninitialized memory leak) in <8.20.1"
   }
 }

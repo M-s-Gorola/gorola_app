@@ -25,7 +25,7 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
   const io = new Server(app.server, {
     cors: {
       credentials: true,
-      origin: corsOrigins.length === 0 ? true : corsOrigins,
+      origin: process.env.NODE_ENV === "development" ? true : (corsOrigins.length === 0 ? true : corsOrigins),
     },
   });
 
@@ -71,6 +71,21 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
         app.log.info({ orderId, socketId: socket.id, userId: user.sub }, "Joined order room");
       } catch {
         socket.emit("error", { message: "Failed to join order room" });
+      }
+    });
+
+    socket.on("join_store", async (storeId: string) => {
+      try {
+        if (user.role !== "STORE_OWNER" && user.role !== "ADMIN") {
+          socket.emit("error", { message: "Unauthorized access to store updates" });
+          return;
+        }
+
+        const room = `store:${storeId}`;
+        void socket.join(room);
+        app.log.info({ storeId, socketId: socket.id, userId: user.sub }, "Joined store room");
+      } catch {
+        socket.emit("error", { message: "Failed to join store room" });
       }
     });
 

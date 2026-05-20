@@ -47,7 +47,8 @@ describe("CategoryPage", () => {
           data: {
             success: true,
             data: [
-              { id: "s1", slug: "snacks", name: "Snacks", imageUrl: "https://example.com/snack.jpg" }
+              { id: "s1", slug: "snacks", name: "Snacks", imageUrl: "https://example.com/snack.jpg" },
+              { id: "s2", slug: "beverages", name: "Beverages", imageUrl: "https://example.com/bev.jpg" }
             ]
           }
         };

@@ -937,3 +937,259 @@ The GoRola monorepo uses `eslint-plugin-security` to detect common Node.js vulne
 **Alternatives Considered:**
 1. **Line-by-line silencing for the whole repo:** Rejected. Adding 50+ disable comments in React components just to handle basic state access is unmaintainable and reduces developer velocity without adding security value.
 2. **Disable the plugin entirely:** Rejected. We need the protection for the backend API.
+
+---
+
+## [DECISION-032] Phase 7 Booking Commerce Architecture & Hybrid Schema
+
+**Date:** 2026-05-18
+**Status:** Accepted
+
+**Context:**
+GoRola is expanding from purely "Quick Commerce" (instant checkout, immediate rider delivery, physical inventory deduction) to support "Booking Commerce" services (e.g., medical test appointments, home appliance/hardware repairs). This requires a schema and ordering flow that supports calendar-date scheduling, buyer-selected timeslots, fasting constraints, merchant-side approval queues, and field technician dispatch, all while completely isolating and preserving the existing quick-commerce flow.
+
+**Decision:**
+Extend the Prisma schema and business logic under a unified, hybrid architecture:
+1. **DB Schema Extensions**:
+   - Introduce `StoreType` enum (`QUICK_COMMERCE`, `BOOKING_COMMERCE`) on the `Store` model to control the overall workflow.
+   - Introduce `OrderType` enum (`QUICK`, `BOOKING`) on the `Order` model.
+   - Introduce `BookingOrder` model (one-to-one relationship with `Order`) to house booking-specific fields (`scheduledDate`, `timeslot`, `requiresFasting`, `approvalStatus`, `rejectionReason`, `assignedTechnicianId`).
+   - Add new `BookingApprovalStatus` enum: `PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `COMPLETED`, `CANCELLED`.
+   - Add new `RiderType` enum (`DELIVERY`, `FIELD_TECHNICIAN`) on the `DeliveryRider` model to support field technician dispatch.
+   - Extend `OrderStatus` enum to include `PENDING_APPROVAL` and `APPROVED` status options for booking orders.
+2. **Strict Flow Isolation & Core Rules**:
+   - **Cart Bypass**: Booking order products bypass the shopping cart entirely. The buyer clicks "Book Now" on a product detail page, which redirects to the booking scheduler flow.
+   - **No Stock Deduction**: Booking orders represent services rather than physical inventory. They bypass the quick commerce stock movements (`StockMovement`) and stock depletion locks.
+   - **Fasting Regulations**: Fasting tests (`requiresFasting: true`) only permit selecting the early morning slot `"06:00-09:00"`; other slots are filtered out.
+   - **Booking Lead Days**: Ensure calendar scheduling respects the store's `bookingLeadDays` configuration (e.g. if `leadDays = 1`, today is disabled).
+   - **Merchant Approval Gate**: Placed bookings enter `PENDING_APPROVAL` state, requiring the store owner to explicitly approve (`APPROVED`) or reject (`REJECTED` with a non-empty reason). Buyers can cancel pending bookings at any time, but cannot cancel approved bookings without store owner action.
+3. **Dual-Aware Frontend Components**:
+   - The product detail page, grid cards, and category views are updated to handle both store types seamlessly. A `storeType` property is serialized in all product and category API responses.
+   - Separate dashboards/views are maintained under `/bookings/new` for scheduling and `/store/bookings` for merchants, so that booking-specific scheduling controls do not clutter the standard checkout interfaces.
+
+**Rationale:**
+- **Zero-Regression Guarantee**: Keeping standard quick commerce fully separated and unchanged means existing user paths and tests remain 100% functional.
+- **Relational Integrity**: Placing booking metadata in a dedicated `BookingOrder` model keeps the `Order` table clean, avoids massive null columns on standard quick orders, and enforces clean foreign key referential constraints.
+- **Improved UX & Conversion**: Bypassing the cart for bookings maps to standard service-hiring behaviors, eliminating confusion and reducing the steps needed to confirm an appointment.
+
+**Tradeoffs:**
+- Adds schema complexity (additional enums, tables, and conditional logic branches).
+- The `OrderStatus` enum is shared, meaning quick commerce orders technically have access to status values like `PENDING_APPROVAL`, though this is strictly blocked at the application service/validation layers.
+
+**Alternatives Considered:**
+- **Separate Microservices / Repositories**: Rejected. The modular monolith structure handles both domains beautifully and enables sharing core user identity, addresses, and layout systems.
+- **Polymorphic Table Inheritance**: Rejected. Prisma does not support model polymorphism easily, and creating completely separate Order tables for quick vs booking would break the shared history pages, order status tracking, and shared analytical reporting.
+
+---
+
+## [DECISION-033] No Separate `Service` Table — Reuse `Product` + `ProductVariant` for Booking Commerce
+
+**Date:** 2026-05-18
+**Status:** Accepted
+
+**Context:**
+When designing the Booking Commerce schema (Phase 7), the question arose: should medical tests and repair services live in their own `Service` / `ServiceVariant` table, or should they reuse the existing `Product` / `ProductVariant` models?
+
+**Decision:**
+Reuse `Product` and `ProductVariant` for all booking commerce catalog items (medical tests, repairs). Do NOT create a separate `Service` table.
+
+The only booking-specific fields — `allowedTimeslots String[]` and `requiresFasting Boolean` — are added directly onto `ProductVariant`. Everything else that makes a service "different" from a physical product (the approval gate, no stock deduction, the timeslot picker UI, the `BookingOrder` record) is handled at the **order layer**, not the catalog layer.
+
+**Rationale:**
+- **Structural equivalence at catalog level:** A "service" and a "product" are identical at the catalog level — both have a `name`, `description`, `imageUrl`, `price`, `categoryId`, `subCategoryId`, and `storeId`. Creating a `Service` table would duplicate ~90% of the `Product` schema.
+- **Minimal extension needed:** Only two fields differ — `allowedTimeslots` and `requiresFasting`. Adding two nullable fields to `ProductVariant` is far cheaper than a new table with new repositories, new controllers, new routes, new frontend types, and new admin CRUD.
+- **Single buyer browse experience:** The buyer catalog (category grid → product list → product detail) works identically for both store types. The `storeType` discriminator on `Store` is what changes the CTA from "Add to Cart" to "Book Now" — not a different catalog entity.
+- **Single admin CRUD:** Store owners manage tests and services using the same product CRUD panel they use for physical goods. No second admin interface needed.
+- **Order layer handles the difference:** The `BookingOrder` table + `OrderType` enum is where booking commerce diverges from quick commerce. The catalog layer stays clean and unified.
+
+**Tradeoffs:**
+- `ProductVariant` grows two new fields (`allowedTimeslots`, `requiresFasting`) that are always `null` / `[]` for quick-commerce products. This is a small schema denormalization acceptable at our scale.
+- A developer unfamiliar with the codebase might not immediately understand that a `Product` in a `BOOKING_COMMERCE` store is really a "service" — mitigated by the `storeType` discriminator and this decision log entry.
+
+**Alternatives Considered:**
+1. Separate `Service` + `ServiceVariant` tables — rejected: ~90% field duplication, doubles repository/service/controller/frontend-type surface area, breaks the unified buyer browse experience.
+2. Abstract base table with `Product` and `Service` inheriting from it — rejected: Prisma does not support table inheritance; would require complex manual joins or union queries.
+3. JSON `metadata` field on `Product` for booking-specific config — rejected: loses type safety, makes Prisma queries against `allowedTimeslots` impossible, harder to validate in Zod.
+
+---
+
+## [DECISION-034] Strict Store Type Isolation (No Hybrid Stores)
+
+**Date:** 2026-05-19
+**Status:** Accepted
+
+**Context:**
+A business or merchant (e.g., "Electrico" or a pharmacy/clinic) may offer both physical products suitable for immediate delivery (like light bulbs, chargers, standard painkillers) and appointment-based services (like AC repair, home electrical troubleshooting, home diagnostic lab tests). We needed to decide if a single `Store` record could act as a "hybrid" (supporting both `QUICK_COMMERCE` and `BOOKING_COMMERCE` simultaneously) or if stores must be strictly separated.
+
+**Decision:**
+Enforce strict store type isolation at the database and application levels. A single `Store` entity must have exactly one `storeType` (`QUICK_COMMERCE` or `BOOKING_COMMERCE`). If a merchant offers both physical items and scheduled services, they register **two separate stores** under the GoRola catalog:
+1. **Electrico** (Store Type: `QUICK_COMMERCE`): Manage quick physical deliveries (chargers, cords, plugs).
+2. **Electrico Services** (Store Type: `BOOKING_COMMERCE`): Manage appointment scheduling and dispatch field technicians (AC repair, rewiring).
+
+**Rationale:**
+- **Operational & Dashboard Clarity**: The merchant interface needs to support entirely different operational workflows for quick-commerce (packaging, matching with active riders, immediate stock updates) vs. booking-commerce (calendar views, technician availability, slot assignment, manual approval queues). Combining these would clutter the store dashboard under conflicting paradigms.
+- **Cart & Checkout Simplicity**: A hybrid store introduces major cart collision risks. If a buyer places a physical light bulb and an AC repair service in the same cart, the checkout pipeline would have to calculate dynamic delivery fees for the bulb (quick) while zeroing fees and gathering a date/time for the repair (booking). This would require splitting a single order into multiple delivery pipelines, introducing massive database tracking and state machine overhead.
+- **Buyer UX Gating**: By using separate stores, the buyer is guided into the correct visual flow: clicking "Electronics" shows a retail shop interface, whereas clicking "Repairs" shows a calendar scheduling interface.
+
+**Tradeoffs:**
+- Merchants must manage two profiles/dashboards if they provide both physical items and home services.
+  - *Mitigation (Plus-Addressing):* Because the `StoreOwner` database schema enforces a strict `@unique` email constraint, merchants running two stores must register with two separate emails. To prevent the friction of setting up and paying for two distinct email inboxes, merchants can use standard subaddressing (e.g., `merchant+quick@gmail.com` and `merchant+services@gmail.com`). All notification and 2FA emails will automatically route to their single primary inbox (`merchant@gmail.com`), satisfying database constraints with zero administrative overhead.
+- Slight data redundancy (e.g. duplicate merchant bank details, store locations, or contact information across both store profiles).
+
+**Alternatives Considered:**
+1. **Hybrid Stores with Order Splitting**: Allow a single store to list both types of variants. During checkout, if a mixed cart is detected, split it into separate `QUICK` and `BOOKING` orders. Rejected: massive overhead in the checkout service, complicates order matching, and increases developer cognitive load and bug rate.
+2. **Cart Blockers**: Allow hybrid stores, but reject checkout if the buyer has a mixed cart. Rejected: poor UX, as it doesn't solve the messy combined merchant dashboard problem.
+
+---
+
+## [DECISION-035] Privacy-First Buyer Identity Masking & Twilio Proxy Communication
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+For regulatory compliance, user data security, and platform disintermediation prevention, store partners must not have direct access to a buyer's private information (such as their unmasked phone number or full name). However, in real-world quick commerce operations, store owners or delivery personnel occasionally need to contact the buyer (e.g., if a substitute item is required, or for last-mile delivery navigation).
+
+**Decision:**
+1. **Masked Phone Numbers**: Only expose masked phone numbers (e.g., `*********7890`) in the merchant dashboard and store owner API responses.
+2. **Static Buyer Profile**: Hide the buyer's real name under the generic identifier `"Registered User"` or `"Guest"` on the store owner panel.
+3. **Proxy Voice Routing (Twilio Proxy)**: Wire any outgoing phone calls through an automated proxy call routing system (such as Twilio Masked Call Routing). The merchant or rider clicks a "Call" trigger in the UI or dials the virtual proxy number displayed, and the proxy server dynamically redirects the audio channel to the buyer's real mobile phone without exposing private contact numbers.
+
+**Rationale:**
+- **Regulatory Compliance**: Prevents harvesting of buyer phone databases by third-party merchant employees, ensuring tight alignment with modern consumer privacy regulations (such as GDPR or regional IT acts).
+- **Customer Retention**: Prevents merchant disintermediation (merchants taking order transaction flows off-platform to avoid commissions).
+- **Physical Safety**: Protects both customers and delivery agents from unsolicited or inappropriate contact after order completion.
+
+**Tradeoffs:**
+- Adds infrastructure overhead and API integration costs for Twilio/masked proxy calls.
+- Store owners cannot manually type out the buyer's actual number into a traditional phone keypad; all contact must be initiated through the platform's routed channels.
+
+---
+
+## [DECISION-036] Subdomain Routing over Separate Monorepo Packages (Option A vs. Option B)
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+The platform needs to support dedicated subdomains for Store Owners (`store.gorola.com`) and Administrators (`admin.gorola.com`) instead of relying purely on subpaths (e.g. `/store` and `/admin`) under the main domain (`gorola.com`). We needed to decide between implementing client-side routing based on hostnames within a single Vite SPA (Option A) versus refactoring the monorepo to split the frontend into separate Vite application packages (Option B).
+
+**Decision:**
+Start by implementing **Option A (Subdomain Routing inside a Single Vite SPA)**, with a clear evolutionary roadmap to transition to **Option B (Separate Monorepo Micro-Frontends)** when scaling constraints or strict bundle auditing requirements warrant it.
+
+Under Option A:
+- Add custom domains (`store.gorola.com`, `admin.gorola.com`) to the single Vercel deployment.
+- Read `window.location.hostname` in the React frontend entrypoint (`App.tsx`).
+- Conditionally render/mount separate react-router-dom route trees (buyer routes, store owner routes, or admin routes) based on the matching host subdomain.
+- In development/testing environments, local routing falls back to standard subpaths OR local host headers (e.g., `admin.localhost`) to maintain maximum testing velocity without breaking any existing E2E or unit tests.
+
+**Rationale:**
+- **Zero Deployment Overhead**: Avoids orchestrating three separate deployment pipelines and configuration environments on Vercel during the early launch phase.
+- **Unified Development Ergonomics**: Running `pnpm dev` boots a single development server, keeping manual developer iteration extremely fast.
+- **Future-Proof Structure**: Because the project is already a pnpm monorepo with core logic split into `packages/shared` and `packages/ui`, all business logic, design tokens, and components are completely decoupled. Migrating from Option A to Option B in the future will be a trivial file-moving exercise (copying folders into new app packages) rather than a complex refactoring of coupled code.
+- **Risk Mitigation**: Implementing Option A has almost zero impact on existing E2E/Playwright test flows (which target standard `/store` and `/admin` subpaths) since we can allow fallback routing.
+
+**Tradeoffs:**
+- In Option A, admin/merchant-specific code chunks are theoretically downloadable in the buyer's browser assets, though React code splitting and bundler optimization minimize this. Gated authentication and route guards prevent actual unauthorized API access or UI usage.
+- Requires standard cookie configuration (e.g. `SameSite=None`, `Domain=.gorola.com`) to allow credential sharing across subdomains where required, which is already aligned with existing cross-site cookie decisions (DECISION-020).
+
+**Alternatives Considered:**
+1. **Option B (Separate Monorepo Packages from Day 1)** - Rejected for now: premature operational complexity. Splitting packages requires duplicating boilerplate configurations, managing multiple Vercel environment sets, and rewriting automated E2E pipelines, which would slow down active Phase 3/4 feature development.
+
+---
+
+## [DECISION-037] Query-based Subdomain Override for Non-Production Wildcard Environments
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+Vercel's default `.vercel.app` staging domains do not support wildcard SSL certificates (e.g. `*.vercel.app` or `store.*.vercel.app` is blocked by browser security policies). Because of this, it is impossible to resolve or load actual custom subdomains natively (like `store.gorola-staging.vercel.app`) on standard staging deployments without buying and linking a custom domain. We need a way for developers, stakeholders, and QA teams to manually test the full, native subdomain layouts, route guards, and dashboards directly on their default Vercel staging URL.
+
+**Decision:**
+Implement a secure **Query-based Subdomain Override with Session Storage Persistence** in our hostname resolver (`subdomain-resolver.ts`):
+1. **Trigger:** If the URL query contains `?_subdomain=store` or `?_subdomain=admin`, the app immediately stores this override in the browser's `sessionStorage`.
+2. **Persistence:** The resolver reads from `sessionStorage` on all subsequent page views/clicks, ensuring that navigation, redirect guards, and dashboards function smoothly under that subdomain mode even when browsing the root `vercel.app` URL.
+3. **Reset:** Visiting `?_subdomain=clear` or closing the browser tab removes the override, restoring the shopper experience.
+
+**Rationale:**
+- **Zero Configuration:** Allows immediate E2E/manual testing of subdomain routing on Vercel staging and local dev without requiring local hosts file edits or buying custom domains.
+- **High Fidelity:** Simulates the exact production routing behavior, unmounting non-matching route branches with 100% security parity.
+- **Zero Production Footprint:** Live production domains (e.g. `store.gorola.com`) still resolve subdomains natively and automatically using the hostname without requiring any query params.
+
+**Tradeoffs:**
+- Adds a small query-parsing logic in our front-end resolver, but it is lightweight and completely isolated inside `subdomain-resolver.ts`.
+
+---
+
+## [DECISION-038] getScopedPath Convention for All In-App navigate() Calls in Scoped Panels
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+Phase 6.2 introduced `getScopedPath()` and `resolveSubdomain()` in `apps/web/src/lib/subdomain-resolver.ts` to support production subdomain routing (`store.gorola.com`, `admin.gorola.com`, and, when built, `rider.gorola.com`). Under subdomain mode the `/store`, `/admin`, and `/rider` path prefixes are stripped — the merchant dashboard lives at `/dashboard`, not `/store/dashboard`. Any hardcoded `navigate('/store/...')`, `navigate('/admin/...')`, or `navigate('/rider/...')` call written in a future phase will silently break navigation when running under the respective subdomain.
+
+**Decision:**
+**All `navigate()` calls inside store, admin, and rider pages and route guards must use `getScopedPath()` from `@/lib/subdomain-resolver` instead of hardcoded absolute path strings.**
+
+Pattern to follow:
+
+```typescript
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+
+const { isSubdomainMode, subdomain } = resolveSubdomain(window.location.hostname);
+navigate(getScopedPath("/store/dashboard", "store", isSubdomainMode));
+```
+
+This applies to:
+- All pages under `apps/web/src/pages/store/`
+- All pages under `apps/web/src/pages/admin/` (when built)
+- All pages under `apps/web/src/pages/rider/` (Phase 5)
+- Route guards: `StoreRoute`, `AdminRoute`, `RiderRoute` (any `<Navigate>` or `navigate()` call)
+
+Buyer pages (`apps/web/src/pages/buyer/`) are **exempt** — they never navigate into scoped paths.
+
+**Note on Rider:** When Phase 6.3 extends `getScopedPath` to support the `'rider'` scope, the same rule applies to all rider pages and the `RiderRoute` guard. Until Phase 6.3 is complete, rider pages use `/rider/` paths in fallback mode only (Phase 5 does not implement subdomain routing for riders).
+
+**Rationale:**
+- Prevents silent routing regressions in subdomain mode as new store/admin/rider pages are added in Phases 5 and 7.
+- A single function call replaces error-prone string concatenation across every panel.
+- Without this convention, a future agent will write hardcoded paths by default because that is what the existing non-scoped buyer code does.
+
+**Tradeoffs:**
+- Slightly more verbose than a bare string literal. Acceptable given the correctness guarantee.
+- Requires importing from `subdomain-resolver` in every affected component — a one-liner import.
+
+**Alternatives Considered:**
+1. Rely on agent memory or code review to catch hardcoded paths — rejected: agents have no cross-session memory; this will silently regress.
+2. Add a lint rule to ban raw `navigate('/store')` strings — possible future improvement, but the decision log + phase plan notes provide sufficient guardrails for now.
+
+---
+
+## [DECISION-039] Unique Variant Label Validation over SKU Field in Phase 3.4
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+Phase 3.4 (Product Management) requirements in the active phase checklist specify TDD cases verifying that creating/updating products with duplicate SKUs across variants throws a `409 Conflict` error. However, the database schema in `schema.prisma` does not have a `sku` column on `ProductVariant`. We need to decide whether to introduce a schema migration to add a `sku` field, or satisfy the duplicate validation requirement using existing database fields.
+
+**Decision:**
+Do not introduce a new `sku` database column or run a database schema migration. Instead, enforce **unique variant label validation within the product** at the service/controller level. The backend and frontend forms will treat the variant `label` (e.g., `"500ml"`, `"1kg"`, `"Single Service"`) as the unique identifier for a variant under a given product. Submitting a product with multiple variants sharing the exact same label will fail with an HTTP 409 Conflict error.
+
+**Rationale:**
+- **No unnecessary schema bloat:** Avoids adding a new column that isn't functionally required by the current application features.
+- **Maintains existing database integrity:** Keeps the schema lean and preserves reference rules.
+- **Frictionless local/QA setups:** Prevents the need to execute database migrations in local/staging environments, minimizing integration churn.
+- **Equivalent functional validation:** From a user experience and business standpoint, having two variants of the same product with the exact same label (e.g., two `"500ml"` variants) is a logical duplication. Validating label uniqueness under a product achieves the exact same business objective.
+
+**Tradeoffs:**
+- Store owners cannot assign arbitrary non-unique labels to different physical items if they wanted to distinguish them solely by a hypothetical hidden SKU. However, under GoRola, variants are shown to buyers directly by their labels, so labels must be unique and descriptive by definition.
+
+**Alternatives Considered:**
+1. **Prisma Schema Migration (Option A)**: Add `sku String?` to `ProductVariant` and run `prisma migrate dev`. Rejected as it introduces unnecessary database complexity when variant labels are already customer-facing unique identifiers under a product.
+
+
+
+

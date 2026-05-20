@@ -25,6 +25,14 @@ export async function startApp(): Promise<void> {
   const closeWithTelemetry = async (): Promise<void> => {
     const { disconnectPrisma } = await import("./lib/prisma.js");
     const { disconnectRedis } = await import("./lib/redis.js");
+    
+    // Failsafe: force exit if shutdown hangs for more than 10s
+    const failsafe = setTimeout(() => {
+      getLogger().error("shutdown timed out — force exiting");
+      process.exit(0);
+    }, 10000);
+    failsafe.unref();
+
     getLogger().info("shutdown signal received — closing connections");
     try {
       if (typeof app.close === "function") {
@@ -34,6 +42,7 @@ export async function startApp(): Promise<void> {
       await disconnectPrisma();
       await disconnectRedis();
       await shutdownTelemetry();
+      clearTimeout(failsafe);
       getLogger().info("shutdown complete — exiting");
       process.exit(0);
     }

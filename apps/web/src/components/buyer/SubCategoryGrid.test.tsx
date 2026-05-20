@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -87,6 +87,24 @@ describe("SubCategoryGrid", () => {
 
     renderGrid("groceries");
     expect(await screen.findByText("No sub-categories available")).toBeInTheDocument();
+  });
+
+  it("redirects automatically if exactly one sub-category exists", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          { id: "s1", slug: "snacks", name: "Snacks", imageUrl: "https://example.com/snack.jpg" }
+        ]
+      }
+    });
+
+    renderGrid("groceries");
+
+    // Should call navigate with replace: true
+    await waitFor(() => {
+      expect(navigateMock).toHaveBeenCalledWith("/categories/groceries/snacks", { replace: true });
+    });
   });
 
   it("shows error state when fetch fails", async () => {

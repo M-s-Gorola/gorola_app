@@ -131,6 +131,15 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       }
 
       const placed = await deps.buyerCheckout.placeFromCart(buyerId, parsed);
+      
+      // Broadcast to the store's socket room about the brand new order placement!
+      if (app.io) {
+        app.io.to(`store:${placed.order.storeId}`).emit("store:new_order", {
+          orderId: placed.order.id,
+          storeId: placed.order.storeId
+        });
+      }
+
       const responsePayload = success(
         request,
         reply,

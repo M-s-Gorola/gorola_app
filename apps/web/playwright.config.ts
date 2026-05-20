@@ -36,6 +36,11 @@ export default defineConfig({
 
     /* Collect trace when retrying the failed test. See https://playwright.dev/docs/trace-viewer */
     trace: 'on-first-retry',
+
+    /* Launch options to map subdomain domains natively inside Chromium */
+    launchOptions: {
+      args: ['--host-resolver-rules=MAP * 127.0.0.1'],
+    },
   },
 
   /* Configure projects for major browsers */
@@ -46,7 +51,10 @@ export default defineConfig({
     },
     {
       name: 'iphone-se',
-      use: { ...devices['iPhone SE'] },
+      use: { 
+        ...devices['iPhone SE'],
+        browserName: 'chromium',
+      },
     }
   ],
 
@@ -70,7 +78,7 @@ export default defineConfig({
         ? 'PORT=3002 pnpm --filter @gorola/api exec node dist/app.js' 
         : 'pnpm --filter @gorola/api dev',
       url: 'http://127.0.0.1:3002/api/health',
-      reuseExistingServer: false,
+      reuseExistingServer: !process.env.CI,
       timeout: 180000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL_TEST!,
@@ -78,7 +86,8 @@ export default defineConfig({
         HOST: '127.0.0.1',
         PORT: '3002',
         GOROLA_DUMMY_OTP: '123456',
-        NODE_ENV: 'test'
+        NODE_ENV: 'test',
+        OTEL_ENABLED: 'false'
       }
     },
   ],

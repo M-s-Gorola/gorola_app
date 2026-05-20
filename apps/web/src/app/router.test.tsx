@@ -197,14 +197,17 @@ describe("buyer routes", () => {
     expect(screen.queryByText("This page is not ready yet.")).not.toBeInTheDocument();
     noRoleStoreRender.unmount();
 
-    useAuthStore.getState().setRole("STORE_OWNER");
+    useAuthStore.setState({
+      accessToken: "at",
+      role: "STORE_OWNER",
+      twoFactorVerified: true
+    });
     render(
       <MemoryRouter initialEntries={["/store"]}>
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByRole("heading", { name: "Store Dashboard" })).toBeInTheDocument();
-    expect(screen.getByText("This page is not ready yet.")).toBeInTheDocument();
+    expect(screen.getByTestId("kpi-skeleton-orders")).toBeInTheDocument();
   });
 
   it("renders query-aware search page for /search?q=", () => {

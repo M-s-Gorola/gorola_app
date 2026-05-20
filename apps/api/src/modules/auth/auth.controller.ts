@@ -16,7 +16,7 @@ import type { StoreOwnerAuthService } from "./store-owner-auth.service.js";
 
 type AuthControllerDeps = {
   authService: Pick<AuthService, "logout" | "refreshToken" | "sendOtp" | "verifyOtp">;
-  storeOwnerAuthService: Pick<StoreOwnerAuthService, "login" | "setup2FA" | "verify2FA">;
+  storeOwnerAuthService: Pick<StoreOwnerAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
   adminAuthService: Pick<AdminAuthService, "login" | "setup2FA" | "verify2FA">;
 };
 
@@ -89,7 +89,8 @@ function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): Succ
 
 function resolveRefreshToken(
   request: FastifyRequest,
-  body: unknown
+  body: unknown,
+  cookieName = "refreshToken"
 ): { refreshToken: string } {
   const bodyToken =
     typeof body === "object" && body !== null && "refreshToken" in body
@@ -99,8 +100,13 @@ function resolveRefreshToken(
     return { refreshToken: bodyToken };
   }
 
-  const cookieToken = (request.cookies as Record<string, string | undefined> | undefined)
-    ?.refreshToken;
+  const cookies = request.cookies as Record<string, string | undefined> | undefined;
+  const cookieToken =
+    cookies && cookieName === "storeOwnerRefreshToken"
+      ? cookies["storeOwnerRefreshToken"]
+      : cookies
+        ? cookies["refreshToken"]
+        : undefined;
   if (typeof cookieToken === "string" && cookieToken.length > 0) {
     return { refreshToken: cookieToken };
   }
@@ -149,9 +155,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
         totpCode?: string;
       }
     );
-    const tokens = await deps.storeOwnerAuthService.login(payload);
-    reply.setCookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
-    return success(request, reply, tokens);
+    const result = await deps.storeOwnerAuthService.login(payload);
+    if ("requiresTwoFactor" in result) {
+      return success(request, reply, result);
+    }
+    reply.setCookie("storeOwnerRefreshToken", result.refreshToken, refreshCookieOptions());
+    return success(request, reply, result);
   });
 
   app.post("/api/v1/auth/store-owner/setup-2fa", async (request, reply) => {
@@ -164,6 +173,20 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
     const payload = parseVerify2FAInput(request.body as { email: string; code: string });
     await deps.storeOwnerAuthService.verify2FA(payload);
     return success(request, reply, { verified: true });
+  });
+
+  app.post("/api/v1/auth/store-owner/refresh", async (request, reply) => {
+    const payload = parseRefreshTokenInput(resolveRefreshToken(request, request.body, "storeOwnerRefreshToken"));
+    const tokens = await deps.storeOwnerAuthService.refreshToken(payload);
+    reply.setCookie("storeOwnerRefreshToken", tokens.refreshToken, refreshCookieOptions());
+    return success(request, reply, tokens);
+  });
+
+  app.post("/api/v1/auth/store-owner/logout", async (request, reply) => {
+    const payload = parseLogoutInput(resolveRefreshToken(request, request.body, "storeOwnerRefreshToken"));
+    await deps.storeOwnerAuthService.logout(payload);
+    reply.clearCookie("storeOwnerRefreshToken", refreshCookieClearOptions());
+    return success(request, reply, { loggedOut: true });
   });
 
   app.post("/api/v1/auth/admin/login", async (request, reply) => {

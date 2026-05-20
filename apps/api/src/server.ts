@@ -130,18 +130,19 @@ export function createServer(options: CreateServerOptions = {}): FastifyInstance
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allowedHeaders: ["Authorization", "Content-Type", "X-Request-Id"],
     exposedHeaders: ["X-Request-Id"],
-    origin: corsOrigins.length === 0 ? true : corsOrigins,
+    origin: process.env.NODE_ENV === "development" ? true : (corsOrigins.length === 0 ? true : corsOrigins),
     credentials: true,
     strictPreflight: true
   });
 
   const redisClient =
     process.env.NODE_ENV === "test" || options.disableRedis ? null : getRedisClient();
+  const hasDefineCommand = redisClient && typeof (redisClient as unknown as { defineCommand: unknown }).defineCommand === "function";
   void app.register(rateLimit, {
     global: true,
     max: process.env.NODE_ENV === "production" ? 100 : 1000,
     timeWindow: "1 minute",
-    ...(redisClient
+    ...(redisClient && hasDefineCommand
       ? {
           redis: redisClient
         }

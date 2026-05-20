@@ -30,6 +30,23 @@ test.describe('Catalog & Search', () => {
     await expect(productCards.first().locator('img')).toHaveAttribute('src', /.+/);
   });
 
+  test('E2E-002b: Smart Redirect (Single SubCategory skips selection)', async ({ page }) => {
+    // This test uses the "Medical tests" category which we seeded with exactly one sub-category ("All Tests").
+    await page.goto('/');
+
+    const medicalTestsCard = page.locator('[data-testid="category-card"]', { hasText: /Medical tests/i });
+    await expect(medicalTestsCard).toBeVisible();
+    await medicalTestsCard.click();
+
+    // Assert that we land DIRECTLY on the sub-category URL, skipping the selection grid
+    // The URL should be /categories/medical-tests/all-tests
+    await expect(page).toHaveURL(/\/categories\/medical-tests\/all-tests/);
+    
+    // Assert product grid is visible immediately
+    const productCards = page.locator('[data-testid="product-card"]');
+    await expect(productCards.first()).toBeVisible();
+  });
+
   test('E2E-003: Product Detail Page Navigation', async ({ page }) => {
     await page.goto('/categories/groceries/rice-atta');
 

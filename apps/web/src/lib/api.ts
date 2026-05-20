@@ -1,5 +1,6 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig, isAxiosError, type RawAxiosRequestHeaders } from "axios";
 
+import { bootstrapPromise, setBootstrapPromise, setStoreBootstrapPromise, storeBootstrapPromise } from "@/lib/bootstrap-state";
 import { type AuthTokens, useAuthStore } from "@/store/auth.store";
 
 const BUYER_REFRESH_PATH = "/api/v1/auth/buyer/refresh";
@@ -126,12 +127,27 @@ async function handle401(
     options.clearSession();
     return Promise.reject(error);
   }
+
+  const role = useAuthStore.getState().role;
+  const refreshPath = role === "STORE_OWNER"
+    ? "/api/v1/auth/store-owner/refresh"
+    : BUYER_REFRESH_PATH;
+
   try {
-    const res = await instance.post<unknown>(BUYER_REFRESH_PATH, { refreshToken: refresh }, {
+    const res = await instance.post<unknown>(refreshPath, { refreshToken: refresh }, {
       _gorolaRefresh: true
     } as InternalAxiosRequestConfig & { _gorolaRefresh?: true });
-    const tokens = parseRefreshEnvelope(res.data);
-    options.setTokens(tokens);
+    
+    if (role === "STORE_OWNER") {
+      const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
+      if (!body || body.success !== true || !body.data?.accessToken || !body.data?.refreshToken) {
+        throw new Error("Invalid token refresh payload");
+      }
+      options.setTokens(body.data);
+    } else {
+      const tokens = parseRefreshEnvelope(res.data);
+      options.setTokens(tokens);
+    }
   } catch {
     options.clearSession();
     return Promise.reject(error);
@@ -162,8 +178,6 @@ export const api: ReturnType<typeof createApiClient> | null = (() => {
   });
 })();
 
-let bootstrapPromise: Promise<void> | null = null;
-
 /**
  * Startup auth bootstrap: try cookie-backed refresh once so reload keeps buyer session.
  * Deduplicated via bootstrapPromise to prevent race conditions during React StrictMode double-mount.
@@ -173,7 +187,7 @@ export async function bootstrapBuyerAuthSession(): Promise<void> {
     return bootstrapPromise;
   }
 
-  bootstrapPromise = (async () => {
+  const p = (async () => {
     if (api === null) {
       useAuthStore.getState().setBootstrapPending(false);
       return;
@@ -193,8 +207,56 @@ export async function bootstrapBuyerAuthSession(): Promise<void> {
       useAuthStore.getState().setBootstrapPending(false);
     }
   })();
+  setBootstrapPromise(p);
+  return p;
+}
 
-  return bootstrapPromise;
+/**
+ * Startup auth bootstrap for store owner: try cookie-backed refresh once so reload keeps store owner session.
+ */
+export async function bootstrapStoreOwnerAuthSession(): Promise<void> {
+  if (storeBootstrapPromise) {
+    return storeBootstrapPromise;
+  }
+
+  const p = (async () => {
+    if (api === null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    if (useAuthStore.getState().accessToken !== null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    useAuthStore.getState().setBootstrapPending(true);
+    try {
+      const res = await api.post<unknown>("/api/v1/auth/store-owner/refresh", {});
+      const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
+      if (body?.success === true && body.data?.accessToken && body.data?.refreshToken) {
+        // Decode JWT payload
+        const tokenPart = body.data.accessToken.split(".")[1];
+        if (tokenPart) {
+          const payload = JSON.parse(atob(tokenPart)) as {
+            sub: string;
+            storeId: string;
+            role: "STORE_OWNER";
+          };
+          useAuthStore.getState().setStoreOwnerSession({
+            accessToken: body.data.accessToken,
+            refreshToken: body.data.refreshToken,
+            userId: payload.sub,
+            storeId: payload.storeId
+          });
+        }
+      }
+    } catch {
+      // No valid refresh cookie/token on startup
+    } finally {
+      useAuthStore.getState().setBootstrapPending(false);
+    }
+  })();
+  setStoreBootstrapPromise(p);
+  return p;
 }
 
 /**

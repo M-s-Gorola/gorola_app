@@ -1,6 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
 import { Navigate, useLocation } from "react-router-dom";
 
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 type GuardProps = {
@@ -28,15 +29,19 @@ export function StoreRoute({ children }: GuardProps): ReactElement {
   const accessToken = useAuthStore((s) => s.accessToken);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const role = useAuthStore((s) => s.role);
+  const twoFactorVerified = useAuthStore((s) => s.twoFactorVerified);
   const location = useLocation();
+
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
   if (isBootstrapPending) {
     return <p className="font-dm-sans text-sm text-gorola-slate">Restoring your session...</p>;
   }
-  if (!hasSession(accessToken)) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+  if (!hasSession(accessToken) || role !== "STORE_OWNER") {
+    return <Navigate to={getScopedPath("/store/login", "store", isSubdomainMode)} replace state={{ from: location }} />;
   }
-  if (role !== "STORE_OWNER") {
-    return <Navigate to="/" replace />;
+  if (twoFactorVerified !== true) {
+    return <Navigate to={getScopedPath("/store/2fa", "store", isSubdomainMode)} replace state={{ from: location }} />;
   }
   return <>{children}</>;
 }
@@ -46,14 +51,17 @@ export function AdminRoute({ children }: GuardProps): ReactElement {
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const role = useAuthStore((s) => s.role);
   const location = useLocation();
+
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
   if (isBootstrapPending) {
     return <p className="font-dm-sans text-sm text-gorola-slate">Restoring your session...</p>;
   }
   if (!hasSession(accessToken)) {
-    return <Navigate to="/login" replace state={{ from: location }} />;
+    return <Navigate to={getScopedPath("/admin/login", "admin", isSubdomainMode)} replace state={{ from: location }} />;
   }
   if (role !== "ADMIN") {
-    return <Navigate to="/" replace />;
+    return <Navigate to={getScopedPath("/", "buyer", isSubdomainMode)} replace />;
   }
   return <>{children}</>;
 }

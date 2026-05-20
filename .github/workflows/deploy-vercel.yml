@@ -59,12 +59,7 @@ jobs:
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
-      # --prod targets the Production deployment on Vercel (custom domain, no preview URL).
-      # Without --prod, Vercel creates a Preview deployment — used for staging.
+      # Both staging and production are separate Vercel projects (isolated by VERCEL_PROJECT_ID).
+      # We always deploy with --prod so that the respective environment's main domain is updated.
       - name: Deploy to ${{ inputs.environment }}
-        run: |
-          if [ "${{ inputs.environment }}" = "production" ]; then
-            vercel deploy --prod --yes
-          else
-            vercel deploy --yes
-          fi
+        run: vercel deploy --prod --yes
