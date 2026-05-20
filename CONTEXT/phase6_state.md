@@ -188,3 +188,9 @@ Validate that both standard subpath layouts (`http://localhost:5180/store/login`
 - **Problem (E2E iphone-se WebKit Hang):** Local Playwright E2E subdomain tests froze indefinitely on the `iphone-se` project because WebKit does not support the Chromium-specific `--host-resolver-rules` command-line flag, causing it to query public DNS for `store.gorola.com`.
 - **Solution (Chromium Mobile Emulation):** Updated `playwright.config.ts` to run the `iphone-se` project using the `chromium` engine, unblocking local DNS resolution.
 - **Improvement (Informative UI Stubs):** Updated the build, typecheck, lint, and test scripts in `packages/ui` to print concise, helpful console messages explaining their standalone scaffolding purpose.
+
+### 2026-05-20: Subdomain Override Testing Bypass for Staging Environments
+- **Problem (Staging Wildcard SSL Block):** Vercel's default `.vercel.app` domains do not support wildcard SSL certificates, making it impossible to resolve `store.gorola-staging.vercel.app` natively for testing.
+- **Solution (Query Parameter Bypass):** Built a query-based override `?_subdomain=store` / `?_subdomain=admin` with persistent `sessionStorage` in `subdomain-resolver.ts`. This allows flawless testing of dynamic routing, logins, and route guards on Vercel staging or local dev under standard URLs.
+- **Validation:** Added a comprehensive Vitest suite in `subdomain-resolver.test.ts` to cover native detection, query override, sessionStorage persistence, and clean reset. All 6 tests are fully green.
+

@@ -1096,4 +1096,74 @@ Under Option A:
 **Alternatives Considered:**
 1. **Option B (Separate Monorepo Packages from Day 1)** - Rejected for now: premature operational complexity. Splitting packages requires duplicating boilerplate configurations, managing multiple Vercel environment sets, and rewriting automated E2E pipelines, which would slow down active Phase 3/4 feature development.
 
+---
+
+## [DECISION-037] Query-based Subdomain Override for Non-Production Wildcard Environments
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+Vercel's default `.vercel.app` staging domains do not support wildcard SSL certificates (e.g. `*.vercel.app` or `store.*.vercel.app` is blocked by browser security policies). Because of this, it is impossible to resolve or load actual custom subdomains natively (like `store.gorola-staging.vercel.app`) on standard staging deployments without buying and linking a custom domain. We need a way for developers, stakeholders, and QA teams to manually test the full, native subdomain layouts, route guards, and dashboards directly on their default Vercel staging URL.
+
+**Decision:**
+Implement a secure **Query-based Subdomain Override with Session Storage Persistence** in our hostname resolver (`subdomain-resolver.ts`):
+1. **Trigger:** If the URL query contains `?_subdomain=store` or `?_subdomain=admin`, the app immediately stores this override in the browser's `sessionStorage`.
+2. **Persistence:** The resolver reads from `sessionStorage` on all subsequent page views/clicks, ensuring that navigation, redirect guards, and dashboards function smoothly under that subdomain mode even when browsing the root `vercel.app` URL.
+3. **Reset:** Visiting `?_subdomain=clear` or closing the browser tab removes the override, restoring the shopper experience.
+
+**Rationale:**
+- **Zero Configuration:** Allows immediate E2E/manual testing of subdomain routing on Vercel staging and local dev without requiring local hosts file edits or buying custom domains.
+- **High Fidelity:** Simulates the exact production routing behavior, unmounting non-matching route branches with 100% security parity.
+- **Zero Production Footprint:** Live production domains (e.g. `store.gorola.com`) still resolve subdomains natively and automatically using the hostname without requiring any query params.
+
+**Tradeoffs:**
+- Adds a small query-parsing logic in our front-end resolver, but it is lightweight and completely isolated inside `subdomain-resolver.ts`.
+
+---
+
+## [DECISION-038] getScopedPath Convention for All In-App navigate() Calls in Scoped Panels
+
+**Date:** 2026-05-20
+**Status:** Accepted
+
+**Context:**
+Phase 6.2 introduced `getScopedPath()` and `resolveSubdomain()` in `apps/web/src/lib/subdomain-resolver.ts` to support production subdomain routing (`store.gorola.com`, `admin.gorola.com`, and, when built, `rider.gorola.com`). Under subdomain mode the `/store`, `/admin`, and `/rider` path prefixes are stripped — the merchant dashboard lives at `/dashboard`, not `/store/dashboard`. Any hardcoded `navigate('/store/...')`, `navigate('/admin/...')`, or `navigate('/rider/...')` call written in a future phase will silently break navigation when running under the respective subdomain.
+
+**Decision:**
+**All `navigate()` calls inside store, admin, and rider pages and route guards must use `getScopedPath()` from `@/lib/subdomain-resolver` instead of hardcoded absolute path strings.**
+
+Pattern to follow:
+
+```typescript
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+
+const { isSubdomainMode, subdomain } = resolveSubdomain(window.location.hostname);
+navigate(getScopedPath("/store/dashboard", "store", isSubdomainMode));
+```
+
+This applies to:
+- All pages under `apps/web/src/pages/store/`
+- All pages under `apps/web/src/pages/admin/` (when built)
+- All pages under `apps/web/src/pages/rider/` (Phase 5)
+- Route guards: `StoreRoute`, `AdminRoute`, `RiderRoute` (any `<Navigate>` or `navigate()` call)
+
+Buyer pages (`apps/web/src/pages/buyer/`) are **exempt** — they never navigate into scoped paths.
+
+**Note on Rider:** When Phase 6.3 extends `getScopedPath` to support the `'rider'` scope, the same rule applies to all rider pages and the `RiderRoute` guard. Until Phase 6.3 is complete, rider pages use `/rider/` paths in fallback mode only (Phase 5 does not implement subdomain routing for riders).
+
+**Rationale:**
+- Prevents silent routing regressions in subdomain mode as new store/admin/rider pages are added in Phases 5 and 7.
+- A single function call replaces error-prone string concatenation across every panel.
+- Without this convention, a future agent will write hardcoded paths by default because that is what the existing non-scoped buyer code does.
+
+**Tradeoffs:**
+- Slightly more verbose than a bare string literal. Acceptable given the correctness guarantee.
+- Requires importing from `subdomain-resolver` in every affected component — a one-liner import.
+
+**Alternatives Considered:**
+1. Rely on agent memory or code review to catch hardcoded paths — rejected: agents have no cross-session memory; this will silently regress.
+2. Add a lint rule to ban raw `navigate('/store')` strings — possible future improvement, but the decision log + phase plan notes provide sufficient guardrails for now.
+
+
 
