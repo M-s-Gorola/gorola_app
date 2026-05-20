@@ -44,6 +44,21 @@ Phase 7 introduces `BOOKING_COMMERCE` stores (Medical Tests, Repairs). For these
 
 ---
 
+## ⚠️ Subdomain Routing Awareness (READ BEFORE STARTING PHASE 5 — DECISION-038)
+
+Phase 6.2 introduced `getScopedPath()` in `apps/web/src/lib/subdomain-resolver.ts`. All `navigate()` calls inside rider pages and the `RiderRoute` guard **must** use `getScopedPath()` instead of hardcoded `/rider/...` strings, so that navigation works correctly under `rider.gorola.com` (subdomain mode) as well as `/rider/...` fallback mode.
+
+**Pattern to follow in every rider page and RiderRoute:**
+```typescript
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+navigate(getScopedPath("/rider/orders", "rider", isSubdomainMode));
+```
+
+**Note:** Phase 6.3 must be complete (resolver updated to recognise `'rider'` subdomain) before `getScopedPath` works correctly for rider paths. If Phase 6.3 is not yet done, complete it first before starting Phase 5 frontend work.
+
+---
+
 ## Architecture
 
 - Rider frontend lives in **`apps/web/src/pages/rider/`** — same single Vite SPA, same Vercel deployment.
@@ -106,6 +121,7 @@ Phase 7 introduces `BOOKING_COMMERCE` stores (Medical Tests, Repairs). For these
   - [ ] Create `apps/web/src/pages/rider/RiderLoginPage.tsx`
   - [ ] Create `apps/web/src/components/rider/RiderRoute.tsx`
   - [ ] Add `/rider/login` and `/rider/*` routes in `App.tsx`
+  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
   - [ ] Run unit tests — **confirm GREEN**
 
 - [ ] **Verification chain:**
@@ -144,7 +160,9 @@ Replace the 501 stub. Return orders filtered by `storeId` from JWT and status in
   - [ ] **Run — confirm RED**
 
 - [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/pages/rider/RiderOrdersPage.tsx`; run unit tests — **confirm GREEN**
+  - [ ] Create `apps/web/src/pages/rider/RiderOrdersPage.tsx`
+  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [ ] Run unit tests — **confirm GREEN**
 
 - [ ] **Verification chain:**
   - [ ] Rider logs in → `/rider/orders` shows PREPARING orders ready for pickup → ✅
@@ -241,6 +259,7 @@ Rider interface needs to be mobile-first (riders use smartphones). The layout mu
   - [ ] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
   - [ ] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
   - [ ] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
+  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
   - [ ] Run unit tests — **confirm GREEN**
 
 - [ ] **Verification chain:**
