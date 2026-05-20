@@ -12,15 +12,15 @@
 | ------- | ------------------------- | -------- | ----- |
 | Phase 6.1 | Smart Redirect Navigation | COMPLETE | Logic implemented, E2E passing, and 75 medical tests seeded for manual verification. |
 | Phase 6.2 | Subdomain Routing (Opt A) | COMPLETE | Fully implemented with modular route packages, dynamic resolver, dynamic route guards, and validated through robust Vitest & Playwright E2E suites. |
-| Phase 6.3 | Rider Subdomain Config | NOT STARTED | Plan to be drafted. Prerequisite: Phase 6.2 COMPLETE. |
+| Phase 6.3 | Rider Subdomain Config | COMPLETE | Pure subdomain resolver and scoped path infrastructure implemented. Validated with controlled Vitest tests. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-05-20
-- **Session Summary:** Fully implemented Phase 6.2 subdomain routing and fallback integration, modularized routers, refactored dynamic auth guards, and passed all 198 Vitest unit/integration tests and all Playwright E2E smoke tests.
-- **Next Session Must Start With:** Ready for the next business feature or maintenance task.
+- **Session Summary:** Fully implemented Phase 6.3 Rider Subdomain Configuration, updating `subdomain-resolver.ts` to support rider types, regex checks, and override logic. Verified through controlled unit testing in Vitest and ensured all 205 other tests pass.
+- **Next Session Must Start With:** Ready to begin Phase 5 (Rider Interface) implementation or any other next-priority phase.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -168,22 +168,22 @@ Update the subdomain resolver (`subdomain-resolver.ts`) and associated types to 
 
 ---
 
-- [ ] **RED — Unit (`apps/web/src/app/router.subdomain.test.tsx` — additional tests):**
-  - [ ] Test: Mock `window.location.hostname` as `"rider.gorola.com"`. Verify that rendering `<App />` on initial entry `/` renders the `RiderLoginPage` heading (exact heading text must be verified against the actual component when it exists — note that `RiderLoginPage` does not yet exist; this test will stay RED until Phase 5 creates it).
-  - [ ] Test: Mock `window.location.hostname` as `"rider.gorola.com"`. Verify `resolveSubdomain` returns `{ isSubdomainMode: true, subdomain: 'rider' }`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`apps/web/src/app/router.subdomain.test.tsx` — additional tests):**
+  - [x] Test: Mock `window.location.hostname` as `"rider.gorola.com"`. Verify that rendering `<App />` on initial entry `/` renders the `RiderLoginPage` heading (exact heading text must be verified against the actual component when it exists — note that `RiderLoginPage` does not yet exist; this test will stay RED until Phase 5 creates it).
+  - [x] Test: Mock `window.location.hostname` as `"rider.gorola.com"`. Verify `resolveSubdomain` returns `{ isSubdomainMode: true, subdomain: 'rider' }`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Resolver only — no App.tsx or route tree changes yet):**
-  - [ ] [Resolver] Update `apps/web/src/lib/subdomain-resolver.ts`:
-    - Add `'rider'` to the return type union: `subdomain: 'store' | 'admin' | 'rider' | null`
-    - Add `if (hostname.startsWith("rider.")) { return { isSubdomainMode: true, subdomain: "rider" as const }; }` after the admin check
-    - Update `getScopedPath` scope parameter type from `'store' | 'admin' | 'buyer'` to `'store' | 'admin' | 'rider' | 'buyer'`
-    - Update the strip regex from `/^\/(store|admin)/` to `/^\/(store|admin|rider)/`
-    - **Note:** `App.tsx` is NOT updated in this phase. The rider route tree does not exist yet. `rider.gorola.com` will render a fallback until Phase 5 is done.
-  - [ ] [Resolver] Update `apps/web/src/app/router.subdomain.test.tsx`: Add the unit test for `resolveSubdomain("rider.gorola.com")` → confirm GREEN.
+- [x] **GREEN — Frontend (Resolver only — no App.tsx or route tree changes yet):**
+  - [x] [Resolver] Update `apps/web/src/lib/subdomain-resolver.ts`:
+    - [x] Add `'rider'` to the return type union: `subdomain: 'store' | 'admin' | 'rider' | null`
+    - [x] Add `if (hostname.startsWith("rider.")) { return { isSubdomainMode: true, subdomain: "rider" as const }; }` after the admin check
+    - [x] Update `getScopedPath` scope parameter type from `'store' | 'admin' | 'buyer'` to `'store' | 'admin' | 'rider' | 'buyer'`
+    - [x] Update the strip regex from `/^\/(store|admin)/` to `/^\/(store|admin|rider)/`
+    - [x] **Note:** `App.tsx` is NOT updated in this phase. The rider route tree does not exist yet. `rider.gorola.com` will render a fallback until Phase 5 is done.
+  - [x] [Resolver] Update `apps/web/src/app/router.subdomain.test.tsx`: Add the unit test for `resolveSubdomain("rider.gorola.com")` → confirm GREEN.
 
-- [ ] **Verification Chain:**
-  - [ ] Visiting `rider.gorola.com` (or using `?_subdomain=rider` override on staging) → `resolveSubdomain` returns `{ isSubdomainMode: true, subdomain: 'rider' }` → App renders a fallback/placeholder (no crash) → ✅ Done. Full rider routing wires in when Phase 5 completes and `RiderLoginPage` + `RiderRoute` exist.
+- [x] **Verification Chain:**
+  - [x] Visiting `rider.gorola.com` (or using `?_subdomain=rider` override on staging) → `resolveSubdomain` returns `{ isSubdomainMode: true, subdomain: 'rider' }` → App renders a fallback/placeholder (no crash) → ✅ Done. Full rider routing wires in when Phase 5 completes and `RiderLoginPage` + `RiderRoute` exist.
 
 ---
 
@@ -223,4 +223,10 @@ Update the subdomain resolver (`subdomain-resolver.ts`) and associated types to 
 - **Problem (Staging Wildcard SSL Block):** Vercel's default `.vercel.app` domains do not support wildcard SSL certificates, making it impossible to resolve `store.gorola-staging.vercel.app` natively for testing.
 - **Solution (Query Parameter Bypass):** Built a query-based override `?_subdomain=store` / `?_subdomain=admin` with persistent `sessionStorage` in `subdomain-resolver.ts`. This allows flawless testing of dynamic routing, logins, and route guards on Vercel staging or local dev under standard URLs.
 - **Validation:** Added a comprehensive Vitest suite in `subdomain-resolver.test.ts` to cover native detection, query override, sessionStorage persistence, and clean reset. All 6 tests are fully green.
+
+### 2026-05-20: Phase 6.3 Rider Subdomain Config
+- **Goal:** Enable routing infrastructure for the rider subdomain (`rider.gorola.com` or `?_subdomain=rider`) natively and query overrides.
+- **Implementation:** Added `'rider'` to type definitions, query param checking/persistence logic, startsWith hostname checks, and scope list parameter for `getScopedPath` (stripping `/^\/(store|admin|rider)/`).
+- **Validation:** Verified via Unit Tests (`subdomain-resolver.test.ts` passes 100%) and Integration Tests (`router.subdomain.test.tsx` triggers expected controlled RED state for the missing RiderLoginPage component from Phase 5).
+
 

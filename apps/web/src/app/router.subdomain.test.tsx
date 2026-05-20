@@ -130,4 +130,26 @@ describe("subdomain routing integration", () => {
 
     expect(screen.getByRole("heading", { name: "Store Partner Portal" })).toBeInTheDocument();
   });
+
+  it("renders Rider Sign In directly at '/' when browsing rider.gorola.com", () => {
+    setHostnameAndPath("rider.gorola.com", "/");
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false
+        }
+      }
+    });
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter initialEntries={["/"]}>
+          <App />
+        </MemoryRouter>
+      </QueryClientProvider>
+    );
+
+    expect(screen.getByRole("heading", { name: "Rider Sign In" })).toBeInTheDocument();
+  });
 });

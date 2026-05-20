@@ -29,6 +29,12 @@ describe("resolveSubdomain", () => {
       expect(res.isSubdomainMode).toBe(true);
       expect(res.subdomain).toBe("admin");
     });
+
+    it("returns rider subdomain mode for rider.gorola.com", () => {
+      const res = resolveSubdomain("rider.gorola.com");
+      expect(res.isSubdomainMode).toBe(true);
+      expect(res.subdomain).toBe("rider");
+    });
   });
 
   describe("Query Parameter Override & Persistence", () => {

@@ -1,18 +1,18 @@
-export function resolveSubdomain(hostname: string) {
+export function resolveSubdomain(hostname: string): { isSubdomainMode: boolean; subdomain: "store" | "admin" | "rider" | null } {
   // 1. Check for query parameter override (e.g. ?_subdomain=store) or session storage persistence
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);
     const override = params.get("_subdomain");
-    if (override === "store" || override === "admin") {
+    if (override === "store" || override === "admin" || override === "rider") {
       sessionStorage.setItem("gorola_subdomain_override", override);
-      return { isSubdomainMode: true, subdomain: override as "store" | "admin" };
+      return { isSubdomainMode: true, subdomain: override as "store" | "admin" | "rider" };
     }
     if (override === "clear") {
       sessionStorage.removeItem("gorola_subdomain_override");
     } else {
       const savedOverride = sessionStorage.getItem("gorola_subdomain_override");
-      if (savedOverride === "store" || savedOverride === "admin") {
-        return { isSubdomainMode: true, subdomain: savedOverride as "store" | "admin" };
+      if (savedOverride === "store" || savedOverride === "admin" || savedOverride === "rider") {
+        return { isSubdomainMode: true, subdomain: savedOverride as "store" | "admin" | "rider" };
       }
     }
   }
@@ -28,13 +28,16 @@ export function resolveSubdomain(hostname: string) {
   if (hostname.startsWith("admin.")) {
     return { isSubdomainMode: true, subdomain: "admin" as const };
   }
+  if (hostname.startsWith("rider.")) {
+    return { isSubdomainMode: true, subdomain: "rider" as const };
+  }
   return { isSubdomainMode: false, subdomain: null };
 }
 
-export function getScopedPath(target: string, _scope: "store" | "admin" | "buyer", isSubdomain: boolean): string {
+export function getScopedPath(target: string, _scope: "store" | "admin" | "rider" | "buyer", isSubdomain: boolean): string {
   if (isSubdomain) {
     // e.g. '/store/2fa' -> '/2fa' when browsing store.gorola.com
-    return target.replace(/^\/(store|admin)/, "") || "/";
+    return target.replace(/^\/(store|admin|rider)/, "") || "/";
   }
   return target;
 }
