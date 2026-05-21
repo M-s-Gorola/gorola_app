@@ -199,4 +199,33 @@ describe("StoreProductsPage", () => {
       expect(getMock).toHaveBeenCalledWith(expect.stringContaining("search=Apple"));
     });
   });
+
+  it("handles lowStock search query param on mount and toggle clicks", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [],
+        meta: { total: 0, page: 1, limit: 10, hasMore: false }
+      }
+    });
+
+    // Render with lowStock=true query param
+    renderStoreProducts(["/store/products?lowStock=true"]);
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(expect.stringContaining("lowStock=true"));
+    });
+
+    const user = userEvent.setup();
+    const filterBtn = await screen.findByRole("button", { name: /showing low stock only/i });
+    expect(filterBtn).toBeInTheDocument();
+
+    // Click to deactivate filter
+    await user.click(filterBtn);
+
+    await waitFor(() => {
+      // should hit the api without lowStock=true
+      expect(getMock).toHaveBeenLastCalledWith(expect.not.stringContaining("lowStock=true"));
+    });
+  });
 });

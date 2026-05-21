@@ -11,6 +11,7 @@ import type { ReactElement } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
 type WeeklyRevenueItem = {
   date: string;
@@ -46,6 +47,7 @@ type DashboardEnvelope = {
 
 export function StoreDashboardPage(): ReactElement {
   const navigate = useNavigate();
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
 
   const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["store", "dashboard"],
@@ -265,80 +267,121 @@ export function StoreDashboardPage(): ReactElement {
           </div>
         </div>
 
-        {/* Top Selling Products List */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col justify-between">
+        {/* Low Stock Alerts */}
+        <div className={`bg-white rounded-2xl p-6 shadow-sm border flex flex-col justify-between ${
+          dashboard.lowStockItems.length > 0 ? "border-red-200" : "border-gorola-charcoal/10"
+        }`}>
           <div>
-            <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-4">
-              Top Products
-            </h2>
-            <div className="space-y-4">
-              {dashboard.topProducts.map((item, index) => (
-                <div key={item.name} className="flex items-center justify-between py-2 border-b border-gorola-charcoal/[0.03] last:border-0">
-                  <div className="flex items-center gap-3">
-                    <span className="h-6 w-6 rounded-full bg-gorola-mint flex items-center justify-center font-bold text-gorola-charcoal text-xs">
-                      #{index + 1}
-                    </span>
-                    <span className="text-sm font-semibold text-gorola-charcoal truncate max-w-[160px]">
-                      {dashboard.lowStockItems.some((ls) => ls.productName === item.name)
-                        ? `${item.name}\u200b`
-                        : item.name}
-                    </span>
+            <div className="flex items-center gap-3 mb-6">
+              <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                dashboard.lowStockItems.length > 0 ? "bg-red-50 text-red-500 animate-bounce" : "bg-emerald-50 text-emerald-600"
+              }`}>
+                <AlertTriangle className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Low Stock Alerts</h2>
+                <p className="text-xs text-gorola-slate font-dm-sans">Variants below safety threshold.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[290px] overflow-y-auto pr-1">
+              {dashboard.lowStockItems.slice(0, 3).map((item) => (
+                <div
+                  key={`${item.productName}-${item.variantLabel}`}
+                  className="flex items-center justify-between p-3 rounded-xl bg-red-50/50 border border-red-100 hover:bg-red-50 transition-colors"
+                >
+                  <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+                    <h4 className="text-sm font-bold text-gorola-charcoal truncate" title={item.productName}>
+                      {item.productName}
+                    </h4>
+                    <p className="text-xs text-gorola-slate truncate" title={item.variantLabel}>
+                      {item.variantLabel}
+                    </p>
                   </div>
-                  <span className="text-xs font-bold text-gorola-pine bg-gorola-pine/5 px-2.5 py-1 rounded-full whitespace-nowrap">
-                    {item.soldCount} sold
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                      Stock: {item.stockQty}
+                    </span>
+                    <button
+                      onClick={() => navigate(`${getScopedPath("/store/products", "store", isSubdomainMode)}?search=${encodeURIComponent(item.productName)}`)}
+                      className="p-1.5 rounded-lg bg-white border border-gorola-charcoal/5 hover:border-gorola-pine/20 hover:text-gorola-pine transition-all shadow-sm shrink-0"
+                      aria-label="Restock variant"
+                    >
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                 </div>
               ))}
-              {dashboard.topProducts.length === 0 && (
-                <p className="text-sm text-gorola-slate/60 italic text-center py-6">
-                  No products sold in the last 30 days.
-                </p>
+
+              {dashboard.lowStockItems.length > 0 && (
+                <button
+                  onClick={() => navigate(`${getScopedPath("/store/products", "store", isSubdomainMode)}?lowStock=true`)}
+                  className="w-full mt-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl transition-all border border-red-200/50 flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  View All Alerts ({dashboard.lowStockItems.length})
+                  <ArrowRight className="h-3.5 w-3.5" />
+                </button>
+              )}
+
+              {dashboard.lowStockItems.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                  <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-sm">
+                    ✓
+                  </div>
+                  <p className="text-sm font-bold text-gorola-charcoal">All variants stocked!</p>
+                  <p className="text-xs text-gorola-slate">No current alerts found.</p>
+                </div>
               )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bottom Layout Grid: Low Stock Alert panel */}
-      {dashboard.lowStockItems.length > 0 && (
-        <div className="bg-white rounded-2xl border border-red-200 p-6 shadow-sm animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="h-8 w-8 bg-red-50 text-red-500 rounded-lg flex items-center justify-center animate-bounce">
-              <AlertTriangle className="h-4 w-4" />
-            </div>
-            <div>
-              <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Low Stock Alerts</h2>
-              <p className="text-xs text-gorola-slate">Variants below safety threshold.</p>
-            </div>
-          </div>
-
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-            {dashboard.lowStockItems.map((item) => (
-              <div
-                key={`${item.productName}-${item.variantLabel}`}
-                className="flex items-center justify-between p-4 rounded-xl bg-red-50/50 border border-red-100 hover:bg-red-50 transition-colors"
-              >
-                <div className="space-y-1">
-                  <h4 className="text-sm font-bold text-gorola-charcoal">{item.productName}</h4>
-                  <p className="text-xs text-gorola-slate">{item.variantLabel}</p>
-                </div>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-bold text-red-600 bg-red-100 px-2.5 py-1 rounded-full">
-                    Stock: {item.stockQty}
-                  </span>
-                  <button
-                    onClick={() => navigate("/store/catalog")}
-                    className="p-1.5 rounded-lg bg-white border border-gorola-charcoal/5 hover:border-gorola-pine/20 hover:text-gorola-pine transition-all shadow-sm"
-                    aria-label="Restock variant"
-                  >
-                    <ArrowRight className="h-4 w-4" />
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
+      {/* Top Selling Products List */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm">
+        <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-4">
+          Top Performing Products
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gorola-charcoal/5">
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider w-16">Rank</th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Product Name</th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Items Sold</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gorola-charcoal/[0.03]">
+              {dashboard.topProducts.map((item, index) => (
+                <tr key={item.name} className="hover:bg-gorola-mint/5 transition-colors">
+                  <td className="py-4">
+                    <span className="h-6 w-6 rounded-full bg-gorola-mint/50 border border-gorola-mint flex items-center justify-center font-bold text-gorola-charcoal text-xs">
+                      #{index + 1}
+                    </span>
+                  </td>
+                  <td className="py-4 font-semibold text-gorola-charcoal text-sm">
+                    {dashboard.lowStockItems.some((ls) => ls.productName === item.name)
+                      ? `${item.name}\u200b`
+                      : item.name}
+                  </td>
+                  <td className="py-4 text-right">
+                    <span className="text-xs font-bold text-gorola-pine bg-gorola-pine/10 px-3 py-1.5 rounded-full">
+                      {item.soldCount} sold
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {dashboard.topProducts.length === 0 && (
+                <tr>
+                  <td colSpan={3} className="text-sm text-gorola-slate/60 italic text-center py-8">
+                    No products sold in the last 30 days.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
-      )}
+      </div>
     </div>
   );
 }

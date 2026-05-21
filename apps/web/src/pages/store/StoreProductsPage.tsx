@@ -7,7 +7,7 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
@@ -51,20 +51,33 @@ type ProductsEnvelope = {
 export function StoreProductsPage(): ReactElement {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [search, setSearch] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [search, setSearch] = useState(searchParams.get("search") || "");
+  const [showLowStockOnly, setShowLowStockOnly] = useState(searchParams.get("lowStock") === "true");
   const [page, setPage] = useState(1);
 
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
   const limit = 10;
 
+  const toggleLowStockFilter = () => {
+    const nextVal = !showLowStockOnly;
+    setShowLowStockOnly(nextVal);
+    setPage(1);
+
+    const newParams: Record<string, string> = {};
+    if (search) newParams.search = search;
+    if (nextVal) newParams.lowStock = "true";
+    setSearchParams(newParams);
+  };
+
   // 1. Fetch Products Query
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ["store", "products", { search, page }],
+    queryKey: ["store", "products", { search, page, lowStock: showLowStockOnly }],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
       const url = `/api/v1/store/products?page=${page}&limit=${limit}${
         search ? `&search=${encodeURIComponent(search)}` : ""
-      }`;
+      }${showLowStockOnly ? `&lowStock=true` : ""}`;
       const res = await api.get<ProductsEnvelope>(url);
       return res.data;
     }
@@ -124,19 +137,40 @@ export function StoreProductsPage(): ReactElement {
       </div>
 
       {/* Filter / Search Bar */}
-      <div className="flex bg-white border border-gorola-mint/15 rounded-2xl p-3 shadow-sm items-center gap-3">
-        <Search className="h-5 w-5 text-gorola-slate" />
-        <input
-          type="text"
-          placeholder="Search by product name or keywords..."
-          value={search}
-          onChange={(e) => {
-            setSearch(e.target.value);
-            setPage(1);
-          }}
-          className="flex-1 bg-transparent border-0 outline-none text-sm text-gorola-charcoal placeholder-gorola-slate/60 font-dm-sans"
-          id="product-search-input"
-        />
+      <div className="flex flex-col sm:flex-row bg-white border border-gorola-mint/15 rounded-2xl p-3 shadow-sm items-stretch sm:items-center gap-3">
+        <div className="flex items-center gap-3 flex-1 px-1">
+          <Search className="h-5 w-5 text-gorola-slate shrink-0" />
+          <input
+            type="text"
+            placeholder="Search by product name or keywords..."
+            value={search}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSearch(val);
+              setPage(1);
+              const newParams: Record<string, string> = {};
+              if (val) newParams.search = val;
+              if (showLowStockOnly) newParams.lowStock = "true";
+              setSearchParams(newParams);
+            }}
+            className="flex-1 bg-transparent border-0 outline-none text-sm text-gorola-charcoal placeholder-gorola-slate/60 font-dm-sans"
+            id="product-search-input"
+          />
+        </div>
+
+        {/* Low Stock Filter Button Toggle */}
+        <button
+          onClick={toggleLowStockFilter}
+          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all whitespace-nowrap ${
+            showLowStockOnly
+              ? "bg-red-50 text-red-600 border-red-200 shadow-sm shadow-red-50"
+              : "bg-transparent text-gorola-slate border-gorola-mint/20 hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+          }`}
+          id="low-stock-filter-toggle"
+        >
+          <AlertTriangle className={`h-4 w-4 ${showLowStockOnly ? "animate-pulse" : ""}`} />
+          {showLowStockOnly ? "Showing Low Stock Only" : "Filter Low Stock"}
+        </button>
       </div>
 
       {/* Main Content Area */}

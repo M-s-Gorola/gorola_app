@@ -284,9 +284,9 @@ export class StoreOwnerService {
 
   public async getProducts(
     storeId: string,
-    filters: { search?: string; subCategoryId?: string; page: number; limit: number }
+    filters: { search?: string; subCategoryId?: string; lowStock?: boolean; page: number; limit: number }
   ) {
-    const { search, subCategoryId, page, limit } = filters;
+    const { search, subCategoryId, lowStock, page, limit } = filters;
     const skip = (page - 1) * limit;
     const take = limit;
 
@@ -299,6 +299,16 @@ export class StoreOwnerService {
             name: {
               contains: search,
               mode: "insensitive"
+            }
+          }
+        : {}),
+      ...(lowStock === true
+        ? {
+            variants: {
+              some: {
+                isLowStock: true,
+                isActive: true
+              }
             }
           }
         : {})

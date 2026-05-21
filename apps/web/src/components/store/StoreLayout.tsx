@@ -1,5 +1,7 @@
 import type { ReactElement, ReactNode } from "react";
+import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Menu } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
@@ -15,6 +17,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
   const location = useLocation();
   const clearSession = useAuthStore((s) => s.clearSession);
   const storeId = useAuthStore((s) => s.storeId);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
 
@@ -49,13 +52,17 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
   return (
     <div className="flex min-h-screen bg-gorola-mint/5">
       {/* Sidebar Navigation */}
-      <aside className="hidden md:flex w-64 flex-col bg-white border-r border-gorola-mint/15 shadow-sm">
-        <div className="flex h-16 items-center px-6 border-b border-gorola-mint/15">
+      <aside
+        className={`hidden md:flex flex-col bg-white border-r border-gorola-mint/15 shadow-sm transition-all duration-300 ease-in-out ${
+          isSidebarOpen ? "w-64" : "w-0 overflow-hidden border-r-0"
+        }`}
+      >
+        <div className="flex h-16 items-center px-6 border-b border-gorola-mint/15 shrink-0">
           <Link className="flex items-center gap-2" to={getScopedPath("/store/dashboard", "store", isSubdomainMode)}>
             <span className="font-heading text-xl font-bold text-gorola-charcoal">GoRola <span className="text-gorola-pine">Store</span></span>
           </Link>
         </div>
-        <nav className="flex-1 space-y-1 px-4 py-6">
+        <nav className="flex-1 space-y-1 px-4 py-6 overflow-y-auto">
           {navItems.map((item) => {
             const isActive = location.pathname.startsWith(item.path);
             return (
@@ -73,7 +80,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
             );
           })}
         </nav>
-        <div className="p-4 border-t border-gorola-mint/15">
+        <div className="p-4 border-t border-gorola-mint/15 shrink-0">
           <Button className="w-full justify-start gap-2 rounded-xl" onClick={handleLogout} variant="ghost">
             Logout
           </Button>
@@ -84,7 +91,17 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
       <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
         <header className="flex h-16 items-center justify-between bg-white px-6 border-b border-gorola-mint/15 shadow-sm">
-          <div className="flex items-center gap-4">
+          <div className="flex items-center gap-3">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsSidebarOpen(!isSidebarOpen)}
+              className="hidden md:flex text-gorola-slate hover:text-gorola-pine hover:bg-gorola-mint/10 rounded-xl h-9 w-9 items-center justify-center transition-colors"
+              title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
+              aria-label="Toggle Sidebar"
+            >
+              <Menu className="h-5 w-5" />
+            </Button>
             <span className="text-sm font-semibold text-gorola-slate">Store ID: {storeId ?? "Unknown"}</span>
           </div>
           <div className="flex items-center gap-4">

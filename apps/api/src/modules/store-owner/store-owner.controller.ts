@@ -158,6 +158,7 @@ export function registerStoreOwnerRoutes(
   const getProductsQuerySchema = z.object({
     search: z.string().trim().min(1).optional(),
     subCategoryId: z.string().min(1).optional(),
+    lowStock: z.preprocess((val) => val === "true" || val === true, z.boolean()).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(10)
   });
@@ -183,6 +184,7 @@ export function registerStoreOwnerRoutes(
       limit: number;
       search?: string;
       subCategoryId?: string;
+      lowStock?: boolean;
     } = {
       page: parsed.data.page,
       limit: parsed.data.limit
@@ -192,6 +194,9 @@ export function registerStoreOwnerRoutes(
     }
     if (parsed.data.subCategoryId !== undefined) {
       queryParams.subCategoryId = parsed.data.subCategoryId;
+    }
+    if (parsed.data.lowStock !== undefined) {
+      queryParams.lowStock = parsed.data.lowStock;
     }
 
     const result = await storeOwnerService.getProducts(owner.storeId, queryParams);
