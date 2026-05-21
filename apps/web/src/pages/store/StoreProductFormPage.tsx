@@ -233,7 +233,10 @@ export function StoreProductFormPage(): ReactElement {
         toast.success("Product created successfully!");
       }
 
-      await queryClient.invalidateQueries({ queryKey: ["store", "products"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["store", "products"] }),
+        queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] })
+      ]);
       navigate(getScopedPath("/store/products", "store", isSubdomainMode));
     } catch (err) {
       const ax = err as { response?: { data?: { error?: { message?: string } } } };

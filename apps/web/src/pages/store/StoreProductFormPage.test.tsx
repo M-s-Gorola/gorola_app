@@ -127,6 +127,7 @@ describe("StoreProductFormPage", () => {
 
   it("submits correct payload on creation", async () => {
     postMock.mockResolvedValueOnce({ data: { success: true } });
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
 
     renderProductForm(["/store/products/new"]);
 
@@ -170,6 +171,11 @@ describe("StoreProductFormPage", () => {
           }
         ]
       });
+    });
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "products"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "dashboard"] });
     });
   });
 

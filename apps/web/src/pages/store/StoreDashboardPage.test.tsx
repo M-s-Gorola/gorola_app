@@ -1,3 +1,4 @@
+/* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import type { InitialEntry } from "react-router-dom";
@@ -5,6 +6,7 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StoreDashboardPage } from "./StoreDashboardPage";
+import { useAuthStore } from "@/store/auth.store";
 
 const { getMock } = vi.hoisted(() => ({
   getMock: vi.fn()
@@ -38,6 +40,12 @@ function renderStoreDashboard(initialEntries: InitialEntry[] = ["/store/dashboar
 describe("StoreDashboardPage", () => {
   beforeEach(() => {
     getMock.mockReset();
+    useAuthStore.getState().setStoreOwnerSession({
+      accessToken: "mock-access-token",
+      refreshToken: "mock-refresh-token",
+      userId: "mock-user-id",
+      storeId: "mock-store-id"
+    });
   });
 
   it("renders skeletons during loading state", () => {
@@ -113,5 +121,71 @@ describe("StoreDashboardPage", () => {
     expect(screen.getByText("42 sold")).toBeInTheDocument();
     expect(screen.getByText("Fresh Strawberries")).toBeInTheDocument();
     expect(screen.getByText("30 sold")).toBeInTheDocument();
+  });
+
+  it("subscribes to socket events and invalidates query client on new orders or updates", async () => {
+    const mockDashboardData = {
+      success: true,
+      data: {
+        todayOrderCount: 15,
+        todayRevenue: 1250.5,
+        pendingOrdersCount: 4,
+        weeklyRevenue: [],
+        topProducts: [],
+        lowStockItems: [],
+        activeAdvertisementsCount: 2,
+        activeOffersCount: 3
+      }
+    };
+
+    getMock.mockResolvedValue({ data: mockDashboardData });
+
+    // Spy/mock socket.io-client io function
+    const socketListeners: Record<string, (...args: unknown[]) => void> = {};
+    const mockSocket = {
+      on: vi.fn((event, cb) => {
+        socketListeners[event] = cb;
+      }),
+      emit: vi.fn(),
+      disconnect: vi.fn()
+    };
+    
+    const socketIoClient = await import("socket.io-client");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    vi.spyOn(socketIoClient, "io").mockReturnValue(mockSocket as any);
+
+    renderStoreDashboard();
+
+    // Verify initial load
+    expect(await screen.findByText("15")).toBeInTheDocument();
+    expect(getMock).toHaveBeenCalledTimes(1);
+
+    // Verify socket connection and room subscription occurred
+    expect(socketIoClient.io).toHaveBeenCalled();
+    expect(mockSocket.on).toHaveBeenCalledWith("store:new_order", expect.any(Function));
+    expect(mockSocket.on).toHaveBeenCalledWith("store:order_updated", expect.any(Function));
+
+    // Simulate "store:new_order" socket event
+    const newOrderCallback = socketListeners["store:new_order"];
+    expect(newOrderCallback).toBeTypeOf("function");
+    if (newOrderCallback) {
+      newOrderCallback();
+    }
+
+    // Assert that a refresh (refetch) is triggered, calling API get again
+    await vi.waitFor(() => {
+      expect(getMock).toHaveBeenCalledTimes(2);
+    });
+
+    // Simulate "store:order_updated" socket event
+    const orderUpdatedCallback = socketListeners["store:order_updated"];
+    expect(orderUpdatedCallback).toBeTypeOf("function");
+    if (orderUpdatedCallback) {
+      orderUpdatedCallback();
+    }
+
+    await vi.waitFor(() => {
+      expect(getMock).toHaveBeenCalledTimes(3);
+    });
   });
 });

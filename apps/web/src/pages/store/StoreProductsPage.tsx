@@ -93,7 +93,10 @@ export function StoreProductsPage(): ReactElement {
       toast.success("Product status updated successfully");
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey: ["store", "products"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["store", "products"] }),
+        queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] })
+      ]);
     },
     onError: (err: unknown) => {
       const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
