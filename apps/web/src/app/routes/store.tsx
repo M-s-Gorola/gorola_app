@@ -1,8 +1,8 @@
 import type { ReactElement } from "react";
-import { Navigate, Route } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { Link, Navigate, Route } from "react-router-dom";
 
 import { StoreLayout } from "@/components/store/StoreLayout";
+import { StoreBookingsPage } from "@/pages/store/StoreBookingsPage";
 import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
 import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
 import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
@@ -117,6 +117,17 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
         <StoreRoute>
           <StoreLayout>
             <PlaceholderPage title="Settings" prefix={prefix} />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-bookings"
+      path={`${prefix}/bookings`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreBookingsPage />
           </StoreLayout>
         </StoreRoute>
       }

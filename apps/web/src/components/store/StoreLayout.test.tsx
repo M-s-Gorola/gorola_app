@@ -1,5 +1,7 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import React from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -17,8 +19,13 @@ vi.mock("react-router-dom", async () => {
   };
 });
 
-let mockApi: { post: ReturnType<typeof vi.fn> } | null = {
-  post: vi.fn().mockResolvedValue({})
+const { getMock } = vi.hoisted(() => ({
+  getMock: vi.fn()
+}));
+
+let mockApi: { post: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn> } | null = {
+  post: vi.fn().mockResolvedValue({}),
+  get: getMock
 };
 
 vi.mock("@/lib/api", () => {
@@ -29,13 +36,37 @@ vi.mock("@/lib/api", () => {
   };
 });
 
+function renderWithProviders(ui: React.ReactElement) {
+  const queryClient = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false, refetchOnWindowFocus: false }
+    }
+  });
+  return render(
+    <MemoryRouter>
+      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+    </MemoryRouter>
+  );
+}
+
 describe("StoreLayout Logout", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     mockNavigate.mockReset();
+    getMock.mockReset();
     sessionStorage.clear();
+
+    // Default: profile fetch returns QUICK_COMMERCE (Bookings nav hidden)
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: "store-123", name: "Test Store", storeType: "QUICK_COMMERCE" }
+      }
+    });
+
     mockApi = {
-      post: vi.fn().mockResolvedValue({})
+      post: vi.fn().mockResolvedValue({}),
+      get: getMock
     };
 
     useAuthStore.setState({
@@ -51,32 +82,26 @@ describe("StoreLayout Logout", () => {
     const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
     const user = userEvent.setup();
 
-    render(
-      <MemoryRouter>
-        <StoreLayout>
-          <div>Dashboard Content</div>
-        </StoreLayout>
-      </MemoryRouter>
+    renderWithProviders(
+      <StoreLayout>
+        <div>Dashboard Content</div>
+      </StoreLayout>
     );
 
     // There are two Logout buttons: one sidebar (desktop) and one header (mobile).
-    // Let's click the desktop sidebar one.
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
     await user.click(logoutButtons[0]!);
 
-    // sessionStorage.removeItem should be called at least once
     expect(removeItemSpy).toHaveBeenCalledWith("gorola_subdomain_override");
   });
 
   it("navigates to /store/login on logout when isSubdomainMode is false", async () => {
     const user = userEvent.setup();
 
-    render(
-      <MemoryRouter>
-        <StoreLayout>
-          <div>Dashboard Content</div>
-        </StoreLayout>
-      </MemoryRouter>
+    renderWithProviders(
+      <StoreLayout>
+        <div>Dashboard Content</div>
+      </StoreLayout>
     );
 
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
@@ -95,12 +120,10 @@ describe("StoreLayout Logout", () => {
 
     const user = userEvent.setup();
 
-    render(
-      <MemoryRouter>
-        <StoreLayout>
-          <div>Dashboard Content</div>
-        </StoreLayout>
-      </MemoryRouter>
+    renderWithProviders(
+      <StoreLayout>
+        <div>Dashboard Content</div>
+      </StoreLayout>
     );
 
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
@@ -118,12 +141,10 @@ describe("StoreLayout Logout", () => {
   it("calls api.post with correct endpoint and refreshToken on logout", async () => {
     const user = userEvent.setup();
 
-    render(
-      <MemoryRouter>
-        <StoreLayout>
-          <div>Dashboard Content</div>
-        </StoreLayout>
-      </MemoryRouter>
+    renderWithProviders(
+      <StoreLayout>
+        <div>Dashboard Content</div>
+      </StoreLayout>
     );
 
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
@@ -138,27 +159,22 @@ describe("StoreLayout Logout", () => {
     mockApi!.post.mockRejectedValue(new Error("network error"));
     const user = userEvent.setup();
 
-    render(
-      <MemoryRouter>
-        <StoreLayout>
-          <div>Dashboard Content</div>
-        </StoreLayout>
-      </MemoryRouter>
+    renderWithProviders(
+      <StoreLayout>
+        <div>Dashboard Content</div>
+      </StoreLayout>
     );
 
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
     await user.click(logoutButtons[0]!);
 
-    // Check that api.post was called
     expect(mockApi!.post).toHaveBeenCalledWith("/api/v1/auth/store-owner/logout", {
       refreshToken: "rt-token"
     });
 
-    // Check that clearSession was still called successfully
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(useAuthStore.getState().refreshToken).toBeNull();
 
-    // Check that navigation still occurred
     expect(mockNavigate).toHaveBeenCalledWith("/store/login");
   });
 
@@ -166,22 +182,18 @@ describe("StoreLayout Logout", () => {
     mockApi = null;
     const user = userEvent.setup();
 
-    render(
-      <MemoryRouter>
-        <StoreLayout>
-          <div>Dashboard Content</div>
-        </StoreLayout>
-      </MemoryRouter>
+    renderWithProviders(
+      <StoreLayout>
+        <div>Dashboard Content</div>
+      </StoreLayout>
     );
 
     const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
     await user.click(logoutButtons[0]!);
 
-    // Check that clearSession was still called successfully
     expect(useAuthStore.getState().accessToken).toBeNull();
     expect(useAuthStore.getState().refreshToken).toBeNull();
 
-    // Check that navigation still occurred
     expect(mockNavigate).toHaveBeenCalledWith("/store/login");
   });
 });

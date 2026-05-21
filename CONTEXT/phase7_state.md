@@ -10,16 +10,16 @@
 
 | Phase   | Name             | Status       | Notes |
 | ------- | ---------------- | ------------ | ----- |
-| Phase 7 | Booking Commerce | NOT STARTED  | Add medical tests, repairs, and custom booking order flow |
+| Phase 7 | Booking Commerce | IN PROGRESS  | Add medical tests, repairs, and custom booking order flow |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-19
-- **Session Summary:** Successfully completed Phase 7.4 — Buyer Timeslot Picker UI (Frontend). Created responsive React pages for scheduling checkout (BookingTimeslotPage.tsx) and live confirmation updates (BookingConfirmationPage.tsx) utilizing Socket.IO hook subscriptions. Wrote component tests for fasting restraints, lead-day calendar limits, form completions, and badges, confirming 100% green pass. Verified 100% build health (compiler typechecks and ESLint).
-- **Next Session Must Start With:** Phase 7.5 — Store Owner Booking Dashboard (Frontend). Create the page and components for merchant dashboard scheduling, tab systems, and rejections.
-- **In Progress Right Now:** Ready for Phase 7.5.
+- **Date:** 2026-05-21
+- **Session Summary:** Successfully resolved all unit testing suite issues for Phase 7.5 (Store Owner Booking Dashboard). Refactored mock bookings structure to perfectly reflect the `serializeBookingOrder` backend schema, set up persistent mocks using `mockResolvedValue` to withstand window refetches, and refined element matcher queries. Verified 100% green pass on all 5 dashboard tests and 100% build quality.
+- **Next Session Must Start With:** Phase 7.6 — Medical Tests Store Migration. Add booking fields to seed and verify migration scripts.
+- **In Progress Right Now:** Ready for Phase 7.6.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 7 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -276,22 +276,22 @@ Build `StoreBookingsPage.tsx` under `/store/bookings` (gated by `StoreRoute` and
 
 ---
 
-- [ ] **RED — Unit / Component (`apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
-  - [ ] Test: "Pending" tab displays both "Approve" and "Reject" action buttons.
-  - [ ] Test: Rejection modal's confirm button is disabled until a rejection reason is entered.
-  - [ ] Test: "Upcoming" tab displays approved appointments sorted chronologically by scheduled date.
-  - [ ] Test: Navigation link "Bookings" in `StoreLayout` is hidden when the store type is `QUICK_COMMERCE`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [x] Test: "Pending" tab displays both "Approve" and "Reject" action buttons.
+  - [x] Test: Rejection modal's confirm button is disabled until a rejection reason is entered.
+  - [x] Test: "Upcoming" tab displays approved appointments sorted chronologically by scheduled date.
+  - [x] Test: Navigation link "Bookings" in `StoreLayout` is hidden when the store type is `QUICK_COMMERCE`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Component):**
-  - [ ] [Component] Create `apps/web/src/pages/store/StoreBookingsPage.tsx` with tabs, modals, and mutation query states.
-  - [ ] [Layout] Update `apps/web/src/components/store/StoreLayout.tsx` to conditionally render the "Bookings" link.
-  - [ ] [Router] Add `/store/bookings` page under `apps/web/src/App.tsx`.
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/store/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**.
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] Create `apps/web/src/pages/store/StoreBookingsPage.tsx` with tabs, modals, and mutation query states.
+  - [x] [Layout] Update `apps/web/src/components/store/StoreLayout.tsx` to conditionally render the "Bookings" link.
+  - [x] [Router] Add `/store/bookings` page under `apps/web/src/App.tsx`.
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/store/...` strings.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Log in as booking store owner → navigate to bookings dashboard → click "Reject" on a card → type reason → submit → card vanishes and transitions to History tab → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Log in as booking store owner → navigate to bookings dashboard → click "Reject" on a card → type reason → submit → card vanishes and transitions to History tab → ✅ Done.
 
 ---
 
@@ -508,3 +508,9 @@ _(Append new entries here — never delete old entries.)_
 - **Live Confirmation Page:** Created [BookingConfirmationPage.tsx](apps/web/src/pages/buyer/BookingConfirmationPage.tsx) incorporating the `useOrderSocket` hook to invalidate query states reactively, instantly updating scheduling cards, subtotals, and location summaries.
 - **Route Registration:** Registered both views under appropriate layout wrappers and route guards inside [App.tsx](apps/web/src/App.tsx).
 - **Flawless Code Quality Audits:** Re-ran all verification chains. 6/6 frontend unit tests passed successfully, compiler typechecks (`tsc --noEmit`) were 100% clean, and workspace ESLint static analysis returned a perfect zero-error status.
+
+### Session 5 — 2026-05-21 — Phase 7.5 Store Owner Booking Dashboard Test Stabilization
+- **TDD Dashboard Test Suite:** Refactored [StoreBookingsPage.test.tsx](apps/web/src/pages/store/StoreBookingsPage.test.tsx) to align completely with the `serializeBookingOrder` backend API schema by wrapping booking metadata inside the nested `bookingOrder` property structure.
+- **Query Refetch Resilience:** Configured the mock-query client options to disable `refetchOnWindowFocus` and swapped test-level `mockResolvedValueOnce` calls for `mockResolvedValue` to guarantee persistent API responses during browser Focus/Blur events in testing.
+- **Refined DOM Matchers:** Fixed the multi-element matching race on "Fasting" text by targeting "Fasting Required" explicitly, and resolved test status validation capitalization check by asserting the uppercase badge "REJECTED".
+- **Zero-Error Build Status:** Ran web and API test suites to verify 100% green pass results (5/5 frontend tests, 11/11 backend controller tests). All compiler typechecks and ESLint checks are fully clean.

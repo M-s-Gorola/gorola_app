@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
@@ -42,10 +43,23 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
     }, 0);
   };
 
+  const { data: storeProfile } = useQuery({
+    queryKey: ["store", "profile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      return res.data.data;
+    },
+    enabled: !!storeId
+  });
+
   const navItems = [
     { label: "Dashboard", path: getScopedPath("/store/dashboard", "store", isSubdomainMode) },
     { label: "Orders", path: getScopedPath("/store/orders", "store", isSubdomainMode) },
     { label: "Products", path: getScopedPath("/store/products", "store", isSubdomainMode) },
+    ...(storeProfile?.storeType === "BOOKING_COMMERCE"
+      ? [{ label: "Bookings", path: getScopedPath("/store/bookings", "store", isSubdomainMode) }]
+      : []),
     { label: "Settings", path: getScopedPath("/store/settings", "store", isSubdomainMode) }
   ];
 
