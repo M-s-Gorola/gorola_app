@@ -11,8 +11,8 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.1 completed! |
-| Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.1 completed, 3.4.2 planned |
+| Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
@@ -20,7 +20,7 @@
 
 - **Date:** 2026-05-21
 - **Session Summary:** Fully implemented Phase 3.4.1 (Variant Active/Inactive Toggling & Dynamic Variant Additions during Edit Product). Implemented robust Zod schemas, unique variant label checking, transactional stock movements, database deactivation toggles (`isActive`), and a beautiful frontend interface with dynamic opacity indicators, field disabling, and dynamic POST/PUT dispatching on form save. All 432 integration and unit tests are in a GREEN state, and the entire workspace builds successfully.
-- **Next Session Must Start With:** Phase 3.5 — Advertisement Management.
+- **Next Session Must Start With:** Phase 3.4.2 — Product Active/Inactive Toggle (Soft-Delete) in Store Owner Panel.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -361,6 +361,58 @@ In product Edit Mode, store owners cannot deactivate (soft-delete) active varian
 
 - [x] **Verification chain:**
   - [x] Store owner navigates to edit product → clicks "Add Variant" to add a new size → toggles "Active" to "Inactive" on an old size → clicks "Save" → product lists showing only active sizes in buyer panel → old size is greyed out in merchant form → clicks "Active" to reactivate → old size is restored instantly → ✅ Done.
+
+---
+
+### 3.4.2 — Product Active/Inactive Toggle (Soft-Delete) in Store Owner Panel
+
+**Root cause / Goal:**
+Currently, when a store owner deletes a product in the dashboard (`StoreProductsPage`), it triggers a cascade soft-deletion on the backend that sets `product.isDeleted = true` in the database. Once marked as deleted, the store owner cannot view, edit, or reactivate the product in their dashboard. If they temporarily ran out of inventory, they are forced to delete the product and completely recreate it later (which violates the soft-delete toggle philosophy of [DECISION-042] and risks creating identical product conflicts). 
+
+**Fix / Approach:**
+In accordance with [DECISION-042], replace the destructive "Delete" action in `StoreProductsPage` with an **Active / Inactive Toggle (Soft-Delete Toggle)**. 
+
+> [!WARNING]
+> **Anti-Patterns & Bug Prevention Guardrails:**
+> 1. **Do Not Restrictively Filter Administrative APIs:** Ensure `store-owner.service.ts` methods like `getProducts` and `getProductById` do **not** hide inactive products or variants from merchant queries. Merchants must be able to load, edit, and reactivate deactivated entities. Only buyer-facing storefront endpoints should filter by `isActive = true`.
+> 2. **Immediate Query Invalidation on Status Toggle:** Upon successful execution of the active/inactive toggle mutation, the component must immediately call `await queryClient.invalidateQueries({ queryKey: ["store", "products"] })` before triggering any toast or navigation, avoiding visual/stale state discrepancies.
+
+1. **[Backend]** 
+   - Ensure the database model `Product` supports an `isActive: boolean` or `isDeleted: boolean` flag. We will use the existing soft-delete schema column to support toggling, exposing `isActive` in `GET /api/v1/store/products` and providing a dedicated `PUT /api/v1/store/products/:id/status` endpoint to flip the status.
+   - Update `ProductRepository.listForBuyer()` to automatically filter out inactive/soft-deleted products.
+2. **[Frontend]**
+   - In `StoreProductsPage.tsx`, replace the product row delete button with an "Active / Inactive" toggle switch.
+   - **Variant Count Standardization:** In the "Variants" column of the products table, display **two distinct fields**: **Total Variants** and **Active Variants** (e.g., `2 variants (1 active)` or `Total: 2 | Active: 1`) to allow the merchant to see exactly how many variants are in the database and how many of them are active.
+   - If a product is toggled to inactive, visually grey out the row (`opacity-60 bg-gray-50`) in the store owner's dashboard table.
+   - Selecting the toggle to inactive hides it from the buyer storefront, while selecting it back to active restores it instantly.
+
+---
+
+- [ ] **RED — Integration (`store-owner.products.test.ts`):**
+  - [ ] Test: `PUT /api/v1/store/products/:id/status` with body `{ isActive: false }` returns HTTP 200 and toggles the product's database state to inactive.
+  - [ ] Test: After toggling a product to inactive, a buyer query to `GET /api/v1/products` does NOT return this product.
+  - [ ] Test: `PUT /api/v1/store/products/:id/status` with body `{ isActive: true }` returns HTTP 200 and reactivates the product, making it discoverable again for buyers.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend (Repository → Service → Controller):**
+  - [ ] [Repository] In `product.repository.ts`, ensure `findManyByStore` and other store-owner read operations return the active/inactive status flag. Ensure buyer listing and details queries filter out products where `isActive = false` or `isDeleted = true`.
+  - [ ] [Service] Add `updateProductStatus(storeId, productId, isActive: boolean)` in `store-owner.service.ts` that validates product ownership and updates the database record state.
+  - [ ] [Controller] Add handler for `PUT /api/v1/store/products/:id/status` in `store-owner.controller.ts` with Zod schema validation `{ isActive: z.boolean() }`.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit (`StoreProductsPage.test.tsx`):**
+  - [ ] Test: The product list renders an "Active" toggle switch for each product instead of a destructive "Delete" action button.
+  - [ ] Test: The product row in "Variants" column displays both **Total Variants** and **Active Variants** counts (e.g. `2 variants (1 active)`).
+  - [ ] Test: Toggling a product switch to inactive calls the backend `PUT /api/v1/store/products/:id/status` API, shows a success toast, and visually greys out that row (`opacity-60`).
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Update `Product` frontend types to explicitly include `isActive: boolean`.
+  - [ ] [Component] In `StoreProductsPage.tsx`, replace the delete column/actions with an interactive toggle switch. Use `useMutation` to handle status changes. Update table styling to apply `opacity-60 grayscale-[30%] bg-muted/30` on rows where `product.isActive === false`.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Store owner navigates to Products list → toggles product "Fresh Organic Milk" to inactive → row is greyed out instantly on the table → buyer navigates storefront catalog → "Fresh Organic Milk" is hidden → merchant toggles back to active → product restored for buyers instantly → ✅ Done.
 
 ---
 
@@ -844,6 +896,15 @@ Admin needs to create new stores (with an auto-created store owner account), vie
 
 ### 4.6 — Category Management
 
+> [!NOTE]
+> **Design Decision (DECISION-042):**
+> Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for category and subcategory management. Deactivating a category or subcategory must hide it and its associated products from the buyer storefront while preserving all database records to maintain order history integrity, matching [DECISION-042].
+
+> [!WARNING]
+> **Anti-Patterns & Bug Prevention Guardrails:**
+> 1. **Do Not Restrictively Filter Admin API Endpoints:** Admin endpoints (`GET /api/v1/admin/categories` and subcategory reads) must always return both active and inactive categories to allow platform managers to view, edit, and reactivate entities. Only the buyer-facing public APIs will filter them.
+> 2. **Immediate Query Invalidation on Toggle:** When the admin toggles the category/subcategory status, the mutation must execute `await queryClient.invalidateQueries({ queryKey: ["admin", "categories"] })` to force a reactive cache update and avoid any visual stale state.
+
 **Root Cause / Goal:**
 No admin category management endpoints exist. Admin needs to create, edit, toggle active status, and reorder categories and sub-categories. Cannot delete a category that has products (enforced at API level).
 
@@ -865,7 +926,7 @@ No admin category management endpoints exist. Admin needs to create, edit, toggl
   - [ ] Run integration tests — **confirm GREEN**
 
 - [ ] **RED — Unit/Component (`AdminCategoriesPage.test.tsx`):**
-  - [ ] Test: table with "Name", "Emoji/Image", "Slug", "Display Order", "Products Count", "Active" columns
+  - [ ] Test: table has columns "Name", "Emoji/Image", "Slug", "Display Order", "Products Count", "Active", and displays **Total categories/subcategories and active counts** per shop/view (e.g., `Total: 5 | Active: 4`).
   - [ ] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/categories/:id`
   - [ ] Test: drag-to-reorder rows (dnd-kit) updates `displayOrder` and calls `PUT .../reorder`
   - [ ] Test: "Add Category" form requires name, slug (auto-generated from name but editable), imageUrl
@@ -1035,3 +1096,7 @@ _(Append new entries here — never delete old entries.)_
 - **Created Frontend UI Components**: Built `StoreProductsPage.tsx` and `StoreProductFormPage.tsx` featuring low-stock alerts, dynamic multi-variant forms (`useFieldArray`), subcategory selectors, search pagination, and unique variant label validation (**DECISION-039**).
 - **TypeScript strict Optional types (`exactOptionalPropertyTypes: true`) Compliant**: Resolved all strict TS types, decoupled Zod refinements, and eliminated implicit any/resolver mismatch.
 - **Verified Green**: All 26 unit tests across the store owner panel, workspace typecheck, and production builds compile and pass 100% cleanly!
+
+### Session 7 - 2026-05-21 - Resolving Stale Query Cache & Store Owner Dashboard Inactive Variants Hidden Bug
+- **Resolved Store Owner Variant Display Bug:** Fixed an issue where deactivated variants (`isActive: false`) were completely hidden from the merchant's Edit Product form. Removed the restrictive `isActive: true` filter from `StoreOwnerService.getProducts` and `getProductById` so merchants can view, edit, and reactivate deactivated variants.
+- **Fixed Stale Product Edit Save Bug:** Resolved the issue where saving product edits in the dashboard form did not immediately display the updated variant list upon redirect. Integrated immediate TanStack query invalidation (`queryClient.invalidateQueries({ queryKey: ["store", "products"] })`) in the onSubmit handler of `StoreProductFormPage.tsx` before routing back.

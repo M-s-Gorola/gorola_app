@@ -6,10 +6,10 @@ import { StoreLayout } from "@/components/store/StoreLayout";
 import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
 import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
 import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
+import { StoreProductFormPage } from "@/pages/store/StoreProductFormPage";
+import { StoreProductsPage } from "@/pages/store/StoreProductsPage";
 import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
 import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
-import { StoreProductsPage } from "@/pages/store/StoreProductsPage";
-import { StoreProductFormPage } from "@/pages/store/StoreProductFormPage";
 
 import { StoreRoute } from "./guards";
 

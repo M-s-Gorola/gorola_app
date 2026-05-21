@@ -1238,3 +1238,28 @@ Rely on **OrderItem Textual Snapshots** already built into the database schema (
 **Rationale:**
 - **Industry Standard:** This is the gold standard for e-commerce design—receipts preserve static transactional truth, while details page navigation points to the current active catalog.
 - **Zero Database Overhead:** No extra versioning schemas or event-sourcing records are needed because the schema already has snapshot columns built into `OrderItem`.
+
+---
+
+## [DECISION-042] Universal Soft-Delete Toggles for Catalog Entities
+
+**Date:** 2026-05-21
+**Status:** Accepted
+
+**Context:**
+Following [DECISION-040], we identified that destructive hard-deletions of database records lead to critical database foreign key constraint violations and break historical transactional logs (orders, analytics). To prevent this, we use Soft Deletes. However, if a user physically deletes a record and later wants to create an identical entity (e.g. recreating a product with the same name, or a subcategory with the same name), it causes constraint conflicts with unique name validations. 
+
+**Decision:**
+Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for all catalog-related entities across both the Store Owner Panel (products) and Admin Panel (categories, subcategories). Instead of presenting a destructive "Delete" action:
+1. **Product Level:** Product actions will feature an "Active / Inactive" toggle. Deactivating a product will set its status to inactive, greying it out in the store list and hiding it completely from the buyer storefront.
+2. **Category & Subcategory Level:** In the Admin Panel, categories and subcategories will be managed via active/inactive toggles. Deactivating a category or subcategory will hide it and its child products from storefront discovery, while maintaining pristine relationship mappings for existing past orders.
+3. **UX Behavior:** Inactive items will visually render as greyed-out (`opacity-60`) in administrative dashboards, allowing instant toggling back to active without requiring redundant object recreation.
+
+**Rationale:**
+- **Perfect consistency:** Unifies the catalog lifecycle UI/UX across products, variants, categories, and subcategories.
+- **Protects transactional integrity:** Prevents the database from throwing SQL violations due to cascade rules on active foreign keys in orders.
+- **Prevents redundant data entry:** Users can easily close/open stores or categories temporarily (e.g. seasonally) and reactivate them with one click without recreating all nested objects.
+
+**Tradeoffs:**
+- Requires implementing active/inactive styling and toggle switch states across multiple lists, which is easily managed.
+

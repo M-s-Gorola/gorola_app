@@ -140,7 +140,7 @@ describe("StoreOwner Products Integration Tests", () => {
     });
 
     // Create a product for Store A
-    const productA = await db.product.create({
+    await db.product.create({
       data: {
         name: "Store A Apple",
         description: "Fresh apples",

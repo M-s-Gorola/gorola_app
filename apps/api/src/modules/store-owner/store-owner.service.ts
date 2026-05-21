@@ -313,7 +313,6 @@ export class StoreOwnerService {
         take,
         include: {
           variants: {
-            where: { isActive: true },
             orderBy: { label: "asc" }
           },
           subCategory: {
@@ -342,7 +341,6 @@ export class StoreOwnerService {
       where: { id: productId, isDeleted: false },
       include: {
         variants: {
-          where: { isActive: true },
           orderBy: { label: "asc" }
         },
         subCategory: {

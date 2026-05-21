@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -88,6 +88,7 @@ type ProductDetailEnvelope = {
 
 export function StoreProductFormPage(): ReactElement {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { id: productId } = useParams<{ id: string }>();
   const isEditMode = !!productId;
 
@@ -111,6 +112,7 @@ export function StoreProductFormPage(): ReactElement {
     watch,
     formState: { errors, isSubmitting }
   } = useForm<ProductFormValues>({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     resolver: zodResolver(productFormSchema) as any,
     defaultValues: {
       name: "",
@@ -182,8 +184,8 @@ export function StoreProductFormPage(): ReactElement {
 
         // Update pre-existing variants in parallel
         const updateVariantPromises = vals.variants
-          .filter((v: any) => !!v.id) // only update pre-existing variants
-          .map((v: any) => {
+          .filter((v) => !!v.id) // only update pre-existing variants
+          .map((v) => {
             if (!api) throw new Error("API helper not initialized");
             return api.put(`/api/v1/store/products/${productId}/variants/${v.id}`, {
               label: v.label,
@@ -197,8 +199,8 @@ export function StoreProductFormPage(): ReactElement {
 
         // Create newly added variants in parallel
         const createVariantPromises = vals.variants
-          .filter((v: any) => !v.id) // newly added variants don't have id
-          .map((v: any) => {
+          .filter((v) => !v.id) // newly added variants don't have id
+          .map((v) => {
             if (!api) throw new Error("API helper not initialized");
             return api.post(`/api/v1/store/products/${productId}/variants`, {
               label: v.label,
@@ -219,7 +221,7 @@ export function StoreProductFormPage(): ReactElement {
           subCategoryId: vals.subCategoryId,
           description: vals.description || "",
           imageUrl: vals.imageUrl,
-          variants: vals.variants.map((v: any) => ({
+          variants: vals.variants.map((v) => ({
             label: v.label,
             price: v.price,
             stockQty: v.stockQty,
@@ -231,6 +233,7 @@ export function StoreProductFormPage(): ReactElement {
         toast.success("Product created successfully!");
       }
 
+      await queryClient.invalidateQueries({ queryKey: ["store", "products"] });
       navigate(getScopedPath("/store/products", "store", isSubdomainMode));
     } catch (err) {
       const ax = err as { response?: { data?: { error?: { message?: string } } } };
@@ -417,7 +420,7 @@ export function StoreProductFormPage(): ReactElement {
             <div className="space-y-4">
               {fields.map((field, index) => {
                 const isVariantActive = watchVariants?.[index]?.isActive !== false;
-                const hasId = !!(field as any).id;
+                const hasId = !!(field as Record<string, unknown>).id;
 
                 return (
                   <div
