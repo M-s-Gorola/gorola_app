@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowRight,
@@ -8,10 +8,13 @@ import {
   ShoppingBag,
   TrendingUp} from "lucide-react";
 import type { ReactElement } from "react";
+import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { io } from "socket.io-client";
 
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+import { useAuthStore } from "@/store/auth.store";
 
 type WeeklyRevenueItem = {
   date: string;
@@ -47,7 +50,43 @@ type DashboardEnvelope = {
 
 export function StoreDashboardPage(): ReactElement {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+  const storeId = useAuthStore((s) => s.storeId);
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    if (!storeId || !accessToken) return;
+
+    const host = window.location.hostname;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    
+    const socket = io(baseURL, {
+      auth: { token: accessToken },
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      socket.emit("join_store", storeId);
+    });
+
+    const triggerRefresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
+    };
+
+    socket.on("store:new_order", () => {
+      triggerRefresh();
+    });
+
+    socket.on("store:order_updated", () => {
+      triggerRefresh();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [storeId, accessToken, queryClient]);
 
   const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["store", "dashboard"],

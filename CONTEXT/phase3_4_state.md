@@ -1114,3 +1114,8 @@ _(Append new entries here — never delete old entries.)_
 - **Option A Direct Inventory Filtering**: Limited the dashboard alerts card to show a maximum of 3 items, appending a "View All Alerts (Count)" button that routes directly to `/store/products?lowStock=true`.
 - **Products Catalog Filter Integration (`StoreProductsPage.tsx`)**: Created a dedicated, custom-styled "Filter Low Stock" toggle button in the catalog search bar with active states, dynamic URL synchronization, and full server-side Prisma querying support via `lowStock` boolean API query parameter.
 
+### Session 10 — 2026-05-22 — Real-Time Store Dashboard Synchronization
+- **Real-Time WebSocket Dashboard Sync (`StoreDashboardPage.tsx`)**: Established a Socket.IO client connection using dynamic merchant session tokens (`accessToken` and `storeId`) from `@/store/auth.store`. Subscribed to the `"join_store"` WebSocket room and listened for `"store:new_order"` and `"store:order_updated"` events to instantly invalidate the `["store", "dashboard"]` cache.
+- **Cross-Query Catalog Mutation Invalidation (`StoreProductsPage.tsx` & `StoreProductFormPage.tsx`)**: Upgraded product status toggling mutations, product creations, and variant stock updates to concurrently invalidate both catalog (`["store", "products"]`) and dashboard (`["store", "dashboard"]`) cache keys. This ensures inventory corrections instantly synchronize the Low Stock Alerts card across pages without manual reloads.
+- **TDD-driven Integration Verification**: Pre-authored fully-comprehensive Vitest integration and mock socket subscription tests for all altered pages, ensuring a strictly verified, regression-free, and typecheck-clean implementation.
+

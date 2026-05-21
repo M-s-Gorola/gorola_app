@@ -172,11 +172,18 @@ describe("StoreProductsPage", () => {
       }
     });
 
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+
     // Click the toggle switch to deactivate
     await user.click(toggleSwitch);
 
     await waitFor(() => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/store/products/prod-1/status", { isActive: false });
+    });
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "products"] });
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "dashboard"] });
     });
   });
 
