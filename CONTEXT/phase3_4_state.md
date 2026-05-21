@@ -19,7 +19,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-21
-- **Session Summary:** Fully implemented Phase 3.4.2 (Product Active/Inactive Toggle - Soft-Delete). Built backend REST API status-toggle endpoint (`PUT /api/v1/store/products/:id/status`), integrated service layer status updates, and designed frontend list with active/inactive toggle switch, standard variant statistics, visual greyscale/opacity row updates, and instantaneous cached query updates on state mutation. Verified with 100% green unit and integration test suites.
+- **Session Summary:** Fully implemented responsive Collapsible Sidebar, restructured the Store Owner Dashboard with 1/3 column scrollable Low Stock Alerts and full-width vertical Top Products table. Developed Option A direct-filtering mechanism featuring compact 3-alert listing, View All button, and a dedicated, custom-styled "Filter Low Stock" toggle in the Products Page linked to server-side Prisma queries.
 - **Next Session Must Start With:** Phase 3.5 — Store-Wide Discount Codes & Offers in Store Owner Panel.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
@@ -1107,4 +1107,10 @@ _(Append new entries here — never delete old entries.)_
 - **Added Visual Status Indication:** Programmed table rows to gracefully transition to 60% opacity and grayscale when deactivated, visually indicating status without admin-side filtering.
 - **Upgraded Metrics:** Added the standardized product variant metric `X variant(s) (Y active)` showing active variants in relation to the total count for immediate store visibility.
 - **100% Green Verification Suite:** Wrote and fully verified comprehensive integration and unit tests, achieving 100% green test runs across the whole application.
+
+### Session 9 — 2026-05-21 — Collapsible Sidebar, Restructured Dashboard, and Option A Direct Filtering
+- **Collapsible Sidebar Navigation (`StoreLayout.tsx`)**: Implemented a responsive collapsible sidebar toggle with custom React state `isSidebarOpen` and fluid CSS transitions between expanded (`w-64`) and collapsed (`w-0`) modes. Added a premium hamburger Menu toggle button in the header.
+- **Restructured Dashboard Layout (`StoreDashboardPage.tsx`)**: Relocated Low Stock Alerts directly to the prominent 1/3 column position next to the Weekly Revenue Trend. Replaced the 5-column top products grid with a premium full-width vertical table layout to ensure product names are fully readable and never truncated.
+- **Option A Direct Inventory Filtering**: Limited the dashboard alerts card to show a maximum of 3 items, appending a "View All Alerts (Count)" button that routes directly to `/store/products?lowStock=true`.
+- **Products Catalog Filter Integration (`StoreProductsPage.tsx`)**: Created a dedicated, custom-styled "Filter Low Stock" toggle button in the catalog search bar with active states, dynamic URL synchronization, and full server-side Prisma querying support via `lowStock` boolean API query parameter.
 
