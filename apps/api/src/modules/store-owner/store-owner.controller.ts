@@ -404,7 +404,8 @@ export function registerStoreOwnerRoutes(
     price: z.coerce.number().positive().optional(),
     stockQty: z.coerce.number().int().nonnegative().optional(),
     unit: z.string().trim().min(1).optional(),
-    lowStockThreshold: z.coerce.number().int().nonnegative().optional()
+    lowStockThreshold: z.coerce.number().int().nonnegative().optional(),
+    isActive: z.boolean().optional()
   });
 
   app.put("/api/v1/store/products/:id/variants/:variantId", { preHandler }, async (request, reply) => {
@@ -436,6 +437,7 @@ export function registerStoreOwnerRoutes(
       stockQty?: number;
       unit?: string;
       lowStockThreshold?: number;
+      isActive?: boolean;
     } = {};
     if (parsed.data.label !== undefined) {
       variantPayload.label = parsed.data.label;
@@ -452,6 +454,9 @@ export function registerStoreOwnerRoutes(
     if (parsed.data.lowStockThreshold !== undefined) {
       variantPayload.lowStockThreshold = parsed.data.lowStockThreshold;
     }
+    if (parsed.data.isActive !== undefined) {
+      variantPayload.isActive = parsed.data.isActive;
+    }
 
     const variant = await storeOwnerService.updateVariant(owner.storeId, productId, variantId, variantPayload);
 
@@ -463,5 +468,65 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // 6. POST /api/v1/store/products/:id/variants
+  const createVariantBodySchema = z.object({
+    label: z.string().trim().min(1),
+    price: z.coerce.number().positive(),
+    stockQty: z.coerce.number().int().nonnegative(),
+    unit: z.string().trim().min(1),
+    lowStockThreshold: z.coerce.number().int().nonnegative().optional()
+  });
+
+  app.post("/api/v1/store/products/:id/variants", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const productId = params.id;
+    if (!productId) {
+      throw new ValidationError("Product ID is required");
+    }
+
+    const parsed = createVariantBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid variant data", parsed.error.flatten());
+    }
+
+    const createPayload: {
+      label: string;
+      price: number;
+      stockQty: number;
+      unit: string;
+      lowStockThreshold?: number;
+    } = {
+      label: parsed.data.label,
+      price: parsed.data.price,
+      stockQty: parsed.data.stockQty,
+      unit: parsed.data.unit
+    };
+    if (parsed.data.lowStockThreshold !== undefined) {
+      createPayload.lowStockThreshold = parsed.data.lowStockThreshold;
+    }
+
+    const variant = await storeOwnerService.createVariant(owner.storeId, productId, createPayload);
+
+    reply.code(201);
+    return {
+      success: true,
+      data: variant,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
+
 

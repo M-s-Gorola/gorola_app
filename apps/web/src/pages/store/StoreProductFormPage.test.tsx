@@ -246,8 +246,117 @@ describe("StoreProductFormPage", () => {
         price: 160.0,
         stockQty: 10,
         unit: "kg",
-        lowStockThreshold: 5
+        lowStockThreshold: 5,
+        isActive: true
+      });
+    });
+  });
+
+  it("handles active/inactive toggles and newly added variants in edit mode", async () => {
+    const mockProductDetail = {
+      success: true,
+      data: {
+        id: "prod-xyz",
+        name: "Original Milk",
+        description: "Fresh milk",
+        imageUrl: "http://example.com/milk.png",
+        subCategoryId: "subcat-1",
+        variants: [
+          {
+            id: "var-1",
+            label: "500ml",
+            price: 30.0,
+            stockQty: 20,
+            unit: "packet",
+            lowStockThreshold: 5,
+            isActive: true
+          }
+        ]
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/store/categories") {
+        return Promise.resolve({ data: { success: true, data: mockCategories } });
+      }
+      if (url === "/api/v1/store/products/prod-xyz") {
+        return Promise.resolve({ data: mockProductDetail });
+      }
+      return Promise.reject(new Error(`Not Found: ${url}`));
+    });
+
+    putMock.mockResolvedValue({ data: { success: true } });
+    postMock.mockResolvedValue({ data: { success: true } });
+
+    renderProductForm(["/store/products/prod-xyz/edit"]);
+
+    // Verify page renders details
+    const nameInput = await screen.findByLabelText(/product name/i);
+    expect(nameInput).toHaveValue("Original Milk");
+
+    // The variant toggle switch is rendered for pre-existing variants
+    const toggleLabel = screen.getByLabelText(/active status/i);
+    expect(toggleLabel).toBeInTheDocument();
+    expect(toggleLabel).toBeChecked(); // should be checked by default since isActive is true
+
+    const user = userEvent.setup();
+
+    // Toggle variant to inactive
+    await user.click(toggleLabel);
+    expect(toggleLabel).not.toBeChecked();
+
+    // Variant row card should get deactivation styling class
+    const variantCard = toggleLabel.closest("[data-testid='variant-card']");
+    expect(variantCard).toHaveClass("opacity-60");
+
+    // Add a new brand new variant
+    const addVariantBtn = screen.getByRole("button", { name: /add variant/i });
+    await user.click(addVariantBtn);
+
+    // Enter details for new Variant 2
+    const labels = screen.getAllByLabelText(/unique label/i);
+    const units = screen.getAllByLabelText(/standard unit/i);
+    const prices = screen.getAllByLabelText(/price/i);
+    const stocks = screen.getAllByLabelText(/stock quantity/i);
+
+    expect(labels).toHaveLength(2); // original plus the new one
+    await user.type(labels[1]!, "1L Bottle");
+    await user.clear(units[1]!);
+    await user.type(units[1]!, "bottle");
+    await user.type(prices[1]!, "55");
+    await user.type(stocks[1]!, "40");
+
+    const saveBtn = screen.getByRole("button", { name: /save changes/i });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      // Expect product metadata PUT call
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/products/prod-xyz", {
+        name: "Original Milk",
+        subCategoryId: "subcat-1",
+        description: "Fresh milk",
+        imageUrl: "http://example.com/milk.png"
+      });
+
+      // Expect original variant PUT call with isActive: false
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/products/prod-xyz/variants/var-1", {
+        label: "500ml",
+        price: 30,
+        stockQty: 20,
+        unit: "packet",
+        lowStockThreshold: 5,
+        isActive: false
+      });
+
+      // Expect newly added variant POST call
+      expect(postMock).toHaveBeenCalledWith("/api/v1/store/products/prod-xyz/variants", {
+        label: "1L Bottle",
+        price: 55,
+        stockQty: 40,
+        unit: "bottle",
+        lowStockThreshold: undefined
       });
     });
   });
 });
+

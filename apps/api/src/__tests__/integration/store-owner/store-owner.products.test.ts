@@ -709,4 +709,208 @@ describe("StoreOwner Products Integration Tests", () => {
     expect(body.success).toBe(true);
     expect(body.data.name).toBe("Single Product");
   });
+
+  it("should successfully update variant isActive status to false (soft-deactivate)", async () => {
+    const store = await storeRepo.create({
+      name: "Store A",
+      description: "Organic Groceries",
+      phone: "+919999999901",
+      address: "Store A Street"
+    });
+
+    const owner = await ownerRepo.create({
+      email: "owner.a@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+
+    const category = await db.category.create({
+      data: { slug: "dairy", name: "Dairy", isActive: true }
+    });
+
+    const subCategory = await db.subCategory.create({
+      data: { slug: "milk", name: "Milk", isActive: true, categoryId: category.id }
+    });
+
+    const product = await db.product.create({
+      data: {
+        name: "Toggle Variant Product",
+        description: "Desc",
+        storeId: store.id,
+        categoryId: category.id,
+        subCategoryId: subCategory.id,
+        imageUrl: "http://example.com/milk.png",
+        isActive: true
+      }
+    });
+
+    const variant = await db.productVariant.create({
+      data: {
+        productId: product.id,
+        label: "Deactivatable Size",
+        price: 10,
+        stockQty: 10,
+        lowStockThreshold: 5,
+        isLowStock: false,
+        isInStock: true,
+        unit: "packet",
+        isActive: true
+      }
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+    const response = await server.inject({
+      method: "PUT",
+      url: `/api/v1/store/products/${product.id}/variants/${variant.id}`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { isActive: false }
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json().success).toBe(true);
+    expect(response.json().data.isActive).toBe(false);
+
+    // Verify database
+    const dbVariant = await db.productVariant.findUniqueOrThrow({
+      where: { id: variant.id }
+    });
+    expect(dbVariant.isActive).toBe(false);
+  });
+
+  it("should successfully add a new variant to an existing product and register an INITIAL stock movement", async () => {
+    const store = await storeRepo.create({
+      name: "Store A",
+      description: "Organic Groceries",
+      phone: "+919999999901",
+      address: "Store A Street"
+    });
+
+    const owner = await ownerRepo.create({
+      email: "owner.a@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+
+    const category = await db.category.create({
+      data: { slug: "dairy", name: "Dairy", isActive: true }
+    });
+
+    const subCategory = await db.subCategory.create({
+      data: { slug: "milk", name: "Milk", isActive: true, categoryId: category.id }
+    });
+
+    const product = await db.product.create({
+      data: {
+        name: "Product For New Variant",
+        description: "Desc",
+        storeId: store.id,
+        categoryId: category.id,
+        subCategoryId: subCategory.id,
+        imageUrl: "http://example.com/milk.png",
+        isActive: true
+      }
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/v1/store/products/${product.id}/variants`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: "Dynamic Variant",
+        price: 49.99,
+        stockQty: 80,
+        unit: "kg",
+        lowStockThreshold: 10
+      }
+    });
+
+    expect(response.statusCode).toBe(201);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.label).toBe("Dynamic Variant");
+    expect(body.data.price.toString()).toBe("49.99");
+    expect(body.data.stockQty).toBe(80);
+    expect(body.data.lowStockThreshold).toBe(10);
+    expect(body.data.isActive).toBe(true);
+
+    // Verify database variant exists
+    const dbVariant = await db.productVariant.findUniqueOrThrow({
+      where: { id: body.data.id }
+    });
+    expect(dbVariant.productId).toBe(product.id);
+
+    // Verify stock movement
+    const movements = await db.stockMovement.findMany({
+      where: { productVariantId: dbVariant.id }
+    });
+    expect(movements).toHaveLength(1);
+    expect(movements[0]?.type).toBe("INITIAL");
+    expect(movements[0]?.quantity).toBe(80);
+  });
+
+  it("should throw 409 Conflict when adding a variant with a duplicate label (active or inactive)", async () => {
+    const store = await storeRepo.create({
+      name: "Store A",
+      description: "Organic Groceries",
+      phone: "+919999999901",
+      address: "Store A Street"
+    });
+
+    const owner = await ownerRepo.create({
+      email: "owner.a@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+
+    const category = await db.category.create({
+      data: { slug: "dairy", name: "Dairy", isActive: true }
+    });
+
+    const subCategory = await db.subCategory.create({
+      data: { slug: "milk", name: "Milk", isActive: true, categoryId: category.id }
+    });
+
+    const product = await db.product.create({
+      data: {
+        name: "Duplicate Label Product",
+        description: "Desc",
+        storeId: store.id,
+        categoryId: category.id,
+        subCategoryId: subCategory.id,
+        imageUrl: "http://example.com/milk.png",
+        isActive: true
+      }
+    });
+
+    // Create an existing variant (active or inactive)
+    await db.productVariant.create({
+      data: {
+        productId: product.id,
+        label: "Unique Size",
+        price: 15,
+        stockQty: 10,
+        unit: "packet",
+        isActive: false // inactive variant should still block duplicate labels!
+      }
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+    const response = await server.inject({
+      method: "POST",
+      url: `/api/v1/store/products/${product.id}/variants`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: {
+        label: "unique size ", // testing trimming and case-insensitive check
+        price: 20,
+        stockQty: 30,
+        unit: "packet"
+      }
+    });
+
+    expect(response.statusCode).toBe(409);
+    expect(response.json().success).toBe(false);
+    expect(response.json().error.code).toBe("CONFLICT");
+  });
 });
+

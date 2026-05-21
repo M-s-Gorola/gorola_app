@@ -11,16 +11,16 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4 completed! |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.1 completed! |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-20
-- **Session Summary:** Solved store session state persistence by isolating store owner sessions to a distinct cookie namespace (`"storeOwnerRefreshToken"`), completely preventing session conflicts on reload. Upgraded HTTP Fastify and Socket.io CORS to dynamically mirror origins in development mode, unblocking Vite port shifts. Added WebSocket real-time updates to the buyer's `OrderHistoryPage.tsx` so merchant status changes propagate instantly with custom notifications. Implemented premium manual refresh mechanisms with active loading spinners (`animate-spin`) and multi-stage Sonner status toasts on both client and merchant pages.
-- **Next Session Must Start With:** Phase 3.4 — Product Management (CRUD + Variants).
+- **Date:** 2026-05-21
+- **Session Summary:** Fully implemented Phase 3.4.1 (Variant Active/Inactive Toggling & Dynamic Variant Additions during Edit Product). Implemented robust Zod schemas, unique variant label checking, transactional stock movements, database deactivation toggles (`isActive`), and a beautiful frontend interface with dynamic opacity indicators, field disabling, and dynamic POST/PUT dispatching on form save. All 432 integration and unit tests are in a GREEN state, and the entire workspace builds successfully.
+- **Next Session Must Start With:** Phase 3.5 — Advertisement Management.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -332,35 +332,35 @@ In product Edit Mode, store owners cannot deactivate (soft-delete) active varian
 
 ---
 
-- [ ] **RED — Integration (`store-owner.products.test.ts`):**
-  - [ ] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ isActive: false }` returns HTTP 200, and querying the database shows the variant's `isActive` column is set to `false`.
-  - [ ] Test: `POST /api/v1/store/products/:id/variants` with body `{ label: 'New Size', price: 40, stockQty: 50, unit: 'bottle' }` returns HTTP 201 with the created variant details, and a transaction-based `INITIAL` StockMovement is logged.
-  - [ ] Test: `POST /api/v1/store/products/:id/variants` with duplicate label of an existing active variant returns HTTP 409 `CONFLICT`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`store-owner.products.test.ts`):**
+  - [x] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ isActive: false }` returns HTTP 200, and querying the database shows the variant's `isActive` column is set to `false`.
+  - [x] Test: `POST /api/v1/store/products/:id/variants` with body `{ label: 'New Size', price: 40, stockQty: 50, unit: 'bottle' }` returns HTTP 201 with the created variant details, and a transaction-based `INITIAL` StockMovement is logged.
+  - [x] Test: `POST /api/v1/store/products/:id/variants` with duplicate label of an existing active variant returns HTTP 409 `CONFLICT`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Update `updateVariant(storeId, productId, variantId, dto)` in `store-owner.service.ts` to accept and write `isActive: boolean`.
-  - [ ] [Service] Add `createVariant(storeId, productId, dto)` in `store-owner.service.ts` that validates variant label uniqueness, calls `tx.productVariant.create()`, and creates an `INITIAL` `StockMovement` inside a transaction.
-  - [ ] [Controller] Update variant Zod schema and the handler in `store-owner.controller.ts` to pass `isActive` in `updateVariant`.
-  - [ ] [Controller] Add route + handler for `POST /api/v1/store/products/:id/variants` with body validation.
-  - [ ] Run integration test — **confirm GREEN**.
+- [x] **GREEN — Backend:**
+  - [x] [Service] Update `updateVariant(storeId, productId, variantId, dto)` in `store-owner.service.ts` to accept and write `isActive: boolean`.
+  - [x] [Service] Add `createVariant(storeId, productId, dto)` in `store-owner.service.ts` that validates variant label uniqueness, calls `tx.productVariant.create()`, and creates an `INITIAL` `StockMovement` inside a transaction.
+  - [x] [Controller] Update variant Zod schema and the handler in `store-owner.controller.ts` to pass `isActive` in `updateVariant`.
+  - [x] [Controller] Add route + handler for `POST /api/v1/store/products/:id/variants` with body validation.
+  - [x] Run integration test — **confirm GREEN**.
 
-- [ ] **RED — Unit (`StoreProductFormPage.test.tsx`):**
-  - [ ] Test: In edit mode, pre-existing variants render with a status toggle switch. Toggling it off adds a visual `opacity-50` / greyed-out class to the variant row.
-  - [ ] Test: Clicking "Add Variant" in edit mode appends a new empty variant card. Submitting the form calls the new `POST /api/v1/store/products/:id/variants` endpoint for the newly added variant.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`StoreProductFormPage.test.tsx`):**
+  - [x] Test: In edit mode, pre-existing variants render with a status toggle switch. Toggling it off adds a visual `opacity-50` / greyed-out class to the variant row.
+  - [x] Test: Clicking "Add Variant" in edit mode appends a new empty variant card. Submitting the form calls the new `POST /api/v1/store/products/:id/variants` endpoint for the newly added variant.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] [Types] Update variant types in `StoreProductFormPage.tsx` to include `isActive?: boolean`.
-  - [ ] [Component] In `StoreProductFormPage.tsx`:
-    - Enable the "Add Variant" button in edit mode.
-    - Inside the variant card list, replace the "Remove" button with an "Active / Inactive" switch if `field.id` is present (pre-existing variant).
-    - If `isActive` is false, add `opacity-60 bg-gray-50 border-gray-200` to the card container and disable fields other than the toggle.
-    - In `onSubmit` Edit Mode handling, call `api.put` for pre-existing variants, and call `api.post("/api/v1/store/products/:id/variants", ...)` for new variants.
-  - [ ] Run unit test — **confirm GREEN**.
+- [x] **GREEN — Frontend:**
+  - [x] [Types] Update variant types in `StoreProductFormPage.tsx` to include `isActive?: boolean`.
+  - [x] [Component] In `StoreProductFormPage.tsx`:
+    - [x] Enable the "Add Variant" button in edit mode.
+    - [x] Inside the variant card list, replace the "Remove" button with an "Active / Inactive" switch if `field.id` is present (pre-existing variant).
+    - [x] If `isActive` is false, add `opacity-60 bg-gray-50 border-gray-200` to the card container and disable fields other than the toggle.
+    - [x] In `onSubmit` Edit Mode handling, call `api.put` for pre-existing variants, and call `api.post("/api/v1/store/products/:id/variants", ...)` for new variants.
+  - [x] Run unit test — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Store owner navigates to edit product → clicks "Add Variant" to add a new size → toggles "Active" to "Inactive" on an old size → clicks "Save" → product lists showing only active sizes in buyer panel → old size is greyed out in merchant form → clicks "Active" to reactivate → old size is restored instantly → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Store owner navigates to edit product → clicks "Add Variant" to add a new size → toggles "Active" to "Inactive" on an old size → clicks "Save" → product lists showing only active sizes in buyer panel → old size is greyed out in merchant form → clicks "Active" to reactivate → old size is restored instantly → ✅ Done.
 
 ---
 

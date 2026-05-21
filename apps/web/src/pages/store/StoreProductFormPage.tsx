@@ -32,7 +32,8 @@ const rawProductFormSchema = z.object({
         price: z.coerce.number().positive("Price must be a positive number"),
         stockQty: z.coerce.number().int().nonnegative("Stock quantity must be non-negative").default(0),
         unit: z.string().trim().min(1, "Unit is required"),
-        lowStockThreshold: z.coerce.number().int().nonnegative().optional()
+        lowStockThreshold: z.coerce.number().int().nonnegative().optional(),
+        isActive: z.boolean().optional().default(true)
       })
     )
     .min(1, "At least one variant is required")
@@ -80,6 +81,7 @@ type ProductDetailEnvelope = {
       stockQty: number;
       unit: string;
       lowStockThreshold?: number | null;
+      isActive?: boolean;
     }[];
   };
 };
@@ -106,6 +108,7 @@ export function StoreProductFormPage(): ReactElement {
     control,
     handleSubmit,
     reset,
+    watch,
     formState: { errors, isSubmitting }
   } = useForm<ProductFormValues>({
     resolver: zodResolver(productFormSchema) as any,
@@ -114,7 +117,7 @@ export function StoreProductFormPage(): ReactElement {
       subCategoryId: "",
       description: "",
       imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=300",
-      variants: [{ label: "", price: 0, stockQty: 0, unit: "kg" }]
+      variants: [{ label: "", price: 0, stockQty: 0, unit: "kg", isActive: true }]
     },
     mode: "onSubmit"
   });
@@ -123,6 +126,8 @@ export function StoreProductFormPage(): ReactElement {
     control,
     name: "variants"
   });
+
+  const watchVariants = watch("variants");
 
   // 2. Fetch Product Data (if in Edit Mode)
   const { data: productDetail, isLoading: isLoadingProduct } = useQuery({
@@ -150,7 +155,8 @@ export function StoreProductFormPage(): ReactElement {
           price: v.price,
           stockQty: v.stockQty,
           unit: v.unit,
-          lowStockThreshold: v.lowStockThreshold ?? undefined
+          lowStockThreshold: v.lowStockThreshold ?? undefined,
+          isActive: v.isActive ?? true
         }))
       });
     }
@@ -174,7 +180,7 @@ export function StoreProductFormPage(): ReactElement {
           imageUrl: vals.imageUrl
         });
 
-        // Update variants in parallel
+        // Update pre-existing variants in parallel
         const updateVariantPromises = vals.variants
           .filter((v: any) => !!v.id) // only update pre-existing variants
           .map((v: any) => {
@@ -184,11 +190,26 @@ export function StoreProductFormPage(): ReactElement {
               price: v.price,
               stockQty: v.stockQty,
               unit: v.unit,
+              lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
+              isActive: v.isActive !== false
+            });
+          });
+
+        // Create newly added variants in parallel
+        const createVariantPromises = vals.variants
+          .filter((v: any) => !v.id) // newly added variants don't have id
+          .map((v: any) => {
+            if (!api) throw new Error("API helper not initialized");
+            return api.post(`/api/v1/store/products/${productId}/variants`, {
+              label: v.label,
+              price: v.price,
+              stockQty: v.stockQty,
+              unit: v.unit,
               lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold)
             });
           });
 
-        await Promise.all(updateVariantPromises);
+        await Promise.all([...updateVariantPromises, ...createVariantPromises]);
 
         toast.success("Product and variants updated successfully!");
       } else {
@@ -368,17 +389,15 @@ export function StoreProductFormPage(): ReactElement {
                   Enforces unique labeling (e.g. "Pack of 3", "1kg", "500g").
                 </p>
               </div>
-              {!isEditMode && (
-                <button
-                  type="button"
-                  onClick={() => append({ label: "", price: 0, stockQty: 0, unit: "kg" })}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gorola-pine/20 hover:bg-gorola-pine/5 text-gorola-pine rounded-xl text-xs font-bold"
-                  id="add-variant-btn"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                  Add Variant
-                </button>
-              )}
+              <button
+                type="button"
+                onClick={() => append({ label: "", price: 0, stockQty: 0, unit: "kg", isActive: true })}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gorola-pine/20 hover:bg-gorola-pine/5 text-gorola-pine rounded-xl text-xs font-bold"
+                id="add-variant-btn"
+              >
+                <Plus className="h-3.5 w-3.5" />
+                Add Variant
+              </button>
             </div>
 
             {errors.variants?.root && (
@@ -396,142 +415,169 @@ export function StoreProductFormPage(): ReactElement {
             )}
 
             <div className="space-y-4">
-              {fields.map((field, index) => (
-                <div
-                  key={field.id}
-                  data-testid={`variant-item-${index}`}
-                  className="bg-gorola-mint/5 border border-gorola-mint/10 rounded-2xl p-4 space-y-3 relative shadow-inner"
-                >
-                  <div className="flex justify-between items-center">
-                    <span className="text-[10px] font-extrabold uppercase text-gorola-pine">
-                      Variant #{index + 1}
-                    </span>
-                    {fields.length > 1 && !isEditMode && (
-                      <button
-                        type="button"
-                        onClick={() => remove(index)}
-                        className="text-rose-600 hover:text-rose-800 text-xs font-bold inline-flex items-center gap-1"
-                        data-testid={`remove-variant-${index}`}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        Remove
-                      </button>
-                    )}
+              {fields.map((field, index) => {
+                const isVariantActive = watchVariants?.[index]?.isActive !== false;
+                const hasId = !!(field as any).id;
+
+                return (
+                  <div
+                    key={field.id}
+                    data-testid="variant-card"
+                    className={`bg-gorola-mint/5 border border-gorola-mint/10 rounded-2xl p-4 space-y-3 relative shadow-inner transition-all duration-200 ${
+                      !isVariantActive ? "opacity-60 bg-gray-50 border-gray-200 shadow-none" : ""
+                    }`}
+                  >
+                    <div className="flex justify-between items-center">
+                      <span className="text-[10px] font-extrabold uppercase text-gorola-pine">
+                        Variant #{index + 1}
+                      </span>
+                      {hasId ? (
+                        <div className="flex items-center gap-2">
+                          <label className="text-[10px] font-bold text-gorola-slate cursor-pointer select-none flex items-center gap-1.5">
+                            <input
+                              type="checkbox"
+                              id={`variant-active-${index}`}
+                              {...register(`variants.${index}.isActive`)}
+                              className="h-3.5 w-3.5 rounded border-gorola-mint/30 text-gorola-pine focus:ring-gorola-pine/20 cursor-pointer"
+                              aria-label="Active status"
+                            />
+                            Active status
+                          </label>
+                        </div>
+                      ) : (
+                        fields.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => remove(index)}
+                            className="text-rose-600 hover:text-rose-800 text-xs font-bold inline-flex items-center gap-1"
+                            data-testid={`remove-variant-${index}`}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Remove
+                          </button>
+                        )
+                      )}
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      {/* Variant Label */}
+                      <div className="flex flex-col gap-1.5">
+                        <label
+                          className="text-[10px] font-bold text-gorola-charcoal"
+                          htmlFor={`variant-label-${index}`}
+                        >
+                          Unique Label
+                        </label>
+                        <Input
+                          id={`variant-label-${index}`}
+                          placeholder="e.g. 500g Pack"
+                          {...register(`variants.${index}.label`)}
+                          disabled={!isVariantActive}
+                          aria-invalid={errors.variants?.[index]?.label ? "true" : undefined}
+                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                        />
+                        {errors.variants?.[index]?.label && (
+                          <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                            {errors.variants[index].label.message}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Variant Unit */}
+                      <div className="flex flex-col gap-1.5">
+                        <label
+                          className="text-[10px] font-bold text-gorola-charcoal"
+                          htmlFor={`variant-unit-${index}`}
+                        >
+                          Standard Unit
+                        </label>
+                        <Input
+                          id={`variant-unit-${index}`}
+                          placeholder="e.g. kg, pieces, pack"
+                          {...register(`variants.${index}.unit`)}
+                          disabled={!isVariantActive}
+                          aria-invalid={errors.variants?.[index]?.unit ? "true" : undefined}
+                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                        />
+                        {errors.variants?.[index]?.unit && (
+                          <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                            {errors.variants[index].unit.message}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {/* Variant Price */}
+                      <div className="flex flex-col gap-1.5">
+                        <label
+                          className="text-[10px] font-bold text-gorola-charcoal"
+                          htmlFor={`variant-price-${index}`}
+                        >
+                          Price (INR)
+                        </label>
+                        <Input
+                          id={`variant-price-${index}`}
+                          type="number"
+                          step="0.01"
+                          placeholder="49.99"
+                          {...register(`variants.${index}.price`)}
+                          disabled={!isVariantActive}
+                          aria-invalid={errors.variants?.[index]?.price ? "true" : undefined}
+                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                        />
+                        {errors.variants?.[index]?.price && (
+                          <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                            {errors.variants[index].price.message}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Variant Stock */}
+                      <div className="flex flex-col gap-1.5">
+                        <label
+                          className="text-[10px] font-bold text-gorola-charcoal"
+                          htmlFor={`variant-stockQty-${index}`}
+                        >
+                          Stock Quantity
+                        </label>
+                        <Input
+                          id={`variant-stockQty-${index}`}
+                          type="number"
+                          placeholder="50"
+                          {...register(`variants.${index}.stockQty`)}
+                          disabled={!isVariantActive}
+                          aria-invalid={errors.variants?.[index]?.stockQty ? "true" : undefined}
+                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                        />
+                        {errors.variants?.[index]?.stockQty && (
+                          <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                            {errors.variants[index].stockQty.message}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Variant Low Stock Threshold */}
+                      <div className="flex flex-col gap-1.5">
+                        <label
+                          className="text-[10px] font-bold text-gorola-charcoal"
+                          htmlFor={`variant-lowStockThreshold-${index}`}
+                        >
+                          Low Stock Alert
+                        </label>
+                        <Input
+                          id={`variant-lowStockThreshold-${index}`}
+                          type="number"
+                          placeholder="5"
+                          {...register(`variants.${index}.lowStockThreshold`)}
+                          disabled={!isVariantActive}
+                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                        />
+                      </div>
+                    </div>
                   </div>
-
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    {/* Variant Label */}
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-[10px] font-bold text-gorola-charcoal"
-                        htmlFor={`variant-label-${index}`}
-                      >
-                        Unique Label
-                      </label>
-                      <Input
-                        id={`variant-label-${index}`}
-                        placeholder="e.g. 500g Pack"
-                        {...register(`variants.${index}.label`)}
-                        aria-invalid={errors.variants?.[index]?.label ? "true" : undefined}
-                        className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                      />
-                      {errors.variants?.[index]?.label && (
-                        <p className="text-rose-600 text-[10px] font-semibold" role="alert">
-                          {errors.variants[index].label.message}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Variant Unit */}
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-[10px] font-bold text-gorola-charcoal"
-                        htmlFor={`variant-unit-${index}`}
-                      >
-                        Standard Unit
-                      </label>
-                      <Input
-                        id={`variant-unit-${index}`}
-                        placeholder="e.g. kg, pieces, pack"
-                        {...register(`variants.${index}.unit`)}
-                        aria-invalid={errors.variants?.[index]?.unit ? "true" : undefined}
-                        className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                      />
-                      {errors.variants?.[index]?.unit && (
-                        <p className="text-rose-600 text-[10px] font-semibold" role="alert">
-                          {errors.variants[index].unit.message}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {/* Variant Price */}
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-[10px] font-bold text-gorola-charcoal"
-                        htmlFor={`variant-price-${index}`}
-                      >
-                        Price (INR)
-                      </label>
-                      <Input
-                        id={`variant-price-${index}`}
-                        type="number"
-                        step="0.01"
-                        placeholder="49.99"
-                        {...register(`variants.${index}.price`)}
-                        aria-invalid={errors.variants?.[index]?.price ? "true" : undefined}
-                        className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                      />
-                      {errors.variants?.[index]?.price && (
-                        <p className="text-rose-600 text-[10px] font-semibold" role="alert">
-                          {errors.variants[index].price.message}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Variant Stock */}
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-[10px] font-bold text-gorola-charcoal"
-                        htmlFor={`variant-stockQty-${index}`}
-                      >
-                        Stock Quantity
-                      </label>
-                      <Input
-                        id={`variant-stockQty-${index}`}
-                        type="number"
-                        placeholder="50"
-                        {...register(`variants.${index}.stockQty`)}
-                        aria-invalid={errors.variants?.[index]?.stockQty ? "true" : undefined}
-                        className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                      />
-                      {errors.variants?.[index]?.stockQty && (
-                        <p className="text-rose-600 text-[10px] font-semibold" role="alert">
-                          {errors.variants[index].stockQty.message}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Variant Low Stock Threshold */}
-                    <div className="flex flex-col gap-1.5">
-                      <label
-                        className="text-[10px] font-bold text-gorola-charcoal"
-                        htmlFor={`variant-lowStockThreshold-${index}`}
-                      >
-                        Low Stock Alert
-                      </label>
-                      <Input
-                        id={`variant-lowStockThreshold-${index}`}
-                        type="number"
-                        placeholder="5"
-                        {...register(`variants.${index}.lowStockThreshold`)}
-                        className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>

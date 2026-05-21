@@ -523,6 +523,7 @@ export class StoreOwnerService {
       stockQty?: number;
       unit?: string;
       lowStockThreshold?: number;
+      isActive?: boolean;
     }
   ) {
     const product = await this.db.product.findUnique({
@@ -561,6 +562,7 @@ export class StoreOwnerService {
           ...(dto.stockQty !== undefined ? { stockQty: dto.stockQty } : {}),
           ...(dto.unit ? { unit: dto.unit } : {}),
           ...(dto.lowStockThreshold !== undefined ? { lowStockThreshold: dto.lowStockThreshold } : {}),
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
           isInStock,
           isLowStock
         }
@@ -582,4 +584,77 @@ export class StoreOwnerService {
       return updated;
     });
   }
+
+  public async createVariant(
+    storeId: string,
+    productId: string,
+    dto: {
+      label: string;
+      price: number;
+      stockQty: number;
+      unit: string;
+      lowStockThreshold?: number;
+    }
+  ) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId, isDeleted: false }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to view this product");
+    }
+
+    // Check unique label (case-insensitive and trimmed) under this product
+    const normalizedLabel = dto.label.trim().toLowerCase();
+    const existingVariants = await this.db.productVariant.findMany({
+      where: { productId }
+    });
+    const labelExists = existingVariants.some(
+      (v) => v.label.trim().toLowerCase() === normalizedLabel
+    );
+
+    if (labelExists) {
+      throw new AppError("Duplicate variant labels within the same product are not allowed", {
+        code: "CONFLICT",
+        statusCode: 409
+      });
+    }
+
+    const lowStockThreshold = dto.lowStockThreshold ?? 5;
+    const isInStock = dto.stockQty > 0;
+    const isLowStock = dto.stockQty <= lowStockThreshold;
+
+    return this.db.$transaction(async (tx) => {
+      const variant = await tx.productVariant.create({
+        data: {
+          productId,
+          label: dto.label,
+          price: new Prisma.Decimal(dto.price.toString()),
+          stockQty: dto.stockQty,
+          lowStockThreshold,
+          isLowStock,
+          isInStock,
+          unit: dto.unit,
+          isActive: true
+        }
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          productVariantId: variant.id,
+          type: "INITIAL",
+          quantity: dto.stockQty,
+          stockQtyBefore: 0,
+          stockQtyAfter: dto.stockQty
+        }
+      });
+
+      return variant;
+    });
+  }
 }
+
