@@ -281,4 +281,409 @@ export class StoreOwnerService {
       activeOffersCount
     };
   }
+
+  public async getProducts(
+    storeId: string,
+    filters: { search?: string; subCategoryId?: string; lowStock?: boolean; page: number; limit: number }
+  ) {
+    const { search, subCategoryId, lowStock, page, limit } = filters;
+    const skip = (page - 1) * limit;
+    const take = limit;
+
+    const where: Prisma.ProductWhereInput = {
+      storeId,
+      isDeleted: false,
+      ...(subCategoryId ? { subCategoryId } : {}),
+      ...(search
+        ? {
+            name: {
+              contains: search,
+              mode: "insensitive"
+            }
+          }
+        : {}),
+      ...(lowStock === true
+        ? {
+            variants: {
+              some: {
+                isLowStock: true,
+                isActive: true
+              }
+            }
+          }
+        : {})
+    };
+
+    const [total, products] = await Promise.all([
+      this.db.product.count({ where }),
+      this.db.product.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take,
+        include: {
+          variants: {
+            orderBy: { label: "asc" }
+          },
+          subCategory: {
+            select: {
+              id: true,
+              name: true
+            }
+          }
+        }
+      })
+    ]);
+
+    return {
+      data: products,
+      meta: {
+        total,
+        page,
+        limit,
+        hasMore: total > page * limit
+      }
+    };
+  }
+
+  public async getProductById(storeId: string, productId: string) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId, isDeleted: false },
+      include: {
+        variants: {
+          orderBy: { label: "asc" }
+        },
+        subCategory: {
+          select: {
+            id: true,
+            name: true
+          }
+        }
+      }
+    });
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to view this product");
+    }
+    return product;
+  }
+
+  public async createProduct(
+    storeId: string,
+    dto: {
+      name: string;
+      subCategoryId: string;
+      description: string;
+      imageUrl: string;
+      variants: {
+        label: string;
+        price: number;
+        stockQty: number;
+        unit: string;
+        lowStockThreshold?: number;
+      }[];
+    }
+  ) {
+    const subCategory = await this.db.subCategory.findUnique({
+      where: { id: dto.subCategoryId }
+    });
+    if (!subCategory) {
+      throw new NotFoundError("Subcategory not found");
+    }
+
+    const labels = dto.variants.map((v) => v.label.trim().toLowerCase());
+    const uniqueLabels = new Set(labels);
+    if (uniqueLabels.size !== labels.length) {
+      throw new AppError("Duplicate variant labels within the same product are not allowed", {
+        code: "CONFLICT",
+        statusCode: 409
+      });
+    }
+
+    return this.db.$transaction(async (tx) => {
+      const product = await tx.product.create({
+        data: {
+          storeId,
+          categoryId: subCategory.categoryId,
+          subCategoryId: dto.subCategoryId,
+          name: dto.name,
+          description: dto.description,
+          imageUrl: dto.imageUrl,
+          isActive: true
+        }
+      });
+
+      const variants = await Promise.all(
+        dto.variants.map(async (v) => {
+          const lowStockThreshold = v.lowStockThreshold ?? 5;
+          const isInStock = v.stockQty > 0;
+          const isLowStock = v.stockQty <= lowStockThreshold;
+
+          const variant = await tx.productVariant.create({
+            data: {
+              productId: product.id,
+              label: v.label,
+              price: new Prisma.Decimal(v.price.toString()),
+              stockQty: v.stockQty,
+              lowStockThreshold,
+              isLowStock,
+              isInStock,
+              unit: v.unit,
+              isActive: true
+            }
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              productVariantId: variant.id,
+              type: "INITIAL",
+              quantity: v.stockQty,
+              stockQtyBefore: 0,
+              stockQtyAfter: v.stockQty
+            }
+          });
+
+          return variant;
+        })
+      );
+
+      return {
+        ...product,
+        variants
+      };
+    });
+  }
+
+  public async updateProduct(
+    storeId: string,
+    productId: string,
+    dto: {
+      name?: string;
+      subCategoryId?: string;
+      description?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to modify this product");
+    }
+
+    let categoryId = product.categoryId;
+    if (dto.subCategoryId) {
+      const subCategory = await this.db.subCategory.findUnique({
+        where: { id: dto.subCategoryId }
+      });
+      if (!subCategory) {
+        throw new NotFoundError("Subcategory not found");
+      }
+      categoryId = subCategory.categoryId;
+    }
+
+    return this.db.product.update({
+      where: { id: productId },
+      data: {
+        ...(dto.name ? { name: dto.name } : {}),
+        ...(dto.description ? { description: dto.description } : {}),
+        ...(dto.imageUrl ? { imageUrl: dto.imageUrl } : {}),
+        ...(dto.subCategoryId ? { subCategoryId: dto.subCategoryId, categoryId } : {})
+      }
+    });
+  }
+
+  public async softDeleteProduct(storeId: string, productId: string) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to delete this product");
+    }
+
+    return this.db.product.update({
+      where: { id: productId },
+      data: {
+        isDeleted: true
+      }
+    });
+  }
+
+  public async updateProductStatus(storeId: string, productId: string, isActive: boolean) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to modify this product's status");
+    }
+
+    return this.db.product.update({
+      where: { id: productId },
+      data: {
+        isActive
+      }
+    });
+  }
+
+  public async updateVariant(
+    storeId: string,
+    productId: string,
+    variantId: string,
+    dto: {
+      label?: string;
+      price?: number;
+      stockQty?: number;
+      unit?: string;
+      lowStockThreshold?: number;
+      isActive?: boolean;
+    }
+  ) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to access this product");
+    }
+
+    const variant = await this.db.productVariant.findUnique({
+      where: { id: variantId }
+    });
+
+    if (!variant || variant.productId !== productId) {
+      throw new NotFoundError("Product variant not found");
+    }
+
+    return this.db.$transaction(async (tx) => {
+      const currentStock = variant.stockQty;
+      const targetStock = dto.stockQty !== undefined ? dto.stockQty : currentStock;
+      const threshold = dto.lowStockThreshold !== undefined ? dto.lowStockThreshold : variant.lowStockThreshold;
+
+      const isInStock = targetStock > 0;
+      const isLowStock = targetStock <= threshold;
+
+      const updated = await tx.productVariant.update({
+        where: { id: variantId },
+        data: {
+          ...(dto.label ? { label: dto.label } : {}),
+          ...(dto.price !== undefined ? { price: new Prisma.Decimal(dto.price.toString()) } : {}),
+          ...(dto.stockQty !== undefined ? { stockQty: dto.stockQty } : {}),
+          ...(dto.unit ? { unit: dto.unit } : {}),
+          ...(dto.lowStockThreshold !== undefined ? { lowStockThreshold: dto.lowStockThreshold } : {}),
+          ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+          isInStock,
+          isLowStock
+        }
+      });
+
+      if (dto.stockQty !== undefined && dto.stockQty !== currentStock) {
+        const delta = Math.abs(dto.stockQty - currentStock);
+        await tx.stockMovement.create({
+          data: {
+            productVariantId: variantId,
+            type: "ADJUSTMENT",
+            quantity: delta,
+            stockQtyBefore: currentStock,
+            stockQtyAfter: targetStock
+          }
+        });
+      }
+
+      return updated;
+    });
+  }
+
+  public async createVariant(
+    storeId: string,
+    productId: string,
+    dto: {
+      label: string;
+      price: number;
+      stockQty: number;
+      unit: string;
+      lowStockThreshold?: number;
+    }
+  ) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId, isDeleted: false }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to view this product");
+    }
+
+    // Check unique label (case-insensitive and trimmed) under this product
+    const normalizedLabel = dto.label.trim().toLowerCase();
+    const existingVariants = await this.db.productVariant.findMany({
+      where: { productId }
+    });
+    const labelExists = existingVariants.some(
+      (v) => v.label.trim().toLowerCase() === normalizedLabel
+    );
+
+    if (labelExists) {
+      throw new AppError("Duplicate variant labels within the same product are not allowed", {
+        code: "CONFLICT",
+        statusCode: 409
+      });
+    }
+
+    const lowStockThreshold = dto.lowStockThreshold ?? 5;
+    const isInStock = dto.stockQty > 0;
+    const isLowStock = dto.stockQty <= lowStockThreshold;
+
+    return this.db.$transaction(async (tx) => {
+      const variant = await tx.productVariant.create({
+        data: {
+          productId,
+          label: dto.label,
+          price: new Prisma.Decimal(dto.price.toString()),
+          stockQty: dto.stockQty,
+          lowStockThreshold,
+          isLowStock,
+          isInStock,
+          unit: dto.unit,
+          isActive: true
+        }
+      });
+
+      await tx.stockMovement.create({
+        data: {
+          productVariantId: variant.id,
+          type: "INITIAL",
+          quantity: dto.stockQty,
+          stockQtyBefore: 0,
+          stockQtyAfter: dto.stockQty
+        }
+      });
+
+      return variant;
+    });
+  }
 }
+

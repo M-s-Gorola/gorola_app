@@ -11,16 +11,16 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.3 completed with live Sockets! |
-| Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2 completed |
+| Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-20
-- **Session Summary:** Solved store session state persistence by isolating store owner sessions to a distinct cookie namespace (`"storeOwnerRefreshToken"`), completely preventing session conflicts on reload. Upgraded HTTP Fastify and Socket.io CORS to dynamically mirror origins in development mode, unblocking Vite port shifts. Added WebSocket real-time updates to the buyer's `OrderHistoryPage.tsx` so merchant status changes propagate instantly with custom notifications. Implemented premium manual refresh mechanisms with active loading spinners (`animate-spin`) and multi-stage Sonner status toasts on both client and merchant pages.
-- **Next Session Must Start With:** Phase 3.4 — Product Management (CRUD + Variants).
+- **Date:** 2026-05-21
+- **Session Summary:** Fully implemented responsive Collapsible Sidebar, restructured the Store Owner Dashboard with 1/3 column scrollable Low Stock Alerts and full-width vertical Top Products table. Developed Option A direct-filtering mechanism featuring compact 3-alert listing, View All button, and a dedicated, custom-styled "Filter Low Stock" toggle in the Products Page linked to server-side Prisma queries.
+- **Next Session Must Start With:** Phase 3.5 — Store-Wide Discount Codes & Offers in Store Owner Panel.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -263,55 +263,156 @@ No store-owner-facing product endpoints exist. Store owners need to create, read
 
 ---
 
-- [ ] **RED — Integration (`store-owner.products.test.ts` — new file):**
-  - [ ] Test setup: create 2 stores (A and B) with products
-  - [ ] Test: `GET /api/v1/store/products` with store A JWT → returns only store A products; store B products absent
-  - [ ] Test: `POST /api/v1/store/products` with body `{ name: 'Fresh Milk', subCategoryId: '<id>', description: '...', variants: [{ label: '500ml', price: 35, stockQty: 100, unit: 'packet' }] }` → HTTP 201 with `{ id, name, variants: [{ id, label, price, stockQty, isInStock: true }] }`
-  - [ ] Test: `POST /api/v1/store/products` with duplicate variant labels under the same product → HTTP 409 with `CONFLICT` code
-  - [ ] Test: `POST /api/v1/store/products` with `subCategoryId` that doesn't exist → HTTP 404 with `NOT_FOUND` code
-  - [ ] Test: `PUT /api/v1/store/products/<storeAProductId>` with body `{ name: 'Updated Name' }` → HTTP 200; product name updated in DB
-  - [ ] Test: `PUT /api/v1/store/products/<storeBProductId>` using store A JWT → HTTP 403 `FORBIDDEN`
-  - [ ] Test: `DELETE /api/v1/store/products/<storeAProductId>` → HTTP 200; `product.isDeleted = true` in DB; product absent from `GET /api/v1/products` buyer endpoint
-  - [ ] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ price: 40, stockQty: 50 }` → HTTP 200; variant price and stock updated in DB; `StockMovement` with type `ADJUSTMENT` created
-  - [ ] **Run — confirm RED (404 — endpoints do not exist)**
+- [x] **RED — Integration (`store-owner.products.test.ts` — new file):**
+  - [x] Test setup: create 2 stores (A and B) with products
+  - [x] Test: `GET /api/v1/store/products` with store A JWT → returns only store A products; store B products absent
+  - [x] Test: `POST /api/v1/store/products` with body `{ name: 'Fresh Milk', subCategoryId: '<id>', description: '...', variants: [{ label: '500ml', price: 35, stockQty: 100, unit: 'packet' }] }` → HTTP 201 with `{ id, name, variants: [{ id, label, price, stockQty, isInStock: true }] }`
+  - [x] Test: `POST /api/v1/store/products` with duplicate variant labels under the same product → HTTP 409 with `CONFLICT` code
+  - [x] Test: `POST /api/v1/store/products` with `subCategoryId` that doesn't exist → HTTP 404 with `NOT_FOUND` code
+  - [x] Test: `PUT /api/v1/store/products/<storeAProductId>` with body `{ name: 'Updated Name' }` → HTTP 200; product name updated in DB
+  - [x] Test: `PUT /api/v1/store/products/<storeBProductId>` using store A JWT → HTTP 403 `FORBIDDEN`
+  - [x] Test: `DELETE /api/v1/store/products/<storeAProductId>` → HTTP 200; `product.isDeleted = true` in DB; product absent from `GET /api/v1/products` buyer endpoint
+  - [x] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ price: 40, stockQty: 50 }` → HTTP 200; variant price and stock updated in DB; `StockMovement` with type `ADJUSTMENT` created
+  - [x] **Run — confirm RED (404 — endpoints do not exist)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add to `store-owner.service.ts`:
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add to `store-owner.service.ts`:
     - `getProducts(storeId, { search?, subCategoryId?, page, limit })`: calls `ProductRepository.findManyByStore(storeId, filters)`
     - `createProduct(storeId, dto)`: validates `subCategoryId` exists; validates that variant labels are unique in the list; calls `ProductRepository.create` with `{ storeId, ...dto, variants: { create: dto.variants } }`; creates `StockMovement` with type `INITIAL` for each variant in a transaction
     - `updateProduct(storeId, productId, dto)`: validates product belongs to storeId; calls `ProductRepository.update`
     - `softDeleteProduct(storeId, productId)`: validates ownership; sets `isDeleted: true`
     - `updateVariant(storeId, productId, variantId, dto)`: validates product belongs to store; if `stockQty` changes, creates `ADJUSTMENT` StockMovement and updates flags atomically in a transaction
-  - [ ] [Controller] Add all 5 routes to `store-owner.controller.ts` with Zod validation for each body/query
-  - [ ] [Routes] Register all 5 with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
-  - [ ] Run integration tests — **confirm GREEN**
+  - [x] [Controller] Add all 5 routes to `store-owner.controller.ts` with Zod validation for each body/query
+  - [x] [Routes] Register all 5 with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`StoreProductsPage.test.tsx`):**
-  - [ ] Test: renders product list with columns "Image", "Name", "Sub-Category", "Variants Count", "Status"
-  - [ ] Test: search input filters list (updates `?search=` query param, re-fetches)
-  - [ ] Test: "Add Product" button navigates to `/store/products/new`
-  - [ ] Test: "Edit" button on a product row navigates to `/store/products/:id/edit`
-  - [ ] Test: "Delete" button shows confirmation modal before calling DELETE endpoint
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`StoreProductsPage.test.tsx`):**
+  - [x] Test: renders product list with columns "Image", "Name", "Sub-Category", "Variants Count", "Status"
+  - [x] Test: search input filters list (updates `?search=` query param, re-fetches)
+  - [x] Test: "Add Product" button navigates to `/store/products/new`
+  - [x] Test: "Edit" button on a product row navigates to `/store/products/:id/edit`
+  - [x] Test: "Delete" button shows confirmation modal before calling DELETE endpoint
+  - [x] **Run — confirm RED**
 
-- [ ] **RED — Unit/Component (`StoreProductFormPage.test.tsx`):**
-  - [ ] Test: form renders name, description, sub-category dropdown, and "Add Variant" section
-  - [ ] Test: each variant row has label, price, stockQty, unit inputs
-  - [ ] Test: "Add Variant" button appends a new empty variant row
-  - [ ] Test: submitting with empty name shows validation error "Product name is required"
-  - [ ] Test: submitting valid form calls `POST /api/v1/store/products` and navigates to `/store/products` on success
-  - [ ] Test: in edit mode, form is pre-filled with existing product data; submitting calls `PUT /api/v1/store/products/:id`
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`StoreProductFormPage.test.tsx`):**
+  - [x] Test: form renders name, description, sub-category dropdown, and "Add Variant" section
+  - [x] Test: each variant row has label, price, stockQty, unit inputs
+  - [x] Test: "Add Variant" button appends a new empty variant row
+  - [x] Test: submitting with empty name shows validation error "Product name is required"
+  - [x] Test: submitting valid form calls `POST /api/v1/store/products` and navigates to `/store/products` on success
+  - [x] Test: in edit mode, form is pre-filled with existing product data; submitting calls `PUT /api/v1/store/products/:id`
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `StoreProductsPage.tsx`, `StoreProductFormPage.tsx` with all required fields
-  - [ ] Use `react-hook-form` + Zod for client-side validation matching backend rules
-  - [ ] Variant rows use `useFieldArray` from react-hook-form
-  - [ ] Sub-category dropdown populated from `GET /api/v1/categories` (nested)
-  - [ ] Run all unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `StoreProductsPage.tsx`, `StoreProductFormPage.tsx` with all required fields
+  - [x] Use `react-hook-form` + Zod for client-side validation matching backend rules
+  - [x] Variant rows use `useFieldArray` from react-hook-form
+  - [x] Sub-category dropdown populated from `GET /api/v1/categories` (nested)
+  - [x] Run all unit tests — **confirm GREEN**
+
+- [x] **Verification chain:**
+  - [x] Store owner → Products page → Add Product → fill name + 2 variants → submit → product appears in list → click Edit → change price → save → buyer API returns updated price → ✅ Done.
+
+---
+
+### 3.4.1 — Variant Active/Inactive Toggle & Additions in Edit Mode
+
+**Root cause / Goal:**
+In product Edit Mode, store owners cannot deactivate (soft-delete) active variants, reactivate inactive ones, or append brand-new variants. This forces merchants to delete the entire product and recreate it if they want to modify the variant set, which breaks catalog administration.
+
+**Fix / Approach:**
+1. **[Backend]**
+   - Update `PUT /api/v1/store/products/:id/variants/:variantId` in `store-owner.controller.ts` to accept `isActive?: boolean` in the payload.
+   - Create `POST /api/v1/store/products/:id/variants` in `store-owner.controller.ts` to support adding new variants to an existing product in Edit Mode.
+2. **[Frontend]**
+   - Update `StoreProductFormPage.tsx` to:
+     - Render an **Active/Inactive Toggle** switch (with greyed-out styling when inactive) for pre-existing variants.
+     - Allow the **Add Variant** button to remain active in Edit Mode, appending new variants (marked with no `id` in form values).
+     - On submission in Edit Mode, update pre-existing variants (including their `isActive` state) and `POST` any newly added variants to the new backend endpoint.
+
+---
+
+- [x] **RED — Integration (`store-owner.products.test.ts`):**
+  - [x] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ isActive: false }` returns HTTP 200, and querying the database shows the variant's `isActive` column is set to `false`.
+  - [x] Test: `POST /api/v1/store/products/:id/variants` with body `{ label: 'New Size', price: 40, stockQty: 50, unit: 'bottle' }` returns HTTP 201 with the created variant details, and a transaction-based `INITIAL` StockMovement is logged.
+  - [x] Test: `POST /api/v1/store/products/:id/variants` with duplicate label of an existing active variant returns HTTP 409 `CONFLICT`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] [Service] Update `updateVariant(storeId, productId, variantId, dto)` in `store-owner.service.ts` to accept and write `isActive: boolean`.
+  - [x] [Service] Add `createVariant(storeId, productId, dto)` in `store-owner.service.ts` that validates variant label uniqueness, calls `tx.productVariant.create()`, and creates an `INITIAL` `StockMovement` inside a transaction.
+  - [x] [Controller] Update variant Zod schema and the handler in `store-owner.controller.ts` to pass `isActive` in `updateVariant`.
+  - [x] [Controller] Add route + handler for `POST /api/v1/store/products/:id/variants` with body validation.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **RED — Unit (`StoreProductFormPage.test.tsx`):**
+  - [x] Test: In edit mode, pre-existing variants render with a status toggle switch. Toggling it off adds a visual `opacity-50` / greyed-out class to the variant row.
+  - [x] Test: Clicking "Add Variant" in edit mode appends a new empty variant card. Submitting the form calls the new `POST /api/v1/store/products/:id/variants` endpoint for the newly added variant.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend:**
+  - [x] [Types] Update variant types in `StoreProductFormPage.tsx` to include `isActive?: boolean`.
+  - [x] [Component] In `StoreProductFormPage.tsx`:
+    - [x] Enable the "Add Variant" button in edit mode.
+    - [x] Inside the variant card list, replace the "Remove" button with an "Active / Inactive" switch if `field.id` is present (pre-existing variant).
+    - [x] If `isActive` is false, add `opacity-60 bg-gray-50 border-gray-200` to the card container and disable fields other than the toggle.
+    - [x] In `onSubmit` Edit Mode handling, call `api.put` for pre-existing variants, and call `api.post("/api/v1/store/products/:id/variants", ...)` for new variants.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Store owner navigates to edit product → clicks "Add Variant" to add a new size → toggles "Active" to "Inactive" on an old size → clicks "Save" → product lists showing only active sizes in buyer panel → old size is greyed out in merchant form → clicks "Active" to reactivate → old size is restored instantly → ✅ Done.
+
+---
+
+### 3.4.2 — Product Active/Inactive Toggle (Soft-Delete) in Store Owner Panel
+
+**Root cause / Goal:**
+Currently, when a store owner deletes a product in the dashboard (`StoreProductsPage`), it triggers a cascade soft-deletion on the backend that sets `product.isDeleted = true` in the database. Once marked as deleted, the store owner cannot view, edit, or reactivate the product in their dashboard. If they temporarily ran out of inventory, they are forced to delete the product and completely recreate it later (which violates the soft-delete toggle philosophy of [DECISION-042] and risks creating identical product conflicts). 
+
+**Fix / Approach:**
+In accordance with [DECISION-042], replace the destructive "Delete" action in `StoreProductsPage` with an **Active / Inactive Toggle (Soft-Delete Toggle)**. 
+
+> [!WARNING]
+> **Anti-Patterns & Bug Prevention Guardrails:**
+> 1. **Do Not Restrictively Filter Administrative APIs:** Ensure `store-owner.service.ts` methods like `getProducts` and `getProductById` do **not** hide inactive products or variants from merchant queries. Merchants must be able to load, edit, and reactivate deactivated entities. Only buyer-facing storefront endpoints should filter by `isActive = true`.
+> 2. **Immediate Query Invalidation on Status Toggle:** Upon successful execution of the active/inactive toggle mutation, the component must immediately call `await queryClient.invalidateQueries({ queryKey: ["store", "products"] })` before triggering any toast or navigation, avoiding visual/stale state discrepancies.
+
+1. **[Backend]** 
+   - Ensure the database model `Product` supports an `isActive: boolean` or `isDeleted: boolean` flag. We will use the existing soft-delete schema column to support toggling, exposing `isActive` in `GET /api/v1/store/products` and providing a dedicated `PUT /api/v1/store/products/:id/status` endpoint to flip the status.
+   - Update `ProductRepository.listForBuyer()` to automatically filter out inactive/soft-deleted products.
+2. **[Frontend]**
+   - In `StoreProductsPage.tsx`, replace the product row delete button with an "Active / Inactive" toggle switch.
+   - **Variant Count Standardization:** In the "Variants" column of the products table, display **two distinct fields**: **Total Variants** and **Active Variants** (e.g., `2 variants (1 active)` or `Total: 2 | Active: 1`) to allow the merchant to see exactly how many variants are in the database and how many of them are active.
+   - If a product is toggled to inactive, visually grey out the row (`opacity-60 bg-gray-50`) in the store owner's dashboard table.
+   - Selecting the toggle to inactive hides it from the buyer storefront, while selecting it back to active restores it instantly.
+
+---
+
+- [ ] **RED — Integration (`store-owner.products.test.ts`):**
+  - [ ] Test: `PUT /api/v1/store/products/:id/status` with body `{ isActive: false }` returns HTTP 200 and toggles the product's database state to inactive.
+  - [ ] Test: After toggling a product to inactive, a buyer query to `GET /api/v1/products` does NOT return this product.
+  - [ ] Test: `PUT /api/v1/store/products/:id/status` with body `{ isActive: true }` returns HTTP 200 and reactivates the product, making it discoverable again for buyers.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend (Repository → Service → Controller):**
+  - [ ] [Repository] In `product.repository.ts`, ensure `findManyByStore` and other store-owner read operations return the active/inactive status flag. Ensure buyer listing and details queries filter out products where `isActive = false` or `isDeleted = true`.
+  - [ ] [Service] Add `updateProductStatus(storeId, productId, isActive: boolean)` in `store-owner.service.ts` that validates product ownership and updates the database record state.
+  - [ ] [Controller] Add handler for `PUT /api/v1/store/products/:id/status` in `store-owner.controller.ts` with Zod schema validation `{ isActive: z.boolean() }`.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit (`StoreProductsPage.test.tsx`):**
+  - [ ] Test: The product list renders an "Active" toggle switch for each product instead of a destructive "Delete" action button.
+  - [ ] Test: The product row in "Variants" column displays both **Total Variants** and **Active Variants** counts (e.g. `2 variants (1 active)`).
+  - [ ] Test: Toggling a product switch to inactive calls the backend `PUT /api/v1/store/products/:id/status` API, shows a success toast, and visually greys out that row (`opacity-60`).
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Update `Product` frontend types to explicitly include `isActive: boolean`.
+  - [ ] [Component] In `StoreProductsPage.tsx`, replace the delete column/actions with an interactive toggle switch. Use `useMutation` to handle status changes. Update table styling to apply `opacity-60 grayscale-[30%] bg-muted/30` on rows where `product.isActive === false`.
+  - [ ] Run unit tests — **confirm GREEN**.
 
 - [ ] **Verification chain:**
-  - [ ] Store owner → Products page → Add Product → fill name + 2 variants → submit → product appears in list → click Edit → change price → save → buyer API returns updated price → ✅ Done.
+  - [ ] Store owner navigates to Products list → toggles product "Fresh Organic Milk" to inactive → row is greyed out instantly on the table → buyer navigates storefront catalog → "Fresh Organic Milk" is hidden → merchant toggles back to active → product restored for buyers instantly → ✅ Done.
 
 ---
 
@@ -795,6 +896,15 @@ Admin needs to create new stores (with an auto-created store owner account), vie
 
 ### 4.6 — Category Management
 
+> [!NOTE]
+> **Design Decision (DECISION-042):**
+> Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for category and subcategory management. Deactivating a category or subcategory must hide it and its associated products from the buyer storefront while preserving all database records to maintain order history integrity, matching [DECISION-042].
+
+> [!WARNING]
+> **Anti-Patterns & Bug Prevention Guardrails:**
+> 1. **Do Not Restrictively Filter Admin API Endpoints:** Admin endpoints (`GET /api/v1/admin/categories` and subcategory reads) must always return both active and inactive categories to allow platform managers to view, edit, and reactivate entities. Only the buyer-facing public APIs will filter them.
+> 2. **Immediate Query Invalidation on Toggle:** When the admin toggles the category/subcategory status, the mutation must execute `await queryClient.invalidateQueries({ queryKey: ["admin", "categories"] })` to force a reactive cache update and avoid any visual stale state.
+
 **Root Cause / Goal:**
 No admin category management endpoints exist. Admin needs to create, edit, toggle active status, and reorder categories and sub-categories. Cannot delete a category that has products (enforced at API level).
 
@@ -816,7 +926,7 @@ No admin category management endpoints exist. Admin needs to create, edit, toggl
   - [ ] Run integration tests — **confirm GREEN**
 
 - [ ] **RED — Unit/Component (`AdminCategoriesPage.test.tsx`):**
-  - [ ] Test: table with "Name", "Emoji/Image", "Slug", "Display Order", "Products Count", "Active" columns
+  - [ ] Test: table has columns "Name", "Emoji/Image", "Slug", "Display Order", "Products Count", "Active", and displays **Total categories/subcategories and active counts** per shop/view (e.g., `Total: 5 | Active: 4`).
   - [ ] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/categories/:id`
   - [ ] Test: drag-to-reorder rows (dnd-kit) updates `displayOrder` and calls `PUT .../reorder`
   - [ ] Test: "Add Category" form requires name, slug (auto-generated from name but editable), imageUrl
@@ -980,4 +1090,27 @@ _(Append new entries here — never delete old entries.)_
 - **Wired Real-Time Buyer Order History Sync**: Built Socket.IO active-order room subscriptions inside `OrderHistoryPage.tsx`. Buyer orders automatically join their respective socket rooms, receiving immediate `"order_status_changed"` updates from the merchant with elegant Sonner notifications and zero-latency UI status updates.
 - **Crafted Premium Manual Refresh Mechanisms**: Upgraded manual refresh triggers on both client and merchant panels to include `animate-spin` micro-animations, button disabled states during execution, and multi-stage Sonner status toasts (Syncing -> Sync Complete!), creating an extremely satisfying and premium feel.
 
+### Session 6 — 2026-05-21 — Completed Store Product Management (CRUD + Variants)
+- **Completed Phase 3.4**: Built and fully wired the complete Store Owner Product Management panel.
+- **Implemented Backend Product CRUD**: Added backend service, controller, and routes for full product/variant CRUD, Cascade soft-deletes, and inventory stock adjustments, all verified in `store-owner.products.test.ts`.
+- **Created Frontend UI Components**: Built `StoreProductsPage.tsx` and `StoreProductFormPage.tsx` featuring low-stock alerts, dynamic multi-variant forms (`useFieldArray`), subcategory selectors, search pagination, and unique variant label validation (**DECISION-039**).
+- **TypeScript strict Optional types (`exactOptionalPropertyTypes: true`) Compliant**: Resolved all strict TS types, decoupled Zod refinements, and eliminated implicit any/resolver mismatch.
+- **Verified Green**: All 26 unit tests across the store owner panel, workspace typecheck, and production builds compile and pass 100% cleanly!
+
+### Session 7 - 2026-05-21 - Resolving Stale Query Cache & Store Owner Dashboard Inactive Variants Hidden Bug
+- **Resolved Store Owner Variant Display Bug:** Fixed an issue where deactivated variants (`isActive: false`) were completely hidden from the merchant's Edit Product form. Removed the restrictive `isActive: true` filter from `StoreOwnerService.getProducts` and `getProductById` so merchants can view, edit, and reactivate deactivated variants.
+- **Fixed Stale Product Edit Save Bug:** Resolved the issue where saving product edits in the dashboard form did not immediately display the updated variant list upon redirect. Integrated immediate TanStack query invalidation (`queryClient.invalidateQueries({ queryKey: ["store", "products"] })`) in the onSubmit handler of `StoreProductFormPage.tsx` before routing back.
+
+### Session 8 - 2026-05-21 - Completed Product Active/Inactive Toggle (Soft-Delete)
+- **Implemented Backend Status Toggle Endpoint:** Built the service function `updateProductStatus` and wired the controller endpoint `PUT /api/v1/store/products/:id/status` validated by Zod schema for full product status transitions.
+- **Redesigned Frontend Store Catalog Panel:** Replaced the destructive and irreversible product delete confirmation modal with a beautifully styled toggle switch element in the Actions column.
+- **Added Visual Status Indication:** Programmed table rows to gracefully transition to 60% opacity and grayscale when deactivated, visually indicating status without admin-side filtering.
+- **Upgraded Metrics:** Added the standardized product variant metric `X variant(s) (Y active)` showing active variants in relation to the total count for immediate store visibility.
+- **100% Green Verification Suite:** Wrote and fully verified comprehensive integration and unit tests, achieving 100% green test runs across the whole application.
+
+### Session 9 — 2026-05-21 — Collapsible Sidebar, Restructured Dashboard, and Option A Direct Filtering
+- **Collapsible Sidebar Navigation (`StoreLayout.tsx`)**: Implemented a responsive collapsible sidebar toggle with custom React state `isSidebarOpen` and fluid CSS transitions between expanded (`w-64`) and collapsed (`w-0`) modes. Added a premium hamburger Menu toggle button in the header.
+- **Restructured Dashboard Layout (`StoreDashboardPage.tsx`)**: Relocated Low Stock Alerts directly to the prominent 1/3 column position next to the Weekly Revenue Trend. Replaced the 5-column top products grid with a premium full-width vertical table layout to ensure product names are fully readable and never truncated.
+- **Option A Direct Inventory Filtering**: Limited the dashboard alerts card to show a maximum of 3 items, appending a "View All Alerts (Count)" button that routes directly to `/store/products?lowStock=true`.
+- **Products Catalog Filter Integration (`StoreProductsPage.tsx`)**: Created a dedicated, custom-styled "Filter Low Stock" toggle button in the catalog search bar with active states, dynamic URL synchronization, and full server-side Prisma querying support via `lowStock` boolean API query parameter.
 

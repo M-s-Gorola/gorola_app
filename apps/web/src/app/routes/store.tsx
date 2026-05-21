@@ -6,6 +6,8 @@ import { StoreLayout } from "@/components/store/StoreLayout";
 import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
 import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
 import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
+import { StoreProductFormPage } from "@/pages/store/StoreProductFormPage";
+import { StoreProductsPage } from "@/pages/store/StoreProductsPage";
 import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
 import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
 
@@ -69,14 +71,43 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
       }
     />,
     <Route
-      key="store-catalog"
-      path={`${prefix}/catalog`}
+      key="store-products"
+      path={`${prefix}/products`}
       element={
         <StoreRoute>
           <StoreLayout>
-            <PlaceholderPage title="Catalog" prefix={prefix} />
+            <StoreProductsPage />
           </StoreLayout>
         </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-products-new"
+      path={`${prefix}/products/new`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreProductFormPage />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-products-edit"
+      path={`${prefix}/products/:id/edit`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreProductFormPage />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-catalog"
+      path={`${prefix}/catalog`}
+      element={
+        <Navigate to={prefix ? `${prefix}/products` : "/products"} replace />
       }
     />,
     <Route

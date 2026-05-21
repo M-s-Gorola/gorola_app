@@ -16,15 +16,16 @@
 | Phase 6.4 | Subdomain Routing Bug Fixes | COMPLETE | Fixed 3 critical bugs: sessionStorage not cleared on logout, stale bootstrap promise singletons, and store root `/` rendering a placeholder instead of redirecting to dashboard. |
 | Phase 6.5 | Logout & Routing Bug TDD Suite | COMPLETE | Fully verified with robust unit tests across auth.store, subdomain-resolver, bootstrap-state, and StoreLayout. Fixed and updated the router integration test. |
 | Phase 6.6 | Smooth Scroll Lifecycle Fix | COMPLETE | Prevent duplicate useGorolaMotion calls with static scanning & lifecycle unit tests. |
+| Phase 6.7 | Refresh Token Race Condition | COMPLETE | Deduplicate overlapping /refresh calls in Axios interceptor to prevent unexpected logouts on reload or parallel requests. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-05-21
-- **Session Summary:** Investigated the intermittent smooth scroll breaking issue in the buyer window. Identified that duplicate invocation of the `useGorolaMotion()` hook within `ProfilePage.tsx` creates a redundant Lenis instance which prematurely executes `destroyGorolaLenis()` during its unmounting cleanup. Added a comprehensive Phase 6.6 plan with static checking and lifecycle unit tests in `phase6_state.md` under the strict TDD instruction format.
-- **Next Session Must Start With:** Executing Phase 6.6 TDD checklist to resolve the smooth scroll duplicate hook lifecycle bug.
-- **In Progress Right Now:** Phase 6.6.
+- **Session Summary:** Standardized toggles and session auth stability. Resolved the session logout race condition under Refresh Token Rotation (RTR) by implementing parallel Axios request queueing and deduplication, verified with new robust integration tests. Checked that the entire workspace passes all 432 unit/integration tests and ESLint checks 100% cleanly.
+- **Next Session Must Start With:** Phase 3.4.2 — Product Active/Inactive Toggle (Soft-Delete) in Store Owner Panel.
+- **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
 ---
@@ -468,6 +469,38 @@ The goal is to eliminate this duplicate invocation, clean up the Profile page, a
   - Added a **Static Filesystem Scanner** test in `useGorolaMotion.test.tsx` that enforces a compile/test-time check ensuring no page or component (except `App.tsx`) calls `useGorolaMotion`.
   - Added a **Lifecycle Integration** test verifying reference counted singleton survival across concurrent caller lifecycles.
   - Complete workspace Vitest suite is 100% green (221/221 tests passing). TypeScript `tsc` and ESLint checks pass cleanly with 0 warnings/errors.
+
+---
+
+## Phase 6.7 Checklist — Refresh Token Race Condition & Session Deduplication
+
+**Root Cause / Goal:**
+Under Refresh Token Rotation (RTR), the server revokes/deletes the old refresh token as soon as a new one is issued. When the frontend's access token expires during parallel backend mutations (like updating a product and variants together), multiple parallel requests will simultaneously fail with `401` and attempt to call `/refresh` in parallel.
+* The first `/refresh` call succeeds, revokes the old refresh token, and sets the new tokens in the cookie and memory.
+* The second `/refresh` call (dispatched in the same event tick with the same old refresh token) is rejected by the server with a `401` because that refresh token was just revoked.
+* This returns `401` to the client, triggering a cascade logout (`clearSession()`) which unexpectedly bounces the merchant to the login screen.
+
+**Fix / Approach:**
+Implement a standard request-queueing and refresh deduplication interceptor pattern in `apps/web/src/lib/api.ts`.
+* Maintain a boolean flag `isRefreshing = false` and an array of queued request callbacks `failedQueue = []`.
+* When a 401 occurs in `handle401`:
+  * If `isRefreshing` is `true`, return a new `Promise` that is pushed to `failedQueue`. It resolves with the new token to retry the request.
+  * If `isRefreshing` is `false`, set it to `true` and proceed with the token refresh request.
+  * Once the refresh returns successfully: set `isRefreshing = false`, process and resolve all promises in the `failedQueue` with the new access token, and clear the queue.
+  * If the refresh fails: set `isRefreshing = false`, reject all queued promises, call `clearSession()`, and clear the queue.
+
+---
+
+- [x] **RED — Unit / Integration (`apps/web/src/lib/api.test.ts`):**
+  - [x] Test (Parallel Refresh Deduplication): Setup Axios MockAdapter. Intercept multiple concurrent `GET /data-1` and `GET /data-2` requests and make them fail with `401` once. Make the mock `/refresh` endpoint succeed on its first call and return new tokens. Assert that both concurrent requests are resolved with their final retried success responses, and that `/refresh` is called **exactly once** instead of twice.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Axios Interceptors):**
+  - [x] [Interceptors] In `apps/web/src/lib/api.ts`, add the `isRefreshing` and `failedQueue` fields. Update `handle401` to implement the deduplication and queuing of parallel 401s. Ensure queued requests get retried with the new `Authorization` headers.
+  - [x] Run all unit tests — **confirm GREEN**.
+
+- [x] **Verification Chain:**
+  - [x] Log into store owner portal → simulate or trigger expired access token state → execute form submission containing multiple parallel backend mutations → verify both mutations complete successfully → verify store owner is **not** logged out and remains on dashboard → ✅ Done.
 
 
 
