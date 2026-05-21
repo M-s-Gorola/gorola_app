@@ -1,4 +1,6 @@
 import { render, renderHook, waitFor } from "@testing-library/react";
+import fs from "fs";
+import path from "path";
 import { act, type ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -24,17 +26,23 @@ const mockLenisInstance = {
 };
 
 let moduleLevenLenis: typeof mockLenisInstance | null = null;
+let mockRefCount = 0;
 
 vi.mock("@/lib/lenis", () => ({
   get lenis() {
     return moduleLevenLenis;
   },
   createGorolaLenis: vi.fn(() => {
+    mockRefCount++;
     moduleLevenLenis = mockLenisInstance;
     return mockLenisInstance;
   }),
   destroyGorolaLenis: vi.fn(() => {
-    moduleLevenLenis = null;
+    mockRefCount--;
+    if (mockRefCount <= 0) {
+      moduleLevenLenis = null;
+      mockRefCount = 0;
+    }
   }),
 }));
 
@@ -61,6 +69,7 @@ describe("useGorolaMotion", () => {
     mockOn.mockImplementation(() => vi.fn());
     mockRaf.mockReset();
     moduleLevenLenis = null;
+    mockRefCount = 0;
 
     Object.defineProperty(window, "scrollTo", {
       value: vi.fn(),
@@ -178,5 +187,59 @@ describe("useGorolaMotion", () => {
 
     // scrollTo must have been called (not skipped)
     expect(mockScrollTo).toHaveBeenCalledWith(0, { immediate: true });
+  });
+
+  // ── Regression: Static hook scanner and lifecycle survival ──────────────────────────
+
+  it("is only called in App.tsx and never inside individual page or layout components", () => {
+    function scanDirectoryForPattern(dir: string, pattern: string, ignorePatterns: string[] = []): string[] {
+      const results: string[] = [];
+      if (!fs.existsSync(dir)) return results;
+      const files = fs.readdirSync(dir);
+      for (const file of files) {
+        const fullPath = path.join(dir, file);
+        const stat = fs.statSync(fullPath);
+        if (stat.isDirectory()) {
+          results.push(...scanDirectoryForPattern(fullPath, pattern, ignorePatterns));
+        } else if (stat.isFile()) {
+          if (ignorePatterns.some((ip) => file.includes(ip))) continue;
+          const content = fs.readFileSync(fullPath, "utf-8");
+          if (content.includes(pattern)) {
+            results.push(fullPath);
+          }
+        }
+      }
+      return results;
+    }
+
+    const pagesDir = path.resolve(__dirname, "../pages");
+    const componentsDir = path.resolve(__dirname, "../components");
+    const pagesMatches = scanDirectoryForPattern(pagesDir, "useGorolaMotion", [".test.", ".spec."]);
+    const componentsMatches = scanDirectoryForPattern(componentsDir, "useGorolaMotion", [".test.", ".spec."]);
+    const allMatches = [...pagesMatches, ...componentsMatches];
+
+    // Assert that no component files or pages import/invoke useGorolaMotion
+    expect(allMatches).toEqual([]);
+  });
+
+  it("REGRESSION: unmounting a duplicate hook caller does not set the global lenis singleton to null", async () => {
+    const { useGorolaMotion } = await import("./useGorolaMotion");
+    // 1. App mounts: calls useGorolaMotion
+    const appHook = renderHook(() => useGorolaMotion(), { wrapper });
+    expect(moduleLevenLenis).not.toBeNull();
+
+    // 2. ProfilePage mounts: calls useGorolaMotion duplicate
+    const profileHook = renderHook(() => useGorolaMotion(), { wrapper });
+    expect(moduleLevenLenis).not.toBeNull();
+
+    // 3. ProfilePage unmounts: cleanup hook executes
+    profileHook.unmount();
+
+    // 4. Assert that the singleton remains active because the App hook is still mounted!
+    expect(moduleLevenLenis).not.toBeNull();
+
+    // Cleanup App hook
+    appHook.unmount();
+    expect(moduleLevenLenis).toBeNull();
   });
 });
