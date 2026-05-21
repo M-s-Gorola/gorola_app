@@ -527,6 +527,44 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // 7. PUT /api/v1/store/products/:id/status
+  const updateProductStatusBodySchema = z.object({
+    isActive: z.boolean()
+  });
+
+  app.put("/api/v1/store/products/:id/status", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const productId = params.id;
+    if (!productId) {
+      throw new ValidationError("Product ID is required");
+    }
+
+    const parsed = updateProductStatusBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid product status data", parsed.error.flatten());
+    }
+
+    const product = await storeOwnerService.updateProductStatus(owner.storeId, productId, parsed.data.isActive);
+
+    return {
+      success: true,
+      data: product,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
 
 

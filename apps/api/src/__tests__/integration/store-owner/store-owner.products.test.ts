@@ -912,5 +912,113 @@ describe("StoreOwner Products Integration Tests", () => {
     expect(response.json().success).toBe(false);
     expect(response.json().error.code).toBe("CONFLICT");
   });
+
+  it("should successfully toggle a product's isActive status to false (soft-delete)", async () => {
+    const store = await storeRepo.create({
+      name: "Store A",
+      description: "Organic Groceries",
+      phone: "+919999999901",
+      address: "Store A Street"
+    });
+
+    const owner = await ownerRepo.create({
+      email: "owner.a@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+
+    const category = await db.category.create({
+      data: { slug: "dairy", name: "Dairy", isActive: true }
+    });
+
+    const subCategory = await db.subCategory.create({
+      data: { slug: "milk", name: "Milk", isActive: true, categoryId: category.id }
+    });
+
+    const product = await db.product.create({
+      data: {
+        name: "Toggle Product Status",
+        description: "Pure dairy milk",
+        storeId: store.id,
+        categoryId: category.id,
+        subCategoryId: subCategory.id,
+        imageUrl: "http://example.com/milk.png",
+        isActive: true
+      }
+    });
+
+    // Create an active variant to make it listable for buyers
+    await db.productVariant.create({
+      data: {
+        productId: product.id,
+        label: "Standard pack",
+        price: 45,
+        stockQty: 50,
+        unit: "packet",
+        isActive: true
+      }
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+
+    // 1. Toggle Product Inactive (isActive = false)
+    const responseDeactivate = await server.inject({
+      method: "PUT",
+      url: `/api/v1/store/products/${product.id}/status`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { isActive: false }
+    });
+
+    expect(responseDeactivate.statusCode).toBe(200);
+    expect(responseDeactivate.json().success).toBe(true);
+    expect(responseDeactivate.json().data.isActive).toBe(false);
+
+    // Verify DB
+    const dbProduct = await db.product.findUniqueOrThrow({
+      where: { id: product.id }
+    });
+    expect(dbProduct.isActive).toBe(false);
+
+    // 2. Query buyer-facing GET /api/v1/products and verify this product is filtered out
+    const responseBuyerFiltered = await server.inject({
+      method: "GET",
+      url: "/api/v1/products"
+    });
+    expect(responseBuyerFiltered.statusCode).toBe(200);
+    const buyerFilteredBody = responseBuyerFiltered.json();
+    expect(buyerFilteredBody.success).toBe(true);
+    const foundProductFiltered = buyerFilteredBody.data.items.find((item: { id: string }) => item.id === product.id);
+    expect(foundProductFiltered).toBeUndefined();
+
+    // 3. Toggle Product Active (isActive = true)
+    const responseActivate = await server.inject({
+      method: "PUT",
+      url: `/api/v1/store/products/${product.id}/status`,
+      headers: { authorization: `Bearer ${token}` },
+      payload: { isActive: true }
+    });
+
+    expect(responseActivate.statusCode).toBe(200);
+    expect(responseActivate.json().success).toBe(true);
+    expect(responseActivate.json().data.isActive).toBe(true);
+
+    // Verify DB
+    const dbProductActive = await db.product.findUniqueOrThrow({
+      where: { id: product.id }
+    });
+    expect(dbProductActive.isActive).toBe(true);
+
+    // 4. Query buyer-facing GET /api/v1/products and verify product is back
+    const responseBuyerActive = await server.inject({
+      method: "GET",
+      url: "/api/v1/products"
+    });
+    expect(responseBuyerActive.statusCode).toBe(200);
+    const buyerActiveBody = responseBuyerActive.json();
+    expect(buyerActiveBody.success).toBe(true);
+    const foundProductActive = buyerActiveBody.data.items.find((item: { id: string }) => item.id === product.id);
+    expect(foundProductActive).toBeDefined();
+    expect(foundProductActive.name).toBe("Toggle Product Status");
+  });
 });
 

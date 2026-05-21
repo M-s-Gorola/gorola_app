@@ -511,6 +511,27 @@ export class StoreOwnerService {
     });
   }
 
+  public async updateProductStatus(storeId: string, productId: string, isActive: boolean) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId }
+    });
+
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to modify this product's status");
+    }
+
+    return this.db.product.update({
+      where: { id: productId },
+      data: {
+        isActive
+      }
+    });
+  }
+
   public async updateVariant(
     storeId: string,
     productId: string,

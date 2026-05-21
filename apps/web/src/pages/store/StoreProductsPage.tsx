@@ -3,8 +3,7 @@ import {
   AlertTriangle,
   Edit2,
   Plus,
-  Search,
-  Trash2
+  Search
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
@@ -20,6 +19,7 @@ type Variant = {
   price: number;
   stockQty: number;
   unit: string;
+  isActive: boolean;
   lowStockThreshold?: number | null;
 };
 
@@ -29,6 +29,7 @@ type Product = {
   description: string;
   imageUrl: string;
   subCategoryId: string;
+  isActive: boolean;
   subCategory?: {
     id: string;
     name: string;
@@ -52,7 +53,6 @@ export function StoreProductsPage(): ReactElement {
   const queryClient = useQueryClient();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
   const limit = 10;
@@ -70,29 +70,24 @@ export function StoreProductsPage(): ReactElement {
     }
   });
 
-  // 2. Delete Product Mutation
-  const deleteProductMutation = useMutation({
-    mutationFn: async (productId: string) => {
+  // 2. Toggle Product Status Mutation
+  const toggleProductStatusMutation = useMutation({
+    mutationFn: async ({ productId, isActive }: { productId: string; isActive: boolean }) => {
       if (!api) throw new Error("API helper not initialized");
-      await api.delete(`/api/v1/store/products/${productId}`);
+      await api.put(`/api/v1/store/products/${productId}/status`, { isActive });
     },
     onSuccess: () => {
-      toast.success("Product deleted successfully");
-      setProductToDelete(null);
-      void queryClient.invalidateQueries({ queryKey: ["store", "products"] });
+      toast.success("Product status updated successfully");
+    },
+    onSettled: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["store", "products"] });
     },
     onError: (err: unknown) => {
       const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
-      const errMsg = errorResponse?.response?.data?.error?.message || "Failed to delete product";
+      const errMsg = errorResponse?.response?.data?.error?.message || "Failed to update product status";
       toast.error(errMsg);
     }
   });
-
-  const handleDeleteConfirm = () => {
-    if (productToDelete) {
-      deleteProductMutation.mutate(productToDelete.id);
-    }
-  };
 
   const hasLowStock = (product: Product): boolean => {
     return product.variants.some((v) => {
@@ -190,83 +185,98 @@ export function StoreProductsPage(): ReactElement {
                 </tr>
               </thead>
               <tbody>
-                {data.data.map((product) => (
-                  <tr
-                    key={product.id}
-                    data-testid={`product-row-${product.id}`}
-                    className="border-b border-gorola-mint/10 last:border-0 hover:bg-gorola-mint/5 transition-colors duration-150"
-                  >
-                    <td className="p-4 flex items-center gap-4">
-                      <img
-                        src={product.imageUrl || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=120"}
-                        alt={product.name}
-                        className="h-12 w-12 rounded-xl object-cover border border-gorola-mint/15 shadow-sm"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=120";
-                        }}
-                      />
-                      <div>
-                        <h4 className="font-heading text-sm font-black text-gorola-charcoal">{product.name}</h4>
-                        <p className="text-xs text-gorola-slate truncate max-w-xs font-dm-sans">{product.description || "No description provided."}</p>
-                      </div>
-                    </td>
-                    <td className="p-4 text-sm font-semibold text-gorola-charcoal font-dm-sans">
-                      {product.subCategory?.name || "Uncategorized"}
-                    </td>
-                    <td className="p-4">
-                      <div className="space-y-1">
-                        <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-gorola-pine/10 text-gorola-pine">
-                          {product.variants.length} {product.variants.length === 1 ? "variant" : "variants"}
-                        </span>
-                        <div className="text-[10px] text-gorola-slate font-medium">
-                          {product.variants.map((v) => `${v.label} (${formatCurrency(v.price)})`).join(", ")}
+                {data.data.map((product) => {
+                  const totalVariants = product.variants.length;
+                  const activeVariants = product.variants.filter((v) => v.isActive).length;
+                  return (
+                    <tr
+                      key={product.id}
+                      data-testid={`product-row-${product.id}`}
+                      className={`border-b border-gorola-mint/10 last:border-0 hover:bg-gorola-mint/5 transition-colors duration-150 ${
+                        !product.isActive ? "opacity-60 bg-gray-50/50 dark:bg-muted/10 grayscale-[30%]" : ""
+                      }`}
+                    >
+                      <td className="p-4 flex items-center gap-4">
+                        <img
+                          src={product.imageUrl || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=120"}
+                          alt={product.name}
+                          className="h-12 w-12 rounded-xl object-cover border border-gorola-mint/15 shadow-sm"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=120";
+                          }}
+                        />
+                        <div>
+                          <h4 className="font-heading text-sm font-black text-gorola-charcoal">{product.name}</h4>
+                          <p className="text-xs text-gorola-slate truncate max-w-xs font-dm-sans">{product.description || "No description provided."}</p>
                         </div>
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      {hasLowStock(product) ? (
-                        <span
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200"
-                          data-testid={`low-stock-badge-${product.id}`}
-                        >
-                          <AlertTriangle className="h-3 w-3" />
-                          Low Stock
-                        </span>
-                      ) : (
-                        <span
-                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200"
-                          data-testid={`in-stock-badge-${product.id}`}
-                        >
-                          In Stock
-                        </span>
-                      )}
-                    </td>
-                    <td className="p-4 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        <button
-                          onClick={() => navigate(getScopedPath(`/store/products/${product.id}/edit`, "store", isSubdomainMode))}
-                          className="p-2 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all"
-                          title="Edit Product"
-                          data-testid={`edit-product-${product.id}`}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </button>
-                        <button
-                          onClick={() => setProductToDelete(product)}
-                          className="p-2 border border-rose-100 hover:border-rose-350 hover:bg-rose-50 rounded-lg text-gorola-slate hover:text-rose-600 transition-all"
-                          title="Delete Product"
-                          data-testid={`delete-product-${product.id}`}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="p-4 text-sm font-semibold text-gorola-charcoal font-dm-sans">
+                        {product.subCategory?.name || "Uncategorized"}
+                      </td>
+                      <td className="p-4">
+                        <div className="space-y-1">
+                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-gorola-pine/10 text-gorola-pine font-dm-sans">
+                            {totalVariants} {totalVariants === 1 ? "variant" : "variants"} ({activeVariants} active)
+                          </span>
+                          <div className="text-[10px] text-gorola-slate font-medium">
+                            {product.variants.map((v) => `${v.label} (${formatCurrency(v.price)})`).join(", ")}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        {hasLowStock(product) ? (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200"
+                            data-testid={`low-stock-badge-${product.id}`}
+                          >
+                            <AlertTriangle className="h-3 w-3" />
+                            Low Stock
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200"
+                            data-testid={`in-stock-badge-${product.id}`}
+                          >
+                            In Stock
+                          </span>
+                        )}
+                      </td>
+                      <td className="p-4 text-right">
+                        <div className="inline-flex items-center gap-4">
+                          <button
+                            onClick={() => navigate(getScopedPath(`/store/products/${product.id}/edit`, "store", isSubdomainMode))}
+                            className="p-2 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all"
+                            title="Edit Product"
+                            data-testid={`edit-product-${product.id}`}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </button>
+                          
+                          <label className="relative inline-flex items-center cursor-pointer" title="Toggle Active Status">
+                            <input
+                              type="checkbox"
+                              checked={product.isActive}
+                              disabled={toggleProductStatusMutation.isPending}
+                              onChange={(e) => {
+                                toggleProductStatusMutation.mutate({
+                                  productId: product.id,
+                                  isActive: e.target.checked
+                                });
+                              }}
+                              className="sr-only peer"
+                              data-testid={`status-toggle-${product.id}`}
+                            />
+                            <div className="w-9 h-5 bg-gray-200 peer-focus:outline-none rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all dark:border-gray-600 peer-checked:bg-gorola-pine"></div>
+                          </label>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
-
+ 
           {/* Pagination bar */}
           {data.meta && data.meta.total > limit && (
             <div className="flex justify-between items-center bg-gorola-mint/5 border-t border-gorola-mint/15 px-6 py-4">
@@ -305,48 +315,6 @@ export function StoreProductsPage(): ReactElement {
           >
             Create Product
           </button>
-        </div>
-      )}
-
-      {/* Delete Confirmation Modal */}
-      {productToDelete && (
-        <div
-          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
-          onClick={() => setProductToDelete(null)}
-          data-testid="delete-confirm-modal"
-        >
-          <div
-            className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 space-y-6"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-center gap-4">
-              <div className="h-12 w-12 bg-rose-50 text-rose-500 rounded-full flex items-center justify-center">
-                <Trash2 className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-gorola-charcoal font-heading">Delete Product?</h3>
-                <p className="text-xs text-gorola-slate mt-1 font-dm-sans">
-                  This action is irreversible and will soft-delete "{productToDelete.name}" and all its active variants.
-                </p>
-              </div>
-            </div>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setProductToDelete(null)}
-                className="flex-1 px-4 py-3 border border-gorola-mint/20 hover:bg-gorola-mint/10 rounded-xl text-xs font-bold text-gorola-slate transition-all"
-              >
-                Keep Product
-              </button>
-              <button
-                onClick={handleDeleteConfirm}
-                disabled={deleteProductMutation.isPending}
-                className="flex-1 px-4 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-bold transition-all disabled:opacity-50"
-                data-testid="confirm-delete-btn"
-              >
-                {deleteProductMutation.isPending ? "Deleting..." : "Delete Permanently"}
-              </button>
-            </div>
-          </div>
         </div>
       )}
     </div>

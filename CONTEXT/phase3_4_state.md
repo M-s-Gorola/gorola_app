@@ -11,7 +11,7 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.1 completed, 3.4.2 planned |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2 completed |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
@@ -19,8 +19,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-21
-- **Session Summary:** Fully implemented Phase 3.4.1 (Variant Active/Inactive Toggling & Dynamic Variant Additions during Edit Product). Implemented robust Zod schemas, unique variant label checking, transactional stock movements, database deactivation toggles (`isActive`), and a beautiful frontend interface with dynamic opacity indicators, field disabling, and dynamic POST/PUT dispatching on form save. All 432 integration and unit tests are in a GREEN state, and the entire workspace builds successfully.
-- **Next Session Must Start With:** Phase 3.4.2 — Product Active/Inactive Toggle (Soft-Delete) in Store Owner Panel.
+- **Session Summary:** Fully implemented Phase 3.4.2 (Product Active/Inactive Toggle - Soft-Delete). Built backend REST API status-toggle endpoint (`PUT /api/v1/store/products/:id/status`), integrated service layer status updates, and designed frontend list with active/inactive toggle switch, standard variant statistics, visual greyscale/opacity row updates, and instantaneous cached query updates on state mutation. Verified with 100% green unit and integration test suites.
+- **Next Session Must Start With:** Phase 3.5 — Store-Wide Discount Codes & Offers in Store Owner Panel.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -1100,3 +1100,11 @@ _(Append new entries here — never delete old entries.)_
 ### Session 7 - 2026-05-21 - Resolving Stale Query Cache & Store Owner Dashboard Inactive Variants Hidden Bug
 - **Resolved Store Owner Variant Display Bug:** Fixed an issue where deactivated variants (`isActive: false`) were completely hidden from the merchant's Edit Product form. Removed the restrictive `isActive: true` filter from `StoreOwnerService.getProducts` and `getProductById` so merchants can view, edit, and reactivate deactivated variants.
 - **Fixed Stale Product Edit Save Bug:** Resolved the issue where saving product edits in the dashboard form did not immediately display the updated variant list upon redirect. Integrated immediate TanStack query invalidation (`queryClient.invalidateQueries({ queryKey: ["store", "products"] })`) in the onSubmit handler of `StoreProductFormPage.tsx` before routing back.
+
+### Session 8 - 2026-05-21 - Completed Product Active/Inactive Toggle (Soft-Delete)
+- **Implemented Backend Status Toggle Endpoint:** Built the service function `updateProductStatus` and wired the controller endpoint `PUT /api/v1/store/products/:id/status` validated by Zod schema for full product status transitions.
+- **Redesigned Frontend Store Catalog Panel:** Replaced the destructive and irreversible product delete confirmation modal with a beautifully styled toggle switch element in the Actions column.
+- **Added Visual Status Indication:** Programmed table rows to gracefully transition to 60% opacity and grayscale when deactivated, visually indicating status without admin-side filtering.
+- **Upgraded Metrics:** Added the standardized product variant metric `X variant(s) (Y active)` showing active variants in relation to the total count for immediate store visibility.
+- **100% Green Verification Suite:** Wrote and fully verified comprehensive integration and unit tests, achieving 100% green test runs across the whole application.
+
