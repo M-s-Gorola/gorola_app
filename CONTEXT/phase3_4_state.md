@@ -11,7 +11,7 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.3 completed with live Sockets! |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4 completed! |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete |
 
 ---
@@ -263,55 +263,104 @@ No store-owner-facing product endpoints exist. Store owners need to create, read
 
 ---
 
-- [ ] **RED — Integration (`store-owner.products.test.ts` — new file):**
-  - [ ] Test setup: create 2 stores (A and B) with products
-  - [ ] Test: `GET /api/v1/store/products` with store A JWT → returns only store A products; store B products absent
-  - [ ] Test: `POST /api/v1/store/products` with body `{ name: 'Fresh Milk', subCategoryId: '<id>', description: '...', variants: [{ label: '500ml', price: 35, stockQty: 100, unit: 'packet' }] }` → HTTP 201 with `{ id, name, variants: [{ id, label, price, stockQty, isInStock: true }] }`
-  - [ ] Test: `POST /api/v1/store/products` with duplicate variant labels under the same product → HTTP 409 with `CONFLICT` code
-  - [ ] Test: `POST /api/v1/store/products` with `subCategoryId` that doesn't exist → HTTP 404 with `NOT_FOUND` code
-  - [ ] Test: `PUT /api/v1/store/products/<storeAProductId>` with body `{ name: 'Updated Name' }` → HTTP 200; product name updated in DB
-  - [ ] Test: `PUT /api/v1/store/products/<storeBProductId>` using store A JWT → HTTP 403 `FORBIDDEN`
-  - [ ] Test: `DELETE /api/v1/store/products/<storeAProductId>` → HTTP 200; `product.isDeleted = true` in DB; product absent from `GET /api/v1/products` buyer endpoint
-  - [ ] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ price: 40, stockQty: 50 }` → HTTP 200; variant price and stock updated in DB; `StockMovement` with type `ADJUSTMENT` created
-  - [ ] **Run — confirm RED (404 — endpoints do not exist)**
+- [x] **RED — Integration (`store-owner.products.test.ts` — new file):**
+  - [x] Test setup: create 2 stores (A and B) with products
+  - [x] Test: `GET /api/v1/store/products` with store A JWT → returns only store A products; store B products absent
+  - [x] Test: `POST /api/v1/store/products` with body `{ name: 'Fresh Milk', subCategoryId: '<id>', description: '...', variants: [{ label: '500ml', price: 35, stockQty: 100, unit: 'packet' }] }` → HTTP 201 with `{ id, name, variants: [{ id, label, price, stockQty, isInStock: true }] }`
+  - [x] Test: `POST /api/v1/store/products` with duplicate variant labels under the same product → HTTP 409 with `CONFLICT` code
+  - [x] Test: `POST /api/v1/store/products` with `subCategoryId` that doesn't exist → HTTP 404 with `NOT_FOUND` code
+  - [x] Test: `PUT /api/v1/store/products/<storeAProductId>` with body `{ name: 'Updated Name' }` → HTTP 200; product name updated in DB
+  - [x] Test: `PUT /api/v1/store/products/<storeBProductId>` using store A JWT → HTTP 403 `FORBIDDEN`
+  - [x] Test: `DELETE /api/v1/store/products/<storeAProductId>` → HTTP 200; `product.isDeleted = true` in DB; product absent from `GET /api/v1/products` buyer endpoint
+  - [x] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ price: 40, stockQty: 50 }` → HTTP 200; variant price and stock updated in DB; `StockMovement` with type `ADJUSTMENT` created
+  - [x] **Run — confirm RED (404 — endpoints do not exist)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add to `store-owner.service.ts`:
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add to `store-owner.service.ts`:
     - `getProducts(storeId, { search?, subCategoryId?, page, limit })`: calls `ProductRepository.findManyByStore(storeId, filters)`
     - `createProduct(storeId, dto)`: validates `subCategoryId` exists; validates that variant labels are unique in the list; calls `ProductRepository.create` with `{ storeId, ...dto, variants: { create: dto.variants } }`; creates `StockMovement` with type `INITIAL` for each variant in a transaction
     - `updateProduct(storeId, productId, dto)`: validates product belongs to storeId; calls `ProductRepository.update`
     - `softDeleteProduct(storeId, productId)`: validates ownership; sets `isDeleted: true`
     - `updateVariant(storeId, productId, variantId, dto)`: validates product belongs to store; if `stockQty` changes, creates `ADJUSTMENT` StockMovement and updates flags atomically in a transaction
-  - [ ] [Controller] Add all 5 routes to `store-owner.controller.ts` with Zod validation for each body/query
-  - [ ] [Routes] Register all 5 with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
-  - [ ] Run integration tests — **confirm GREEN**
+  - [x] [Controller] Add all 5 routes to `store-owner.controller.ts` with Zod validation for each body/query
+  - [x] [Routes] Register all 5 with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`StoreProductsPage.test.tsx`):**
-  - [ ] Test: renders product list with columns "Image", "Name", "Sub-Category", "Variants Count", "Status"
-  - [ ] Test: search input filters list (updates `?search=` query param, re-fetches)
-  - [ ] Test: "Add Product" button navigates to `/store/products/new`
-  - [ ] Test: "Edit" button on a product row navigates to `/store/products/:id/edit`
-  - [ ] Test: "Delete" button shows confirmation modal before calling DELETE endpoint
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`StoreProductsPage.test.tsx`):**
+  - [x] Test: renders product list with columns "Image", "Name", "Sub-Category", "Variants Count", "Status"
+  - [x] Test: search input filters list (updates `?search=` query param, re-fetches)
+  - [x] Test: "Add Product" button navigates to `/store/products/new`
+  - [x] Test: "Edit" button on a product row navigates to `/store/products/:id/edit`
+  - [x] Test: "Delete" button shows confirmation modal before calling DELETE endpoint
+  - [x] **Run — confirm RED**
 
-- [ ] **RED — Unit/Component (`StoreProductFormPage.test.tsx`):**
-  - [ ] Test: form renders name, description, sub-category dropdown, and "Add Variant" section
-  - [ ] Test: each variant row has label, price, stockQty, unit inputs
-  - [ ] Test: "Add Variant" button appends a new empty variant row
-  - [ ] Test: submitting with empty name shows validation error "Product name is required"
-  - [ ] Test: submitting valid form calls `POST /api/v1/store/products` and navigates to `/store/products` on success
-  - [ ] Test: in edit mode, form is pre-filled with existing product data; submitting calls `PUT /api/v1/store/products/:id`
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`StoreProductFormPage.test.tsx`):**
+  - [x] Test: form renders name, description, sub-category dropdown, and "Add Variant" section
+  - [x] Test: each variant row has label, price, stockQty, unit inputs
+  - [x] Test: "Add Variant" button appends a new empty variant row
+  - [x] Test: submitting with empty name shows validation error "Product name is required"
+  - [x] Test: submitting valid form calls `POST /api/v1/store/products` and navigates to `/store/products` on success
+  - [x] Test: in edit mode, form is pre-filled with existing product data; submitting calls `PUT /api/v1/store/products/:id`
+  - [x] **Run — confirm RED**
+
+- [x] **GREEN — Frontend:**
+  - [x] Create `StoreProductsPage.tsx`, `StoreProductFormPage.tsx` with all required fields
+  - [x] Use `react-hook-form` + Zod for client-side validation matching backend rules
+  - [x] Variant rows use `useFieldArray` from react-hook-form
+  - [x] Sub-category dropdown populated from `GET /api/v1/categories` (nested)
+  - [x] Run all unit tests — **confirm GREEN**
+
+- [x] **Verification chain:**
+  - [x] Store owner → Products page → Add Product → fill name + 2 variants → submit → product appears in list → click Edit → change price → save → buyer API returns updated price → ✅ Done.
+
+---
+
+### 3.4.1 — Variant Active/Inactive Toggle & Additions in Edit Mode
+
+**Root cause / Goal:**
+In product Edit Mode, store owners cannot deactivate (soft-delete) active variants, reactivate inactive ones, or append brand-new variants. This forces merchants to delete the entire product and recreate it if they want to modify the variant set, which breaks catalog administration.
+
+**Fix / Approach:**
+1. **[Backend]**
+   - Update `PUT /api/v1/store/products/:id/variants/:variantId` in `store-owner.controller.ts` to accept `isActive?: boolean` in the payload.
+   - Create `POST /api/v1/store/products/:id/variants` in `store-owner.controller.ts` to support adding new variants to an existing product in Edit Mode.
+2. **[Frontend]**
+   - Update `StoreProductFormPage.tsx` to:
+     - Render an **Active/Inactive Toggle** switch (with greyed-out styling when inactive) for pre-existing variants.
+     - Allow the **Add Variant** button to remain active in Edit Mode, appending new variants (marked with no `id` in form values).
+     - On submission in Edit Mode, update pre-existing variants (including their `isActive` state) and `POST` any newly added variants to the new backend endpoint.
+
+---
+
+- [ ] **RED — Integration (`store-owner.products.test.ts`):**
+  - [ ] Test: `PUT /api/v1/store/products/:id/variants/:variantId` with body `{ isActive: false }` returns HTTP 200, and querying the database shows the variant's `isActive` column is set to `false`.
+  - [ ] Test: `POST /api/v1/store/products/:id/variants` with body `{ label: 'New Size', price: 40, stockQty: 50, unit: 'bottle' }` returns HTTP 201 with the created variant details, and a transaction-based `INITIAL` StockMovement is logged.
+  - [ ] Test: `POST /api/v1/store/products/:id/variants` with duplicate label of an existing active variant returns HTTP 409 `CONFLICT`.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend:**
+  - [ ] [Service] Update `updateVariant(storeId, productId, variantId, dto)` in `store-owner.service.ts` to accept and write `isActive: boolean`.
+  - [ ] [Service] Add `createVariant(storeId, productId, dto)` in `store-owner.service.ts` that validates variant label uniqueness, calls `tx.productVariant.create()`, and creates an `INITIAL` `StockMovement` inside a transaction.
+  - [ ] [Controller] Update variant Zod schema and the handler in `store-owner.controller.ts` to pass `isActive` in `updateVariant`.
+  - [ ] [Controller] Add route + handler for `POST /api/v1/store/products/:id/variants` with body validation.
+  - [ ] Run integration test — **confirm GREEN**.
+
+- [ ] **RED — Unit (`StoreProductFormPage.test.tsx`):**
+  - [ ] Test: In edit mode, pre-existing variants render with a status toggle switch. Toggling it off adds a visual `opacity-50` / greyed-out class to the variant row.
+  - [ ] Test: Clicking "Add Variant" in edit mode appends a new empty variant card. Submitting the form calls the new `POST /api/v1/store/products/:id/variants` endpoint for the newly added variant.
+  - [ ] **Run — confirm RED.**
 
 - [ ] **GREEN — Frontend:**
-  - [ ] Create `StoreProductsPage.tsx`, `StoreProductFormPage.tsx` with all required fields
-  - [ ] Use `react-hook-form` + Zod for client-side validation matching backend rules
-  - [ ] Variant rows use `useFieldArray` from react-hook-form
-  - [ ] Sub-category dropdown populated from `GET /api/v1/categories` (nested)
-  - [ ] Run all unit tests — **confirm GREEN**
+  - [ ] [Types] Update variant types in `StoreProductFormPage.tsx` to include `isActive?: boolean`.
+  - [ ] [Component] In `StoreProductFormPage.tsx`:
+    - Enable the "Add Variant" button in edit mode.
+    - Inside the variant card list, replace the "Remove" button with an "Active / Inactive" switch if `field.id` is present (pre-existing variant).
+    - If `isActive` is false, add `opacity-60 bg-gray-50 border-gray-200` to the card container and disable fields other than the toggle.
+    - In `onSubmit` Edit Mode handling, call `api.put` for pre-existing variants, and call `api.post("/api/v1/store/products/:id/variants", ...)` for new variants.
+  - [ ] Run unit test — **confirm GREEN**.
 
 - [ ] **Verification chain:**
-  - [ ] Store owner → Products page → Add Product → fill name + 2 variants → submit → product appears in list → click Edit → change price → save → buyer API returns updated price → ✅ Done.
+  - [ ] Store owner navigates to edit product → clicks "Add Variant" to add a new size → toggles "Active" to "Inactive" on an old size → clicks "Save" → product lists showing only active sizes in buyer panel → old size is greyed out in merchant form → clicks "Active" to reactivate → old size is restored instantly → ✅ Done.
 
 ---
 
@@ -980,4 +1029,9 @@ _(Append new entries here — never delete old entries.)_
 - **Wired Real-Time Buyer Order History Sync**: Built Socket.IO active-order room subscriptions inside `OrderHistoryPage.tsx`. Buyer orders automatically join their respective socket rooms, receiving immediate `"order_status_changed"` updates from the merchant with elegant Sonner notifications and zero-latency UI status updates.
 - **Crafted Premium Manual Refresh Mechanisms**: Upgraded manual refresh triggers on both client and merchant panels to include `animate-spin` micro-animations, button disabled states during execution, and multi-stage Sonner status toasts (Syncing -> Sync Complete!), creating an extremely satisfying and premium feel.
 
-
+### Session 6 — 2026-05-21 — Completed Store Product Management (CRUD + Variants)
+- **Completed Phase 3.4**: Built and fully wired the complete Store Owner Product Management panel.
+- **Implemented Backend Product CRUD**: Added backend service, controller, and routes for full product/variant CRUD, Cascade soft-deletes, and inventory stock adjustments, all verified in `store-owner.products.test.ts`.
+- **Created Frontend UI Components**: Built `StoreProductsPage.tsx` and `StoreProductFormPage.tsx` featuring low-stock alerts, dynamic multi-variant forms (`useFieldArray`), subcategory selectors, search pagination, and unique variant label validation (**DECISION-039**).
+- **TypeScript strict Optional types (`exactOptionalPropertyTypes: true`) Compliant**: Resolved all strict TS types, decoupled Zod refinements, and eliminated implicit any/resolver mismatch.
+- **Verified Green**: All 26 unit tests across the store owner panel, workspace typecheck, and production builds compile and pass 100% cleanly!

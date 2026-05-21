@@ -1190,6 +1190,51 @@ Do not introduce a new `sku` database column or run a database schema migration.
 **Alternatives Considered:**
 1. **Prisma Schema Migration (Option A)**: Add `sku String?` to `ProductVariant` and run `prisma migrate dev`. Rejected as it introduces unnecessary database complexity when variant labels are already customer-facing unique identifiers under a product.
 
+---
 
+## [DECISION-040] Variant Active/Inactive Toggle for Soft-Deletes to Prevent Label Conflicts
 
+**Date:** 2026-05-21
+**Status:** Accepted
 
+**Context:**
+Phase 3.4.1 implements deactivating (soft-deleting) active variants and adding new variants in product Edit Mode. 
+
+In relational database systems, executing a hard SQL deletion (`DELETE FROM "ProductVariant"`) is strongly prohibited once a variant is linked to historical transactions. Past buyer orders contain relation fields (`productVariantId`) pointing directly to these variants. A hard deletion would violate SQL foreign key constraints, throw database errors, or completely orphan/crash past customer invoices and analytics dashboards.
+
+Therefore, we must use a **Soft Delete** mechanism. However, if a merchant soft-deletes a variant (e.g. by setting `isDeleted: true` or completely deleting the row) and later wants to recreate it, it poses a major constraint conflict under [DECISION-039] (unique variant label constraint). Since the soft-deleted variant still exists in the database, attempting to recreate a variant with the exact same label (e.g. `"500ml"`) would trigger a `409 Conflict` duplicate label validation error.
+
+**Decision:**
+Implement an **Active/Inactive Toggle** switch in the UI for pre-existing variants instead of a hard deletion button. Toggling a variant to inactive sets `isActive: false` on the backend, which:
+1. Greys out the variant card in the merchant form, signaling that it is deactivated.
+2. Automatically filters it out from the buyer-facing product listings and storefront search.
+3. Allows the merchant to reactivate it instantly with a single toggle, preventing duplicate variant label creation conflicts and keeping the database clean.
+
+**Rationale:**
+- **Prevents Referential Integrity Violations:** Because the product or variant is never physically deleted (`DELETE`) from the database, all historical purchases, order items, invoice files, and store performance reports remain fully linked and completely safe from SQL constraint crashes.
+- **Zero Constraint Conflicts:** Avoids unique-label validation issues since the merchant simply reactivates the existing row rather than trying to insert a new row with a conflicting label.
+- **Superior User Experience:** Merchants can temporarily suspend a size or flavor (e.g., "Out of Stock" or "Seasonal") and reactivate it later with one click without re-entering standard prices, units, and details.
+- **Refined Security:** Keeps past transaction logs completely intact.
+
+**Tradeoffs:**
+- Adds toggling logic in the UI and a visual "greyed out" state, which is easily achieved with styling utilities.
+
+---
+
+## [DECISION-041] Product Price/Name Modification Auditing via OrderItem Textual Snapshots
+
+**Date:** 2026-05-21
+**Status:** Accepted
+
+**Context:**
+When a merchant modifies product properties (such as changing the product name or the image URL) or changes individual variant price points, there is a risk that past order historical displays (receipts, checkout records, user profiles) will display the updated information, breaking transaction auditing. We need to decide if updating these details requires versioned schema models or snapshot captures.
+
+**Decision:**
+Rely on **OrderItem Textual Snapshots** already built into the database schema (`schema.prisma`):
+1. **Snapshots:** The `OrderItem` table stores plain-text snapshots of transaction details (`productName` and `variantLabel`) along with the specific historical purchase `price` at checkout.
+2. **Display:** Past receipts, invoice details, and order history pages render from these static snapshot fields, guaranteeing 100% correct financial and transaction audit trails.
+3. **Links:** Historical receipt items link to the live, current product page via their relational `productVariantId` foreign key. If a buyer clicks the historical order item, they navigate to the updated product page showing the new name and image.
+
+**Rationale:**
+- **Industry Standard:** This is the gold standard for e-commerce design—receipts preserve static transactional truth, while details page navigation points to the current active catalog.
+- **Zero Database Overhead:** No extra versioning schemas or event-sourcing records are needed because the schema already has snapshot columns built into `OrderItem`.

@@ -1,5 +1,6 @@
 import { ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { z } from "zod";
 
 import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
@@ -125,6 +126,338 @@ export function registerStoreOwnerRoutes(
     return {
       success: true,
       data: order,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/store/categories
+  app.get("/api/v1/store/categories", { preHandler }, async (request, reply) => {
+    const categories = await prisma.category.findMany({
+      where: { isActive: true },
+      include: {
+        subCategories: {
+          where: { isActive: true },
+          orderBy: { name: "asc" }
+        }
+      },
+      orderBy: { name: "asc" }
+    });
+
+    return {
+      success: true,
+      data: categories,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // 1. GET /api/v1/store/products
+  const getProductsQuerySchema = z.object({
+    search: z.string().trim().min(1).optional(),
+    subCategoryId: z.string().min(1).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(10)
+  });
+
+  app.get("/api/v1/store/products", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = getProductsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const queryParams: {
+      page: number;
+      limit: number;
+      search?: string;
+      subCategoryId?: string;
+    } = {
+      page: parsed.data.page,
+      limit: parsed.data.limit
+    };
+    if (parsed.data.search !== undefined) {
+      queryParams.search = parsed.data.search;
+    }
+    if (parsed.data.subCategoryId !== undefined) {
+      queryParams.subCategoryId = parsed.data.subCategoryId;
+    }
+
+    const result = await storeOwnerService.getProducts(owner.storeId, queryParams);
+
+    return {
+      success: true,
+      data: result.data,
+      meta: {
+        total: result.meta.total,
+        page: result.meta.page,
+        limit: result.meta.limit,
+        hasMore: result.meta.hasMore,
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/store/products/:id
+  app.get("/api/v1/store/products/:id", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const productId = params.id;
+    if (!productId) {
+      throw new ValidationError("Product ID is required");
+    }
+
+    const product = await storeOwnerService.getProductById(owner.storeId, productId);
+
+    return {
+      success: true,
+      data: product,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // 2. POST /api/v1/store/products
+  const createProductBodySchema = z.object({
+    name: z.string().trim().min(1, "Product name is required"),
+    subCategoryId: z.string().min(1, "Sub-category is required"),
+    description: z.string().trim().default(""),
+    imageUrl: z.string().trim().min(1, "Image URL/path is required"),
+    variants: z.array(
+      z.object({
+        label: z.string().trim().min(1, "Variant label is required"),
+        price: z.coerce.number().positive("Price must be positive"),
+        stockQty: z.coerce.number().int().nonnegative("Stock quantity must be non-negative").default(0),
+        unit: z.string().trim().min(1, "Unit is required"),
+        lowStockThreshold: z.coerce.number().int().nonnegative().optional()
+      })
+    ).min(1, "At least one variant is required")
+  });
+
+  app.post("/api/v1/store/products", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = createProductBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid product data", parsed.error.flatten());
+    }
+
+    const variantsMapped = parsed.data.variants.map((v) => {
+      const variantItem: {
+        label: string;
+        price: number;
+        stockQty: number;
+        unit: string;
+        lowStockThreshold?: number;
+      } = {
+        label: v.label,
+        price: v.price,
+        stockQty: v.stockQty,
+        unit: v.unit
+      };
+      if (v.lowStockThreshold !== undefined) {
+        variantItem.lowStockThreshold = v.lowStockThreshold;
+      }
+      return variantItem;
+    });
+
+    const createPayload = {
+      name: parsed.data.name,
+      subCategoryId: parsed.data.subCategoryId,
+      description: parsed.data.description,
+      imageUrl: parsed.data.imageUrl,
+      variants: variantsMapped
+    };
+
+    const product = await storeOwnerService.createProduct(owner.storeId, createPayload);
+
+    reply.code(201);
+    return {
+      success: true,
+      data: product,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // 3. PUT /api/v1/store/products/:id
+  const updateProductBodySchema = z.object({
+    name: z.string().trim().min(1).optional(),
+    subCategoryId: z.string().min(1).optional(),
+    description: z.string().trim().optional(),
+    imageUrl: z.string().trim().optional()
+  });
+
+  app.put("/api/v1/store/products/:id", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const productId = params.id;
+    if (!productId) {
+      throw new ValidationError("Product ID is required");
+    }
+
+    const parsed = updateProductBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid product update data", parsed.error.flatten());
+    }
+
+    const updatePayload: {
+      name?: string;
+      subCategoryId?: string;
+      description?: string;
+      imageUrl?: string;
+    } = {};
+    if (parsed.data.name !== undefined) {
+      updatePayload.name = parsed.data.name;
+    }
+    if (parsed.data.subCategoryId !== undefined) {
+      updatePayload.subCategoryId = parsed.data.subCategoryId;
+    }
+    if (parsed.data.description !== undefined) {
+      updatePayload.description = parsed.data.description;
+    }
+    if (parsed.data.imageUrl !== undefined) {
+      updatePayload.imageUrl = parsed.data.imageUrl;
+    }
+
+    const product = await storeOwnerService.updateProduct(owner.storeId, productId, updatePayload);
+
+    return {
+      success: true,
+      data: product,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // 4. DELETE /api/v1/store/products/:id
+  app.delete("/api/v1/store/products/:id", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const productId = params.id;
+    if (!productId) {
+      throw new ValidationError("Product ID is required");
+    }
+
+    await storeOwnerService.softDeleteProduct(owner.storeId, productId);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // 5. PUT /api/v1/store/products/:id/variants/:variantId
+  const updateVariantBodySchema = z.object({
+    label: z.string().trim().min(1).optional(),
+    price: z.coerce.number().positive().optional(),
+    stockQty: z.coerce.number().int().nonnegative().optional(),
+    unit: z.string().trim().min(1).optional(),
+    lowStockThreshold: z.coerce.number().int().nonnegative().optional()
+  });
+
+  app.put("/api/v1/store/products/:id/variants/:variantId", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const productId = params.id;
+    const variantId = params.variantId;
+    if (!productId || !variantId) {
+      throw new ValidationError("Product ID and Variant ID are required");
+    }
+
+    const parsed = updateVariantBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid variant update data", parsed.error.flatten());
+    }
+
+    const variantPayload: {
+      label?: string;
+      price?: number;
+      stockQty?: number;
+      unit?: string;
+      lowStockThreshold?: number;
+    } = {};
+    if (parsed.data.label !== undefined) {
+      variantPayload.label = parsed.data.label;
+    }
+    if (parsed.data.price !== undefined) {
+      variantPayload.price = parsed.data.price;
+    }
+    if (parsed.data.stockQty !== undefined) {
+      variantPayload.stockQty = parsed.data.stockQty;
+    }
+    if (parsed.data.unit !== undefined) {
+      variantPayload.unit = parsed.data.unit;
+    }
+    if (parsed.data.lowStockThreshold !== undefined) {
+      variantPayload.lowStockThreshold = parsed.data.lowStockThreshold;
+    }
+
+    const variant = await storeOwnerService.updateVariant(owner.storeId, productId, variantId, variantPayload);
+
+    return {
+      success: true,
+      data: variant,
       meta: {
         requestId: getRequestId(request, reply)
       }

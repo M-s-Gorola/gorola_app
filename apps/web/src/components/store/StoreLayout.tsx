@@ -42,7 +42,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
   const navItems = [
     { label: "Dashboard", path: getScopedPath("/store/dashboard", "store", isSubdomainMode) },
     { label: "Orders", path: getScopedPath("/store/orders", "store", isSubdomainMode) },
-    { label: "Catalog", path: getScopedPath("/store/catalog", "store", isSubdomainMode) },
+    { label: "Products", path: getScopedPath("/store/products", "store", isSubdomainMode) },
     { label: "Settings", path: getScopedPath("/store/settings", "store", isSubdomainMode) }
   ];
 
