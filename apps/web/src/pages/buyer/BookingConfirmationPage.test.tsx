@@ -76,7 +76,7 @@ describe("BookingConfirmationPage", () => {
         id: "store1",
         name: "Max Labs Mussoorie",
         phone: "+919999997103",
-      },
+      } as { id: string; name: string; phone: string; storeType?: string } | undefined,
       items: [
         {
           id: "li1",

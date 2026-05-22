@@ -1263,3 +1263,25 @@ Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for a
 **Tradeoffs:**
 - Requires implementing active/inactive styling and toggle switch states across multiple lists, which is easily managed.
 
+---
+
+## [DECISION-043] Pay-on-Service Default for Booking Commerce
+
+**Date:** 2026-05-23
+**Status:** Accepted
+
+**Context:**
+Quick Commerce orders (groceries, medicines, electronics) allow buyers to select their payment method (e.g., Credit Card, Online Payment, or Cash on Delivery) immediately at checkout. However, Booking Commerce (medical diagnostic tests, doorstep device repairs) is fundamentally different: appointments are scheduled for future timeslots and require manual merchant approval first. We need to document why the system defaults booking flows to Cash on Delivery (COD) / Pay-on-Service and maps this cleanly in UI receipts.
+
+**Decision:**
+1. Default all checkout requests under `BOOKING_COMMERCE` strictly to the `COD` database state, bypassing up-front online payment choices at checkout.
+2. Render the checkout/confirmation payment label dynamically as **"Pay on Service"** (instead of retail jargon like "COD" or "Cash on Delivery") on buyer booking receipts.
+
+**Rationale:**
+- **Avoids Refund Gateway Overhead:** Bookings are *requests* that store owners can decline (e.g., if a technician is sick or a doctor is booked). Taking payments up-front would lead to massive financial losses on non-refundable payment gateway transaction fees (2-3%) and constant customer support tickets for failed/rejected appointments.
+- **Support for Price Adjustments:** Technical repairs frequently discover secondary issues on-site (e.g., an AC service discovering a leakage that requires a replacement valve). Pay-on-service allows the final invoice to be adjusted and settled directly at the doorstep based on actual services rendered.
+- **Industry Standard for On-Demand Services:** Matches the mental model of on-demand home services (e.g., Urban Company or local field services) where payment is processed only after successful job completion.
+
+**Tradeoffs:**
+- Increased risk of buyer "no-shows" since no deposit is taken. This is mitigated by giving store owners the phone numbers of buyers to confirm beforehand and allowing them to cancel/reschedule requests easily.
+

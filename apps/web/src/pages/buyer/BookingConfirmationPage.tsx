@@ -194,7 +194,7 @@ export function BookingConfirmationPage(): ReactElement {
             <p>Subtotal: Rs {booking.subtotal}</p>
             <p>Delivery fee: Rs {booking.deliveryFee}</p>
             <p className="font-semibold text-gorola-pine text-base">Total: Rs {booking.total}</p>
-            <p className="text-xs text-gorola-slate">Payment method: {booking.paymentMethod}</p>
+            <p className="text-xs text-gorola-slate">Payment method: {booking.paymentMethod === "COD" ? "Pay on Service" : booking.paymentMethod}</p>
           </div>
         </div>
 

@@ -502,5 +502,36 @@ Implement a standard request-queueing and refresh deduplication interceptor patt
 - [x] **Verification Chain:**
   - [x] Log into store owner portal → simulate or trigger expired access token state → execute form submission containing multiple parallel backend mutations → verify both mutations complete successfully → verify store owner is **not** logged out and remains on dashboard → ✅ Done.
 
+---
+
+## Phase 6.8 Checklist — E2E Test Suite Alignment for Category Segregation
+
+**Root cause / Goal:**
+Due to Phase 7.7 category segregation implementation, the homepage now displays categories separated under two distinct headings ("Instant Delivery" and "Book a Service"). Additionally, with the introduction of "Electronics" and "Repairs", the total number of categories in the test seed has increased from 3 to 5.
+Currently, `tests/e2e/home.spec.ts` contains a hardcoded assertion `expect(categoryCards).toHaveCount(3)` which expects exactly 3 category cards, causing E2E test failures on Chromium and Mobile.
+Furthermore, E2E test routes must be properly aligned to ensure that Quick Commerce flows exclusively query Quick Commerce paths and Booking Commerce categories are clearly segregated.
+
+**Fix / Approach:**
+1. Update `tests/e2e/home.spec.ts`'s `E2E-001: Home Page Loads Correctly` test to assert the presence of both "Instant Delivery" and "Book a Service" section headers, and expect exactly 5 category cards total.
+2. Ensure that all Quick Commerce E2E tests (such as checkout and catalog browsing) target categories specifically classified as Quick Commerce, which is already naturally aligned due to DOM rendering order (Quick Commerce categories rendering first).
+
+---
+
+- [ ] **RED — E2E Test (`tests/e2e/home.spec.ts`):**
+  - [ ] Test: `Home Page Loads Correctly` asserts `categoryCards` count is 5 (which is currently failing because the test expects 3).
+  - [ ] Test: Assert that the "Instant Delivery" section is visible and contains 3 categories.
+  - [ ] Test: Assert that the "Book a Service" section is visible and contains 2 categories.
+  - [ ] **Run — confirm RED (test suite fails on home.spec.ts).**
+
+- [ ] **GREEN — Frontend E2E Alignment:**
+  - [ ] [E2E] In `apps/web/tests/e2e/home.spec.ts`, update `toHaveCount(3)` to `toHaveCount(5)`.
+  - [ ] [E2E] Update the verification loop to iterate over all 5 category cards.
+  - [ ] [E2E] Add assertions verifying the visibility of section headers: "Instant Delivery" (`h3` with text `Instant Delivery`) and "Book a Service" (`h3` with text `Book a Service`).
+  - [ ] Run E2E tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Open buyer web homepage → see "Instant Delivery" heading with "Groceries", "Medical", and "Electronics" categories → see "Book a Service" heading with "Repairs" and "Medical tests" categories → Playwright successfully completes E2E tests with 0 failures → ✅ Done.
+
+
 
 
