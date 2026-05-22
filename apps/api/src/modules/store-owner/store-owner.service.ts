@@ -124,42 +124,87 @@ export class StoreOwnerService {
     const endOfToday = new Date();
     endOfToday.setHours(23, 59, 59, 999);
 
-    // 1. Today's Order Count (all orders placed today regardless of status)
-    const todayOrderCount = await this.db.order.count({
-      where: {
-        storeId,
-        createdAt: {
-          gte: startOfToday,
-          lte: endOfToday
-        }
-      }
+    const store = await this.db.store.findUnique({
+      where: { id: storeId },
+      select: { storeType: true }
     });
+    const isBooking = store?.storeType === "BOOKING_COMMERCE";
 
-    // 2. Today's Revenue (sum of total for today's DELIVERED + PLACED orders)
-    const revenueResult = await this.db.order.aggregate({
-      _sum: {
-        total: true
-      },
-      where: {
-        storeId,
-        status: {
-          in: ["DELIVERED", "PLACED"]
-        },
-        createdAt: {
-          gte: startOfToday,
-          lte: endOfToday
-        }
-      }
-    });
+    // 1. Today's Order Count (all orders/bookings placed today regardless of status)
+    const todayOrderCount = isBooking
+      ? await this.db.bookingOrder.count({
+          where: {
+            order: {
+              storeId,
+              createdAt: {
+                gte: startOfToday,
+                lte: endOfToday
+              }
+            }
+          }
+        })
+      : await this.db.order.count({
+          where: {
+            storeId,
+            createdAt: {
+              gte: startOfToday,
+              lte: endOfToday
+            }
+          }
+        });
+
+    // 2. Today's Revenue (sum of total for today's DELIVERED/APPROVED + PLACED/PENDING orders)
+    const revenueResult = isBooking
+      ? await this.db.order.aggregate({
+          _sum: {
+            total: true
+          },
+          where: {
+            storeId,
+            bookingOrder: {
+              approvalStatus: {
+                in: ["APPROVED", "PENDING_APPROVAL"]
+              }
+            },
+            createdAt: {
+              gte: startOfToday,
+              lte: endOfToday
+            }
+          }
+        })
+      : await this.db.order.aggregate({
+          _sum: {
+            total: true
+          },
+          where: {
+            storeId,
+            status: {
+              in: ["DELIVERED", "PLACED"]
+            },
+            createdAt: {
+              gte: startOfToday,
+              lte: endOfToday
+            }
+          }
+        });
     const todayRevenue = Number(revenueResult._sum.total ?? 0);
 
-    // 3. Pending Orders Count (count of PLACED orders)
-    const pendingOrdersCount = await this.db.order.count({
-      where: {
-        storeId,
-        status: "PLACED"
-      }
-    });
+    // 3. Pending Orders Count (count of PLACED / PENDING_APPROVAL requests)
+    const pendingOrdersCount = isBooking
+      ? await this.db.bookingOrder.count({
+          where: {
+            order: {
+              storeId
+            },
+            approvalStatus: "PENDING_APPROVAL"
+          }
+        })
+      : await this.db.order.count({
+          where: {
+            storeId,
+            status: "PLACED"
+          }
+        });
 
     // 4. Weekly Revenue Trend (daily revenue for the last 7 calendar days, including today)
     const weeklyRevenue: { date: string; revenue: number }[] = [];
@@ -172,21 +217,39 @@ export class StoreOwnerService {
       const dayEnd = new Date(d);
       dayEnd.setHours(23, 59, 59, 999);
 
-      const sumResult = await this.db.order.aggregate({
-        _sum: {
-          total: true
-        },
-        where: {
-          storeId,
-          status: {
-            in: ["DELIVERED", "PLACED"]
-          },
-          createdAt: {
-            gte: dayStart,
-            lte: dayEnd
-          }
-        }
-      });
+      const sumResult = isBooking
+        ? await this.db.order.aggregate({
+            _sum: {
+              total: true
+            },
+            where: {
+              storeId,
+              bookingOrder: {
+                approvalStatus: {
+                  in: ["APPROVED", "PENDING_APPROVAL"]
+                }
+              },
+              createdAt: {
+                gte: dayStart,
+                lte: dayEnd
+              }
+            }
+          })
+        : await this.db.order.aggregate({
+            _sum: {
+              total: true
+            },
+            where: {
+              storeId,
+              status: {
+                in: ["DELIVERED", "PLACED"]
+              },
+              createdAt: {
+                gte: dayStart,
+                lte: dayEnd
+              }
+            }
+          });
 
       const year = d.getFullYear();
       const month = String(d.getMonth() + 1).padStart(2, "0");
@@ -203,55 +266,84 @@ export class StoreOwnerService {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const groupResult = await this.db.orderItem.groupBy({
-      by: ["productName"],
-      _sum: {
-        quantity: true
-      },
-      where: {
-        order: {
-          storeId,
-          status: {
-            in: ["DELIVERED", "PLACED"]
+    const groupResult = isBooking
+      ? await this.db.orderItem.groupBy({
+          by: ["productName"],
+          _sum: {
+            quantity: true
           },
-          createdAt: {
-            gte: thirtyDaysAgo
-          }
-        }
-      },
-      orderBy: {
-        _sum: {
-          quantity: "desc"
-        }
-      },
-      take: 5
-    });
+          where: {
+            order: {
+              storeId,
+              bookingOrder: {
+                approvalStatus: {
+                  in: ["APPROVED", "PENDING_APPROVAL"]
+                }
+              },
+              createdAt: {
+                gte: thirtyDaysAgo
+              }
+            }
+          },
+          orderBy: {
+            _sum: {
+              quantity: "desc"
+            }
+          },
+          take: 5
+        })
+      : await this.db.orderItem.groupBy({
+          by: ["productName"],
+          _sum: {
+            quantity: true
+          },
+          where: {
+            order: {
+              storeId,
+              status: {
+                in: ["DELIVERED", "PLACED"]
+              },
+              createdAt: {
+                gte: thirtyDaysAgo
+              }
+            }
+          },
+          orderBy: {
+            _sum: {
+              quantity: "desc"
+            }
+          },
+          take: 5
+        });
 
     const topProducts = groupResult.map((item) => ({
       name: item.productName,
       soldCount: item._sum.quantity ?? 0
     }));
 
-    // 6. Low stock items (variants where isLowStock = true)
-    const lowStockVariants = await this.db.productVariant.findMany({
-      where: {
-        product: {
-          storeId,
-          isDeleted: false
-        },
-        isLowStock: true,
-        isActive: true
-      },
-      include: {
-        product: true
-      }
-    });
-
-    const lowStockItems = lowStockVariants.map((v) => ({
-      productName: v.product.name,
-      variantLabel: v.label,
-      stockQty: v.stockQty
-    }));
+    // 6. Low stock items (variants where isLowStock = true) - empty for booking
+    const lowStockItems = isBooking
+      ? []
+      : await (async () => {
+          const lowStockVariants = await this.db.productVariant.findMany({
+            where: {
+              product: {
+                storeId,
+                isDeleted: false
+              },
+              isLowStock: true,
+              isActive: true
+            },
+            include: {
+              product: true
+            }
+          });
+          return lowStockVariants.map((v) => ({
+            productName: v.product.name,
+            variantLabel: v.label,
+            stockQty: v.stockQty
+          }));
+        })();
 
     // 7. Active approved advertisements count
     const activeAdvertisementsCount = await this.db.advertisement.count({

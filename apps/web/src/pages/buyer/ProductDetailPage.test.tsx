@@ -72,7 +72,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [
             { id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 },
@@ -106,7 +107,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [
             { id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 },
@@ -134,7 +136,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [
             { id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 },
@@ -178,7 +181,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [{ id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 2 }]
         }
@@ -223,7 +227,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [{ id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 0 }]
         }
@@ -248,7 +253,7 @@ describe("ProductDetailPage", () => {
           name: "Apple",
           description: "Fresh apple",
           imageUrl: "https://cdn.example.com/apple.jpg",
-          store: { id: "s1", name: "Peak Mart", phone: "+919111111111" },
+          store: { id: "s1", name: "Peak Mart", phone: "+919111111111", storeType: "QUICK_COMMERCE" },
           variants: [{ id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 }]
         }
       }
@@ -278,5 +283,38 @@ describe("ProductDetailPage", () => {
 
     // 5. Verify local quantity is reset to 1, not stuck at 3 or 0
     expect(screen.getByText("1")).toBeInTheDocument();
+  });
+
+  it("renders Book Now button instead of Add to Cart for BOOKING_COMMERCE products", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "p2",
+          name: "CBC Panel",
+          description: "Complete blood count",
+          imageUrl: "https://cdn.example.com/cbc.jpg",
+          store: {
+            id: "s2",
+            name: "Aarna Diagnostic Centre",
+            phone: "+919222222222",
+            storeType: "BOOKING_COMMERCE"
+          },
+          variants: [
+            { id: "v3", label: "Fasting", price: "499.00", unit: "test", stockQty: 99 }
+          ]
+        }
+      }
+    });
+
+    renderPage("/products/p2");
+    await screen.findByRole("heading", { name: "CBC Panel" });
+    
+    // Check that Book Now button is rendered
+    expect(screen.getByRole("button", { name: "Book Now" })).toBeInTheDocument();
+    
+    // Check that Add to Cart and quantity buttons are not rendered
+    expect(screen.queryByRole("button", { name: "Add to cart" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Increase quantity" })).not.toBeInTheDocument();
   });
 });

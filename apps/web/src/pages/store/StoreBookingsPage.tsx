@@ -142,6 +142,7 @@ export function StoreBookingsPage(): ReactElement {
     onSuccess: () => {
       toast.success("Appointment successfully approved!");
       void queryClient.invalidateQueries({ queryKey: ["store", "bookings"] });
+      void queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
     },
     onError: (err: unknown) => {
       const msg =
@@ -162,6 +163,7 @@ export function StoreBookingsPage(): ReactElement {
       setRejectingBooking(null);
       setRejectionReason("");
       void queryClient.invalidateQueries({ queryKey: ["store", "bookings"] });
+      void queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
     },
     onError: (err: unknown) => {
       const msg =

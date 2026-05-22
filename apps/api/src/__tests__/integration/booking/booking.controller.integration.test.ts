@@ -545,7 +545,7 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       data: { status: string; bookingOrder: { approvalStatus: string; rejectionReason: string } };
     };
     expect(envelope.success).toBe(true);
-    expect(envelope.data.status).toBe("CANCELLED");
+    expect(envelope.data.status).toBe("REJECTED");
     expect(envelope.data.bookingOrder.approvalStatus).toBe("REJECTED");
     expect(envelope.data.bookingOrder.rejectionReason).toBe("Fully booked slot");
   });

@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
@@ -42,6 +42,7 @@ export type BuyerOrderDetail = {
     code: string | null;
   };
   id: string;
+  orderType?: string;
   items: BuyerOrderConfirmationItem[];
   landmarkDescription: string;
   addressLabel?: string | null;
@@ -54,6 +55,7 @@ export type BuyerOrderDetail = {
     id: string;
     name: string;
     phone: string;
+    storeType?: string;
   };
   subtotal: string;
   total: string;
@@ -252,6 +254,7 @@ function StatusStepper({
 }
 
 export function OrderConfirmationPage(): ReactElement {
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const rootRef = useRef<HTMLElement | null>(null);
   const bloomRef = useRef<HTMLDivElement | null>(null);
@@ -277,6 +280,13 @@ export function OrderConfirmationPage(): ReactElement {
       return payload.data;
     },
   });
+
+  const order = query.data;
+  useEffect(() => {
+    if (order && (order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE")) {
+      navigate(`/bookings/${order.id}`, { replace: true });
+    }
+  }, [order, navigate]);
 
   const queryClient = useQueryClient();
   const onStatusChanged = useCallback(

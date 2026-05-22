@@ -851,8 +851,17 @@ No admin user management endpoints exist. Admin needs to search buyers by phone 
 
 ### 4.5 — Store Management
 
+> [!NOTE]
+> **Design Decision (DECISION-042):**
+> Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for store management. Deactivating a store must hide it and all its associated products from the buyer storefront while preserving all database records to maintain order history integrity, matching [DECISION-042].
+
+> [!WARNING]
+> **Anti-Patterns & Bug Prevention Guardrails:**
+> 1. **Do Not Restrictively Filter Admin API Endpoints:** Admin endpoints (`GET /api/v1/admin/stores` and detailed read) must always return both active and inactive stores. Platform managers must be able to view, edit, toggle, and reactivate entities. Only the buyer-facing public APIs will filter them.
+> 2. **Immediate Query Invalidation on Toggle:** When the admin toggles a store's status, the mutation must execute `await queryClient.invalidateQueries({ queryKey: ["admin", "stores"] })` to force a reactive cache update and avoid any visual stale state.
+
 **Root Cause / Goal:**
-Admin needs to create new stores (with an auto-created store owner account), view all stores, see a per-store detail page, and suspend/unsuspend stores. Suspending a store hides all its products from the buyer catalog and blocks new orders.
+Admin needs to create new stores (with an auto-created store owner account), view all stores, see a per-store detail page, and toggle active/inactive status. Deactivating a store hides it and all its products from the buyer catalog and blocks new orders, while greying out the row on the admin list.
 
 > **Phase 7 impact:** Every store must have a `storeType` — either `QUICK_COMMERCE` (groceries, medical store, electronics) or `BOOKING_COMMERCE` (medical tests, repairs). This is set at creation time by the admin and cannot be changed later without a data migration. `storeType` controls the entire order flow for that store. The `storeType` field **must be included in the create-store form and API** even though Phase 7 is not built yet — it future-proofs the schema.
 
@@ -864,33 +873,33 @@ Admin needs to create new stores (with an auto-created store owner account), vie
   - [ ] Test: `POST /api/v1/admin/stores` with `storeType` omitted → HTTP 400 `VALIDATION_ERROR` (storeType is required — no guessing)
   - [ ] Test: `POST /api/v1/admin/stores` with `storeType: 'INVALID_TYPE'` → HTTP 400 `VALIDATION_ERROR`
   - [ ] Test: `POST /api/v1/admin/stores` with duplicate `ownerEmail` → HTTP 409 `CONFLICT`
-  - [ ] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, status }`
+  - [ ] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, isActive }`
   - [ ] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail including `storeType` field
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/suspend` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/unsuspend` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
-  - [ ] Test: all store create/suspend/unsuspend actions create `AuditLog` entries
+  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: false }` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
+  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: true }` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
+  - [ ] Test: all store create and active/inactive status toggle actions create `AuditLog` entries
   - [ ] **Run — confirm RED**
 
 - [ ] **GREEN — Backend:**
   - [x] [Schema] Confirm `storeType StoreType @default(QUICK_COMMERCE)` exists on `Store` model and `enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE }` exists in `schema.prisma`. **This is added in Phase 7.1.** If working on Phase 4.5 before Phase 7.1: add the enum and field now with a migration named `add_store_type`. Do not wait for Phase 7.
-  - [ ] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `suspendStore(storeId, adminId)`, `unsuspendStore(storeId, adminId)`.
-  - [ ] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/suspend`, `PUT /api/v1/admin/stores/:id/unsuspend` with `requireAuth` + `requireRole('ADMIN')`
+  - [ ] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `updateStoreStatus(storeId, isActive: boolean, adminId)`.
+  - [ ] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/status` with `requireAuth` + `requireRole('ADMIN')`
   - [ ] Run integration tests — **confirm GREEN**
 
 - [ ] **RED — Unit/Component (`AdminStoresPage.test.tsx`):**
-  - [ ] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Status" columns
+  - [ ] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Active" columns
   - [ ] Test: "Add Store" form has a required `storeType` radio group with two options: "Quick Commerce (groceries, medicines, electronics)" and "Booking Commerce (tests, repairs)"; submitting without selecting one shows validation error "Store type is required"
   - [ ] Test: submitting a valid form with `storeType: 'BOOKING_COMMERCE'` calls `POST /api/v1/admin/stores` with `{ storeType: 'BOOKING_COMMERCE', ... }` in the request body
   - [ ] Test: the store type badge in the table shows "Quick" in pine-green and "Booking" in amber so admins can distinguish at a glance
   - [ ] Test: clicking store row navigates to `/admin/stores/:id`
   - [ ] Test: store detail page shows `storeType` prominently so admins know which order flow applies
-  - [ ] Test: suspend button shows confirmation modal before calling API; after suspend, status badge changes to "Suspended"
+  - [ ] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/stores/:id/status` mutation, triggers query invalidation, and greys out the row (`opacity-60 bg-gray-50/50 border-gray-200 grayscale-[25%] transition-all`)
   - [ ] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` field. Add `storeType` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
+- [ ] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` and `isActive` fields. Add `storeType` and `isActive` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
 
 - [ ] **Verification chain:**
-  - [ ] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin suspends store → buyer catalog shows 0 products from that store → admin unsuspends → products reappear → ✅
+  - [ ] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin toggles store to inactive → row is instantly greyed out on list → buyer catalog shows 0 products from that store → admin toggles back to active → products reappear → ✅
 
 ---
 

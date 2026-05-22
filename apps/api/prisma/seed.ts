@@ -31,6 +31,22 @@ async function main(): Promise<void> {
     }
   });
 
+  const storeC = await prisma.store.upsert({
+    where: { id: "store_gorola_aarna_diagnostic" },
+    update: {},
+    create: {
+      id: "store_gorola_aarna_diagnostic",
+      name: "Aarna Diagnostic Centre",
+      description: "Dedicated medical diagnostic test laboratory.",
+      phone: "+919999000003",
+      address: "Mall Road, Mussoorie",
+      storeType: "BOOKING_COMMERCE",
+      bookingLeadDays: 1,
+      isAcceptingBookings: true,
+      isActive: true
+    }
+  });
+
   const hashedPw = await hash("Owner#123", 10);
 
   await prisma.storeOwner.upsert({
@@ -53,8 +69,18 @@ async function main(): Promise<void> {
     }
   });
 
+  await prisma.storeOwner.upsert({
+    where: { email: "owner3@gorola.in" },
+    update: { passwordHash: hashedPw },
+    create: {
+      email: "owner3@gorola.in",
+      passwordHash: hashedPw,
+      storeId: storeC.id
+    }
+  });
+
   // Import and run dummy data seeder
-  await seedDummyData(prisma, storeA.id, storeB.id);
+  await seedDummyData(prisma, storeA.id, storeB.id, storeC.id);
 
   await prisma.featureFlag.createMany({
     data: [
@@ -117,7 +143,7 @@ async function main(): Promise<void> {
   });
 
   console.info("Seed completed", {
-    stores: [storeA.name, storeB.name]
+    stores: [storeA.name, storeB.name, storeC.name]
   });
 }
 

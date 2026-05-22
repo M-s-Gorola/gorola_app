@@ -55,6 +55,12 @@ interface BookingOrderWithRelations {
     total: { toString: () => string };
     createdAt: Date;
     updatedAt: Date;
+    store: {
+      id: string;
+      name: string;
+      phone: string;
+      storeType: string;
+    };
     items: Array<{
       id: string;
       orderId: string;
@@ -81,12 +87,18 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     id: order.id,
     storeId: order.storeId,
     userId: order.userId,
-    status: order.status,
+    status: booking.approvalStatus,
     subtotal: order.subtotal.toString(),
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    store: {
+      id: order.store.id,
+      name: order.store.name,
+      phone: order.store.phone,
+      storeType: order.store.storeType
+    },
     items: order.items.map((i) => ({
       id: i.id,
       orderId: i.orderId,

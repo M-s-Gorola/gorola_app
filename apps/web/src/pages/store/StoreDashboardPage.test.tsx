@@ -8,13 +8,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoreDashboardPage } from "./StoreDashboardPage";
 import { useAuthStore } from "@/store/auth.store";
 
-const { getMock } = vi.hoisted(() => ({
-  getMock: vi.fn()
+const { getMock, getProfileMock } = vi.hoisted(() => ({
+  getMock: vi.fn(),
+  getProfileMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
-    get: getMock,
+    get: vi.fn((url: string) => {
+      if (url.includes("/profile")) {
+        return getProfileMock(url);
+      }
+      return getMock(url);
+    }),
     post: vi.fn()
   }
 }));
@@ -40,6 +46,15 @@ function renderStoreDashboard(initialEntries: InitialEntry[] = ["/store/dashboar
 describe("StoreDashboardPage", () => {
   beforeEach(() => {
     getMock.mockReset();
+    getProfileMock.mockReset();
+    getProfileMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          storeType: "QUICK_COMMERCE"
+        }
+      }
+    });
     useAuthStore.getState().setStoreOwnerSession({
       accessToken: "mock-access-token",
       refreshToken: "mock-refresh-token",
@@ -187,5 +202,51 @@ describe("StoreDashboardPage", () => {
     await vi.waitFor(() => {
       expect(getMock).toHaveBeenCalledTimes(3);
     });
+  });
+
+  it("renders booking-specific metrics and labels when storeType is BOOKING_COMMERCE", async () => {
+    getProfileMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          storeType: "BOOKING_COMMERCE"
+        }
+      }
+    });
+
+    const mockDashboardData = {
+      success: true,
+      data: {
+        todayOrderCount: 8,
+        todayRevenue: 2400.0,
+        pendingOrdersCount: 3,
+        weeklyRevenue: [],
+        topProducts: [
+          { name: "Thyroid Profile", soldCount: 12 },
+          { name: "Lipid Profile", soldCount: 8 }
+        ],
+        lowStockItems: [],
+        activeAdvertisementsCount: 1,
+        activeOffersCount: 2
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockDashboardData });
+
+    renderStoreDashboard();
+
+    // Verify booking specific labels are present
+    expect(await screen.findByText("Today's Bookings")).toBeInTheDocument();
+    expect(screen.getByText("Pending Approvals")).toBeInTheDocument();
+    expect(screen.getByText("Top Performing Services")).toBeInTheDocument();
+    expect(screen.getByText("Times Booked")).toBeInTheDocument();
+
+    // Verify metric values
+    expect(screen.getByText("8")).toBeInTheDocument();
+    expect(screen.getByText("₹2,400.00")).toBeInTheDocument();
+    expect(screen.getByText("3")).toBeInTheDocument();
+
+    // Verify low stock section is hidden or empty message is shown
+    expect(screen.queryByText("Low Stock Alert")).not.toBeInTheDocument();
   });
 });

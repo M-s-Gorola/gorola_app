@@ -2,7 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 import gsap from "gsap";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate,useParams } from "react-router-dom";
 
 import { api } from "@/lib/api";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
@@ -26,6 +26,7 @@ type ProductDetail = {
     id: string;
     name: string;
     phone: string;
+    storeType: string;
   };
   variants: ProductVariant[];
 };
@@ -49,6 +50,7 @@ async function fetchProductDetail(id: string): Promise<ProductDetail> {
 
 export function ProductDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const accessToken = useAuthStore((state) => state.accessToken);
   const addOrMergeLine = useCartStore((state) => state.addOrMergeLine);
   const setCartQty = useCartStore((state) => state.setQty);
@@ -180,112 +182,128 @@ export function ProductDetailPage(): ReactElement {
             <p className="font-dm-sans text-3xl font-bold text-gorola-charcoal" data-testid="product-price">
               Rs {selected?.price ?? "0.00"}
             </p>
-            {activeQuantity > 1 && (
+            {query.data.store.storeType !== "BOOKING_COMMERCE" && activeQuantity > 1 && (
               <p className="font-dm-sans text-lg text-gorola-slate">
                 (Total: Rs {itemTotal})
               </p>
             )}
           </div>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2">
+          {query.data.store.storeType === "BOOKING_COMMERCE" ? (
+            <div className="flex items-center gap-4">
               <button
                 type="button"
-                aria-label="Decrease quantity"
+                aria-label="Book Now"
                 onClick={() => {
-                  if (quantityInCart > 0) {
-                    const next = quantityInCart - 1;
-                    setCartQty(selected!.id, next);
-                    if (api !== null && accessToken !== null) {
-                      void enqueueCartVariantMutation(selected!.id, async () => {
-                        if (next <= 0) {
-                          await api!.delete(`/api/v1/cart/items/${selected!.id}`);
-                        } else {
+                  if (selected === undefined) return;
+                  navigate(`/bookings/new?productId=${query.data.id}&variantId=${selected.id}`);
+                }}
+                className="flex-1 rounded-full bg-gorola-saffron px-8 py-3 font-dm-sans text-base font-bold text-gorola-charcoal shadow-lg transition-transform hover:scale-[1.02] active:scale-95 sm:flex-none"
+              >
+                Book Now
+              </button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  aria-label="Decrease quantity"
+                  onClick={() => {
+                    if (quantityInCart > 0) {
+                      const next = quantityInCart - 1;
+                      setCartQty(selected!.id, next);
+                      if (api !== null && accessToken !== null) {
+                        void enqueueCartVariantMutation(selected!.id, async () => {
+                          if (next <= 0) {
+                            await api!.delete(`/api/v1/cart/items/${selected!.id}`);
+                          } else {
+                            await api!.put(`/api/v1/cart/items/${selected!.id}`, {
+                              quantity: next
+                            });
+                          }
+                        });
+                      }
+                    } else {
+                      setLocalQuantity((current) => Math.max(1, current - 1));
+                    }
+                  }}
+                  disabled={maxQty <= 0 || (quantityInCart === 0 && localQuantity <= 1) || activeQuantity <= 0}
+                  className="h-10 w-10 rounded-full border border-gorola-pine/20 text-lg font-semibold transition-colors hover:bg-gorola-pine/5 disabled:opacity-30"
+                >
+                  -
+                </button>
+                <span className="min-w-[2rem] text-center font-dm-sans text-lg font-bold text-gorola-charcoal">
+                  {activeQuantity}
+                </span>
+                <button
+                  type="button"
+                  aria-label="Increase quantity"
+                  onClick={() => {
+                    if (quantityInCart > 0) {
+                      const next = quantityInCart + 1;
+                      if (next > maxQty) return;
+                      setCartQty(selected!.id, next);
+                      if (api !== null && accessToken !== null) {
+                        void enqueueCartVariantMutation(selected!.id, async () => {
                           await api!.put(`/api/v1/cart/items/${selected!.id}`, {
                             quantity: next
                           });
-                        }
-                      });
-                    }
-                  } else {
-                    setLocalQuantity((current) => Math.max(1, current - 1));
-                  }
-                }}
-                disabled={maxQty <= 0 || (quantityInCart === 0 && localQuantity <= 1) || activeQuantity <= 0}
-                className="h-10 w-10 rounded-full border border-gorola-pine/20 text-lg font-semibold transition-colors hover:bg-gorola-pine/5 disabled:opacity-30"
-              >
-                -
-              </button>
-              <span className="min-w-[2rem] text-center font-dm-sans text-lg font-bold text-gorola-charcoal">
-                {activeQuantity}
-              </span>
-              <button
-                type="button"
-                aria-label="Increase quantity"
-                onClick={() => {
-                  if (quantityInCart > 0) {
-                    const next = quantityInCart + 1;
-                    if (next > maxQty) return;
-                    setCartQty(selected!.id, next);
-                    if (api !== null && accessToken !== null) {
-                      void enqueueCartVariantMutation(selected!.id, async () => {
-                        await api!.put(`/api/v1/cart/items/${selected!.id}`, {
-                          quantity: next
                         });
-                      });
+                      }
+                    } else {
+                      setLocalQuantity((current) => Math.min(current + 1, maxQty));
                     }
-                  } else {
-                    setLocalQuantity((current) => Math.min(current + 1, maxQty));
-                  }
-                }}
-                disabled={maxQty <= 0 || activeQuantity >= maxQty}
-                className="h-10 w-10 rounded-full border border-gorola-pine/20 text-lg font-semibold transition-colors hover:bg-gorola-pine/5 disabled:opacity-30"
-              >
-                +
-              </button>
-            </div>
+                  }}
+                  disabled={maxQty <= 0 || activeQuantity >= maxQty}
+                  className="h-10 w-10 rounded-full border border-gorola-pine/20 text-lg font-semibold transition-colors hover:bg-gorola-pine/5 disabled:opacity-30"
+                >
+                  +
+                </button>
+              </div>
 
-            {quantityInCart === 0 ? (
-              <button
-                type="button"
-                aria-label="Add to cart"
-                onClick={() => {
-                  if (selected === undefined || api === null || selected.stockQty <= 0 || localQuantity <= 0) {
-                    return;
-                  }
-                  addOrMergeLine({
-                    productVariantId: selected.id,
-                    quantity: localQuantity,
-                    productName: query.data.name,
-                    unitPrice: Number(selected.price),
-                    variantLabel: selected.label
-                  });
-                  if (accessToken === null) {
-                    return;
-                  }
-                  void enqueueCartVariantMutation(selected.id, async () => {
-                    await api!.post("/api/v1/cart/items", {
+              {quantityInCart === 0 ? (
+                <button
+                  type="button"
+                  aria-label="Add to cart"
+                  onClick={() => {
+                    if (selected === undefined || api === null || selected.stockQty <= 0 || localQuantity <= 0) {
+                      return;
+                    }
+                    addOrMergeLine({
                       productVariantId: selected.id,
-                      quantity: localQuantity
+                      quantity: localQuantity,
+                      productName: query.data.name,
+                      unitPrice: Number(selected.price),
+                      variantLabel: selected.label
                     });
-                  });
-                }}
-                disabled={!canAddToCart}
-                className="flex-1 rounded-full bg-gorola-saffron px-8 py-3 font-dm-sans text-base font-bold text-gorola-charcoal shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 sm:flex-none"
-              >
-                Add to cart
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => {
-                  useCartStore.getState().open();
-                }}
-                className="flex-1 rounded-full bg-gorola-pine px-8 py-3 font-dm-sans text-base font-bold text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-95 sm:flex-none"
-              >
-                View in Cart
-              </button>
-            )}
-          </div>
+                    if (accessToken === null) {
+                      return;
+                    }
+                    void enqueueCartVariantMutation(selected.id, async () => {
+                      await api!.post("/api/v1/cart/items", {
+                        productVariantId: selected.id,
+                        quantity: localQuantity
+                      });
+                    });
+                  }}
+                  disabled={!canAddToCart}
+                  className="flex-1 rounded-full bg-gorola-saffron px-8 py-3 font-dm-sans text-base font-bold text-gorola-charcoal shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 sm:flex-none"
+                >
+                  Add to cart
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    useCartStore.getState().open();
+                  }}
+                  className="flex-1 rounded-full bg-gorola-pine px-8 py-3 font-dm-sans text-base font-bold text-white shadow-lg transition-transform hover:scale-[1.02] active:scale-95 sm:flex-none"
+                >
+                  View in Cart
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </section>

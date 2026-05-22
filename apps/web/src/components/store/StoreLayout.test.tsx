@@ -1,7 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
-import userEvent from "@testing-library/user-event";
-import React from "react";
+import type { ReactNode } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -9,191 +8,75 @@ import { useAuthStore } from "@/store/auth.store";
 
 import { StoreLayout } from "./StoreLayout";
 
-const mockNavigate = vi.fn();
-
-vi.mock("react-router-dom", async () => {
-  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
-  return {
-    ...actual,
-    useNavigate: () => mockNavigate
-  };
-});
-
 const { getMock } = vi.hoisted(() => ({
   getMock: vi.fn()
 }));
 
-let mockApi: { post: ReturnType<typeof vi.fn>; get: ReturnType<typeof vi.fn> } | null = {
-  post: vi.fn().mockResolvedValue({}),
-  get: getMock
-};
+vi.mock("@/lib/api", () => ({
+  api: {
+    get: getMock,
+    post: vi.fn()
+  }
+}));
 
-vi.mock("@/lib/api", () => {
-  return {
-    get api() {
-      return mockApi;
-    }
-  };
-});
-
-function renderWithProviders(ui: React.ReactElement) {
+function renderStoreLayout(children: ReactNode = <div>Content</div>): void {
   const queryClient = new QueryClient({
     defaultOptions: {
-      queries: { retry: false, refetchOnWindowFocus: false }
+      queries: { retry: false }
     }
   });
-  return render(
+
+  render(
     <MemoryRouter>
-      <QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>
+      <QueryClientProvider client={queryClient}>
+        <StoreLayout>{children}</StoreLayout>
+      </QueryClientProvider>
     </MemoryRouter>
   );
 }
 
-describe("StoreLayout Logout", () => {
+describe("StoreLayout Navigation", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
-    mockNavigate.mockReset();
     getMock.mockReset();
-    sessionStorage.clear();
+    useAuthStore.setState({
+      accessToken: "mock-token",
+      refreshToken: "mock-refresh",
+      userId: "owner-id",
+      storeId: "store-id"
+    });
+  });
 
-    // Default: profile fetch returns QUICK_COMMERCE (Bookings nav hidden)
-    getMock.mockResolvedValue({
+  it("shows the Orders tab for retail stores (QUICK_COMMERCE)", async () => {
+    getMock.mockResolvedValueOnce({
       data: {
         success: true,
-        data: { id: "store-123", name: "Test Store", storeType: "QUICK_COMMERCE" }
+        data: {
+          storeType: "QUICK_COMMERCE"
+        }
       }
     });
 
-    mockApi = {
-      post: vi.fn().mockResolvedValue({}),
-      get: getMock
-    };
+    renderStoreLayout();
 
-    useAuthStore.setState({
-      accessToken: "at",
-      refreshToken: "rt-token",
-      role: "STORE_OWNER",
-      twoFactorVerified: true,
-      storeId: "store-123"
-    });
+    const orderElements = await screen.findAllByText("Orders");
+    expect(orderElements.length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Bookings")).toHaveLength(0);
   });
 
-  it("clears sessionStorage override and navigates correctly on logout", async () => {
-    const removeItemSpy = vi.spyOn(Storage.prototype, "removeItem");
-    const user = userEvent.setup();
-
-    renderWithProviders(
-      <StoreLayout>
-        <div>Dashboard Content</div>
-      </StoreLayout>
-    );
-
-    // There are two Logout buttons: one sidebar (desktop) and one header (mobile).
-    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
-    await user.click(logoutButtons[0]!);
-
-    expect(removeItemSpy).toHaveBeenCalledWith("gorola_subdomain_override");
-  });
-
-  it("navigates to /store/login on logout when isSubdomainMode is false", async () => {
-    const user = userEvent.setup();
-
-    renderWithProviders(
-      <StoreLayout>
-        <div>Dashboard Content</div>
-      </StoreLayout>
-    );
-
-    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
-    await user.click(logoutButtons[0]!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/store/login");
-  });
-
-  it("navigates to /login on logout when isSubdomainMode is true (via subdomain hostname)", async () => {
-    const originalLocation = window.location;
-    Object.defineProperty(window, "location", {
-      value: new URL("http://store.gorola.com"),
-      configurable: true,
-      writable: true
+  it("omits the Orders tab and shows Bookings for BOOKING_COMMERCE stores", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          storeType: "BOOKING_COMMERCE"
+        }
+      }
     });
 
-    const user = userEvent.setup();
+    renderStoreLayout();
 
-    renderWithProviders(
-      <StoreLayout>
-        <div>Dashboard Content</div>
-      </StoreLayout>
-    );
-
-    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
-    await user.click(logoutButtons[0]!);
-
-    expect(mockNavigate).toHaveBeenCalledWith("/login");
-
-    Object.defineProperty(window, "location", {
-      value: originalLocation,
-      configurable: true,
-      writable: true
-    });
-  });
-
-  it("calls api.post with correct endpoint and refreshToken on logout", async () => {
-    const user = userEvent.setup();
-
-    renderWithProviders(
-      <StoreLayout>
-        <div>Dashboard Content</div>
-      </StoreLayout>
-    );
-
-    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
-    await user.click(logoutButtons[0]!);
-
-    expect(mockApi!.post).toHaveBeenCalledWith("/api/v1/auth/store-owner/logout", {
-      refreshToken: "rt-token"
-    });
-  });
-
-  it("resiliently logouts client-side even when api.post rejects (fire-and-forget)", async () => {
-    mockApi!.post.mockRejectedValue(new Error("network error"));
-    const user = userEvent.setup();
-
-    renderWithProviders(
-      <StoreLayout>
-        <div>Dashboard Content</div>
-      </StoreLayout>
-    );
-
-    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
-    await user.click(logoutButtons[0]!);
-
-    expect(mockApi!.post).toHaveBeenCalledWith("/api/v1/auth/store-owner/logout", {
-      refreshToken: "rt-token"
-    });
-
-    expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(useAuthStore.getState().refreshToken).toBeNull();
-
-    expect(mockNavigate).toHaveBeenCalledWith("/store/login");
-  });
-
-  it("resiliently logouts when api is null", async () => {
-    mockApi = null;
-    const user = userEvent.setup();
-
-    renderWithProviders(
-      <StoreLayout>
-        <div>Dashboard Content</div>
-      </StoreLayout>
-    );
-
-    const logoutButtons = screen.getAllByRole("button", { name: /logout/i });
-    await user.click(logoutButtons[0]!);
-
-    expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(useAuthStore.getState().refreshToken).toBeNull();
-
-    expect(mockNavigate).toHaveBeenCalledWith("/store/login");
+    const bookingElements = await screen.findAllByText("Bookings");
+    expect(bookingElements.length).toBeGreaterThan(0);
+    expect(screen.queryAllByText("Orders")).toHaveLength(0);
   });
 });

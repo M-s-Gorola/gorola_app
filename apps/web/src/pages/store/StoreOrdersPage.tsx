@@ -12,10 +12,12 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 type OrderStatus =
@@ -93,6 +95,7 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
 }
 
 export function StoreOrdersPage(): ReactElement {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
@@ -100,6 +103,24 @@ export function StoreOrdersPage(): ReactElement {
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
+
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+  const { data: storeProfile } = useQuery({
+    queryKey: ["store", "profile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      return res.data.data;
+    },
+    enabled: !!storeId
+  });
+
+  useEffect(() => {
+    if (storeProfile?.storeType === "BOOKING_COMMERCE") {
+      navigate(getScopedPath("/store/bookings", "store", isSubdomainMode), { replace: true });
+    }
+  }, [storeProfile, navigate, isSubdomainMode]);
 
   useEffect(() => {
     console.log("🔌 [StoreSocket] useEffect triggered. storeId:", storeId, "hasToken:", !!accessToken);

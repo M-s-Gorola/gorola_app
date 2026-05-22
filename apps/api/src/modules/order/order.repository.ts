@@ -11,7 +11,7 @@ import {
 export const orderRelationsInclude = {
   items: { orderBy: { id: "asc" as const } },
   statusHistory: { orderBy: { changedAt: "asc" as const } },
-  store: { select: { id: true, name: true, phone: true } }
+  store: { select: { id: true, name: true, phone: true, storeType: true } }
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{

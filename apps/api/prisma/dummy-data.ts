@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
-export async function seedDummyData(prisma: PrismaClient, storeAId: string, storeBId: string) {
+export async function seedDummyData(prisma: PrismaClient, storeAId: string, storeBId: string, storeCId: string) {
   // Wipe existing catalog data (respecting FK constraints)
   await prisma.stockMovement.deleteMany({});
   await prisma.cartItem.deleteMany({});
@@ -152,7 +152,9 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
     name: string,
     price: string,
     stockQty: number,
-    unit: string
+    unit: string,
+    requiresFasting = false,
+    allowedTimeslots?: string[]
   ) => {
     return prisma.product.upsert({
       where: { id },
@@ -167,7 +169,15 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
         imageUrl: `https://picsum.photos/seed/${id}/400/400`,
         isActive: true,
         variants: {
-          create: [{ label: unit, price, stockQty, unit, isActive: true }]
+          create: [{
+            label: unit,
+            price,
+            stockQty,
+            unit,
+            isActive: true,
+            requiresFasting,
+            allowedTimeslots: allowedTimeslots || []
+          }]
         }
       }
     });
@@ -219,9 +229,12 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
     { id: "prod_sup_4", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Iron Supplements", price: "130.00", stockQty: 70, unit: "1 strip" },
     { id: "prod_sup_5", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Protein Powder", price: "950.00", stockQty: 20, unit: "500 g" },
 
-    // Medical Tests (Sample)
-    { id: "prod_test_1", storeId: storeBId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "CBC (Complete Blood Count)", price: "300.00", stockQty: 999, unit: "Test" },
-    { id: "prod_test_2", storeId: storeBId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "HbA1c", price: "550.00", stockQty: 999, unit: "Test" }
+    // Medical Tests (Dedicated Booking Store C)
+    { id: "prod_test_1", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Blood Sugar (Fasting)", price: "80.00", stockQty: 999, unit: "Test", requiresFasting: true, allowedTimeslots: ["06:00-09:00"] },
+    { id: "prod_test_2", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "CBC Panel (Fasting)", price: "350.00", stockQty: 999, unit: "Test", requiresFasting: true, allowedTimeslots: ["06:00-09:00"] },
+    { id: "prod_test_3", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Lipid Profile (Fasting)", price: "650.00", stockQty: 999, unit: "Test", requiresFasting: true, allowedTimeslots: ["06:00-09:00"] },
+    { id: "prod_test_4", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Thyroid (TSH)", price: "450.00", stockQty: 999, unit: "Test", requiresFasting: false, allowedTimeslots: ["06:00-09:00", "09:00-12:00", "12:00-15:00", "15:00-18:00"] },
+    { id: "prod_test_5", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Urine Routine", price: "120.00", stockQty: 999, unit: "Test", requiresFasting: false, allowedTimeslots: ["06:00-09:00", "09:00-12:00", "12:00-15:00", "15:00-18:00"] }
   ];
 
   console.info(`Seeding ${productData.length} products in chunks of 5...`);
@@ -229,7 +242,7 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
   for (let i = 0; i < productData.length; i += chunkSize) {
     const chunk = productData.slice(i, i + chunkSize);
     await Promise.all(
-      chunk.map((p) => createProduct(p.id, p.storeId, p.categoryId, p.subCategoryId, p.name, p.price, p.stockQty, p.unit))
+      chunk.map((p: any) => createProduct(p.id, p.storeId, p.categoryId, p.subCategoryId, p.name, p.price, p.stockQty, p.unit, p.requiresFasting, p.allowedTimeslots))
     );
   }
 

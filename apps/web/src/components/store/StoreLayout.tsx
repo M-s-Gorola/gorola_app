@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
@@ -53,11 +53,21 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
     enabled: !!storeId
   });
 
+  const isBooking = storeProfile?.storeType === "BOOKING_COMMERCE";
+
+  useEffect(() => {
+    if (isBooking && location.pathname.includes("/store/orders")) {
+      navigate(getScopedPath("/store/bookings", "store", isSubdomainMode), { replace: true });
+    }
+  }, [isBooking, location.pathname, navigate, isSubdomainMode]);
+
   const navItems = [
     { label: "Dashboard", path: getScopedPath("/store/dashboard", "store", isSubdomainMode) },
-    { label: "Orders", path: getScopedPath("/store/orders", "store", isSubdomainMode) },
+    ...(!isBooking
+      ? [{ label: "Orders", path: getScopedPath("/store/orders", "store", isSubdomainMode) }]
+      : []),
     { label: "Products", path: getScopedPath("/store/products", "store", isSubdomainMode) },
-    ...(storeProfile?.storeType === "BOOKING_COMMERCE"
+    ...(isBooking
       ? [{ label: "Bookings", path: getScopedPath("/store/bookings", "store", isSubdomainMode) }]
       : []),
     { label: "Settings", path: getScopedPath("/store/settings", "store", isSubdomainMode) }
