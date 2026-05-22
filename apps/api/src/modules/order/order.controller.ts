@@ -43,6 +43,7 @@ function serializeOrderResponse(
     deliveryFee: order.deliveryFee.toString(),
     deliveryNote: order.deliveryNote,
     id: order.id,
+    orderType: order.orderType,
     items: order.items.map((item) => ({
       id: item.id,
       orderId: item.orderId,
@@ -70,7 +71,8 @@ function serializeOrderResponse(
     store: {
       id: order.store.id,
       name: order.store.name,
-      phone: order.store.phone
+      phone: order.store.phone,
+      storeType: order.store.storeType
     },
     storeId: order.storeId,
     subtotal: order.subtotal.toString(),

@@ -247,4 +247,100 @@ describe("BookingTimeslotPage", () => {
       );
     });
   });
+
+  it("allows adding a new address and auto-selects it upon success", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/products/")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: "prod1",
+              name: "CBC Blood Test",
+              store: { id: "store1", name: "Max Labs", bookingLeadDays: 1 },
+              variants: [
+                {
+                  id: "var1",
+                  label: "Standard Test",
+                  price: "500.00",
+                  requiresFasting: false,
+                  allowedTimeslots: ["09:00-12:00"],
+                },
+              ],
+            },
+          },
+        });
+      }
+      if (url.includes("/api/v1/addresses")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              addresses: [],
+            },
+          },
+        });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    apiPostSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/addresses") {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { id: "new-addr-999" },
+          },
+        });
+      }
+      if (url === "/api/v1/bookings") {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { orderId: "ord-new-123" },
+          },
+        });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderComponent();
+    await screen.findByText("CBC Blood Test");
+
+    // Click Add New button
+    const addNewBtn = screen.getByRole("button", { name: /Add New/i });
+    fireEvent.click(addNewBtn);
+
+    // Verify modal is open
+    expect(await screen.findByText("Add New Address")).toBeInTheDocument();
+
+    // Fill out the address form
+    const labelInput = screen.getByLabelText(/Label/i);
+    const landmarkInput = screen.getByLabelText(/Landmark/i);
+    const flatRoomInput = screen.getByLabelText(/Flat \/ room/i);
+
+    fireEvent.change(labelInput, { target: { value: "Office" } });
+    fireEvent.change(landmarkInput, { target: { value: "Near Mall Road Mussoorie" } });
+    fireEvent.change(flatRoomInput, { target: { value: "Suite 101" } });
+
+    // Click Save Address
+    const saveBtn = screen.getByRole("button", { name: /Save Address/i });
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(apiPostSpy).toHaveBeenCalledWith(
+        "/api/v1/addresses",
+        expect.objectContaining({
+          label: "Office",
+          landmarkDescription: "Near Mall Road Mussoorie",
+          flatRoom: "Suite 101",
+        }),
+      );
+    });
+
+    // Verify modal closes and selectedAddressId is set
+    await waitFor(() => {
+      expect(screen.queryByText("Add New Address")).not.toBeInTheDocument();
+    });
+  });
 });

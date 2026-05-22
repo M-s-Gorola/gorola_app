@@ -570,6 +570,30 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // 8. GET /api/v1/store/profile
+  app.get("/api/v1/store/profile", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await prisma.storeOwner.findUnique({
+      where: { id: userId },
+      include: { store: true }
+    });
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    return {
+      success: true,
+      data: owner.store,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
 
 

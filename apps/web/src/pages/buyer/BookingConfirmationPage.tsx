@@ -30,10 +30,11 @@ type BookingEnvelope = {
   paymentMethod: string;
   landmarkDescription: string;
   flatRoom: string | null;
-  store: {
+  store?: {
     id: string;
     name: string;
     phone: string;
+    storeType?: string;
   };
   items: BookingItem[];
   bookingOrder: BookingOrderDetails;
@@ -193,7 +194,7 @@ export function BookingConfirmationPage(): ReactElement {
             <p>Subtotal: Rs {booking.subtotal}</p>
             <p>Delivery fee: Rs {booking.deliveryFee}</p>
             <p className="font-semibold text-gorola-pine text-base">Total: Rs {booking.total}</p>
-            <p className="text-xs text-gorola-slate">Payment method: {booking.paymentMethod}</p>
+            <p className="text-xs text-gorola-slate">Payment method: {booking.paymentMethod === "COD" ? "Pay on Service" : booking.paymentMethod}</p>
           </div>
         </div>
 
@@ -201,8 +202,12 @@ export function BookingConfirmationPage(): ReactElement {
         <div className="w-full rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm space-y-3">
           <h2 className="font-playfair text-lg font-bold text-gorola-charcoal">Location & Store</h2>
           <div className="font-dm-sans text-sm space-y-1 text-gorola-slate">
-            <p className="font-semibold text-gorola-charcoal">Store: {booking.store.name}</p>
-            <p>Phone: {booking.store.phone}</p>
+            {booking.store && (
+              <>
+                <p className="font-semibold text-gorola-charcoal">Store: {booking.store.name}</p>
+                <p>Phone: {booking.store.phone}</p>
+              </>
+            )}
             <div className="border-t border-gorola-pine/10 mt-3 pt-3">
               <p className="font-semibold text-gorola-charcoal">Appointment Address</p>
               <p className="mt-1">

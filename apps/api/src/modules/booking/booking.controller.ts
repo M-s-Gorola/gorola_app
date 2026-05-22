@@ -55,6 +55,19 @@ interface BookingOrderWithRelations {
     total: { toString: () => string };
     createdAt: Date;
     updatedAt: Date;
+    landmarkDescription: string;
+    flatRoom: string | null;
+    addressLabel: string | null;
+    store: {
+      id: string;
+      name: string;
+      phone: string;
+      storeType: string;
+    };
+    user: {
+      phone: string;
+      name: string;
+    } | null;
     items: Array<{
       id: string;
       orderId: string;
@@ -75,18 +88,35 @@ interface BookingOrderWithRelations {
   };
 }
 
+function maskPhone(phone: string): string {
+  if (!phone) return "";
+  if (phone.length <= 4) return "****";
+  return "*".repeat(phone.length - 4) + phone.slice(-4);
+}
+
 function serializeBookingOrder(booking: BookingOrderWithRelations): Record<string, unknown> {
   const order = booking.order;
   return {
     id: order.id,
     storeId: order.storeId,
     userId: order.userId,
-    status: order.status,
+    status: booking.approvalStatus,
     subtotal: order.subtotal.toString(),
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    landmarkDescription: order.landmarkDescription,
+    flatRoom: order.flatRoom,
+    addressLabel: order.addressLabel,
+    buyerMaskedPhone: order.user ? maskPhone(order.user.phone) : "",
+    paymentMethod: "COD",
+    store: {
+      id: order.store.id,
+      name: order.store.name,
+      phone: order.store.phone,
+      storeType: order.store.storeType
+    },
     items: order.items.map((i) => ({
       id: i.id,
       orderId: i.orderId,

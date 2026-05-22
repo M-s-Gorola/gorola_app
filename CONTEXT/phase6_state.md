@@ -373,6 +373,68 @@ The goal is to eliminate this duplicate invocation, clean up the Profile page, a
 
 ---
 
+## Phase 6.7 Checklist — Refresh Token Race Condition & Session Deduplication
+
+**Root Cause / Goal:**
+Under Refresh Token Rotation (RTR), the server revokes/deletes the old refresh token as soon as a new one is issued. When the frontend's access token expires during parallel backend mutations (like updating a product and variants together), multiple parallel requests will simultaneously fail with `401` and attempt to call `/refresh` in parallel.
+* The first `/refresh` call succeeds, revokes the old refresh token, and sets the new tokens in the cookie and memory.
+* The second `/refresh` call (dispatched in the same event tick with the same old refresh token) is rejected by the server with a `401` because that refresh token was just revoked.
+* This returns `401` to the client, triggering a cascade logout (`clearSession()`) which unexpectedly bounces the merchant to the login screen.
+
+**Fix / Approach:**
+Implement a standard request-queueing and refresh deduplication interceptor pattern in `apps/web/src/lib/api.ts`.
+* Maintain a boolean flag `isRefreshing = false` and an array of queued request callbacks `failedQueue = []`.
+* When a 401 occurs in `handle401`:
+  * If `isRefreshing` is `true`, return a new `Promise` that is pushed to `failedQueue`. It resolves with the new token to retry the request.
+  * If `isRefreshing` is `false`, set it to `true` and proceed with the token refresh request.
+  * Once the refresh returns successfully: set `isRefreshing = false`, process and resolve all promises in the `failedQueue` with the new access token, and clear the queue.
+  * If the refresh fails: set `isRefreshing = false`, reject all queued promises, call `clearSession()`, and clear the queue.
+
+---
+
+- [x] **RED — Unit / Integration (`apps/web/src/lib/api.test.ts`):**
+  - [x] Test (Parallel Refresh Deduplication): Setup Axios MockAdapter. Intercept multiple concurrent `GET /data-1` and `GET /data-2` requests and make them fail with `401` once. Make the mock `/refresh` endpoint succeed on its first call and return new tokens. Assert that both concurrent requests are resolved with their final retried success responses, and that `/refresh` is called **exactly once** instead of twice.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Axios Interceptors):**
+  - [x] [Interceptors] In `apps/web/src/lib/api.ts`, add the `isRefreshing` and `failedQueue` fields. Update `handle401` to implement the deduplication and queuing of parallel 401s. Ensure queued requests get retried with the new `Authorization` headers.
+  - [x] Run all unit tests — **confirm GREEN**.
+
+- [x] **Verification Chain:**
+  - [x] Log into store owner portal → simulate or trigger expired access token state → execute form submission containing multiple parallel backend mutations → verify both mutations complete successfully → verify store owner is **not** logged out and remains on dashboard → ✅ Done.
+
+---
+
+## Phase 6.8 Checklist — E2E Test Suite Alignment for Category Segregation
+
+**Root cause / Goal:**
+Due to Phase 7.7 category segregation implementation, the homepage now displays categories separated under two distinct headings ("Instant Delivery" and "Book a Service"). Additionally, with the introduction of "Electronics" and "Repairs", the total number of categories in the test seed has increased from 3 to 5.
+Currently, `tests/e2e/home.spec.ts` contains a hardcoded assertion `expect(categoryCards).toHaveCount(3)` which expects exactly 3 category cards, causing E2E test failures on Chromium and Mobile.
+Furthermore, E2E test routes must be properly aligned to ensure that Quick Commerce flows exclusively query Quick Commerce paths and Booking Commerce categories are clearly segregated.
+
+**Fix / Approach:**
+1. Update `tests/e2e/home.spec.ts`'s `E2E-001: Home Page Loads Correctly` test to assert the presence of both "Instant Delivery" and "Book a Service" section headers, and expect exactly 5 category cards total.
+2. Ensure that all Quick Commerce E2E tests (such as checkout and catalog browsing) target categories specifically classified as Quick Commerce, which is already naturally aligned due to DOM rendering order (Quick Commerce categories rendering first).
+
+---
+
+- [x] **RED — E2E Test (`tests/e2e/home.spec.ts`):**
+  - [x] Test: `Home Page Loads Correctly` asserts `categoryCards` count is 5 (which is currently failing because the test expects 3).
+  - [x] Test: Assert that the "Instant Delivery" section is visible and contains 3 categories.
+  - [x] Test: Assert that the "Book a Service" section is visible and contains 2 categories.
+  - [x] **Run — confirm RED (test suite fails on home.spec.ts).**
+
+- [x] **GREEN — Frontend E2E Alignment:**
+  - [x] [E2E] In `apps/web/tests/e2e/home.spec.ts`, update `toHaveCount(3)` to `toHaveCount(5)`.
+  - [x] [E2E] Update the verification loop to iterate over all 5 category cards.
+  - [x] [E2E] Add assertions verifying the visibility of section headers: "Instant Delivery" (`h3` with text `Instant Delivery`) and "Book a Service" (`h3` with text `Book a Service`).
+  - [x] Run E2E tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Open buyer web homepage → see "Instant Delivery" heading with "Groceries", "Medical", and "Electronics" categories → see "Book a Service" heading with "Repairs" and "Medical tests" categories → Playwright successfully completes E2E tests with 0 failures → ✅ Done.
+
+---
+
 ## Session Notes (Phase 6)
 
 ### 2026-05-16: E2E Stabilization & Smart Redirect
@@ -470,37 +532,8 @@ The goal is to eliminate this duplicate invocation, clean up the Profile page, a
   - Added a **Lifecycle Integration** test verifying reference counted singleton survival across concurrent caller lifecycles.
   - Complete workspace Vitest suite is 100% green (221/221 tests passing). TypeScript `tsc` and ESLint checks pass cleanly with 0 warnings/errors.
 
----
 
-## Phase 6.7 Checklist — Refresh Token Race Condition & Session Deduplication
 
-**Root Cause / Goal:**
-Under Refresh Token Rotation (RTR), the server revokes/deletes the old refresh token as soon as a new one is issued. When the frontend's access token expires during parallel backend mutations (like updating a product and variants together), multiple parallel requests will simultaneously fail with `401` and attempt to call `/refresh` in parallel.
-* The first `/refresh` call succeeds, revokes the old refresh token, and sets the new tokens in the cookie and memory.
-* The second `/refresh` call (dispatched in the same event tick with the same old refresh token) is rejected by the server with a `401` because that refresh token was just revoked.
-* This returns `401` to the client, triggering a cascade logout (`clearSession()`) which unexpectedly bounces the merchant to the login screen.
-
-**Fix / Approach:**
-Implement a standard request-queueing and refresh deduplication interceptor pattern in `apps/web/src/lib/api.ts`.
-* Maintain a boolean flag `isRefreshing = false` and an array of queued request callbacks `failedQueue = []`.
-* When a 401 occurs in `handle401`:
-  * If `isRefreshing` is `true`, return a new `Promise` that is pushed to `failedQueue`. It resolves with the new token to retry the request.
-  * If `isRefreshing` is `false`, set it to `true` and proceed with the token refresh request.
-  * Once the refresh returns successfully: set `isRefreshing = false`, process and resolve all promises in the `failedQueue` with the new access token, and clear the queue.
-  * If the refresh fails: set `isRefreshing = false`, reject all queued promises, call `clearSession()`, and clear the queue.
-
----
-
-- [x] **RED — Unit / Integration (`apps/web/src/lib/api.test.ts`):**
-  - [x] Test (Parallel Refresh Deduplication): Setup Axios MockAdapter. Intercept multiple concurrent `GET /data-1` and `GET /data-2` requests and make them fail with `401` once. Make the mock `/refresh` endpoint succeed on its first call and return new tokens. Assert that both concurrent requests are resolved with their final retried success responses, and that `/refresh` is called **exactly once** instead of twice.
-  - [x] **Run — confirm RED.**
-
-- [x] **GREEN — Frontend (Axios Interceptors):**
-  - [x] [Interceptors] In `apps/web/src/lib/api.ts`, add the `isRefreshing` and `failedQueue` fields. Update `handle401` to implement the deduplication and queuing of parallel 401s. Ensure queued requests get retried with the new `Authorization` headers.
-  - [x] Run all unit tests — **confirm GREEN**.
-
-- [x] **Verification Chain:**
-  - [x] Log into store owner portal → simulate or trigger expired access token state → execute form submission containing multiple parallel backend mutations → verify both mutations complete successfully → verify store owner is **not** logged out and remains on dashboard → ✅ Done.
 
 
 

@@ -52,6 +52,7 @@ export type ProductDetailResult = {
     id: string;
     name: string;
     phone: string;
+    storeType: string;
   };
   variants: Array<{
     id: string;
@@ -62,6 +63,8 @@ export type ProductDetailResult = {
     isInStock: boolean;
     isLowStock: boolean;
     lowStockThreshold: number;
+    requiresFasting: boolean;
+    allowedTimeslots: string[];
   }>;
 };
 
@@ -247,7 +250,8 @@ export class ProductRepository {
           select: {
             id: true,
             name: true,
-            phone: true
+            phone: true,
+            storeType: true
           }
         },
         variants: {
@@ -265,7 +269,9 @@ export class ProductRepository {
             stockQty: true,
             isInStock: true,
             isLowStock: true,
-            lowStockThreshold: true
+            lowStockThreshold: true,
+            requiresFasting: true,
+            allowedTimeslots: true
           }
         }
       }
@@ -283,7 +289,8 @@ export class ProductRepository {
       store: {
         id: product.store.id,
         name: product.store.name,
-        phone: product.store.phone
+        phone: product.store.phone,
+        storeType: product.store.storeType
       },
       variants: product.variants.map((variant) => ({
         id: variant.id,
@@ -293,7 +300,9 @@ export class ProductRepository {
         stockQty: variant.stockQty,
         isInStock: variant.isInStock,
         isLowStock: variant.isLowStock,
-        lowStockThreshold: variant.lowStockThreshold
+        lowStockThreshold: variant.lowStockThreshold,
+        requiresFasting: variant.requiresFasting,
+        allowedTimeslots: variant.allowedTimeslots
       }))
     };
   }

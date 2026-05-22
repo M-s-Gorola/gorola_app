@@ -23,9 +23,11 @@ type Order = {
   id: string;
   total: string;
   status: string;
+  orderType?: string;
   createdAt: string;
   store: {
     name: string;
+    storeType?: string;
   };
   items: OrderItem[];
   rating: boolean | null;
@@ -229,7 +231,13 @@ export function OrderHistoryPage() {
                     Reorder
                   </button>
                   <button
-                    onClick={() => navigate(`/orders/${order.id}`)}
+                    onClick={() => {
+                      if (order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE") {
+                        navigate(`/bookings/${order.id}`);
+                      } else {
+                        navigate(`/orders/${order.id}`);
+                      }
+                    }}
                     className="p-2 bg-gorola-charcoal/5 hover:bg-gorola-charcoal/10 rounded-xl text-gorola-charcoal/60 hover:text-gorola-charcoal transition-colors"
                   >
                     <ChevronRight className="w-5 h-5" />

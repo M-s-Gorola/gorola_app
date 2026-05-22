@@ -17,12 +17,10 @@ vi.mock("gsap", () => ({
     }),
     set: vi.fn(),
     timeline: vi.fn(() => ({
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      to: vi.fn(function (this: any) {
+      to: vi.fn(function (this: unknown) {
         return this;
       }),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      set: vi.fn(function (this: any) {
+      set: vi.fn(function (this: unknown) {
         return this;
       }),
     })),
@@ -78,7 +76,7 @@ describe("BookingConfirmationPage", () => {
         id: "store1",
         name: "Max Labs Mussoorie",
         phone: "+919999997103",
-      },
+      } as { id: string; name: string; phone: string; storeType?: string } | undefined,
       items: [
         {
           id: "li1",
@@ -141,5 +139,19 @@ describe("BookingConfirmationPage", () => {
     expect(
       screen.getByText("Rejection Reason: No available doctors for that slot"),
     ).toBeInTheDocument();
+  });
+
+  it("renders robustly and does not crash even if the store field is null or undefined", async () => {
+    const envelope = mockBookingEnvelope("PENDING_APPROVAL");
+    envelope.data = { ...envelope.data, store: undefined };
+
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    expect(screen.queryByText(/Max Labs Mussoorie/)).not.toBeInTheDocument();
   });
 });

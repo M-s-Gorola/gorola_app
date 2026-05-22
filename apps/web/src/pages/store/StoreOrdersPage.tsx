@@ -12,10 +12,12 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 type OrderStatus =
@@ -50,6 +52,8 @@ type Order = {
   total: number;
   paymentMethod: string;
   landmarkDescription: string;
+  flatRoom?: string | null;
+  addressLabel?: string | null;
   createdAt: string;
   buyerMaskedPhone: string;
   items: OrderItem[];
@@ -93,6 +97,7 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
 }
 
 export function StoreOrdersPage(): ReactElement {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
@@ -100,6 +105,24 @@ export function StoreOrdersPage(): ReactElement {
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
+
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+  const { data: storeProfile } = useQuery({
+    queryKey: ["store", "profile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      return res.data.data;
+    },
+    enabled: !!storeId
+  });
+
+  useEffect(() => {
+    if (storeProfile?.storeType === "BOOKING_COMMERCE") {
+      navigate(getScopedPath("/store/bookings", "store", isSubdomainMode), { replace: true });
+    }
+  }, [storeProfile, navigate, isSubdomainMode]);
 
   useEffect(() => {
     console.log("🔌 [StoreSocket] useEffect triggered. storeId:", storeId, "hasToken:", !!accessToken);
@@ -540,14 +563,15 @@ export function StoreOrdersPage(): ReactElement {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center">
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0">
                       <MapPin className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-gorola-slate font-bold">Landmark Description</p>
-                      <p className="text-xs font-bold text-gorola-charcoal">
-                        {selectedOrder.landmarkDescription || "No landmark specified"}
+                      <p className="text-[10px] text-gorola-slate font-bold">Delivery Address</p>
+                      <p className="text-xs font-black text-gorola-charcoal">
+                        {selectedOrder.flatRoom ? `${selectedOrder.flatRoom}, ` : ""}
+                        {selectedOrder.landmarkDescription || "No address provided"}
                       </p>
                     </div>
                   </div>

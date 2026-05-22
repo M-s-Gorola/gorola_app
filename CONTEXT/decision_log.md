@@ -1263,3 +1263,52 @@ Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for a
 **Tradeoffs:**
 - Requires implementing active/inactive styling and toggle switch states across multiple lists, which is easily managed.
 
+---
+
+## [DECISION-043] Pay-on-Service Default for Booking Commerce
+
+**Date:** 2026-05-23
+**Status:** Accepted
+
+**Context:**
+Quick Commerce orders (groceries, medicines, electronics) allow buyers to select their payment method (e.g., Credit Card, Online Payment, or Cash on Delivery) immediately at checkout. However, Booking Commerce (medical diagnostic tests, doorstep device repairs) is fundamentally different: appointments are scheduled for future timeslots and require manual merchant approval first. We need to document why the system defaults booking flows to Cash on Delivery (COD) / Pay-on-Service and maps this cleanly in UI receipts.
+
+**Decision:**
+1. Default all checkout requests under `BOOKING_COMMERCE` strictly to the `COD` database state, bypassing up-front online payment choices at checkout.
+2. Render the checkout/confirmation payment label dynamically as **"Pay on Service"** (instead of retail jargon like "COD" or "Cash on Delivery") on buyer booking receipts.
+
+**Rationale:**
+- **Avoids Refund Gateway Overhead:** Bookings are *requests* that store owners can decline (e.g., if a technician is sick or a doctor is booked). Taking payments up-front would lead to massive financial losses on non-refundable payment gateway transaction fees (2-3%) and constant customer support tickets for failed/rejected appointments.
+- **Support for Price Adjustments:** Technical repairs frequently discover secondary issues on-site (e.g., an AC service discovering a leakage that requires a replacement valve). Pay-on-service allows the final invoice to be adjusted and settled directly at the doorstep based on actual services rendered.
+- **Industry Standard for On-Demand Services:** Matches the mental model of on-demand home services (e.g., Urban Company or local field services) where payment is processed only after successful job completion.
+
+**Tradeoffs:**
+- Increased risk of buyer "no-shows" since no deposit is taken. This is mitigated by giving store owners the phone numbers of buyers to confirm beforehand and allowing them to cancel/reschedule requests easily.
+
+---
+
+## [DECISION-044] Deterministic Test Seed Pathing & Category Segregation Strategy
+
+**Date:** 2026-05-23
+**Status:** Accepted
+
+**Context:**
+With the addition of Booking Commerce (Phase 7), storefront categories are split into two sections: "Instant Delivery" and "Book a Service". Currently, this grouping is achieved in the frontend `CategoryGrid.tsx` using a hardcoded array of category slugs (`["groceries", "medical", "electronics"]`). 
+Furthermore, Playwright E2E tests for Quick Commerce are written with hardcoded catalog paths (e.g. `/categories/groceries` or `/categories/groceries/rice-atta`). We need to document the architectural justification for these implementations and detail the long-term resolution strategy.
+
+**Decision:**
+1. **Testing Stability via Hardcoded Paths:** Retain hardcoded catalog paths in the Playwright E2E tests. Because the E2E suite runs against an isolated, predictable database initialized by the global test seed (`bootstrap-test-db.cjs`), these specific paths are guaranteed to exist, ensuring fast and deterministic test runs.
+2. **Transition from Hardcoded Slugs to Dynamic Enums (Phase 4.1):** The current client-side slug filtering in `CategoryGrid.tsx` is accepted only as a temporary, quick-to-ship POC. As part of **Phase 4.1 (Admin Catalog & Category Management)**, we will deprecate the hardcoded client-side array and introduce a structural database upgrade:
+   - Add a `commerceType` enum (`QUICK_COMMERCE` | `BOOKING_COMMERCE`) on the Prisma `Category` model.
+   - Update category management APIs to serialize `commerceType`.
+   - Update the buyer frontend (`CategoryGrid.tsx`) to dynamically partition categories into "Instant Delivery" and "Book a Service" sections based on the API response, eliminating all hardcoded frontend slug lists.
+
+**Rationale:**
+- **Zero Test Churn:** Keeps current E2E tests highly performant, robust, and readable without requiring runtime API discovery overhead inside simple browser test files.
+- **Perfect Scalability:** The database-driven discriminator guarantees that when new categories are created dynamically by admins, they automatically render in the correct visual container on the storefront with zero code modifications.
+- **Decoupled Architecture:** Defers schema additions until Phase 4, when the full admin category management dashboard and control systems are engineered.
+
+**Tradeoffs:**
+- E2E tests are coupled to the seed dataset's naming convention; any changes to the default test categories will require updating the corresponding test selectors (a standard trade-off in E2E automation).
+
+

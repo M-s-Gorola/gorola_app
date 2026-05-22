@@ -88,6 +88,18 @@ export function StoreDashboardPage(): ReactElement {
     };
   }, [storeId, accessToken, queryClient]);
 
+  const { data: storeProfile } = useQuery({
+    queryKey: ["store", "profile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      return res.data.data;
+    },
+    enabled: !!storeId
+  });
+
+  const isBooking = storeProfile?.storeType === "BOOKING_COMMERCE";
+
   const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
     queryKey: ["store", "dashboard"],
     queryFn: async () => {
@@ -184,11 +196,11 @@ export function StoreDashboardPage(): ReactElement {
 
       {/* KPI Cards Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
-        {/* Today's Orders */}
+        {/* Today's Orders / Bookings */}
         <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
-              Today's Orders
+              {isBooking ? "Today's Bookings" : "Today's Orders"}
             </span>
             <div className="h-8 w-8 bg-gorola-pine/10 rounded-xl flex items-center justify-center text-gorola-pine">
               <ShoppingBag className="h-4 w-4" />
@@ -196,7 +208,9 @@ export function StoreDashboardPage(): ReactElement {
           </div>
           <div className="mt-4">
             <h3 className="text-2xl font-black text-gorola-charcoal">{dashboard.todayOrderCount}</h3>
-            <p className="text-xs text-gorola-slate mt-1">Orders placed today</p>
+            <p className="text-xs text-gorola-slate mt-1">
+              {isBooking ? "Appointments today" : "Orders placed today"}
+            </p>
           </div>
         </div>
 
@@ -204,7 +218,7 @@ export function StoreDashboardPage(): ReactElement {
         <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
-              Today's Revenue
+              {isBooking ? "Today's Booking Revenue" : "Today's Revenue"}
             </span>
             <div className="h-8 w-8 bg-green-100 rounded-xl flex items-center justify-center text-green-700">
               <TrendingUp className="h-4 w-4" />
@@ -214,15 +228,17 @@ export function StoreDashboardPage(): ReactElement {
             <h3 className="text-2xl font-black text-gorola-charcoal">
               {formatCurrency(dashboard.todayRevenue)}
             </h3>
-            <p className="text-xs text-gorola-slate mt-1">Confirmed + placed today</p>
+            <p className="text-xs text-gorola-slate mt-1">
+              {isBooking ? "Confirmed today" : "Confirmed + placed today"}
+            </p>
           </div>
         </div>
 
-        {/* Pending Orders */}
+        {/* Pending Orders / Approvals */}
         <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
-              Pending Orders
+              {isBooking ? "Pending Approvals" : "Pending Orders"}
             </span>
             <div className="h-8 w-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-700">
               <Clock className="h-4 w-4" />
@@ -230,7 +246,9 @@ export function StoreDashboardPage(): ReactElement {
           </div>
           <div className="mt-4">
             <h3 className="text-2xl font-black text-gorola-charcoal">{dashboard.pendingOrdersCount}</h3>
-            <p className="text-xs text-gorola-slate mt-1">Requiring action</p>
+            <p className="text-xs text-gorola-slate mt-1">
+              {isBooking ? "Requiring approval" : "Requiring action"}
+            </p>
           </div>
         </div>
 
@@ -272,7 +290,7 @@ export function StoreDashboardPage(): ReactElement {
       {/* Main Panel layout Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Weekly Revenue Trend Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col">
+        <div className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col`}>
           <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-6">
             Weekly Revenue Trend
           </h2>
@@ -307,87 +325,93 @@ export function StoreDashboardPage(): ReactElement {
         </div>
 
         {/* Low Stock Alerts */}
-        <div className={`bg-white rounded-2xl p-6 shadow-sm border flex flex-col justify-between ${
-          dashboard.lowStockItems.length > 0 ? "border-red-200" : "border-gorola-charcoal/10"
-        }`}>
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
-                dashboard.lowStockItems.length > 0 ? "bg-red-50 text-red-500 animate-bounce" : "bg-emerald-50 text-emerald-600"
-              }`}>
-                <AlertTriangle className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Low Stock Alerts</h2>
-                <p className="text-xs text-gorola-slate font-dm-sans">Variants below safety threshold.</p>
-              </div>
-            </div>
-
-            <div className="space-y-4 max-h-[290px] overflow-y-auto pr-1">
-              {dashboard.lowStockItems.slice(0, 3).map((item) => (
-                <div
-                  key={`${item.productName}-${item.variantLabel}`}
-                  className="flex items-center justify-between p-3 rounded-xl bg-red-50/50 border border-red-100 hover:bg-red-50 transition-colors"
-                >
-                  <div className="space-y-0.5 min-w-0 flex-1 pr-2">
-                    <h4 className="text-sm font-bold text-gorola-charcoal truncate" title={item.productName}>
-                      {item.productName}
-                    </h4>
-                    <p className="text-xs text-gorola-slate truncate" title={item.variantLabel}>
-                      {item.variantLabel}
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full whitespace-nowrap">
-                      Stock: {item.stockQty}
-                    </span>
-                    <button
-                      onClick={() => navigate(`${getScopedPath("/store/products", "store", isSubdomainMode)}?search=${encodeURIComponent(item.productName)}`)}
-                      className="p-1.5 rounded-lg bg-white border border-gorola-charcoal/5 hover:border-gorola-pine/20 hover:text-gorola-pine transition-all shadow-sm shrink-0"
-                      aria-label="Restock variant"
-                    >
-                      <ArrowRight className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
+        {!isBooking && (
+          <div className={`bg-white rounded-2xl p-6 shadow-sm border flex flex-col justify-between ${
+            dashboard.lowStockItems.length > 0 ? "border-red-200" : "border-gorola-charcoal/10"
+          }`}>
+            <div>
+              <div className="flex items-center gap-3 mb-6">
+                <div className={`h-8 w-8 rounded-lg flex items-center justify-center ${
+                  dashboard.lowStockItems.length > 0 ? "bg-red-50 text-red-500 animate-bounce" : "bg-emerald-50 text-emerald-600"
+                }`}>
+                  <AlertTriangle className="h-4 w-4" />
                 </div>
-              ))}
-
-              {dashboard.lowStockItems.length > 0 && (
-                <button
-                  onClick={() => navigate(`${getScopedPath("/store/products", "store", isSubdomainMode)}?lowStock=true`)}
-                  className="w-full mt-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl transition-all border border-red-200/50 flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  View All Alerts ({dashboard.lowStockItems.length})
-                  <ArrowRight className="h-3.5 w-3.5" />
-                </button>
-              )}
-
-              {dashboard.lowStockItems.length === 0 && (
-                <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
-                  <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-sm">
-                    ✓
-                  </div>
-                  <p className="text-sm font-bold text-gorola-charcoal">All variants stocked!</p>
-                  <p className="text-xs text-gorola-slate">No current alerts found.</p>
+                <div>
+                  <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Low Stock Alerts</h2>
+                  <p className="text-xs text-gorola-slate font-dm-sans">Variants below safety threshold.</p>
                 </div>
-              )}
+              </div>
+
+              <div className="space-y-4 max-h-[290px] overflow-y-auto pr-1">
+                {dashboard.lowStockItems.slice(0, 3).map((item) => (
+                  <div
+                    key={`${item.productName}-${item.variantLabel}`}
+                    className="flex items-center justify-between p-3 rounded-xl bg-red-50/50 border border-red-100 hover:bg-red-50 transition-colors"
+                  >
+                    <div className="space-y-0.5 min-w-0 flex-1 pr-2">
+                      <h4 className="text-sm font-bold text-gorola-charcoal truncate" title={item.productName}>
+                        {item.productName}
+                      </h4>
+                      <p className="text-xs text-gorola-slate truncate" title={item.variantLabel}>
+                        {item.variantLabel}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[10px] font-bold text-red-600 bg-red-100 px-2 py-0.5 rounded-full whitespace-nowrap">
+                        Stock: {item.stockQty}
+                      </span>
+                      <button
+                        onClick={() => navigate(`${getScopedPath("/store/products", "store", isSubdomainMode)}?search=${encodeURIComponent(item.productName)}`)}
+                        className="p-1.5 rounded-lg bg-white border border-gorola-charcoal/5 hover:border-gorola-pine/20 hover:text-gorola-pine transition-all shadow-sm shrink-0"
+                        aria-label="Restock variant"
+                      >
+                        <ArrowRight className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+
+                {dashboard.lowStockItems.length > 0 && (
+                  <button
+                    onClick={() => navigate(`${getScopedPath("/store/products", "store", isSubdomainMode)}?lowStock=true`)}
+                    className="w-full mt-2 py-2.5 px-4 bg-red-50 hover:bg-red-100 text-red-700 font-bold text-xs rounded-xl transition-all border border-red-200/50 flex items-center justify-center gap-1.5 shadow-sm"
+                  >
+                    View All Alerts ({dashboard.lowStockItems.length})
+                    <ArrowRight className="h-3.5 w-3.5" />
+                  </button>
+                )}
+
+                {dashboard.lowStockItems.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                    <div className="h-10 w-10 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center font-bold text-sm">
+                      ✓
+                    </div>
+                    <p className="text-sm font-bold text-gorola-charcoal">All variants stocked!</p>
+                    <p className="text-xs text-gorola-slate">No current alerts found.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
-        </div>
+        )}
       </div>
 
-      {/* Top Selling Products List */}
+      {/* Top Selling Products / Services List */}
       <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm">
         <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-4">
-          Top Performing Products
+          {isBooking ? "Top Performing Services" : "Top Performing Products"}
         </h2>
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gorola-charcoal/5">
                 <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider w-16">Rank</th>
-                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Product Name</th>
-                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Items Sold</th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">
+                  {isBooking ? "Service Name" : "Product Name"}
+                </th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">
+                  {isBooking ? "Times Booked" : "Items Sold"}
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gorola-charcoal/[0.03]">
@@ -405,7 +429,7 @@ export function StoreDashboardPage(): ReactElement {
                   </td>
                   <td className="py-4 text-right">
                     <span className="text-xs font-bold text-gorola-pine bg-gorola-pine/10 px-3 py-1.5 rounded-full">
-                      {item.soldCount} sold
+                      {item.soldCount} {isBooking ? "booked" : "sold"}
                     </span>
                   </td>
                 </tr>
@@ -413,7 +437,9 @@ export function StoreDashboardPage(): ReactElement {
               {dashboard.topProducts.length === 0 && (
                 <tr>
                   <td colSpan={3} className="text-sm text-gorola-slate/60 italic text-center py-8">
-                    No products sold in the last 30 days.
+                    {isBooking
+                      ? "No services booked in the last 30 days."
+                      : "No products sold in the last 30 days."}
                   </td>
                 </tr>
               )}

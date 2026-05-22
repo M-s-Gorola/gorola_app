@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 
-export async function seedDummyData(prisma: PrismaClient, storeAId: string, storeBId: string) {
+export async function seedDummyData(prisma: PrismaClient, storeAId: string, storeBId: string, storeCId: string, storeDId: string, storeEId: string) {
   // Wipe existing catalog data (respecting FK constraints)
   await prisma.stockMovement.deleteMany({});
   await prisma.cartItem.deleteMany({});
@@ -45,6 +45,30 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
       name: "Medical tests",
       imageUrl: "https://picsum.photos/seed/medical-tests/400/300",
       displayOrder: 3,
+      isActive: true
+    }
+  });
+
+  const electronicsCategory = await prisma.category.upsert({
+    where: { slug: "electronics" },
+    update: { imageUrl: "https://picsum.photos/seed/electronics/400/300" },
+    create: {
+      slug: "electronics",
+      name: "Electronics",
+      imageUrl: "https://picsum.photos/seed/electronics/400/300",
+      displayOrder: 4,
+      isActive: true
+    }
+  });
+
+  const repairsCategory = await prisma.category.upsert({
+    where: { slug: "repairs" },
+    update: { imageUrl: "https://picsum.photos/seed/repairs/400/300" },
+    create: {
+      slug: "repairs",
+      name: "Repairs",
+      imageUrl: "https://picsum.photos/seed/repairs/400/300",
+      displayOrder: 5,
       isActive: true
     }
   });
@@ -141,6 +165,32 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
     }
   });
 
+  const subElecAll = await prisma.subCategory.upsert({
+    where: { slug: "all-electronics" },
+    update: { categoryId: electronicsCategory.id },
+    create: {
+      slug: "all-electronics",
+      name: "All Electronics",
+      imageUrl: "https://picsum.photos/seed/all-electronics/200/200",
+      categoryId: electronicsCategory.id,
+      displayOrder: 1,
+      isActive: true,
+    }
+  });
+
+  const subRepairsAll = await prisma.subCategory.upsert({
+    where: { slug: "all-repairs" },
+    update: { categoryId: repairsCategory.id },
+    create: {
+      slug: "all-repairs",
+      name: "All Repairs",
+      imageUrl: "https://picsum.photos/seed/all-repairs/200/200",
+      categoryId: repairsCategory.id,
+      displayOrder: 1,
+      isActive: true,
+    }
+  });
+
   // -------------------------
   // PRODUCTS HELPER
   // -------------------------
@@ -152,7 +202,9 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
     name: string,
     price: string,
     stockQty: number,
-    unit: string
+    unit: string,
+    requiresFasting = false,
+    allowedTimeslots?: string[]
   ) => {
     return prisma.product.upsert({
       where: { id },
@@ -167,7 +219,15 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
         imageUrl: `https://picsum.photos/seed/${id}/400/400`,
         isActive: true,
         variants: {
-          create: [{ label: unit, price, stockQty, unit, isActive: true }]
+          create: [{
+            label: unit,
+            price,
+            stockQty,
+            unit,
+            isActive: true,
+            requiresFasting,
+            allowedTimeslots: allowedTimeslots || []
+          }]
         }
       }
     });
@@ -219,9 +279,25 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
     { id: "prod_sup_4", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Iron Supplements", price: "130.00", stockQty: 70, unit: "1 strip" },
     { id: "prod_sup_5", storeId: storeBId, categoryId: medicalCategory.id, subCategoryId: subMedSupplements.id, name: "Protein Powder", price: "950.00", stockQty: 20, unit: "500 g" },
 
-    // Medical Tests (Sample)
-    { id: "prod_test_1", storeId: storeBId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "CBC (Complete Blood Count)", price: "300.00", stockQty: 999, unit: "Test" },
-    { id: "prod_test_2", storeId: storeBId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "HbA1c", price: "550.00", stockQty: 999, unit: "Test" }
+    // Medical Tests (Dedicated Booking Store C)
+    { id: "prod_test_1", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Blood Sugar (Fasting)", price: "80.00", stockQty: 999, unit: "Test", requiresFasting: true, allowedTimeslots: ["06:00-09:00"] },
+    { id: "prod_test_2", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "CBC Panel (Fasting)", price: "350.00", stockQty: 999, unit: "Test", requiresFasting: true, allowedTimeslots: ["06:00-09:00"] },
+    { id: "prod_test_3", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Lipid Profile (Fasting)", price: "650.00", stockQty: 999, unit: "Test", requiresFasting: true, allowedTimeslots: ["06:00-09:00"] },
+    { id: "prod_test_4", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Thyroid (TSH)", price: "450.00", stockQty: 999, unit: "Test", requiresFasting: false, allowedTimeslots: ["06:00-09:00", "09:00-12:00", "12:00-15:00", "15:00-18:00"] },
+    { id: "prod_test_5", storeId: storeCId, categoryId: medicalTestsCategory.id, subCategoryId: subMedTestsAll.id, name: "Urine Routine", price: "120.00", stockQty: 999, unit: "Test", requiresFasting: false, allowedTimeslots: ["06:00-09:00", "09:00-12:00", "12:00-15:00", "15:00-18:00"] },
+
+    // Electronics (Dedicated Quick Commerce Store D)
+    { id: "prod_elec_1", storeId: storeDId, categoryId: electronicsCategory.id, subCategoryId: subElecAll.id, name: "Phone Charger", price: "499.00", stockQty: 50, unit: "1 unit" },
+    { id: "prod_elec_2", storeId: storeDId, categoryId: electronicsCategory.id, subCategoryId: subElecAll.id, name: "USB Cable", price: "199.00", stockQty: 100, unit: "1 unit" },
+    { id: "prod_elec_3", storeId: storeDId, categoryId: electronicsCategory.id, subCategoryId: subElecAll.id, name: "Power Bank", price: "1299.00", stockQty: 30, unit: "1 unit" },
+    { id: "prod_elec_4", storeId: storeDId, categoryId: electronicsCategory.id, subCategoryId: subElecAll.id, name: "Earphones", price: "799.00", stockQty: 40, unit: "1 unit" },
+    { id: "prod_elec_5", storeId: storeDId, categoryId: electronicsCategory.id, subCategoryId: subElecAll.id, name: "Screen Protector", price: "149.00", stockQty: 150, unit: "1 unit" },
+
+    // Repairs (Dedicated Booking Commerce Store E)
+    { id: "prod_rep_1", storeId: storeEId, categoryId: repairsCategory.id, subCategoryId: subRepairsAll.id, name: "Phone Screen Repair", price: "999.00", stockQty: 999, unit: "Service", requiresFasting: false, allowedTimeslots: ["09:00-12:00", "12:00-15:00", "15:00-18:00"] },
+    { id: "prod_rep_2", storeId: storeEId, categoryId: repairsCategory.id, subCategoryId: subRepairsAll.id, name: "Phone Battery Replacement", price: "599.00", stockQty: 999, unit: "Service", requiresFasting: false, allowedTimeslots: ["09:00-12:00", "12:00-15:00", "15:00-18:00"] },
+    { id: "prod_rep_3", storeId: storeEId, categoryId: repairsCategory.id, subCategoryId: subRepairsAll.id, name: "Laptop Keyboard Repair", price: "1499.00", stockQty: 999, unit: "Service", requiresFasting: false, allowedTimeslots: ["09:00-12:00", "12:00-15:00", "15:00-18:00"] },
+    { id: "prod_rep_4", storeId: storeEId, categoryId: repairsCategory.id, subCategoryId: subRepairsAll.id, name: "AC Service", price: "799.00", stockQty: 999, unit: "Service", requiresFasting: false, allowedTimeslots: ["09:00-12:00", "12:00-15:00", "15:00-18:00"] }
   ];
 
   console.info(`Seeding ${productData.length} products in chunks of 5...`);
@@ -229,7 +305,7 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
   for (let i = 0; i < productData.length; i += chunkSize) {
     const chunk = productData.slice(i, i + chunkSize);
     await Promise.all(
-      chunk.map((p) => createProduct(p.id, p.storeId, p.categoryId, p.subCategoryId, p.name, p.price, p.stockQty, p.unit))
+      chunk.map((p: any) => createProduct(p.id, p.storeId, p.categoryId, p.subCategoryId, p.name, p.price, p.stockQty, p.unit, p.requiresFasting, p.allowedTimeslots))
     );
   }
 
@@ -275,5 +351,5 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
     ]
   });
 
-  console.info("Dummy data seeded successfully (32 products, 3 advertisements across 7 subcategories)");
+  console.info("Dummy data seeded successfully (41 products, 3 advertisements across 9 subcategories)");
 }

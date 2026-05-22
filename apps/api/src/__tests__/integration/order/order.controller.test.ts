@@ -442,11 +442,12 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     expect(getPayload.data.id).toBe(orderId);
     expect(getPayload.data.userId).toBe(userRow.id);
     expect(
-      (getPayload as { data: { store?: { id: string; name: string; phone: string } } }).data.store
+      (getPayload as { data: { store?: { id: string; name: string; phone: string; storeType: string } } }).data.store
     ).toEqual({
       id: store.id,
       name: "OC Store",
-      phone: "+911200000099"
+      phone: "+911200000099",
+      storeType: "QUICK_COMMERCE"
     });
 
     const persistedOrder = await db.order.findUniqueOrThrow({

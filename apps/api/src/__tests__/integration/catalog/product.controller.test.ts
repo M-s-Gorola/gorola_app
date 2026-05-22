@@ -304,6 +304,7 @@ describe("Product controller", () => {
           id: storeOne.id,
           name: "Peak Mart",
           phone: "+919111111111",
+          storeType: "QUICK_COMMERCE",
         },
         variants: expect.arrayContaining([
           expect.objectContaining({
