@@ -906,8 +906,9 @@ Admin needs to create new stores (with an auto-created store owner account), vie
 ### 4.6 — Category Management
 
 > [!NOTE]
-> **Design Decision (DECISION-042):**
-> Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for category and subcategory management. Deactivating a category or subcategory must hide it and its associated products from the buyer storefront while preserving all database records to maintain order history integrity, matching [DECISION-042].
+> **Design Decision (DECISION-042 & DECISION-044):**
+> 1. Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for category and subcategory management. Deactivating a category or subcategory must hide it and its associated products from the buyer storefront while preserving all database records to maintain order history integrity, matching [DECISION-042].
+> 2. Implement a global **Dynamic Category Commerce Type** classification system to split storefront categories dynamically into "Instant Delivery" and "Book a Service", matching [DECISION-044]. We will deprecate the hardcoded category list in `CategoryGrid.tsx`.
 
 > [!WARNING]
 > **Anti-Patterns & Bug Prevention Guardrails:**
@@ -915,37 +916,54 @@ Admin needs to create new stores (with an auto-created store owner account), vie
 > 2. **Immediate Query Invalidation on Toggle:** When the admin toggles the category/subcategory status, the mutation must execute `await queryClient.invalidateQueries({ queryKey: ["admin", "categories"] })` to force a reactive cache update and avoid any visual stale state.
 
 **Root Cause / Goal:**
-No admin category management endpoints exist. Admin needs to create, edit, toggle active status, and reorder categories and sub-categories. Cannot delete a category that has products (enforced at API level).
+No admin category management endpoints exist. Admin needs to create, edit, toggle active status, and reorder categories and sub-categories. Cannot delete a category that has products (enforced at API level). 
+Furthermore, the buyer application currently uses a hardcoded array of slugs to sort categories between "Instant Delivery" and "Book a Service". We need a structural database-backed classification system to make this 100% dynamic.
+
+**Fix / Approach:**
+1. **[Schema]** Add a `commerceType` enum field (`QUICK_COMMERCE` | `BOOKING_COMMERCE` with default `QUICK_COMMERCE`) on the `Category` model. Create and apply Prisma database migration `add_category_commerce_type`.
+2. **[Backend]** Update category creation/updates `dto`s to support this field. Expose it in all read/write endpoints under `POST /api/v1/admin/categories`, `PUT /api/v1/admin/categories/:id`, and `GET /api/v1/admin/categories`.
+3. **[Frontend]** 
+   - Add a required "Commerce Type" field in the Admin "Add/Edit Category" forms (e.g. dropdown or radio buttons for "Instant Delivery / Quick Commerce" vs. "Book a Service / Booking Commerce").
+   - Update `CategoryGrid.tsx` in the buyer storefront to read this `commerceType` field from the categories API payload, dynamically grouping categories under "Instant Delivery" and "Book a Service" sections with 0 hardcoded arrays.
 
 ---
 
 - [ ] **RED — Integration (`admin.categories.test.ts`):**
-  - [ ] Test: `POST /api/v1/admin/categories` with body `{ name: 'Electronics', slug: 'electronics', imageUrl: 'https://...', displayOrder: 3 }` → HTTP 201 with `{ id, name, slug, isActive: true }`
+  - [ ] Test: `POST /api/v1/admin/categories` with body `{ name: 'Electronics', slug: 'electronics', imageUrl: 'https://...', displayOrder: 3, commerceType: 'QUICK_COMMERCE' }` → HTTP 201 with `{ id, name, slug, isActive: true, commerceType: 'QUICK_COMMERCE' }`
+  - [ ] Test: `POST /api/v1/admin/categories` with body containing `commerceType: 'BOOKING_COMMERCE'` → HTTP 201; `category.commerceType = 'BOOKING_COMMERCE'` in DB
   - [ ] Test: `POST /api/v1/admin/categories` with duplicate slug → HTTP 409 `CONFLICT`
-  - [ ] Test: `GET /api/v1/admin/categories` → returns ALL categories (including inactive) with product count per category
+  - [ ] Test: `GET /api/v1/admin/categories` → returns ALL categories (including inactive) with product count and `commerceType` per category
   - [ ] Test: `PUT /api/v1/admin/categories/<id>` with `{ isActive: false }` → HTTP 200; category hidden from buyer `GET /api/v1/categories` endpoint
   - [ ] Test: `DELETE /api/v1/admin/categories/<id>` where category has 1+ products → HTTP 409 `CANNOT_DELETE_CATEGORY_WITH_PRODUCTS`
   - [ ] Test: `PUT /api/v1/admin/categories/reorder` with body `[{ id: 'cat1', displayOrder: 1 }, { id: 'cat2', displayOrder: 2 }]` → HTTP 200; orders updated in DB
   - [ ] Test: same endpoints for sub-categories: `POST /api/v1/admin/categories/:slug/sub-categories`, `PUT /api/v1/admin/sub-categories/:id`, `PUT /api/v1/admin/sub-categories/reorder`
   - [ ] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `createCategory`, `updateCategory`, `deleteCategory` (checks for products first), `reorderCategories`, and sub-category equivalents to `admin.service.ts`
-  - [ ] [Controller + Routes] Add all category and sub-category endpoints with `requireAuth` + `requireRole('ADMIN')`
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] Add `commerceType StoreType @default(QUICK_COMMERCE)` to `Category` model in `schema.prisma`.
+  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_category_commerce_type`. Apply to test DB: `pnpm --filter @gorola/api prisma:migrate:test-db`.
+  - [ ] [Repository] Update `CategoryRepository` (e.g. `category.repository.ts`) to select and serialize `commerceType`.
+  - [ ] [Service] Add `createCategory`, `updateCategory`, `deleteCategory` (checks for products first), `reorderCategories`, and sub-category equivalents to `admin.service.ts`.
+  - [ ] [Controller + Routes] Add all category and sub-category endpoints with `requireAuth` + `requireRole('ADMIN')`.
   - [ ] Run integration tests — **confirm GREEN**
 
 - [ ] **RED — Unit/Component (`AdminCategoriesPage.test.tsx`):**
-  - [ ] Test: table has columns "Name", "Emoji/Image", "Slug", "Display Order", "Products Count", "Active", and displays **Total categories/subcategories and active counts** per shop/view (e.g., `Total: 5 | Active: 4`).
+  - [ ] Test: table has columns "Name", "Commerce Type", "Emoji/Image", "Slug", "Display Order", "Products Count", "Active", and displays **Total categories/subcategories and active counts** per shop/view (e.g., `Total: 5 | Active: 4`).
+  - [ ] Test: "Commerce Type" column renders a badge showing "Quick Commerce" or "Book a Service".
   - [ ] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/categories/:id`
   - [ ] Test: drag-to-reorder rows (dnd-kit) updates `displayOrder` and calls `PUT .../reorder`
-  - [ ] Test: "Add Category" form requires name, slug (auto-generated from name but editable), imageUrl
+  - [ ] Test: "Add Category" form requires name, slug (auto-generated from name but editable), imageUrl, and `commerceType` selection (Quick Commerce vs Book a Service).
   - [ ] Test: attempting to delete a category with products shows error "Cannot delete: category has products"
   - [ ] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminCategoriesPage.tsx` with dnd-kit drag-to-reorder; run unit tests — **confirm GREEN**
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Update `Category` and `SubCategory` TypeScript interfaces to include `commerceType: StoreType`.
+  - [ ] [Component] In `AdminCategoriesPage.tsx`, create category page with dnd-kit drag-to-reorder, Zod schemas, and dynamic `commerceType` selection fields.
+  - [ ] [Component] In `CategoryGrid.tsx` (buyer dashboard), dynamically fetch and partition category rendering based on `commerceType` values returned from API.
+  - [ ] Run unit tests — **confirm GREEN**
 
 - [ ] **Verification chain:**
-  - [ ] Admin adds category → appears in buyer catalog → admin deactivates → hidden from buyer → reorder drag-drop → buyer catalog reflects new order → ✅
+  - [ ] Admin adds category with `commerceType: 'BOOKING_COMMERCE'` → appears in buyer storefront under the "Book a Service" section header dynamically → admin edits category to `commerceType: 'QUICK_COMMERCE'` → category immediately moves to "Instant Delivery" section dynamically → admin deactivates category → hidden from buyer storefront completely → reorder drag-drop → buyer catalog reflects new order → ✅ Done.
 
 ---
 
