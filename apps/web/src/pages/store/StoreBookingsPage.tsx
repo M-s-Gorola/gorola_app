@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  MapPin,
   Phone,
   RefreshCw,
   XCircle
@@ -32,6 +33,9 @@ type Booking = {
   createdAt: string;
   customerPhone?: string;
   buyerMaskedPhone?: string;
+  landmarkDescription?: string | null;
+  flatRoom?: string | null;
+  addressLabel?: string | null;
   items: BookingItem[];
   bookingOrder: {
     scheduledDate: string;
@@ -355,6 +359,14 @@ export function StoreBookingsPage(): ReactElement {
                     <div className="flex items-center gap-2.5 text-xs text-gorola-charcoal font-semibold">
                       <Phone className="h-4 w-4 text-gorola-pine" />
                       <span>{formatMaskedPhone(customerPhone)}</span>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 text-xs text-gorola-charcoal font-semibold">
+                      <MapPin className="h-4 w-4 mt-0.5 text-gorola-pine flex-shrink-0" />
+                      <div>
+                        {booking.flatRoom ? `${booking.flatRoom}, ` : ""}
+                        {booking.landmarkDescription || "No address provided"}
+                      </div>
                     </div>
 
                     {/* Display rejection reason if present */}

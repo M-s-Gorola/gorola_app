@@ -707,6 +707,8 @@ describe("Booking HTTP Endpoints (Integration)", () => {
         storeId: string;
         userId: string;
         status: string;
+        landmarkDescription: string;
+        flatRoom: string | null;
         bookingOrder: {
           scheduledDate: string;
           timeslot: string;
@@ -716,6 +718,8 @@ describe("Booking HTTP Endpoints (Integration)", () => {
     expect(envelope.success).toBe(true);
     expect(envelope.data.id).toBe(orderId);
     expect(envelope.data.userId).toBe(buyerUser.id);
+    expect(envelope.data.landmarkDescription).toBe("Near Clock Tower landmark area min ten");
+    expect(envelope.data.flatRoom).toBeNull();
     expect(envelope.data.bookingOrder.timeslot).toBe("09:00-12:00");
   });
 

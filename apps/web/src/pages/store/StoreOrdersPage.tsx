@@ -52,6 +52,8 @@ type Order = {
   total: number;
   paymentMethod: string;
   landmarkDescription: string;
+  flatRoom?: string | null;
+  addressLabel?: string | null;
   createdAt: string;
   buyerMaskedPhone: string;
   items: OrderItem[];
@@ -561,14 +563,15 @@ export function StoreOrdersPage(): ReactElement {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-3">
-                    <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center">
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0">
                       <MapPin className="h-4 w-4" />
                     </div>
                     <div>
-                      <p className="text-[10px] text-gorola-slate font-bold">Landmark Description</p>
-                      <p className="text-xs font-bold text-gorola-charcoal">
-                        {selectedOrder.landmarkDescription || "No landmark specified"}
+                      <p className="text-[10px] text-gorola-slate font-bold">Delivery Address</p>
+                      <p className="text-xs font-black text-gorola-charcoal">
+                        {selectedOrder.flatRoom ? `${selectedOrder.flatRoom}, ` : ""}
+                        {selectedOrder.landmarkDescription || "No address provided"}
                       </p>
                     </div>
                   </div>

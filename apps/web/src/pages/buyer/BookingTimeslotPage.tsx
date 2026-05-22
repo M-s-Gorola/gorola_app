@@ -1,9 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
+import { Plus } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/AddressMapPicker";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 
 type Address = {
@@ -45,6 +57,72 @@ export function BookingTimeslotPage(): ReactElement {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Address creation form state
+  const queryClient = useQueryClient();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [landmark, setLandmark] = useState("");
+  const [flatRoom, setFlatRoom] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  const createMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await api!.post<{ success: boolean; data: { id: string } }>("/api/v1/addresses", body);
+      return res.data;
+    },
+    onSuccess: (res) => {
+      toast.success("Address added successfully");
+      setIsFormOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
+      if (res?.data?.id) {
+        setSelectedAddressId(res.data.id);
+      }
+    },
+    onError: (err) => {
+      if (isAxiosError(err)) {
+        const body = err.response?.data;
+        if (typeof body === "object" && body !== null && "error" in body) {
+          setFormError((body as { error: { message: string } }).error.message);
+          return;
+        }
+      }
+      setFormError("An unexpected error occurred. Please try again.");
+    }
+  });
+
+  const handleSaveAddress = () => {
+    setFormError(null);
+    const trimmedLabel = label.trim();
+    const trimmedLandmark = landmark.trim();
+    
+    if (trimmedLabel.length === 0) {
+      setFormError("Label is required.");
+      return;
+    }
+    if (trimmedLandmark.length < 10) {
+      setFormError("Landmark must be at least 10 characters so drivers can find you.");
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      label: trimmedLabel,
+      landmarkDescription: trimmedLandmark,
+      isDefault,
+    };
+
+    if (flatRoom.trim().length > 0) {
+      payload.flatRoom = flatRoom.trim();
+    }
+    if (mapCoords) {
+      payload.lat = mapCoords.lat;
+      payload.lng = mapCoords.lng;
+    }
+
+    createMutation.mutate(payload);
+  };
+
   // Fetch product detail to get variants and timeslot configurations
   const productQuery = useQuery({
     queryKey: ["booking-product-detail", productId],
@@ -81,6 +159,19 @@ export function BookingTimeslotPage(): ReactElement {
       setSelectedTimeslot("");
     }
   }, [variant]);
+
+  const [addressDefaultSet, setAddressDefaultSet] = useState(false);
+  useEffect(() => {
+    if (addressDefaultSet) return;
+    if (!addressQuery.isSuccess) return;
+    if (addresses.length > 0) {
+      const defaultAddr = addresses.find(a => a.isDefault);
+      if (defaultAddr) {
+        setSelectedAddressId(defaultAddr.id);
+        setAddressDefaultSet(true);
+      }
+    }
+  }, [addressDefaultSet, addresses, addressQuery.isSuccess]);
 
   if (productQuery.isLoading || addressQuery.isLoading) {
     return (
@@ -195,11 +286,47 @@ export function BookingTimeslotPage(): ReactElement {
 
       {/* Address Selector Section */}
       <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
-        <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Address</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Address</h3>
+          <Button
+            onClick={() => {
+              setLabel("");
+              setLandmark("");
+              setFlatRoom("");
+              setIsDefault(false);
+              setMapCoords(null);
+              setFormError(null);
+              setIsFormOpen(true);
+            }}
+            size="sm"
+            variant="outline"
+            className="rounded-full border-gorola-pine/20 text-gorola-pine hover:bg-gorola-pine/5 flex items-center gap-1 font-dm-sans text-xs h-8"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add New
+          </Button>
+        </div>
+
         {addresses.length === 0 ? (
-          <p className="font-dm-sans text-sm text-gorola-slate">
-            No saved addresses found. Please save an address in your profile first.
-          </p>
+          <div className="text-center py-4 space-y-3">
+            <p className="font-dm-sans text-sm text-gorola-slate">
+              No saved addresses found.
+            </p>
+            <Button
+              onClick={() => {
+                setLabel("");
+                setLandmark("");
+                setFlatRoom("");
+                setIsDefault(false);
+                setMapCoords(null);
+                setFormError(null);
+                setIsFormOpen(true);
+              }}
+              size="sm"
+              className="rounded-full bg-gorola-pine text-white"
+            >
+              <Plus className="mr-1 h-4 w-4" /> Add your first address
+            </Button>
+          </div>
         ) : (
           <div className="space-y-3">
             {addresses.map((addr) => {
@@ -245,6 +372,85 @@ export function BookingTimeslotPage(): ReactElement {
       >
         {isSubmitting ? "Placing Booking..." : "Confirm Booking"}
       </button>
+
+      {/* Address Form Dialog */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="max-w-md gap-6">
+          <DialogHeader>
+            <DialogTitle className="font-playfair text-xl">Add New Address</DialogTitle>
+            <DialogDescription>
+              Add a new location for your appointment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-left">
+            <label className="block space-y-1">
+              <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Label (e.g., Home, Work)</span>
+              <input
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                name="label"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="Home"
+              />
+            </label>
+            
+            <label className="block space-y-1">
+              <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Flat / room (optional)</span>
+              <input
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                value={flatRoom}
+                onChange={(e) => setFlatRoom(e.target.value)}
+                placeholder="Apt 4B"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Landmark (required)</span>
+              <textarea
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                name="landmarkDescription"
+                value={landmark}
+                onChange={(e) => setLandmark(e.target.value)}
+                placeholder="E.g. — near the red gate, behind Hotel Padmini"
+                rows={3}
+              />
+            </label>
+
+            <label className="flex items-center gap-2 font-dm-sans text-sm text-gorola-charcoal">
+              <input
+                type="checkbox"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+              />
+              Set as default address
+            </label>
+
+            <div className="space-y-1 pt-2">
+              <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Pinpoint location (optional)</p>
+              <div className="h-48 overflow-hidden rounded-xl border border-gorola-pine/20">
+                <AddressMapPicker
+                  center={mapCoords ?? MUSSOORIE_AREA_CENTER}
+                  onCoordinatesChange={setMapCoords}
+                />
+              </div>
+            </div>
+
+            {formError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={createMutation.isPending}>
+              Cancel
+            </Button>
+            <Button className="bg-gorola-pine text-white" onClick={handleSaveAddress} disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Saving..." : "Save Address"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

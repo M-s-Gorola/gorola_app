@@ -14,7 +14,8 @@ export class BookingOrderRepository {
           include: {
             items: { orderBy: { id: "asc" } },
             statusHistory: { orderBy: { changedAt: "asc" } },
-            store: { select: { id: true, name: true, phone: true, storeType: true } }
+            store: { select: { id: true, name: true, phone: true, storeType: true } },
+            user: { select: { phone: true, name: true } }
           }
         }
       }
@@ -46,7 +47,8 @@ export class BookingOrderRepository {
             include: {
               items: { orderBy: { id: "asc" } },
               statusHistory: { orderBy: { changedAt: "asc" } },
-              store: { select: { id: true, name: true, phone: true, storeType: true } }
+              store: { select: { id: true, name: true, phone: true, storeType: true } },
+              user: { select: { phone: true, name: true } }
             }
           }
         },

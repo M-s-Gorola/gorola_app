@@ -17,7 +17,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-23
-- **Session Summary:** Executed Phase 7.6.1 (Booking Commerce Stabilization). Successfully resolved responsive matching unit test issues in StoreLayout, parameterized StoreDashboardPage to dynamically pivot terminology, labels, and hidden cards for booking commerce stores, locked down Orders routing for booking owners, secured the buyer booking details page against null store errors by serializing store relationships, and synchronized metrics by invalidating the dashboard cache on booking mutations.
+- **Session Summary:** Implemented Privacy-Centric Store-Side Address Visibility and stabilized Buyer contact masking on Booking cards, resolving the "Not Provided" phone bug and maintaining 100% green test passes across all 678 workspace integration and unit tests.
 - **Next Session Must Start With:** Phase 7.7 — Electronics Store (Quick Commerce)
 - **In Progress Right Now:** Ready for Phase 7.7.
 - **Current Blocker:** None.
@@ -589,3 +589,17 @@ _(Append new entries here — never delete old entries.)_
 - **Dashboard Cache Synchronization:** Connected active mutation events in `StoreBookingsPage.tsx` to automatically invalidate dashboard queries (`["store", "dashboard"]`) upon approval and rejection successes, syncing all KPIs.
 - **Buyer UI Crash Mitigation:** Shielded the buyer-side `BookingConfirmationPage.tsx` from crashing on undefined store data by updating `BookingOrderRepository`'s queries (`findById` and `findByStoreId`) and Fastify controllers to select, resolve, and serialize the nested store relation details.
 - **Full Green Status Workspace-Wide:** Achieved 100% test, lint, typecheck, and build verification success workspace-wide.
+
+### Session 8 — 2026-05-23 — Booking Address Flow Stabilization
+- **Inline Address Creation Picker:** Integrated an "Add New Address" capability directly inside `BookingTimeslotPage.tsx` using a fully interactive modal dialog containing the `AddressMapPicker`.
+- **Address Submission & Invalidation:** Implemented backend `POST /api/v1/addresses` mutation mapping, auto-selected newly created addresses upon creation, and invalidated `buyer-addresses` cache keys for perfect query client consistency.
+- **Smart Initial Address Selection:** Configured address selection on load to only auto-select default addresses (marked `isDefault`), resolving integration test conditions.
+- **Backend Receipt Serialization:** Extended `serializeBookingOrder` in `booking.controller.ts` to return address metadata including `landmarkDescription`, `flatRoom`, and `addressLabel` fields, rendering full appointment address details on buyer order receipts.
+- **100% Green Test Coverage:** Created new frontend component unit tests for the dialog and submission, updated integration tests for GET bookings serialization verification, and verified that all frontend/backend tests, typechecks, builds, and linting pass with zero errors.
+
+### Session 9 — 2026-05-23 — Privacy-Centric Store Address & Phone Number Stabilization
+- **Privacy-Centric Address Visibility:** Removed custom address labels (e.g. `[Home]`, `[Office]`) from all merchant-facing pages (`StoreBookingsPage.tsx` and `StoreOrdersPage.tsx`) to protect buyer personal tags, while retaining full flat/room and landmark details for operational logistics.
+- **Buyer Phone Number Fetch Resolution:** Fixed the missing `user` relation inside `BookingOrderRepository` (`findById` and `findByStoreId` queries), allowing `serializeBookingOrder` inside the Fastify controller to correctly resolve, mask, and return the `buyerMaskedPhone` attribute.
+- **Store-Side Phone Rendering Fix:** Resolved the `"Not Provided"` display row on the booking cards by successfully querying and masking customer contact details from the updated API data.
+- **Green Pipeline Verification:** Updated all respective React component testing suites (`StoreBookingsPage.test.tsx` and `StoreOrdersPage.test.tsx`) to match new privacy-centric rules and successfully validated the complete workspace with 439 passing backend tests and 239 passing frontend tests.
+

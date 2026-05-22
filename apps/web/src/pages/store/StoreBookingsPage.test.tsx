@@ -66,6 +66,9 @@ describe("StoreBookingsPage TDD", () => {
         status: "PENDING_APPROVAL",
         createdAt: "2026-05-21T22:00:00.000Z",
         customerPhone: "+919876543210",
+        landmarkDescription: "Near Picture Palace",
+        flatRoom: "Flat 101",
+        addressLabel: "Home",
         items: [
           {
             id: "item-1",
@@ -95,6 +98,10 @@ describe("StoreBookingsPage TDD", () => {
     expect(screen.getByText("+91 98765 ***55")).toBeInTheDocument(); // Masked phone: "+91 98765 ***55"
     expect(screen.getByText(/06:00-09:00/)).toBeInTheDocument();
     expect(screen.getByText(/Fasting Required/i)).toBeInTheDocument();
+
+    // Verify complete address rendering on the bookings card
+    expect(screen.queryByText(/\[Home\]:/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Flat 101, Near Picture Palace/)).toBeInTheDocument();
 
     const approveBtn = screen.getByRole("button", { name: /approve/i });
     const rejectBtn = screen.getByRole("button", { name: /reject/i });

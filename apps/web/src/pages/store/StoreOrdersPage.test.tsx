@@ -73,6 +73,8 @@ describe("StoreOrdersPage", () => {
           total: 170.0,
           paymentMethod: "COD",
           landmarkDescription: "Near park",
+          flatRoom: "Room 404",
+          addressLabel: "Office",
           createdAt: new Date(Date.now() - 300000).toISOString(), // 5m ago
           buyerMaskedPhone: "*********3210",
           items: [
@@ -124,7 +126,11 @@ describe("StoreOrdersPage", () => {
     // Verify Modal Dialog rendered
     expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
     expect(screen.getByText("*********3210")).toBeInTheDocument();
-    expect(screen.getByText("Near park")).toBeInTheDocument();
+    
+    // Verify complete delivery address displays inside detailed modal
+    expect(screen.queryByText(/\[Office\]/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Room 404, Near park/)).toBeInTheDocument();
+    
     expect(screen.getByText(/By BUYER at/i)).toBeInTheDocument();
     expect(screen.getByText("Pack of 6")).toBeInTheDocument();
 
