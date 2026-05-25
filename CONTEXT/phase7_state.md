@@ -464,38 +464,38 @@ We will implement the feature across all layers using strict RED-then-GREEN TDD 
 
 ---
 
-- [ ] **RED — Service Unit Tests (`apps/api/src/__tests__/unit/booking/booking-order.service.test.ts`):**
-  - [ ] Test: `completeBooking` should throw `NotFoundError` if the booking does not exist.
-  - [ ] Test: `completeBooking` should throw `ForbiddenError` if the store owner store ID does not match the order store ID.
-  - [ ] Test: `completeBooking` should throw `ValidationError` if the current order status is not `APPROVED`.
-  - [ ] Test: `completeBooking` should successfully update the order status to `DELIVERED`, booking approval status to `COMPLETED`, record `OrderStatusHistory`, and emit status change.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Service Unit Tests (`apps/api/src/__tests__/unit/booking/booking-order.service.test.ts`):**
+  - [x] Test: `completeBooking` should throw `NotFoundError` if the booking does not exist.
+  - [x] Test: `completeBooking` should throw `ForbiddenError` if the store owner store ID does not match the order store ID.
+  - [x] Test: `completeBooking` should throw `ValidationError` if the current order status is not `APPROVED`.
+  - [x] Test: `completeBooking` should successfully update the order status to `DELIVERED`, booking approval status to `COMPLETED`, record `OrderStatusHistory`, and emit status change.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Service Implementation:**
-  - [ ] [Service] Implement `completeBooking` in `apps/api/src/modules/booking/booking-order.service.ts`.
-  - [ ] Run unit tests — **confirm GREEN**.
+- [x] **GREEN — Service Implementation:**
+  - [x] [Service] Implement `completeBooking` in `apps/api/src/modules/booking/booking-order.service.ts`.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **RED — Controller Integration Tests (`apps/api/src/__tests__/integration/booking/booking.controller.integration.test.ts`):**
-  - [ ] Test: `PUT /api/v1/store/bookings/:orderId/complete` with valid `STORE_OWNER` JWT and an `APPROVED` booking returns HTTP 200 with completed serialization data.
-  - [ ] Test: `PUT /api/v1/store/bookings/:orderId/complete` with a different store owner's JWT returns HTTP 403 `FORBIDDEN`.
-  - [ ] Test: `PUT /api/v1/store/bookings/:orderId/complete` with a `PENDING_APPROVAL` booking returns HTTP 400 `VALIDATION_ERROR`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Controller Integration Tests (`apps/api/src/__tests__/integration/booking/booking.controller.integration.test.ts`):**
+  - [x] Test: `PUT /api/v1/store/bookings/:orderId/complete` with valid `STORE_OWNER` JWT and an `APPROVED` booking returns HTTP 200 with completed serialization data.
+  - [x] Test: `PUT /api/v1/store/bookings/:orderId/complete` with a different store owner's JWT returns HTTP 403 `FORBIDDEN`.
+  - [x] Test: `PUT /api/v1/store/bookings/:orderId/complete` with a `PENDING_APPROVAL` booking returns HTTP 400 `VALIDATION_ERROR`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Controller Endpoint Registration:**
-  - [ ] [Controller] Register route and link endpoint logic in `apps/api/src/modules/booking/booking.controller.ts`.
-  - [ ] Run controller integration tests — **confirm GREEN**.
+- [x] **GREEN — Controller Endpoint Registration:**
+  - [x] [Controller] Register route and link endpoint logic in `apps/api/src/modules/booking/booking.controller.ts`.
+  - [x] Run controller integration tests — **confirm GREEN**.
 
-- [ ] **RED — Component Unit Tests (`apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
-  - [ ] Test: Cards in the "Upcoming" tab render a "Mark Completed" button.
-  - [ ] Test: Clicking "Mark Completed" triggers a call to the completion mutation and invalidates the query client cache.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Component Unit Tests (`apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [x] Test: Cards in the "Upcoming" tab render a "Mark Completed" button.
+  - [x] Test: Clicking "Mark Completed" triggers a call to the completion mutation and invalidates the query client cache.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — UI Component Implementation:**
-  - [ ] [Component] Implement `completeMutation` and add the "Mark Completed" button to approved bookings in `StoreBookingsPage.tsx`.
-  - [ ] Run component unit tests — **confirm GREEN**.
+- [x] **GREEN — UI Component Implementation:**
+  - [x] [Component] Implement `completeMutation` and add the "Mark Completed" button to approved bookings in `StoreBookingsPage.tsx`.
+  - [x] Run component unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Place a medical test booking request → approve the booking → card moves to "Upcoming" tab → click "Mark Completed" → card transitions to "History" tab under the color-coded "COMPLETED" status badge → dashboard metrics and today's revenue sync immediately → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Place a medical test booking request → approve the booking → card moves to "Upcoming" tab → click "Mark Completed" → card transitions to "History" tab under the color-coded "COMPLETED" status badge → dashboard metrics and today's revenue sync immediately → ✅ Done.
 
 ---
 

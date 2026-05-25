@@ -156,9 +156,7 @@ export function BookingConfirmationPage(): ReactElement {
   const formattedDate = booking.bookingOrder.scheduledDate.split("T")[0];
   const config = statusConfig[booking.status] || statusConfig.PENDING_APPROVAL;
 
-  // Track if bloom needs to show based on standard creation timeline
-  const isRecentlyPlaced = booking.bookingOrder !== undefined; // default animation support
-  const shouldShowBloom = isRecentlyPlaced && booking.status === "PENDING_APPROVAL";
+
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 py-8" data-booking-confirmation="true">
