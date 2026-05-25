@@ -136,15 +136,18 @@ describe("OrderConfirmationPage", () => {
 
     const list = screen.getByRole("list", { name: "Order items" });
     expect(within(list).getByText(/Organic Honey/)).toBeInTheDocument();
-    expect(screen.getByText("Subtotal: Rs 200.00")).toBeInTheDocument();
-    expect(screen.getByText("Delivery fee: Rs 30.00")).toBeInTheDocument();
-    expect(screen.getByText("Discount: -Rs 10.00")).toBeInTheDocument();
-    expect(screen.getByText("Total: Rs 220.00")).toBeInTheDocument();
+    const subtotalEl = screen.getByTestId("order-subtotal");
+    expect(within(subtotalEl).getByText("Subtotal:")).toBeInTheDocument();
+    expect(within(subtotalEl).getByText("Rs 200.00")).toBeInTheDocument();
+    expect(screen.getByText("Delivery fee:")).toBeInTheDocument();
+    expect(screen.getByText("Rs 30.00")).toBeInTheDocument();
+    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("-Rs 10.00")).toBeInTheDocument();
+    const totalEl = screen.getByTestId("order-total");
+    expect(within(totalEl).getByText("Payment [Cash on delivery]:")).toBeInTheDocument();
+    expect(within(totalEl).getByText("Rs 220.00")).toBeInTheDocument();
 
     expect(screen.getAllByText(/Kulri Provisions/).length).toBeGreaterThanOrEqual(1);
-    expect(
-      screen.getByText((_c, el) => el?.tagName === "P" && el.textContent?.includes("Cash on delivery")),
-    ).toBeInTheDocument();
 
     const tel = screen.getByRole("link", { name: /Call Kulri Provisions/i });
     expect(tel).toHaveAttribute("href", "tel:+911200000099");

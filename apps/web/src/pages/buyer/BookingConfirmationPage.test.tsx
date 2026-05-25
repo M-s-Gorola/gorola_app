@@ -103,7 +103,7 @@ describe("BookingConfirmationPage", () => {
     renderComponent();
 
     expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
-    expect(screen.getByText(/Max Labs Mussoorie/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Max Labs Mussoorie/)[0]).toBeInTheDocument();
 
     // Check pending badge or text
     expect(

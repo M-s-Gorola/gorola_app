@@ -616,4 +616,14 @@ _(Append new entries here — never delete old entries.)_
   - **📅 Book a Service:** doorstep services scheduled at your convenience (Medical Tests, Repairs).
 - **Quality Assurance:** Validated backend (352/352 passing tests) and frontend (9/9 passing tests) suites alongside complete workspace builds.
 
+### Session 12 — 2026-05-25 — Booking Commerce Receipt UI Consolidation
+- **Fragmented Cards Refactor:** Consolidated the 4 fragmented cards (Status, Schedule, Items, Location) of the booking receipt `BookingConfirmationPage.tsx` into a single, cohesive, status-aware receipt card container, matching the premium design model of `OrderConfirmationPage.tsx`.
+- **Dynamic HSL Status Styling:** Applied custom CSS/Tailwind highlights, dynamic border accents, shadow effects, and alerts based on the `BOOKING_COMMERCE` lifecycle status (`PENDING_APPROVAL`, `APPROVED`, `REJECTED`, `CANCELLED`).
+- **Intro Animation Alignment:** Maintained high-fidelity GSAP checkmark reveal animations by preserving SVGs and animation hooks in the DOM tree.
+- **Robustness & Test Verification:** Updated multi-element selectors inside `BookingConfirmationPage.test.tsx` to handle the new unified DOM structure, keeping 100% of all unit and integration test suites perfectly green.
 
+### Session 13 — 2026-05-25 — Receipt Layout & Pricing Parity Consolidation
+- **Quick Commerce pricing refactor**: Upgraded the pricing breakdown totals section inside `OrderConfirmationPage.tsx` from standard inline paragraphs to a beautiful, spaced-between flex layout ("field on the left, value on the right").
+- **Booking Commerce structural consolidation**: Reordered `BookingConfirmationPage.tsx` to position the "Services Booked" and Store details at the top of the card details. Aligned its payment summary to match the updated Quick Commerce spaced-between flex layout.
+- **Appointment Address & Schedule details**: Placed both sections cleanly at the bottom, matching standard address blocks. Converted the schedule details to key-value alignment and integrated conditional rendering so that `Fasting: ⚠️ Yes / Fasting Required` is *only* visible for medical tests where fasting is explicitly required.
+- **Robust Quality Audits**: Updated unit test selectors inside both `OrderConfirmationPage.test.tsx` and `BookingConfirmationPage.test.tsx` to accommodate the key-value changes and select elements by `data-testid` to prevent duplicate value matches. All 52 test files and 239 tests in the entire workspace passed with 100% green status.

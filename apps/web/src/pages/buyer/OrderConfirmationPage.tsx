@@ -525,7 +525,14 @@ export function OrderConfirmationPage(): ReactElement {
               {weatherPulse}
 
               <div className="w-full space-y-2 rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm">
-                <h2 className="font-playfair text-lg text-gorola-charcoal">Your items</h2>
+                <div className="flex justify-between items-baseline gap-2 pb-1">
+                  <h2 className="font-playfair text-lg font-bold text-gorola-charcoal">Your items</h2>
+                  {order.store && (
+                    <span className="font-dm-sans text-xs text-gorola-slate">
+                      from <span className="font-semibold text-gorola-charcoal">{order.store.name}</span>
+                    </span>
+                  )}
+                </div>
                 <ul aria-label="Order items" className="space-y-2">
                   {order.items.map((line) => (
                     <li
@@ -543,12 +550,25 @@ export function OrderConfirmationPage(): ReactElement {
                   ))}
                 </ul>
 
-                <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
-                  <p data-testid="order-subtotal">Subtotal: Rs {order.subtotal}</p>
-                  <p>Delivery fee: Rs {order.deliveryFee}</p>
-                  {discountAmount !== "0.00" ? <p>Discount: -Rs {discountAmount}</p> : null}
-                  <p className="font-semibold" data-testid="order-total">Total: Rs {order.total}</p>
-                  <p>Payment: {formatPayment(order.paymentMethod)}</p>
+                <div className="space-y-1.5 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
+                  <div className="flex justify-between" data-testid="order-subtotal">
+                    <span className="text-gorola-slate">Subtotal:</span>
+                    <span className="font-medium">Rs {order.subtotal}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gorola-slate">Delivery fee:</span>
+                    <span className="font-medium">Rs {order.deliveryFee}</span>
+                  </div>
+                  {discountAmount !== "0.00" ? (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Discount:</span>
+                      <span className="font-medium">-Rs {discountAmount}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
+                    <span>Payment [{formatPayment(order.paymentMethod)}]:</span>
+                    <span>Rs {order.total}</span>
+                  </div>
                 </div>
 
                 <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-slate">
