@@ -232,10 +232,10 @@ export function LoginPage(): ReactElement {
         userId
       });
 
-      const fromPath = (location.state as { from?: { pathname?: string } } | null)?.from?.pathname;
+      const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
       let target = "/";
-      if (typeof fromPath === "string" && fromPath !== "" && fromPath !== "/login") {
-        target = fromPath;
+      if (from && typeof from.pathname === "string" && from.pathname !== "" && from.pathname !== "/login") {
+        target = `${from.pathname}${from.search ?? ""}`;
       }
       navigate(target, { replace: true });
     } catch (e) {

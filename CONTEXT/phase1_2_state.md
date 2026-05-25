@@ -1959,6 +1959,11 @@ _(Append new entries ” never delete old ones)_
 - **CI Performance**: Finalized deep caching for `pnpm` dependencies and Playwright browser binaries in `.github/workflows/ci.yml`.
 - **Verification**: Confirmed a clean 34/34 E2E pass rate with the new isolation and idempotency flags.
 
+**Session 123 (Checkout Back-Button Navigation Hardening):**
+- **SPA History Stack Replacement**: Implemented the history replacement pattern (`{ replace: true }`) for all checkout page transitions in `CheckoutPage.tsx` and `BookingTimeslotPage.tsx`.
+- **Duplicate Prevention**: Prevents users from clicking the browser's Back button on a confirmation receipt page to return to the active checkout or scheduling forms, completely eliminating duplicate order/booking submission risk.
+- **Visual Parity & Normal Navigation**: Confirmed that normal history routing is preserved when viewing receipts from past history lists (past order history links standard-navigate and safely pop back to the history page when browser Back is pressed).
+- **Design Alignment**: Formally logged the architectural decision in `decision_log.md` (`[DECISION-045]`) and built a highly detailed, reusable guide in `ISSUES GUIDE/checkout_history_replacement.md` to serve as a blueprint for future projects.
 
 ---
 
@@ -2088,4 +2093,5 @@ _(Append new entries ” never delete old ones)_
 - **Components (TDD):** `TopographicBg` (decorative SVG, `opacity` default `0.12`); `WeatherBanner` (pine vs slate from `useWeatherStore`, `data-weather` + `role="status"`); `ETABanner` (`.eta-pulse` on amber dot, static `etaLabel` prop for now). **`HomePage`:** “Design system ” Phase 2.2 preview” section with the three for visual smoke-testing.
 - **Tooling:** `WeatherBanner.test.tsx` needs **`eslint-disable simple-import-sort/imports, import/order`** (conflict between `import/order` and `@/` + `./` ordering).
 - **Verify:** `pnpm ci:quality` (API 277, web 30, build).
+
 

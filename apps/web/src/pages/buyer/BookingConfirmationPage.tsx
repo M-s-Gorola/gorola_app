@@ -1,7 +1,8 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import gsap from "gsap";
 import { Home } from "lucide-react";
 import type { ReactElement } from "react";
-import { useCallback } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 
 import { useOrderSocket } from "@/hooks/useOrderSocket";
@@ -33,6 +34,7 @@ type BookingEnvelope = {
   landmarkDescription: string;
   flatRoom: string | null;
   addressLabel: string | null;
+  createdAt: string;
   store?: {
     id: string;
     name: string;
@@ -84,25 +86,30 @@ const statusConfig = {
     borderColor: "border-red-200 hover:border-red-300",
     shadowColor: "shadow-red-100/10",
     badgeBg: "bg-red-50 border border-red-200 text-red-800",
-    badgeLabel: "This booking request was declined.",
-    title: "Booking Rejected",
+    badgeLabel: "This booking has been cancelled.",
+    title: "Booking Cancelled",
     accentBorder: "border-l-4 border-l-red-500",
     iconColor: "text-red-500",
   },
   CANCELLED: {
-    borderColor: "border-gray-200 hover:border-gray-300",
-    shadowColor: "shadow-gray-100/10",
-    badgeBg: "bg-gray-50 border border-gray-200 text-gray-800",
+    borderColor: "border-red-200 hover:border-red-300",
+    shadowColor: "shadow-red-100/10",
+    badgeBg: "bg-red-50 border border-red-200 text-red-800",
     badgeLabel: "This booking has been cancelled.",
     title: "Booking Cancelled",
-    accentBorder: "border-l-4 border-l-gray-500",
-    iconColor: "text-gray-500",
+    accentBorder: "border-l-4 border-l-red-500",
+    iconColor: "text-red-500",
   },
 };
 
 export function BookingConfirmationPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const queryClient = useQueryClient();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const bloomRef = useRef<HTMLDivElement | null>(null);
+  const entranceDoneRef = useRef(false);
+  const [animationFinished, setAnimationFinished] = useState(false);
+  const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
 
   const query = useQuery({
     queryKey: ["booking-order-confirmation", id],
@@ -116,10 +123,97 @@ export function BookingConfirmationPage(): ReactElement {
     enabled: !!id,
   });
 
+  const currentStatus = query.data?.status;
+  const lastStatusRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (currentStatus && lastStatusRef.current && lastStatusRef.current !== currentStatus) {
+      setShowStatusTransitionBloom(true);
+      setAnimationFinished(false);
+      entranceDoneRef.current = false;
+    }
+    lastStatusRef.current = currentStatus ?? null;
+  }, [currentStatus]);
+
+  useEffect(() => {
+    entranceDoneRef.current = false;
+    setAnimationFinished(false);
+    setShowStatusTransitionBloom(false);
+  }, [id]);
+
+  const isRecentlyPlaced = query.isSuccess && query.data.createdAt ? (
+    Date.now() - new Date(query.data.createdAt).getTime() < 60000
+  ) : false;
+
+  const shouldShowBloom = query.isSuccess && (
+    (query.data.status === "PENDING_APPROVAL" || isRecentlyPlaced || showStatusTransitionBloom) && !animationFinished
+  );
+
+  useLayoutEffect(() => {
+    if (!query.isSuccess || query.data === undefined || entranceDoneRef.current) {
+      return;
+    }
+    const root = rootRef.current;
+    const bloom = bloomRef.current;
+    if (!root) {
+      return;
+    }
+
+    if (!shouldShowBloom) {
+      entranceDoneRef.current = true;
+      setAnimationFinished(true);
+      gsap.set(".occ-content", { autoAlpha: 1, y: 0 });
+      return;
+    }
+
+    if (!bloom) return;
+    entranceDoneRef.current = true;
+
+    const ctx = gsap.context(() => {
+      gsap.set(bloom, { autoAlpha: 1 });
+      gsap.set(".occ-content", { autoAlpha: 0, y: 24 });
+      const path = root.querySelector<SVGPathElement>(".occ-check-path");
+      let length = 80;
+      if (path !== null) {
+        try {
+          length = path.getTotalLength();
+        } catch {
+          length = 80;
+        }
+        gsap.set(path, {
+          strokeDasharray: length,
+          strokeDashoffset: length,
+        });
+      }
+
+      const tl = gsap.timeline({
+        defaults: { ease: "power3.out" },
+        onComplete: () => {
+          setAnimationFinished(true);
+          setShowStatusTransitionBloom(false);
+        }
+      });
+
+      tl.to({}, { duration: 0.75 }) 
+        .to(bloom, { autoAlpha: 0, duration: 1.1 })
+        .to(
+          ".occ-check-path",
+          { strokeDashoffset: 0, duration: 0.8, ease: "power2.inOut" },
+          "-=0.7"
+        )
+        .to(".occ-content", { autoAlpha: 1, y: 0, duration: 0.8 }, "-=0.5");
+    }, root);
+
+    return (): void => {
+      ctx.revert();
+    };
+  }, [query.isSuccess, id, shouldShowBloom]);
+
   // Realtime update listener using standard Socket.IO hook
   const onStatusChanged = useCallback(
     (data: { orderId: string; status: string }) => {
       if (data.orderId === id) {
+        void queryClient.invalidateQueries({ queryKey: ["booking-order-confirmation", id] });
         queryClient.setQueryData(
           ["booking-order-confirmation", id],
           (old: BookingEnvelope | undefined) => {
@@ -156,10 +250,15 @@ export function BookingConfirmationPage(): ReactElement {
   const formattedDate = booking.bookingOrder.scheduledDate.split("T")[0];
   const config = statusConfig[booking.status] || statusConfig.PENDING_APPROVAL;
 
-
-
   return (
-    <div className="mx-auto max-w-lg space-y-6 px-4 py-8" data-booking-confirmation="true">
+    <div ref={rootRef} className="mx-auto max-w-lg space-y-6 px-4 py-8 relative overflow-hidden" data-booking-confirmation="true">
+      {shouldShowBloom && (
+        <div
+          ref={bloomRef}
+          aria-hidden={true}
+          className="occ-bloom pointer-events-none fixed inset-0 z-[100] bg-gradient-to-br from-emerald-400/95 via-gorola-pine to-emerald-900/90"
+        />
+      )}
       <div className="occ-content relative z-[1] mx-auto flex max-w-lg flex-col items-center gap-6 text-center">
         {/* Dynamic Status Icon / Checkmark at top */}
         <svg
@@ -196,13 +295,14 @@ export function BookingConfirmationPage(): ReactElement {
               booking.status === "PENDING_APPROVAL" ? "bg-amber-50 text-amber-700 ring-amber-600/20" :
               booking.status === "APPROVED" ? "bg-indigo-50 text-indigo-700 ring-indigo-600/20" :
               (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" :
-              booking.status === "REJECTED" ? "bg-rose-50 text-rose-700 ring-rose-600/20" :
+              (booking.status === "REJECTED" || booking.status === "CANCELLED") ? "bg-rose-50 text-rose-700 ring-rose-600/20" :
               "bg-gray-50 text-gray-700 ring-gray-600/20"
             )}>
               {booking.status === "PENDING_APPROVAL" ? "Pending Approval" :
                booking.status === "APPROVED" ? "Confirmed" :
                (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "Completed" :
-               booking.status.replace("_", " ")}
+               (booking.status === "REJECTED" || booking.status === "CANCELLED") ? "Cancelled" :
+               (booking.status as string).replace("_", " ")}
             </div>
           </div>
           
@@ -215,7 +315,7 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.id.length > 8 ? `…${booking.id.slice(-8)}` : booking.id}
             </span>{" "}
             {booking.status === "COMPLETED" || booking.status === "DELIVERED" ? "has been completed at" :
-             booking.status === "REJECTED" ? "was declined by" :
+             (booking.status === "REJECTED" || booking.status === "CANCELLED") ? "has been cancelled by" :
              booking.status === "APPROVED" ? "is confirmed with" : "has been requested from"}{" "}
             <span className="font-semibold text-gorola-charcoal">{booking.store?.name}</span>.
           </p>
@@ -233,7 +333,7 @@ export function BookingConfirmationPage(): ReactElement {
             <p className="font-dm-sans text-sm font-semibold">
               {config.badgeLabel}
             </p>
-            {booking.status === "REJECTED" && booking.bookingOrder.rejectionReason && (
+            {(booking.status === "REJECTED" || booking.status === "CANCELLED") && booking.bookingOrder.rejectionReason && (
               <p className="font-dm-sans text-xs font-medium mt-1 opacity-90">
                 Rejection Reason: {booking.bookingOrder.rejectionReason}
               </p>

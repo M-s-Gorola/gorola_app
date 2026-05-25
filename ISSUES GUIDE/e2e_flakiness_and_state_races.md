@@ -127,10 +127,34 @@ await deleteItem.click();
 
 ---
 
-## 5. Summary Cheat Sheet for Developers
+## 5. Case Study: Timezone-Boundary Validation Fallbacks
+### The Problem
+When E2E tests select "tomorrow" (`+1 day`) for booking slots, timezone discrepancies between the local system running the browser and the backend server (especially near the midnight boundary) can cause the server to calculate the selection as "today". If the backend enforces a `1-day` minimum lead-time restriction, this results in an unexpected validation failure (`INVALID_BOOKING_DATE`).
+
+### The Solution
+Shift all E2E date selections to **at least 2 days in the future** (`+2 days`). This is completely compliant with lead-days constraints and mathematically immune to midnight-boundary or timezone-offset discrepancies between the browser context and backend environments.
+
+---
+
+## 6. Case Study: WebSocket Query Invalidation Settlement
+### The Problem
+When a real-time event (like a booking status change) is received via Socket.IO, updating the local React state immediately (e.g. `status = "CANCELLED"`) is highly responsive. However, doing so *without* updating secondary backend properties (like the `rejectionReason`) leaves the client in a partially sync-locked state, causing E2E tests to fail when verifying that the rejection reason is displayed alongside the status.
+
+### The Solution
+When a status changed socket event is received, perform a two-pronged sync action:
+1. **Optimistic UI Update:** Immediately update the local query's status field to prevent visual lag or state flickering.
+2. **Cache Invalidation:** Call `queryClient.invalidateQueries` for that specific query. This forces a clean, concurrent API refetch in the background, pulling down the fully updated database object (including `rejectionReason`) deterministically.
+
+---
+
+## 7. Summary Cheat Sheet for Developers
 
 | Symptom | Probable Cause | Corrective Action |
 | :--- | :--- | :--- |
 | `Locator not found / Timeout` on modal, dropdown, or submenu | Component re-render unmounted the UI overlay mid-flight. | Wait for the cache update/query refresh to settle (`waitForResponse`) before opening the menu. |
 | Test fails on CI but is 100% green locally | CI runner CPU throttle lag slows React/DOM rendering cycles. | Avoid arbitrary delays; use dynamic assertion gates (`toBeVisible`, `toHaveCount`). |
 | Click event doesn't seem to fire | A layout shift or overlapping toast message intercepted the click. | Use `{ force: true }` or scroll the element into view first (`scrollIntoViewIfNeeded()`). |
+| `INVALID_BOOKING_DATE` failure on midnight/timezone boundary | Server and browser date mismatch on `+1 day` boundaries. | Shift the E2E date selection to **at least +2 days** in the future to ensure safety. |
+| Stale details (like rejection reason) missing after WebSocket status update | The socket event only pushed the basic status string without secondary DB fields. | Concurrently update local status query data optimistically, and trigger `queryClient.invalidateQueries` to fetch the complete updated record. |
+| `locator.click: Timeout` on multi-viewport navigation links | The first matched element is hidden in the current viewport (e.g. desktop sidebar is hidden on mobile). | Use `.filter({ visible: true }).first()` to dynamically target the active visible element in the current viewport. |
+

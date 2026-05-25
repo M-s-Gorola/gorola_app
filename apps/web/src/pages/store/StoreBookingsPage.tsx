@@ -389,7 +389,7 @@ export function StoreBookingsPage(): ReactElement {
                     </div>
 
                     {/* Display rejection reason if present */}
-                    {booking.bookingOrder?.approvalStatus === "REJECTED" &&
+                    {(booking.bookingOrder?.approvalStatus === "REJECTED" || booking.bookingOrder?.approvalStatus === "CANCELLED") &&
                       booking.bookingOrder?.rejectionReason && (
                         <div className="pt-2 border-t border-gorola-mint/10 text-xs text-red-600 font-bold">
                           Reason: {booking.bookingOrder.rejectionReason}
@@ -443,7 +443,7 @@ export function StoreBookingsPage(): ReactElement {
                       className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
                         booking.bookingOrder?.approvalStatus === "APPROVED"
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
-                          : booking.bookingOrder?.approvalStatus === "REJECTED"
+                          : (booking.bookingOrder?.approvalStatus === "REJECTED" || booking.bookingOrder?.approvalStatus === "CANCELLED")
                           ? "bg-rose-50 text-rose-700 border-rose-200/50"
                           : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
                       }`}
@@ -454,7 +454,7 @@ export function StoreBookingsPage(): ReactElement {
                       ) : (
                         <XCircle className="h-3 w-3" />
                       )}
-                      {booking.bookingOrder?.approvalStatus?.replace("_", " ")}
+                      {booking.bookingOrder?.approvalStatus === "REJECTED" ? "CANCELLED" : booking.bookingOrder?.approvalStatus?.replace("_", " ")}
                     </span>
                   </div>
                 )}

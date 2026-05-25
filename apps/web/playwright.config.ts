@@ -82,7 +82,7 @@ export default defineConfig({
       timeout: 180000,
       env: {
         DATABASE_URL: process.env.DATABASE_URL_TEST!,
-        CORS_ALLOWED_ORIGINS: 'http://127.0.0.1:5180',
+        CORS_ALLOWED_ORIGINS: 'http://127.0.0.1:5180,http://store.gorola.com:5180,http://admin.gorola.com:5180,http://rider.gorola.com:5180',
         HOST: '127.0.0.1',
         PORT: '3002',
         GOROLA_DUMMY_OTP: '123456',

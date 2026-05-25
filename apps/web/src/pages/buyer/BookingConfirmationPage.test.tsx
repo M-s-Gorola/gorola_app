@@ -147,7 +147,7 @@ describe("BookingConfirmationPage", () => {
     renderComponent();
 
     expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
-    expect(screen.getByText("Booking Rejected")).toBeInTheDocument();
+    expect(screen.getByText("Booking Cancelled")).toBeInTheDocument();
     expect(
       screen.getByText("Rejection Reason: No available doctors for that slot"),
     ).toBeInTheDocument();

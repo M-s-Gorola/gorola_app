@@ -158,15 +158,16 @@
 
   "database_schema_entities": [
     "User (buyer)",
-    "Store",
+    "Store (with storeType, bookingLeadDays, isAcceptingBookings)",
     "StoreOwner",
     "Admin",
     "Category",
+    "SubCategory",
     "Product",
-    "ProductVariant",
+    "ProductVariant (with allowedTimeslots, requiresFasting)",
     "Cart",
     "CartItem",
-    "Order",
+    "Order (with orderType, scheduledFor, rating, ratingComment)",
     "OrderItem",
     "OrderStatusHistory",
     "Address",
@@ -176,9 +177,10 @@
     "FeatureFlag",
     "OTPLog",
     "AuditLog",
-    "DeliveryRider (stub — empty table, ready for future)",
+    "DeliveryRider (with riderType)",
     "RiderLocation (stub — empty table, ready for future)",
     "StockMovement (append-only inventory ledger — every stock change recorded)",
+    "BookingOrder (links scheduledDate, timeslot, requiresFasting, approvalStatus, assignedTechnicianId to Order)",
     "ProductVariant fields to add: lowStockThreshold (Int default 5), isLowStock (Boolean default false), isInStock (Boolean default true)"
   ],
 
@@ -290,6 +292,10 @@
     "phase_5_future": {
       "name": "Rider Interface (Future Module — Do Not Build Yet)",
       "note": "All DB tables (DeliveryRider, RiderLocation), API routes (/api/v1/rider/...), and Socket.IO events are STUBBED with TODO comments. Zero implementation. Plug-in ready."
+    },
+    "phase_7_booking": {
+      "name": "Booking Commerce (Phase 7 Completed)",
+      "note": "Enables scheduled appointments/timeslot booking, service-based commerce, owner approval workflow, pay-on-service, status normalizations, and back-button history replacement."
     }
   }
 }

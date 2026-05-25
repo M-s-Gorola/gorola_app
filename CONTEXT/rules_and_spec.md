@@ -178,8 +178,15 @@ IDEMPOTENCY: All POST endpoints for orders and payments MUST accept and honor X-
 ## 5. Database Rules
 
 ```
-ORM: Prisma v5 — ONLY. No raw SQL unless performance-critical and fully reviewed.
+ORM: Prisma v5/v6 — ONLY. No raw SQL unless performance-critical and fully reviewed.
      If raw SQL is used: it MUST be in a dedicated .sql file, parameterized, and reviewed.
+
+HYBRID COMMERCE ENGINE:
+  - Supports both Quick Commerce and Booking Commerce store flows.
+  - StoreType enum: QUICK_COMMERCE, BOOKING_COMMERCE
+  - OrderType enum: QUICK, BOOKING
+  - BookingApprovalStatus enum: PENDING_APPROVAL, APPROVED, REJECTED, COMPLETED, CANCELLED
+  - RiderType enum: DELIVERY, FIELD_TECHNICIAN
 
 MIGRATIONS:
   - Always use 'prisma migrate dev' — never edit migration files manually
@@ -188,30 +195,35 @@ MIGRATIONS:
   - Never drop a column without a deprecation cycle (rename → dual-write → drop)
 
 NAMING CONVENTIONS:
-  - Tables: snake_case plural (users, store_owners, order_items)
-  - Columns: snake_case (created_at, store_id, is_active)
-  - Prisma model names: PascalCase (User, StoreOwner, OrderItem)
-  - Indexes: idx_[table]_[column(s)] (idx_orders_store_id_created_at)
+  - Tables: PascalCase (defaults directly to Prisma model names)
+  - Columns: camelCase (e.g. createdAt, storeId, isDeleted)
+  - Prisma model names: PascalCase (User, StoreOwner, OrderItem, SubCategory, BookingOrder)
+  - Indexes: idx_[table]_[column(s)] or auto-generated relational indexes (@@index, @@unique)
 
-IDs: Use cuid2 (shorter than UUID, URL-safe, monotonic for better index performance)
+IDs: Use cuid (@default(cuid())) for all primary key IDs
 
-REQUIRED COLUMNS ON ALL ENTITIES:
+REQUIRED COLUMNS ON ALL ENTITIES (where appropriate):
   - id: String @id @default(cuid())
   - createdAt: DateTime @default(now())
   - updatedAt: DateTime @updatedAt
-  - isDeleted: Boolean @default(false)  (soft delete — NEVER hard delete user data)
 
-SOFT DELETE RULE: All deletes are soft deletes. Repositories filter out isDeleted=true by default.
-                  Admin can view deleted records. Hard delete: never, except PII purge flow (GDPR stub).
+SOFT DELETE RULE: All deletes on User, Store, StoreOwner, Admin, Product, and DeliveryRider are soft deletes via an `isDeleted` boolean.
+                  Repositories filter out isDeleted=true by default.
 
 SENSITIVE DATA:
-  - Passwords: bcrypt (cost factor 12)
+  - Passwords: bcrypt (cost factor 10-12)
   - Phone numbers: stored as-is (needed for OTP) — mask in logs
-  - Payment data: NEVER stored — Razorpay handles it
+  - Payment data: NEVER stored — Razorpay / Pay-on-Service handles it
 
 TRANSACTIONS:
   - Use prisma.$transaction for any operation touching >1 table
   - Timeout: 10 seconds max per transaction
+
+CRITICAL COMMERCE ENTITIES & SCHEMA RELATIONSHIPS:
+  - SubCategory: Nesting entity between Category and Product to support precise catalog subdivisions.
+  - BookingOrder: Secondary table linked 1:1 with Order, storing appointment scheduledDate, timeslot, requiresFasting, approvalStatus, and technician assignments.
+  - ProductVariant: Carrying allowedTimeslots (String[]) and requiresFasting (Boolean) for booking configuration parameters.
+  - Store: Carrying storeType, bookingLeadDays, and isAcceptingBookings to govern booking limitations.
 ```
 
 ---

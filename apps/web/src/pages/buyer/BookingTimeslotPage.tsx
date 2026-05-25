@@ -211,7 +211,7 @@ export function BookingTimeslotPage(): ReactElement {
         }
       );
       toast.success("Booking placed successfully!");
-      navigate(`/bookings/${res.data.data.orderId}`);
+      navigate(`/bookings/${res.data.data.orderId}`, { replace: true });
     } catch (err) {
       console.error(err);
       toast.error("Failed to place booking. Please try again.");

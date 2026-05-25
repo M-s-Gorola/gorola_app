@@ -10,16 +10,16 @@
 
 | Phase   | Name             | Status       | Notes |
 | ------- | ---------------- | ------------ | ----- |
-| Phase 7 | Booking Commerce | IN PROGRESS  | Add medical tests, repairs, and custom booking order flow |
+| Phase 7 | Booking Commerce | ✅ COMPLETE  | Add medical tests, repairs, and custom booking order flow |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-25
-- **Session Summary:** Implemented Phase 7.9 CategoryGrid and ProductDetailPage Booking Awareness. Added storeType to ProductRepository list mapper and validator, and conditionally rendered a direct "Book" routing button pill in ProductGrid for booking-commerce store types.
-- **Next Session Must Start With:** Phase 7.10 — Booking Order Buyer History Integration
-- **In Progress Right Now:** Ready for Phase 7.10.
+- **Date:** 2026-05-26
+- **Session Summary:** Completed status normalization across panels, fully implemented high-fidelity GSAP receipt transitions, and resolved the background query animation conflicts.
+- **Next Phase/Task:** Proceeding to Phase 3 & 4 Store Owner and Admin Panel development.
+- **In Progress Right Now:** None (Phase 7 is officially COMPLETE).
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 7 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -543,23 +543,23 @@ The buyer Order History page displays all orders under a quick-commerce format, 
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/modules/user/account-orders.integration.test.ts`):**
-  - [ ] Test: `GET /api/v1/account/orders` returns `orderType` and a nested `bookingOrder` object containing `scheduledDate`, `timeslot`, and `approvalStatus` for booking orders.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/order/order.history.test.ts`):**
+  - [x] Test: `GET /api/v1/orders/history` returns `orderType` and a nested `bookingOrder` object containing `scheduledDate`, `timeslot`, and `approvalStatus` for booking orders.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Unit / Component (`apps/web/src/pages/buyer/OrderHistoryPage.test.tsx`):**
-  - [ ] Test: Card renders scheduling timeslot and date for a booking order.
-  - [ ] Test: Renders a yellow "PENDING_APPROVAL" badge for pending booking orders.
-  - [ ] Test: Renders a "Book Again" button which replaces the "Reorder" button.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`apps/web/src/pages/buyer/OrderHistoryPage.test.tsx`):**
+  - [x] Test: Card renders scheduling timeslot and date for a booking order.
+  - [x] Test: Renders a yellow "PENDING_APPROVAL" badge for pending booking orders.
+  - [x] Test: Renders a "Book Again" button which replaces the "Reorder" button.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend & Frontend:**
-  - [ ] [Controller] Update `GET /api/v1/account/orders` handler to include `bookingOrder` relation and `orderType` fields.
-  - [ ] [Component] Update `apps/web/src/pages/buyer/OrderHistoryPage.tsx` to conditionally render booking cards.
-  - [ ] Run unit and integration tests — **confirm GREEN**.
+- [x] **GREEN — Backend & Frontend:**
+  - [x] [Controller] Update `GET /api/v1/orders/history` handler to include `bookingOrder` relation and `orderType` fields.
+  - [x] [Component] Update `apps/web/src/pages/buyer/OrderHistoryPage.tsx` to conditionally render booking cards.
+  - [x] Run unit and integration tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Open buyer Order History page → verify booking order displays "Blood Sugar (Fasting)", scheduled time, yellow "PENDING_APPROVAL" badge, and "Book Again" button → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Open buyer Order History page → verify booking order displays "Blood Sugar (Fasting)", scheduled time, yellow "PENDING_APPROVAL" badge, and "Book Again" button → ✅ Done.
 
 ---
 
@@ -573,18 +573,19 @@ Write E2E test file `tests/e2e/booking-journey.spec.ts` using Playwright.
 
 ---
 
-- [ ] **RED — E2E (`tests/e2e/booking-journey.spec.ts`):**
-  - [ ] Test: Buyer navigates to Medical Tests category → selects Blood Sugar (Fasting) → verifies "Book Now" renders → clicks and lands on picker → asserts only morning timeslot "06:00-09:00" is selectable and fasting banner is visible → selects date and slot → confirms address → clicks confirm → lands on confirmation screen showing PENDING_APPROVAL.
-  - [ ] Test: Store owner logs in → navigates to `/store/bookings` → clicks "Approve" on pending card → asserts card shifts to Upcoming → verifies buyer's screen changes to APPROVED via Socket.IO.
-  - [ ] Test: Store owner rejects booking with reason "Equipment failure" → verifies buyer receives REJECTED state displaying the reason.
-  - [ ] Test: Buyer tries to book on today's date when `leadDays = 1` → asserts calendar date is disabled and throws client-side validation error.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — E2E (`tests/e2e/booking-journey.spec.ts`):**
+  - [x] Test: Buyer navigates to Medical Tests category → selects Blood Sugar (Fasting) → verifies "Book Now" renders → clicks and lands on picker → asserts only morning timeslot "06:00-09:00" is selectable and fasting banner is visible → selects date and slot → confirms address → clicks confirm → lands on confirmation screen showing PENDING_APPROVAL.
+  - [x] Test: Store owner logs in → navigates to `/store/bookings` → clicks "Approve" on pending card → asserts card shifts to Upcoming → verifies buyer's screen changes to APPROVED via Socket.IO.
+  - [x] Test: Store owner clicks "Mark Completed" on approved card → asserts card moves to History tab → verifies buyer's screen changes to completed "Service Done" in Pine Green.
+  - [x] Test: Store owner rejects booking with reason "Equipment failure" → verifies buyer receives REJECTED state displaying the reason.
+  - [x] Test: Buyer tries to book on today's date when `leadDays = 1` → asserts calendar date is disabled and throws client-side validation error.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — E2E (Playwright Run):**
-  - [ ] Run the complete E2E test suite — **confirm GREEN**.
+- [x] **GREEN — E2E (Playwright Run):**
+  - [x] Run the complete E2E test suite — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Run `pnpm exec playwright test tests/e2e/booking-journey.spec.ts` → all test blocks resolve with passing logs → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Run `pnpm exec playwright test tests/e2e/booking-journey.spec.ts` → all test blocks resolve with passing logs → ✅ Done.
 
 ---
 
@@ -698,4 +699,27 @@ _(Append new entries here — never delete old entries.)_
 - **Conditional Rendering in Product Grid**: Modified `ProductGrid.tsx` to read the new `storeType` from list items. If `storeType === "BOOKING_COMMERCE"`, it bypasses the retail shopping cart and renders a custom `"Book"` navigation link pointing directly to the timeslot picker `/bookings/new?productId=&variantId=`.
 - **TDD Integration and Unit Coverage**: Added an API controller integration test inside `product.controller.test.ts` to confirm `storeType` serialization, and wrote detailed React component unit tests inside `ProductGrid.test.tsx` and `ProductDetailPage.test.tsx` checking that buttons navigate and render correct links for booking stores.
 - **Flawless Verification**: Verified 100% successful passes of all 451 API tests and 242 web tests, with zero compilation errors (`tsc --noEmit`) and perfect linting results.
+
+### Session 17 — 2026-05-25 — Phase 7.10 Booking Order Buyer History Integration
+- **Backend Query Updates**: Eager-loaded the `bookingOrder` relation and product variant `productId` inside `orderRelationsInclude` in `order.repository.ts`, serializing slot schedules, status badges, and fasting requirement flags in `serializeOrderResponse` inside `order.controller.ts`.
+- **Frontend Buyer Dashboard**: Implemented visual tab switches (All, Instant Deliveries, Booked Services) to filter history records dynamically in `OrderHistoryPage.tsx`. Displayed amber caution fasting warnings, scheduled slots/dates, and mapped custom-colored approval status badges (`PENDING_APPROVAL`, `APPROVED`, `REJECTED`, etc.).
+- **Polished Tab Layout**: Added explicit `whitespace-nowrap`, responsive font size `text-xs md:text-sm`, and expanded the container layout to `max-w-xl md:max-w-2xl w-full` with horizontal scrolling support to guarantee that tab labels remain elegantly on a single line.
+- **TDD Integration and Verification**: Restored thumbs up button selectors in Vitest and successfully verified passing tests on both backend API and frontend component suites, with zero TypeScript warnings (`tsc --noEmit`) and perfect eslint compliance.
+
+### Session 18 — 2026-05-25 — Phase 7.11 Playwright E2E Tests Completion
+- **Comprehensive E2E Testing**: Designed and implemented the complete multi-actor booking E2E suite in `booking-journey.spec.ts` using Playwright.
+- **Verification Flow**: Verified the end-to-end booking flow: buyer schedules blood sugar test with fasting validation, store owner dashboard displays and approves, buyer status updates live via WebSocket/Socket.io rooms, store owner completes service, and buyer details show Pine Green checkout parity.
+- **Robust Viewport Support**: Successfully validated all test scenarios on both desktop and mobile viewports in Playwright, resulting in all E2E tests passing cleanly with 100% green correctness and exit code 0.
+
+### Session 19 — 2026-05-25 — Booking Login Query State Redirection Fix
+- **Authentication Redirect Resolution**: Resolved an authentication intercept bug where buyers clicking `"Book"` on the home grid or `"Book Now"` on details page were correctly prompted to log in, but then lost context.
+- **State Preservation**: Fixed the redirect flow by capturing and preserving the `productId` and `variantId` parameters on the login page path, ensuring that once OTP validation succeeds, the buyer is seamlessly redirected directly into the scheduling Timeslot Picker page `/bookings/new?productId=...&variantId=...` instead of standard quick-commerce home page.
+- **E2E Validation**: Confirmed correct query param preservation and smooth redirection through automated Playwright E2E checks.
+
+### Session 20 — 2026-05-26 — Phase 7 Booking Commerce Status Normalization & GSAP Parity
+- **Status Unification**: Normalized all `REJECTED` status badges to display as `CANCELLED` (red badge) across the Buyer Order History panel and Store Owner Bookings dashboard. Displayed cancellation reasons under normalized history cards on the store panel.
+- **Robust GSAP Animation**: Integrated the premium GSAP "bloom" animation in `BookingConfirmationPage.tsx`. Completely resolved the green splash overlay sticking issue by decoupling the GSAP transition effect from the background database refetch queries (removing `query.data` from the `useLayoutEffect` dependency list).
+- **TypeScript & TDD Stability**: Updated `BookingEnvelope` type to include `createdAt` property. Adjusted mock assertions in `StoreBookingsPage.test.tsx` to expect "CANCELLED" instead of "REJECTED".
+- **Verification**: Confirmed all 11 Vitest booking page tests are green and typecheck compiler successfully passes with 0 warnings. Phase 7 is now officially ✅ COMPLETE.
+
 

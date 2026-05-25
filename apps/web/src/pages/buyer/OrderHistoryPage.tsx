@@ -65,7 +65,7 @@ export function OrderHistoryPage() {
         case "APPROVED":
           return { label: "Approved", classes: "bg-indigo-100 text-indigo-700 border border-indigo-200" };
         case "REJECTED":
-          return { label: "Rejected", classes: "bg-red-100 text-red-700 border border-red-200" };
+          return { label: "Cancelled", classes: "bg-red-100 text-red-700 border border-red-200" };
         case "COMPLETED":
           return { label: "Completed", classes: "bg-green-100 text-green-700 border border-green-200" };
         case "CANCELLED":

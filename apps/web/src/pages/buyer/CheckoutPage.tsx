@@ -153,7 +153,7 @@ export function CheckoutPage(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
       void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
       
-      navigate(`/orders/${orderId}`);
+      navigate(`/orders/${orderId}`, { replace: true });
     }
   });
 

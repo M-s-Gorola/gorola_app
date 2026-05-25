@@ -282,8 +282,15 @@ apps/api/src/modules/
 │
 ├── catalog/                 ← READ-HEAVY, CACHED IN REDIS
 │   ├── categories           ← GET /api/v1/categories
-│   ├── products             ← GET /api/v1/products?categoryId=&storeId=&search=
-│   └── variants             ← GET /api/v1/products/:id (includes variants)
+│   ├── subcategories        ← GET /api/v1/categories/:slug/subcategories
+│   ├── products             ← GET /api/v1/products?categoryId=&subCategoryId=&storeId=&search=
+│   └── variants             ← GET /api/v1/products/:id (includes variants with allowedTimeslots/requiresFasting)
+│
+├── booking/                 ← HYBRID BOOKING COMMERCE WORKFLOW (PHASE 7)
+│   ├── list timeslots       ← GET  /api/v1/booking/timeslots?storeId=&date=
+│   ├── place booking        ← POST /api/v1/orders (orderType = BOOKING)
+│   ├── list bookings        ← GET  /api/v1/booking/history (buyer appointment tracking)
+│   └── owner action         ← PUT  /api/v1/store/orders/:id/status (approval status transitions)
 │
 ├── cart/                    ← PER-USER, SESSION-LIKE
 │   ├── view cart            ← GET  /api/v1/cart
@@ -292,7 +299,7 @@ apps/api/src/modules/
 │   └── remove item          ← DELETE /api/v1/cart/items/:variantId
 │
 ├── order/                   ← CRITICAL PATH — ALL OPERATIONS TRANSACTIONAL
-│   ├── place order          ← POST /api/v1/orders
+│   ├── place order          ← POST /api/v1/orders (orderType = QUICK)
 │   ├── get order            ← GET  /api/v1/orders/:id
 │   ├── list my orders       ← GET  /api/v1/orders (buyer's orders)
 │   └── reorder              ← POST /api/v1/orders/:id/reorder
@@ -360,23 +367,27 @@ User (buyer)
   ├── has many → Address
   ├── has one  → Cart
   │               └── has many → CartItem → ProductVariant
-  └── has many → Order
-                  ├── belongs to → Store
+  └── has many → Order (orderType = QUICK | BOOKING)
+                  ├── belongs to → Store (storeType = QUICK_COMMERCE | BOOKING_COMMERCE)
                   ├── has many  → OrderItem → ProductVariant
-                  └── has many  → OrderStatusHistory
+                  ├── has many  → OrderStatusHistory
+                  └── has one   → BookingOrder (only for orderType = BOOKING)
+                                  └── scheduledDate, timeslot, requiresFasting, approvalStatus
 
-Store
+Store (storeType = QUICK_COMMERCE | BOOKING_COMMERCE)
   │
   ├── has many → StoreOwner
   ├── has many → Product
-  │               └── has many → ProductVariant
+  │               └── has many → ProductVariant (allowedTimeslots, requiresFasting)
   ├── has many → Order
   ├── has many → Advertisement
   ├── has many → Offer
-  └── has many → Discount
+  ├── has many → Discount
+  └── has many → DeliveryRider (riderType = DELIVERY | FIELD_TECHNICIAN)
 
 Category
-  └── has many → Product
+  └── has many → SubCategory
+                  └── has many → Product
 
 Admin (standalone — no store association)
 
@@ -384,7 +395,7 @@ FeatureFlag (key-value store, admin-controlled)
 
 AuditLog (append-only, references actorId by string — not FK, so log survives deletion)
 
-DeliveryRider [STUB]
+DeliveryRider [STUB] (riderType = DELIVERY | FIELD_TECHNICIAN)
   └── has many → RiderLocation [STUB]
 ```
 
