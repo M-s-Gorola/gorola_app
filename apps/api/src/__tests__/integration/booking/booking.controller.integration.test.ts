@@ -768,4 +768,176 @@ describe("Booking HTTP Endpoints (Integration)", () => {
 
     expect(getRes.statusCode).toBe(404);
   });
+
+  describe("completeBooking Route", () => {
+    it("should allow owner to complete an APPROVED booking (HTTP 200)", async () => {
+      const server = createServer({
+        disableRedis: true,
+        registerRoutes: registerAppRoutes
+      });
+
+      const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+      const ownerToken = await signTestToken(owner.id, "STORE_OWNER");
+
+      const addr = await db.address.create({
+        data: {
+          userId: buyerUser.id,
+          label: "Home",
+          landmarkDescription: "Near Clock Tower landmark area min ten"
+        }
+      });
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // 1. Create a booking request
+      const placeRes = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "POST",
+        payload: {
+          storeId: store.id,
+          items: [{ productId: product.id, variantId: variantStandard.id }],
+          scheduledDate: tomorrow.toISOString(),
+          timeslot: "09:00-12:00",
+          addressId: addr.id
+        },
+        url: "/api/v1/bookings"
+      });
+      const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
+
+      // 2. Approve booking
+      const approveRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/approve`
+      });
+      expect(approveRes.statusCode).toBe(200);
+
+      // 3. Complete booking
+      const completeRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/complete`
+      });
+
+      await server.close();
+
+      expect(completeRes.statusCode).toBe(200);
+      const envelope = completeRes.json() as {
+        success: boolean;
+        data: { status: string; bookingOrder: { approvalStatus: string } };
+      };
+      expect(envelope.success).toBe(true);
+      expect(envelope.data.status).toBe("COMPLETED");
+      expect(envelope.data.bookingOrder.approvalStatus).toBe("COMPLETED");
+
+      // Verify DB state
+      const dbOrder = await db.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: { bookingOrder: true }
+      });
+      expect(dbOrder.status).toBe("DELIVERED");
+      expect(dbOrder.bookingOrder?.approvalStatus).toBe("COMPLETED");
+    });
+
+    it("should fail completion if wrong store owner attempts to complete (HTTP 403)", async () => {
+      const server = createServer({
+        disableRedis: true,
+        registerRoutes: registerAppRoutes
+      });
+
+      const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+      const ownerToken = await signTestToken(owner.id, "STORE_OWNER");
+      const wrongOwnerToken = await signTestToken(otherOwner.id, "STORE_OWNER");
+
+      const addr = await db.address.create({
+        data: {
+          userId: buyerUser.id,
+          label: "Home",
+          landmarkDescription: "Near Clock Tower landmark area min ten"
+        }
+      });
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const placeRes = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "POST",
+        payload: {
+          storeId: store.id,
+          items: [{ productId: product.id, variantId: variantStandard.id }],
+          scheduledDate: tomorrow.toISOString(),
+          timeslot: "09:00-12:00",
+          addressId: addr.id
+        },
+        url: "/api/v1/bookings"
+      });
+      const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
+
+      const approveRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/approve`
+      });
+      expect(approveRes.statusCode).toBe(200);
+
+      const completeRes = await server.inject({
+        headers: { authorization: `Bearer ${wrongOwnerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/complete`
+      });
+
+      await server.close();
+
+      expect(completeRes.statusCode).toBe(403);
+    });
+
+    it("should fail completion if booking is not in APPROVED status (HTTP 400)", async () => {
+      const server = createServer({
+        disableRedis: true,
+        registerRoutes: registerAppRoutes
+      });
+
+      const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+      const ownerToken = await signTestToken(owner.id, "STORE_OWNER");
+
+      const addr = await db.address.create({
+        data: {
+          userId: buyerUser.id,
+          label: "Home",
+          landmarkDescription: "Near Clock Tower landmark area min ten"
+        }
+      });
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const placeRes = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "POST",
+        payload: {
+          storeId: store.id,
+          items: [{ productId: product.id, variantId: variantStandard.id }],
+          scheduledDate: tomorrow.toISOString(),
+          timeslot: "09:00-12:00",
+          addressId: addr.id
+        },
+        url: "/api/v1/bookings"
+      });
+      const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
+
+      // Skip approval, attempt completion directly
+      const completeRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/complete`
+      });
+
+      await server.close();
+
+      expect(completeRes.statusCode).toBe(400);
+    });
+  });
 });
+

@@ -201,7 +201,7 @@ export function OrderHistoryPage() {
                     order.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 
                     'bg-blue-100 text-blue-700'
                   }`}>
-                    {order.status}
+                    {order.status === 'DELIVERED' && (order.orderType === 'BOOKING' || order.store?.storeType === 'BOOKING_COMMERCE') ? 'COMPLETED' : order.status}
                   </span>
                 </div>
                 <p className="text-sm text-gorola-charcoal/40">

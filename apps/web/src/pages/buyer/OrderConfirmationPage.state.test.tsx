@@ -176,7 +176,7 @@ describe("OrderConfirmationPage States", () => {
     renderComponent("order-cancelled");
 
     expect(await screen.findByRole("heading", { name: /order cancelled/i })).toBeInTheDocument();
-    expect(screen.getByText(/any refunds will be processed/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/any refunds will be processed/i)[0]).toBeInTheDocument();
     
     // Should NOT show store contact or tracking pulse
     expect(screen.queryByText(/tracking is live/i)).not.toBeInTheDocument();

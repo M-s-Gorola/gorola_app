@@ -177,6 +177,25 @@ export function StoreBookingsPage(): ReactElement {
     }
   });
 
+  // Complete Booking Request Mutation
+  const completeMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put(`/api/v1/store/bookings/${orderId}/complete`);
+    },
+    onSuccess: () => {
+      toast.success("Appointment successfully marked completed!");
+      void queryClient.invalidateQueries({ queryKey: ["store", "bookings"] });
+      void queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ||
+        "Failed to complete booking";
+      toast.error(msg);
+    }
+  });
+
   // Tab Filtering & Sorting Logical Maps
   const pendingBookings = bookings.filter(
     (b) => b.bookingOrder?.approvalStatus === "PENDING_APPROVAL"
@@ -400,6 +419,19 @@ export function StoreBookingsPage(): ReactElement {
                   </div>
                 )}
 
+                {/* Mark Completed Actions Footer */}
+                {activeTab === "UPCOMING" && (
+                  <div className="flex gap-3 mt-6 pt-4 border-t border-gorola-mint/10">
+                    <button
+                      disabled={completeMutation.isPending}
+                      onClick={() => completeMutation.mutate(booking.orderId || booking.id)}
+                      className="flex-1 py-3 px-4 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
+                    >
+                      {completeMutation.isPending ? "Completing..." : "Mark Completed"}
+                    </button>
+                  </div>
+                )}
+
                 {/* Read-Only Status Indicator badges for non-pending requests */}
                 {activeTab !== "PENDING" && (
                   <div className="mt-6 pt-4 border-t border-gorola-mint/10 flex items-center justify-between">
@@ -416,7 +448,8 @@ export function StoreBookingsPage(): ReactElement {
                           : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
                       }`}
                     >
-                      {booking.bookingOrder?.approvalStatus === "APPROVED" ? (
+                      {booking.bookingOrder?.approvalStatus === "APPROVED" ||
+                      booking.bookingOrder?.approvalStatus === "COMPLETED" ? (
                         <CheckCircle2 className="h-3 w-3" />
                       ) : (
                         <XCircle className="h-3 w-3" />

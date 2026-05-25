@@ -451,6 +451,54 @@ Seed a `BOOKING_COMMERCE` repairs store, listing 4 home repair services and allo
 
 ---
 
+### 7.8.1 — Booking Order Completion Flow
+
+**Root cause / Goal:**
+Currently, store owners of `BOOKING_COMMERCE` stores cannot mark approved appointments/services as completed. Booking orders remain stuck in the "APPROVED" state (tab: Upcoming) indefinitely. We need to implement a "Mark Completed" status transition on both backend (updating `Order.status` to `DELIVERED` and `BookingOrder.approvalStatus` to `COMPLETED`) and frontend store dashboards, wired through a dedicated Fastify endpoint with live Socket.IO events.
+
+**Fix / Approach:**
+We will implement the feature across all layers using strict RED-then-GREEN TDD cycles:
+1. **Service Layer**: Add and test `completeBooking` inside `BookingOrderService`.
+2. **Controller Layer**: Register and test `PUT /api/v1/store/bookings/:orderId/complete` in `booking.controller.ts`.
+3. **UI Component Layer**: Add a "Mark Completed" button to approved cards in the "Upcoming" tab of `StoreBookingsPage.tsx` and wire cache invalidation.
+
+---
+
+- [ ] **RED — Service Unit Tests (`apps/api/src/__tests__/unit/booking/booking-order.service.test.ts`):**
+  - [ ] Test: `completeBooking` should throw `NotFoundError` if the booking does not exist.
+  - [ ] Test: `completeBooking` should throw `ForbiddenError` if the store owner store ID does not match the order store ID.
+  - [ ] Test: `completeBooking` should throw `ValidationError` if the current order status is not `APPROVED`.
+  - [ ] Test: `completeBooking` should successfully update the order status to `DELIVERED`, booking approval status to `COMPLETED`, record `OrderStatusHistory`, and emit status change.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Service Implementation:**
+  - [ ] [Service] Implement `completeBooking` in `apps/api/src/modules/booking/booking-order.service.ts`.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **RED — Controller Integration Tests (`apps/api/src/__tests__/integration/booking/booking.controller.integration.test.ts`):**
+  - [ ] Test: `PUT /api/v1/store/bookings/:orderId/complete` with valid `STORE_OWNER` JWT and an `APPROVED` booking returns HTTP 200 with completed serialization data.
+  - [ ] Test: `PUT /api/v1/store/bookings/:orderId/complete` with a different store owner's JWT returns HTTP 403 `FORBIDDEN`.
+  - [ ] Test: `PUT /api/v1/store/bookings/:orderId/complete` with a `PENDING_APPROVAL` booking returns HTTP 400 `VALIDATION_ERROR`.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Controller Endpoint Registration:**
+  - [ ] [Controller] Register route and link endpoint logic in `apps/api/src/modules/booking/booking.controller.ts`.
+  - [ ] Run controller integration tests — **confirm GREEN**.
+
+- [ ] **RED — Component Unit Tests (`apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [ ] Test: Cards in the "Upcoming" tab render a "Mark Completed" button.
+  - [ ] Test: Clicking "Mark Completed" triggers a call to the completion mutation and invalidates the query client cache.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — UI Component Implementation:**
+  - [ ] [Component] Implement `completeMutation` and add the "Mark Completed" button to approved bookings in `StoreBookingsPage.tsx`.
+  - [ ] Run component unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Place a medical test booking request → approve the booking → card moves to "Upcoming" tab → click "Mark Completed" → card transitions to "History" tab under the color-coded "COMPLETED" status badge → dashboard metrics and today's revenue sync immediately → ✅ Done.
+
+---
+
 ### 7.9 — CategoryGrid and ProductDetailPage Booking Awareness
 
 **Root cause / Goal:**
@@ -627,3 +675,20 @@ _(Append new entries here — never delete old entries.)_
 - **Booking Commerce structural consolidation**: Reordered `BookingConfirmationPage.tsx` to position the "Services Booked" and Store details at the top of the card details. Aligned its payment summary to match the updated Quick Commerce spaced-between flex layout.
 - **Appointment Address & Schedule details**: Placed both sections cleanly at the bottom, matching standard address blocks. Converted the schedule details to key-value alignment and integrated conditional rendering so that `Fasting: ⚠️ Yes / Fasting Required` is *only* visible for medical tests where fasting is explicitly required.
 - **Robust Quality Audits**: Updated unit test selectors inside both `OrderConfirmationPage.test.tsx` and `BookingConfirmationPage.test.tsx` to accommodate the key-value changes and select elements by `data-testid` to prevent duplicate value matches. All 52 test files and 239 tests in the entire workspace passed with 100% green status.
+
+### Session 14 — 2026-05-25 — Phase 7.8.1 Booking Order Completion Flow
+- **Service Layer Booking Completion**: Built the `completeBooking` method in `BookingOrderService` with an atomic transaction that transitions `Order.status` to `DELIVERED` and `BookingOrder.approvalStatus` to `COMPLETED`, recording state history and publishing the status change update via standard Socket.io events.
+- **Controller PUT API (TDD)**: Registered `PUT /api/v1/store/bookings/:orderId/complete` in `booking.controller.ts` with strict store owner access validation. Wrote failing integration tests in `booking.controller.integration.test.ts` mapping the happy path (200), unauthorized store access (403), and invalid state transitions (400), bringing them all to GREEN.
+- **Frontend Action & Cache Invalidation (TDD)**: Added the `"Mark Completed"` action button to `StoreBookingsPage.tsx` under the "UPCOMING" tab for approved bookings, wired the `completeMutation` to invalidate `bookings` and `store-kpis` cache keys, and wrote component unit tests in `StoreBookingsPage.test.tsx` to confirm mutation trigger and visual rendering.
+- **Status Display & Receipt Bugfixes**: 
+  - Fixed a display bug in `OrderHistoryPage.tsx` where completed bookings rendered as `'DELIVERED'`. It now dynamically translates the tag label to `'COMPLETED'` for `BOOKING` type orders.
+  - Resolved a receipt bug in `BookingConfirmationPage.tsx` where completed/delivered booking receipts fell back to displaying `'Booking Placed'` with the subtext `'Waiting for store confirmation'`. Created configurations for `'COMPLETED'` and `'DELIVERED'` statuses inside `statusConfig` and updated unit tests to verify the correct status text rendering.
+  - Reordered the `BookingConfirmationPage.tsx` layout to render the primary status icon, heading, status badge, and booking description *above* the card container for all states, achieving full structural parity with the Quick Commerce receipt page layout.
+  - Shifted the `APPROVED` (confirmed) booking state from green/emerald to a distinct, premium Indigo layout color system to resolve the coloring overlap and visually differentiate confirmed appointments from completed green ones.
+- **Complete Green Pipeline**: Verified type safety (successful `tsc` compiling) and full-application building, passing all 450 API tests and 241 web tests with 100% green correctness.
+
+### Session 15 — 2026-05-25 — Dynamic Receipt Card Color-Coding & Status Text Consolidation
+- **Completed Terminology & Brand Colors**: Tuned `BookingConfirmationPage.tsx` status configs to mapcompleted/delivered booking titles to `"Service Done"` instead of `"Booking Completed"` and aligned the checkmark icon to use the signature **GoRola Pine Green** (`text-gorola-pine`) brand color.
+- **Quick Commerce Status Alert Banners**: Added responsive, colored status-alert message boxes at the top of the Quick Commerce receipt card in `OrderConfirmationPage.tsx` for all order lifecycle states (`PLACED`, `PREPARING`, `OUT_FOR_DELIVERY`, `DELIVERED`, `CANCELLED`).
+- **Dynamic Card Color-Coding in Retail**: Refactored the retail order details card in `OrderConfirmationPage.tsx` to dynamically render custom status-aware borders, background shadows, and left-accent color bars (e.g. amber for `PLACED`, indigo for `PREPARING`, blue for `OUT_FOR_DELIVERY`, emerald for `DELIVERED`, and red for `CANCELLED`), achieving unified high-end styling across both pipelines.
+- **Flawless Verification & Regression Audits**: Ran and verified the entire testing framework workspace-wide, passing all 450 API tests and 241 web tests with 100% correctness.

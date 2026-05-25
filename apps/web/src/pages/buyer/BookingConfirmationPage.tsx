@@ -25,7 +25,7 @@ type BookingItem = {
 
 type BookingEnvelope = {
   id: string;
-  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED";
+  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "DELIVERED";
   subtotal: string;
   deliveryFee: string;
   total: string;
@@ -54,13 +54,31 @@ const statusConfig = {
     iconColor: "text-amber-500",
   },
   APPROVED: {
+    borderColor: "border-indigo-200 hover:border-indigo-300",
+    shadowColor: "shadow-indigo-100/10",
+    badgeBg: "bg-indigo-50 border border-indigo-200 text-indigo-800",
+    badgeLabel: "✅ Your booking has been approved by the store owner!",
+    title: "Your booking is confirmed!",
+    accentBorder: "border-l-4 border-l-indigo-500",
+    iconColor: "text-indigo-500",
+  },
+  COMPLETED: {
     borderColor: "border-emerald-200 hover:border-emerald-300",
     shadowColor: "shadow-emerald-100/10",
     badgeBg: "bg-emerald-50 border border-emerald-200 text-emerald-800",
-    badgeLabel: "✅ Your booking has been approved by the store owner!",
-    title: "Your booking is confirmed!",
+    badgeLabel: "🎉 This booking appointment has been marked as completed!",
+    title: "Service Done",
     accentBorder: "border-l-4 border-l-emerald-500",
-    iconColor: "text-emerald-500",
+    iconColor: "text-gorola-pine",
+  },
+  DELIVERED: {
+    borderColor: "border-emerald-200 hover:border-emerald-300",
+    shadowColor: "shadow-emerald-100/10",
+    badgeBg: "bg-emerald-50 border border-emerald-200 text-emerald-800",
+    badgeLabel: "🎉 This booking appointment has been marked as completed!",
+    title: "Service Done",
+    accentBorder: "border-l-4 border-l-emerald-500",
+    iconColor: "text-gorola-pine",
   },
   REJECTED: {
     borderColor: "border-red-200 hover:border-red-300",
@@ -170,6 +188,41 @@ export function BookingConfirmationPage(): ReactElement {
           />
         </svg>
 
+        {/* Dynamic Status Header Info (displayed above receipt card) */}
+        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300">
+          <div className="flex flex-col items-center gap-2">
+            <h1 className="font-playfair text-3xl font-bold text-gorola-charcoal" id="occ-heading">
+              {config.title}
+            </h1>
+            <div className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-inset",
+              booking.status === "PENDING_APPROVAL" ? "bg-amber-50 text-amber-700 ring-amber-600/20" :
+              booking.status === "APPROVED" ? "bg-indigo-50 text-indigo-700 ring-indigo-600/20" :
+              (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" :
+              booking.status === "REJECTED" ? "bg-rose-50 text-rose-700 ring-rose-600/20" :
+              "bg-gray-50 text-gray-700 ring-gray-600/20"
+            )}>
+              {booking.status === "PENDING_APPROVAL" ? "Pending Approval" :
+               booking.status === "APPROVED" ? "Confirmed" :
+               (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "Completed" :
+               booking.status.replace("_", " ")}
+            </div>
+          </div>
+          
+          <p className="font-dm-sans text-sm text-gorola-slate">
+            Booking{" "}
+            <span
+              className="font-mono font-semibold text-gorola-charcoal"
+              title={`Full booking reference: ${booking.id}`}
+            >
+              {booking.id.length > 8 ? `…${booking.id.slice(-8)}` : booking.id}
+            </span>{" "}
+            {booking.status === "COMPLETED" || booking.status === "DELIVERED" ? "has been completed at" :
+             booking.status === "REJECTED" ? "was declined by" :
+             booking.status === "APPROVED" ? "is confirmed with" : "has been requested from"}{" "}
+            <span className="font-semibold text-gorola-charcoal">{booking.store?.name}</span>.
+          </p>
+        </div>
+
         {/* Unified, Status-Aware Receipt Card */}
         <div className={cn(
           "w-full rounded-3xl border bg-white p-6 text-left shadow-lg transition-all duration-300 space-y-6",
@@ -177,28 +230,16 @@ export function BookingConfirmationPage(): ReactElement {
           config.accentBorder,
           config.shadowColor
         )}>
-          {/* Card Header & Dynamic Status */}
-          <div className="space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-              <h1 className="font-playfair text-2xl font-bold text-gorola-charcoal">
-                {config.title}
-              </h1>
-              <span className="font-dm-sans text-xs text-gorola-slate sm:text-right">
-                Booking Ref: <span className="font-mono font-semibold text-gorola-charcoal">{booking.id}</span>
-              </span>
-            </div>
-
-            {/* Dynamic Status alert container */}
-            <div className={cn("rounded-2xl p-4 transition-all duration-300", config.badgeBg)}>
-              <p className="font-dm-sans text-sm font-semibold">
-                {config.badgeLabel}
+          {/* Card Header Status Alert */}
+          <div className={cn("rounded-2xl p-4 transition-all duration-300", config.badgeBg)}>
+            <p className="font-dm-sans text-sm font-semibold">
+              {config.badgeLabel}
+            </p>
+            {booking.status === "REJECTED" && booking.bookingOrder.rejectionReason && (
+              <p className="font-dm-sans text-xs font-medium mt-1 opacity-90">
+                Rejection Reason: {booking.bookingOrder.rejectionReason}
               </p>
-              {booking.status === "REJECTED" && booking.bookingOrder.rejectionReason && (
-                <p className="font-dm-sans text-xs font-medium mt-1 opacity-90">
-                  Rejection Reason: {booking.bookingOrder.rejectionReason}
-                </p>
-              )}
-            </div>
+            )}
           </div>
 
           {/* Section 1: Services Booked & Store Info */}
