@@ -50,6 +50,7 @@ function serializeOrderResponse(
       price: item.price.toString(),
       productName: item.productName,
       productVariantId: item.productVariantId,
+      productId: item.productVariant?.productId ?? "",
       quantity: item.quantity,
       variantLabel: item.variantLabel
     })),
@@ -80,7 +81,17 @@ function serializeOrderResponse(
     updatedAt: order.updatedAt.toISOString(),
     userId: order.userId,
     rating: order.rating,
-    ratingComment: order.ratingComment
+    ratingComment: order.ratingComment,
+    bookingOrder: order.bookingOrder
+      ? {
+          id: order.bookingOrder.id,
+          scheduledDate: order.bookingOrder.scheduledDate.toISOString(),
+          timeslot: order.bookingOrder.timeslot,
+          requiresFasting: order.bookingOrder.requiresFasting,
+          approvalStatus: order.bookingOrder.approvalStatus,
+          rejectionReason: order.bookingOrder.rejectionReason
+        }
+      : null
   };
 }
 

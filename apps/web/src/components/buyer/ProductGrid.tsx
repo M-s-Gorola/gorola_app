@@ -24,6 +24,7 @@ type ProductListItem = {
   imageUrl: string;
   storeId: string;
   storeName: string;
+  storeType?: string;
   categoryId: string;
   highestPricedVariantId: string;
   price: string;
@@ -319,6 +320,20 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
               <p className="mt-1 font-dm-sans text-xs text-gorola-slate">Unit: {item.unit}</p>
             </div>
             {(() => {
+              if (item.storeType === "BOOKING_COMMERCE") {
+                return (
+                  <Link
+                    to={`/bookings/new?productId=${item.productId}&variantId=${item.highestPricedVariantId}`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                    }}
+                    className="mt-3 inline-block text-center rounded-full bg-gorola-saffron px-4 py-2 text-sm font-semibold text-gorola-charcoal"
+                  >
+                    Book
+                  </Link>
+                );
+              }
+
               const line = lines.find(
                 (candidate) => candidate.productVariantId === item.highestPricedVariantId
               );

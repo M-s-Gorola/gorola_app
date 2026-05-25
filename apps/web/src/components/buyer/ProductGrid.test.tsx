@@ -477,4 +477,40 @@ describe("ProductGrid", () => {
     // In MemoryRouter, we can check if the current location is still '/' (or whatever it was).
     // However, the test above is enough if we just want to prove it currently FAILS (because no link exists).
   });
+
+  it("renders Book link instead of Add button for BOOKING_COMMERCE products", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "p1",
+              productId: "prod-123",
+              name: "AC Service",
+              highestPricedVariantId: "v1",
+              storeId: "s1",
+              storeName: "GoRola Repairs",
+              categoryId: "c1",
+              imageUrl: "https://x",
+              price: "799.00",
+              unit: "service",
+              storeType: "BOOKING_COMMERCE"
+            }
+          ],
+          nextCursor: null
+        }
+      }
+    });
+
+    renderGrid();
+
+    const bookLink = await screen.findByRole("link", { name: /book/i });
+    expect(bookLink).toBeInTheDocument();
+    expect(bookLink).toHaveAttribute(
+      "href",
+      "/bookings/new?productId=prod-123&variantId=v1"
+    );
+  });
 });
+

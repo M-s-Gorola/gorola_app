@@ -9,9 +9,19 @@ import {
 
 /** Shared include graph for reads + post-create hydrate. */
 export const orderRelationsInclude = {
-  items: { orderBy: { id: "asc" as const } },
+  items: {
+    orderBy: { id: "asc" as const },
+    include: {
+      productVariant: {
+        select: {
+          productId: true
+        }
+      }
+    }
+  },
   statusHistory: { orderBy: { changedAt: "asc" as const } },
-  store: { select: { id: true, name: true, phone: true, storeType: true } }
+  store: { select: { id: true, name: true, phone: true, storeType: true } },
+  bookingOrder: true
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{

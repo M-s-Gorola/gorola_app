@@ -8,9 +8,10 @@ import { useCartStore } from "@/store/cart.store";
 
 import { ProductDetailPage } from "./ProductDetailPage";
 
-const { getMock, postMock } = vi.hoisted(() => ({
+const { getMock, postMock, mockNavigate } = vi.hoisted(() => ({
   getMock: vi.fn(),
-  postMock: vi.fn()
+  postMock: vi.fn(),
+  mockNavigate: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -19,6 +20,15 @@ vi.mock("@/lib/api", () => ({
     post: postMock
   }
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate
+  };
+});
+
 
 function renderPage(initialPath = "/products/p1"): void {
   const queryClient = new QueryClient({
@@ -44,6 +54,7 @@ describe("ProductDetailPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     postMock.mockReset();
+    mockNavigate.mockReset();
     useCartStore.getState().clear();
     useAuthStore.getState().setBuyerSession({
       accessToken: "at",
@@ -310,11 +321,40 @@ describe("ProductDetailPage", () => {
     renderPage("/products/p2");
     await screen.findByRole("heading", { name: "CBC Panel" });
     
-    // Check that Book Now button is rendered
-    expect(screen.getByRole("button", { name: "Book Now" })).toBeInTheDocument();
-    
     // Check that Add to Cart and quantity buttons are not rendered
     expect(screen.queryByRole("button", { name: "Add to cart" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Increase quantity" })).not.toBeInTheDocument();
   });
+
+  it("navigates to /bookings/new when Book Now is clicked", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "p2",
+          name: "CBC Panel",
+          description: "Complete blood count",
+          imageUrl: "https://cdn.example.com/cbc.jpg",
+          store: {
+            id: "s2",
+            name: "Aarna Diagnostic Centre",
+            phone: "+919222222222",
+            storeType: "BOOKING_COMMERCE"
+          },
+          variants: [
+            { id: "v3", label: "Fasting", price: "499.00", unit: "test", stockQty: 99 }
+          ]
+        }
+      }
+    });
+
+    renderPage("/products/p2");
+    await screen.findByRole("heading", { name: "CBC Panel" });
+
+    const bookNowButton = screen.getByRole("button", { name: "Book Now" });
+    fireEvent.click(bookNowButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/bookings/new?productId=p2&variantId=v3");
+  });
 });
+
