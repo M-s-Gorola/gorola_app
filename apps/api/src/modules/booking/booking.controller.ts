@@ -335,6 +335,40 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
     }
   );
 
+  // PUT /api/v1/store/bookings/:orderId/complete
+  app.put(
+    "/api/v1/store/bookings/:orderId/complete",
+    { preHandler: ownerPreHandlers },
+    async (request, reply) => {
+      const ownerId = request.user?.sub;
+      if (!ownerId) {
+        throw new UnauthorizedError("Store owner subject missing");
+      }
+
+      const prisma = getPrismaClient();
+      const owner = await prisma.storeOwner.findUnique({
+        where: { id: ownerId }
+      });
+      if (!owner) {
+        throw new ForbiddenError("Store owner record not found");
+      }
+
+      const params = parseSafe(orderParamsSchema, request.params);
+      await deps.bookingService.completeBooking(
+        owner.storeId,
+        params.orderId,
+        ownerId
+      );
+
+      const booking = await deps.bookingService.repository.findById(params.orderId);
+      if (!booking) {
+        throw new NotFoundError("Booking order not found");
+      }
+
+      return success(request, reply, serializeBookingOrder(booking));
+    }
+  );
+
   // DELETE /api/v1/bookings/:orderId
   app.delete(
     "/api/v1/bookings/:orderId",

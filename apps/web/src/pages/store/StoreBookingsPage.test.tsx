@@ -256,6 +256,59 @@ describe("StoreBookingsPage TDD", () => {
     expect(productNames[1]).toContain("Thyroid (TSH)");
   });
 
+  it("Upcoming tab renders 'Mark Completed' button for APPROVED bookings and triggers completion mutation", async () => {
+    const mockBookings = [
+      {
+        id: "booking-upcoming-complete",
+        orderId: "order-upcoming-complete",
+        status: "APPROVED",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-upcoming-complete",
+            productName: "Thyroid (TSH)",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-24T09:00:00.000Z",
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const upcomingTab = await screen.findByRole("tab", { name: /upcoming/i });
+    await user.click(upcomingTab);
+
+    expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
+
+    const completeBtn = screen.getByRole("button", { name: /mark completed/i });
+    expect(completeBtn).toBeInTheDocument();
+
+    putMock.mockResolvedValue({
+      data: { success: true }
+    });
+
+    await user.click(completeBtn);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/bookings/order-upcoming-complete/complete");
+    });
+  });
+
   it("History tab lists completed, rejected, and cancelled bookings", async () => {
     const mockBookings = [
       {

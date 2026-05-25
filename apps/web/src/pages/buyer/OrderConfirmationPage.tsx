@@ -524,8 +524,39 @@ export function OrderConfirmationPage(): ReactElement {
 
               {weatherPulse}
 
-              <div className="w-full space-y-2 rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm">
-                <h2 className="font-playfair text-lg text-gorola-charcoal">Your items</h2>
+              <div className={cn(
+                "w-full space-y-4 rounded-2xl border bg-white p-5 text-left transition-all duration-500",
+                order.status === "PLACED" ? "border-amber-200 shadow-amber-100/10 border-l-4 border-l-amber-500" :
+                order.status === "PREPARING" ? "border-indigo-200 shadow-indigo-100/10 border-l-4 border-l-indigo-500" :
+                order.status === "OUT_FOR_DELIVERY" ? "border-blue-200 shadow-blue-100/10 border-l-4 border-l-blue-500" :
+                order.status === "DELIVERED" ? "border-emerald-200 shadow-emerald-100/10 border-l-4 border-l-emerald-500" :
+                "border-red-200 shadow-red-100/10 border-l-4 border-l-red-500"
+              )}>
+                {/* Dynamic Status Alert Banner */}
+                <div className={cn("rounded-2xl p-4 transition-all duration-300", 
+                  order.status === "PLACED" ? "bg-amber-50 border border-amber-200 text-amber-800" :
+                  order.status === "PREPARING" ? "bg-indigo-50 border border-indigo-200 text-indigo-800" :
+                  order.status === "OUT_FOR_DELIVERY" ? "bg-blue-50 border border-blue-200 text-blue-800" :
+                  order.status === "DELIVERED" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" :
+                  "bg-red-50 border border-red-200 text-red-800"
+                )}>
+                  <p className="font-dm-sans text-sm font-semibold">
+                    {order.status === "PLACED" ? "Your order has been placed. Waiting for the store to accept and start picking your items." :
+                     order.status === "PREPARING" ? "👨‍🍳 The store has accepted and is picking/packaging your items!" :
+                     order.status === "OUT_FOR_DELIVERY" ? "🚴 Your rider is on the way! Live tracking is active." :
+                     order.status === "DELIVERED" ? "🎉 Your order has been delivered! Hope you enjoy your purchase." :
+                     "⚠️ This order was cancelled. Any refunds will be processed soon."}
+                  </p>
+                </div>
+
+                <div className="flex justify-between items-baseline gap-2 pb-1 border-b border-gorola-pine/10 pb-2">
+                  <h2 className="font-playfair text-lg font-bold text-gorola-charcoal">Your items</h2>
+                  {order.store && (
+                    <span className="font-dm-sans text-xs text-gorola-slate">
+                      from <span className="font-semibold text-gorola-charcoal">{order.store.name}</span>
+                    </span>
+                  )}
+                </div>
                 <ul aria-label="Order items" className="space-y-2">
                   {order.items.map((line) => (
                     <li
@@ -543,12 +574,25 @@ export function OrderConfirmationPage(): ReactElement {
                   ))}
                 </ul>
 
-                <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
-                  <p data-testid="order-subtotal">Subtotal: Rs {order.subtotal}</p>
-                  <p>Delivery fee: Rs {order.deliveryFee}</p>
-                  {discountAmount !== "0.00" ? <p>Discount: -Rs {discountAmount}</p> : null}
-                  <p className="font-semibold" data-testid="order-total">Total: Rs {order.total}</p>
-                  <p>Payment: {formatPayment(order.paymentMethod)}</p>
+                <div className="space-y-1.5 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
+                  <div className="flex justify-between" data-testid="order-subtotal">
+                    <span className="text-gorola-slate">Subtotal:</span>
+                    <span className="font-medium">Rs {order.subtotal}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gorola-slate">Delivery fee:</span>
+                    <span className="font-medium">Rs {order.deliveryFee}</span>
+                  </div>
+                  {discountAmount !== "0.00" ? (
+                    <div className="flex justify-between text-emerald-700">
+                      <span>Discount:</span>
+                      <span className="font-medium">-Rs {discountAmount}</span>
+                    </div>
+                  ) : null}
+                  <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
+                    <span>Payment [{formatPayment(order.paymentMethod)}]:</span>
+                    <span>Rs {order.total}</span>
+                  </div>
                 </div>
 
                 <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-slate">

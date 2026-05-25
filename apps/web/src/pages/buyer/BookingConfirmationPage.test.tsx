@@ -103,7 +103,7 @@ describe("BookingConfirmationPage", () => {
     renderComponent();
 
     expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
-    expect(screen.getByText(/Max Labs Mussoorie/)).toBeInTheDocument();
+    expect(screen.getAllByText(/Max Labs Mussoorie/)[0]).toBeInTheDocument();
 
     // Check pending badge or text
     expect(
@@ -125,6 +125,18 @@ describe("BookingConfirmationPage", () => {
 
     expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
     expect(screen.getByText("Your booking is confirmed!")).toBeInTheDocument();
+  });
+
+  it("renders success status text and completed details when status is COMPLETED", async () => {
+    apiGetSpy.mockResolvedValue({
+      data: mockBookingEnvelope("COMPLETED"),
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    expect(screen.getByText("Service Done")).toBeInTheDocument();
+    expect(screen.getByText(/This booking appointment has been marked as completed/)).toBeInTheDocument();
   });
 
   it("renders rejection reason banner when status transitions to REJECTED", async () => {

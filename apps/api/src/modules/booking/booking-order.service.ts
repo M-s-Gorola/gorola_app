@@ -340,4 +340,58 @@ export class BookingOrderService {
     this.orderEmitter?.emitStatusChanged(orderId, "CANCELLED");
     return cancelled;
   }
+
+  public async completeBooking(
+    storeId: string,
+    orderId: string,
+    ownerId: string
+  ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
+    const booking = await this.repository.findById(orderId);
+    if (!booking) {
+      throw new NotFoundError(`Booking order with ID ${orderId} not found.`);
+    }
+
+    if (booking.order.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to complete bookings for this store.");
+    }
+
+    if (booking.order.status !== "APPROVED") {
+      throw new ValidationError("Only bookings in APPROVED status can be completed.");
+    }
+
+    const completed = await this.db.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: "DELIVERED" }
+      });
+
+      await tx.bookingOrder.update({
+        where: { orderId },
+        data: {
+          approvalStatus: "COMPLETED"
+        }
+      });
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: "DELIVERED",
+          changedBy: `store-owner:${ownerId}`,
+          note: "Booking service completed"
+        }
+      });
+
+      return tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: {
+          items: true,
+          statusHistory: true
+        }
+      });
+    });
+
+    this.orderEmitter?.emitStatusChanged(orderId, "DELIVERED");
+    return completed;
+  }
 }
+
