@@ -27,7 +27,7 @@ async function main() {
   });
 
   // 2. Seed test users for E2E
-  const phones = ["+919876543210", "+919876543211", "+919876543212"];
+  const phones = ["+919876543210", "+919876543211", "+919876543212", "+919876543214"];
   const users = await Promise.all(phones.map(async (phone) => {
     return prisma.user.upsert({
       where: { phone },

@@ -1311,4 +1311,38 @@ Furthermore, Playwright E2E tests for Quick Commerce are written with hardcoded 
 **Tradeoffs:**
 - E2E tests are coupled to the seed dataset's naming convention; any changes to the default test categories will require updating the corresponding test selectors (a standard trade-off in E2E automation).
 
+---
+
+## [DECISION-045] SPA History Stack Replacement (replace: true) for Checkout Confirmation Redirects
+
+**Date:** 2026-05-26
+**Status:** Accepted
+
+**Context:**
+In both Quick Commerce and Booking Commerce checkout/scheduling flows, once a user successfully creates an order or booking, they are redirected to a final receipt/confirmation page (e.g. `/orders/:id` or `/bookings/:id`). Standard browser navigation allows users to click the browser "Back" button on this receipt page, returning them to the `/checkout` or `/bookings/new` scheduling forms. If they submit the form again, it could lead to duplicate orders, server-side stock issues, and bad user experiences.
+
+**Decision:**
+Implement a mandatory **"History Stack Replacement"** pattern for all successful transaction page redirects. Instead of pushing the confirmation route onto the history stack, the navigation callback must replace the active checkout history entry using `replace: true`:
+1. **Quick Commerce (`CheckoutPage.tsx`)**:
+   `navigate(`/orders/${orderId}`, { replace: true });`
+2. **Booking Commerce (`BookingTimeslotPage.tsx`)**:
+   `navigate(`/bookings/${res.data.data.orderId}`, { replace: true });`
+
+Additionally, confirmation pages must display a clear, high-fidelity on-screen primary button (e.g., "Track Order in History" or "Go to Bookings Dashboard") that explicitly navigates users forward into their respective history panels.
+
+**Rationale:**
+- **Eliminates Double-Orders**: It physically prevents users from backing up into the checkout/scheduling views where they could resubmit the form.
+- **Natural Back Navigation**: When the user clicks the browser back button, the browser skips the checkout entry (since it was replaced) and takes them directly to the last page they visited before checkout (e.g., the store storefront or subcategory landing page). Since their cart has been cleared on placement, this is completely safe and logical.
+- **Zero Overhead**: This is a standard single-parameter change (`{ replace: true }`) in React Router, carrying absolutely no performance, database, or DOM-rendering footprint.
+- **No Trap Behavior**: Avoids fragile browser history hacks (`popstate` blocking) which Chrome and modern browsers block as malicious patterns.
+
+**Tradeoffs:**
+- The user cannot go back to review the exact checkout form inputs they submitted. This is mitigated because the order details card on the confirmation/receipt screen already displays a fully populated summary of their selected items, prices, scheduled slots, and address landmarks.
+
+**Alternatives Considered:**
+1. **History Popstate Interception**: Intercepting back-clicks on the confirmation page and forcing a redirect. Rejected due to browser security restrictions and high fragility across different device viewports.
+2. **Checkout State Preservation**: Leaving the history alone, but checking on checkout mount if the cart is empty, and automatically redirecting the user. Rejected because it allows a confusing flash of the checkout screen before the redirect occurs.
+
+---
+
 

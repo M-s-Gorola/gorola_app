@@ -338,6 +338,26 @@ describe("Product controller", () => {
     });
   });
 
+  it("GET /api/v1/products returns storeType on each item", async () => {
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes,
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/v1/products?limit=2",
+    });
+
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.items[0]).toMatchObject({
+      storeType: "QUICK_COMMERCE",
+    });
+  });
+
   it("GET /api/v1/products/:id returns 404 when product does not exist", async () => {
     const server = createServer({
       disableRedis: true,

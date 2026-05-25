@@ -6,24 +6,28 @@ GoRola is a premium quick-commerce platform for Mussoorie, India. This repositor
 
 - **Phase 1 (NFR Foundation)**: ✅ Completed.
 - **Phase 2 (Buyer Web Experience)**: ✅ Completed.
-  - Full E2E stability achieved (34/34 passing).
+  - Full E2E stability achieved.
   - Hardened full-stack quality gate.
-- **Phase 3 (Store Owner Foundation)**: 🕒 Next.
+- **Phase 7 (Booking Commerce)**: ✅ Completed.
+  - Hybrid Quick & Booking Commerce engines unified.
+  - Automated morning/afternoon appointment slots, fasting requirements, lead days, and real-time dashboard status tracking.
+- **Phase 3 & 4 (Store Owner & Admin Panel)**: 🕒 Next.
 
 ## Tech Stack
 
 - **Backend**: Fastify (Node.js), Prisma ORM, PostgreSQL 15, Redis 7, Pino (Logging)
-- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS 4, GSAP/Lenis (Animations)
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS 4, GSAP/Lenis (Animations)
 - **Tooling**: pnpm workspaces, ESLint 9, Prettier, TypeScript strict mode
-- **Testing**: Vitest (Unit & API Integration tests)
+- **Testing**: Vitest (Unit & API Integration tests), Playwright (E2E)
 
 ## Implemented API Domains (Repository Layer)
 
-- `user` & `auth` (OTP flow)
-- `store` & `store-owner`
+- `user` & `auth` (OTP flow with custom rate-limiting and device verification)
+- `store` & `store-owner` (real-time WebSocket KPIs & Order status dashboards)
 - `admin`
-- `catalog` (categories, products, variants)
-- `cart` & `order`
+- `catalog` (categories, subcategories, products, variants)
+- `cart` & `order` (Quick Commerce checkout)
+- `booking` & `BookingOrder` (appointment scheduling, lead-days picker, fasting validations)
 - `address` & `delivery` (stub)
 - `promotion` (ads, offers, discounts)
 - `feature-flag` & `audit`
@@ -45,7 +49,8 @@ GoRola_app/
 ├── railway.toml            # Railway configuration (API)
 ├── .env.example            # Environment variables template
 ├── package.json            # Root workspace scripts
-└── pnpm-workspace.yaml     # pnpm workspace definition
+├── pnpm-workspace.yaml     # pnpm workspace definition
+└── CONTEXT/                # Architecture design maps & rules specs
 ```
 
 ## Local Setup & Seeding
@@ -91,7 +96,7 @@ This command runs the **exact** same sequence as the GitHub Actions CI pipeline:
 5. **Typechecking**: Full-stack TypeScript validation.
 6. **Build**: Verifies the production bundle.
 7. **Unit/Integration Tests**: 500+ Vitest tests.
-8. **E2E Tests**: 34 Playwright user-journey flows.
+8. **E2E Tests**: 48 Playwright user-journey flows (covering quick commerce & booking engines across multiple viewports).
 
 ## Root Workspace Commands
 

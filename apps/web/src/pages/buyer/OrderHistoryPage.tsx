@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
 import { CheckCircle2, ChevronRight, Clock, MessageSquare, RefreshCcw, ThumbsDown, ThumbsUp } from "lucide-react";
-import { useEffect,useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -17,6 +17,17 @@ type OrderItem = {
   quantity: number;
   variantLabel: string;
   price: string;
+  productVariantId: string;
+  productId?: string;
+};
+
+type BookingOrderDetails = {
+  id: string;
+  scheduledDate: string;
+  timeslot: string;
+  requiresFasting: boolean;
+  approvalStatus: string;
+  rejectionReason: string | null;
 };
 
 type Order = {
@@ -26,12 +37,15 @@ type Order = {
   orderType?: string;
   createdAt: string;
   store: {
+    id: string;
     name: string;
-    storeType?: string;
+    phone: string;
+    storeType: string;
   };
   items: OrderItem[];
   rating: boolean | null;
   ratingComment: string | null;
+  bookingOrder: BookingOrderDetails | null;
 };
 
 export function OrderHistoryPage() {
@@ -39,6 +53,36 @@ export function OrderHistoryPage() {
   const queryClient = useQueryClient();
   const [ratingComment, setRatingComment] = useState<Record<string, string>>({});
   const [activeRating, setActiveRating] = useState<string | null>(null);
+  const [filter, setFilter] = useState<"all" | "quick" | "booking">("all");
+
+  const getBadgeDetails = (order: Order) => {
+    const isBooking = order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE";
+    if (isBooking && order.bookingOrder) {
+      const status = order.bookingOrder.approvalStatus;
+      switch (status) {
+        case "PENDING_APPROVAL":
+          return { label: "Pending Approval", classes: "bg-amber-100 text-amber-700 border border-amber-200" };
+        case "APPROVED":
+          return { label: "Approved", classes: "bg-indigo-100 text-indigo-700 border border-indigo-200" };
+        case "REJECTED":
+          return { label: "Cancelled", classes: "bg-red-100 text-red-700 border border-red-200" };
+        case "COMPLETED":
+          return { label: "Completed", classes: "bg-green-100 text-green-700 border border-green-200" };
+        case "CANCELLED":
+          return { label: "Cancelled", classes: "bg-red-100 text-red-700 border border-red-200" };
+        default:
+          return { label: status, classes: "bg-blue-100 text-blue-700 border border-blue-200" };
+      }
+    }
+
+    if (order.status === "DELIVERED") {
+      return { label: "DELIVERED", classes: "bg-green-100 text-green-700" };
+    }
+    if (order.status === "CANCELLED") {
+      return { label: "CANCELLED", classes: "bg-red-100 text-red-700" };
+    }
+    return { label: order.status, classes: "bg-blue-100 text-blue-700" };
+  };
 
   const accessToken = useAuthStore((s) => s.accessToken);
 
@@ -48,6 +92,13 @@ export function OrderHistoryPage() {
       const res = await api!.get("/api/v1/orders/history");
       return res.data.data.orders as Order[];
     }
+  });
+
+  const filteredOrders = orders?.filter((order) => {
+    const isBooking = order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE";
+    if (filter === "quick") return !isBooking;
+    if (filter === "booking") return isBooking;
+    return true;
   });
 
   useEffect(() => {
@@ -185,148 +236,216 @@ export function OrderHistoryPage() {
         </button>
       </header>
 
+      {/* Filter Tabs */}
+      <div className="flex gap-2 p-1 bg-gorola-charcoal/[0.04] rounded-2xl mb-6 max-w-xl md:max-w-2xl w-full overflow-x-auto scrollbar-none">
+        <button
+          onClick={() => setFilter("all")}
+          className={`flex-1 py-2 px-4 text-center rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+            filter === "all"
+              ? "bg-white text-gorola-charcoal shadow-sm"
+              : "text-gorola-charcoal/50 hover:text-gorola-charcoal"
+          }`}
+        >
+          All
+        </button>
+        <button
+          onClick={() => setFilter("quick")}
+          className={`flex-1 py-2 px-4 text-center rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+            filter === "quick"
+              ? "bg-white text-gorola-pine shadow-sm"
+              : "text-gorola-charcoal/50 hover:text-gorola-charcoal"
+          }`}
+        >
+          ⚡ Instant Deliveries
+        </button>
+        <button
+          onClick={() => setFilter("booking")}
+          className={`flex-1 py-2 px-4 text-center rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+            filter === "booking"
+              ? "bg-white text-indigo-600 shadow-sm"
+              : "text-gorola-charcoal/50 hover:text-gorola-charcoal"
+          }`}
+        >
+          📅 Booked Services
+        </button>
+      </div>
+
       <div className="space-y-4">
-        {orders.map((order) => (
-          <div
-            key={order.id}
-            data-testid="order-card"
-            className="group relative bg-white border border-gorola-charcoal/10 rounded-2xl overflow-hidden hover:border-gorola-pine/30 transition-all duration-300 shadow-sm hover:shadow-md"
-          >
-            <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-              <div className="space-y-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-bold text-lg text-gorola-charcoal">{order.store.name}</h3>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                    order.status === 'DELIVERED' ? 'bg-green-100 text-green-700' : 
-                    order.status === 'CANCELLED' ? 'bg-red-100 text-red-700' : 
-                    'bg-blue-100 text-blue-700'
-                  }`}>
-                    {order.status === 'DELIVERED' && (order.orderType === 'BOOKING' || order.store?.storeType === 'BOOKING_COMMERCE') ? 'COMPLETED' : order.status}
-                  </span>
-                </div>
-                <p className="text-sm text-gorola-charcoal/40">
-                  {format(new Date(order.createdAt), "MMM d, yyyy • h:mm a")}
-                </p>
-                <div className="pt-2 text-sm text-gorola-charcoal/70">
-                  {order.items.map(i => `${i.quantity}x ${i.productName}`).join(", ")}
-                </div>
-              </div>
-
-              <div className="flex items-center gap-6">
-                <div className="text-right">
-                  <p className="text-xs text-gorola-charcoal/40 uppercase tracking-widest font-bold">Total</p>
-                  <p className="text-xl font-black text-gorola-charcoal">₹{order.total}</p>
-                </div>
-                
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => reorderMutation.mutate(order.id)}
-                    disabled={reorderMutation.isPending}
-                    className="flex items-center gap-2 px-4 py-2 bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl font-bold text-sm transition-all duration-300 disabled:opacity-50 shadow-md shadow-gorola-pine/10"
-                    aria-label="Reorder"
-                  >
-                    <RefreshCcw 
-                      className={`w-4 h-4 ${(reorderMutation.isPending && reorderMutation.variables === order.id) ? 'animate-spin' : ''}`} 
-                    />
-                    Reorder
-                  </button>
-                  <button
-                    onClick={() => {
-                      if (order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE") {
-                        navigate(`/bookings/${order.id}`);
-                      } else {
-                        navigate(`/orders/${order.id}`);
-                      }
-                    }}
-                    className="p-2 bg-gorola-charcoal/5 hover:bg-gorola-charcoal/10 rounded-xl text-gorola-charcoal/60 hover:text-gorola-charcoal transition-colors"
-                  >
-                    <ChevronRight className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-            </div>
-
-            {/* Rating Section for Delivered Orders */}
-            {order.status === "DELIVERED" && (
-              <div className="px-5 py-3 bg-gorola-charcoal/[0.02] border-t border-gorola-charcoal/5 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-xs text-gorola-charcoal/40 font-medium">
-                    {order.rating !== null ? (
-                      <div className="space-y-1">
-                        <span className="flex items-center gap-1.5 text-green-600 font-bold">
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          Rating submitted
-                        </span>
-                        {order.ratingComment && (
-                          <p className="text-[10px] text-gorola-charcoal/50 italic">"{order.ratingComment}"</p>
-                        )}
+        {filteredOrders?.map((order) => {
+          const isBooking = order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE";
+          const badge = getBadgeDetails(order);
+          return (
+            <div
+              key={order.id}
+              data-testid="order-card"
+              className="group relative bg-white border border-gorola-charcoal/10 rounded-2xl overflow-hidden hover:border-gorola-pine/30 transition-all duration-300 shadow-sm hover:shadow-md"
+            >
+              <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-bold text-lg text-gorola-charcoal">{order.store.name}</h3>
+                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${badge.classes}`}>
+                      {badge.label}
+                    </span>
+                  </div>
+                  <p className="text-sm text-gorola-charcoal/40">
+                    {format(new Date(order.createdAt), "MMM d, yyyy • h:mm a")}
+                  </p>
+                  
+                  {isBooking && order.bookingOrder && (
+                    <div className="mt-2 space-y-1 text-xs text-gorola-charcoal/60 bg-gorola-charcoal/[0.02] p-2.5 rounded-xl border border-gorola-charcoal/5">
+                      <div className="flex items-center gap-1.5 font-semibold text-gorola-charcoal">
+                        <Clock className="w-3.5 h-3.5 text-gorola-pine" />
+                        <span>Scheduled: {format(new Date(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
                       </div>
-                    ) : (
-                      "How was your order?"
-                    )}
+                      <div className="pl-5">
+                        Slot: {order.bookingOrder.timeslot}
+                      </div>
+                      {order.bookingOrder.requiresFasting && (
+                        <div className="pl-5 text-amber-600 font-bold flex items-center gap-1 mt-0.5">
+                          <span>⚠️ Fasting Required (min 8-10 hours)</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="pt-2 text-sm text-gorola-charcoal/70">
+                    {order.items.map(i => `${i.quantity}x ${i.productName}`).join(", ")}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <p className="text-xs text-gorola-charcoal/40 uppercase tracking-widest font-bold">Total</p>
+                    <p className="text-xl font-black text-gorola-charcoal">₹{order.total}</p>
                   </div>
                   
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
+                    {isBooking ? (
+                      <button
+                        onClick={() => {
+                          const firstItem = order.items[0];
+                          if (firstItem) {
+                            navigate(`/bookings/new?productId=${firstItem.productId ?? ""}&variantId=${firstItem.productVariantId}`);
+                          }
+                        }}
+                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl font-bold text-sm transition-all duration-300 shadow-md shadow-indigo-600/10"
+                        aria-label="Book Again"
+                      >
+                        <RefreshCcw className="w-4 h-4" />
+                        Book Again
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => reorderMutation.mutate(order.id)}
+                        disabled={reorderMutation.isPending}
+                        className="flex items-center gap-2 px-4 py-2 bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl font-bold text-sm transition-all duration-300 disabled:opacity-50 shadow-md shadow-gorola-pine/10"
+                        aria-label="Reorder"
+                      >
+                        <RefreshCcw 
+                          className={`w-4 h-4 ${(reorderMutation.isPending && reorderMutation.variables === order.id) ? 'animate-spin' : ''}`} 
+                        />
+                        Reorder
+                      </button>
+                    )}
                     <button
-                      onClick={() => setActiveRating(activeRating === `${order.id}:up` ? null : `${order.id}:up`)}
-                      disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                        order.rating === true || activeRating === `${order.id}:up`
-                          ? 'bg-green-100 text-green-700 border border-green-200' 
-                          : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                      } disabled:opacity-50`}
-                      aria-label="Thumbs Up"
+                      onClick={() => {
+                        if (isBooking) {
+                          navigate(`/bookings/${order.id}`);
+                        } else {
+                          navigate(`/orders/${order.id}`);
+                        }
+                      }}
+                      className="p-2 bg-gorola-charcoal/5 hover:bg-gorola-charcoal/10 rounded-xl text-gorola-charcoal/60 hover:text-gorola-charcoal transition-colors"
                     >
-                      <ThumbsUp className="w-3.5 h-3.5" />
-                      {order.rating === true ? "Liked" : ""}
-                    </button>
-                    <button
-                      onClick={() => setActiveRating(activeRating === `${order.id}:down` ? null : `${order.id}:down`)}
-                      disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
-                      className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                        order.rating === false || activeRating === `${order.id}:down`
-                          ? 'bg-red-100 text-red-700 border border-red-200' 
-                          : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                      } disabled:opacity-50`}
-                      aria-label="Thumbs Down"
-                    >
-                      <ThumbsDown className="w-3.5 h-3.5" />
-                      {order.rating === false ? "Disliked" : ""}
+                      <ChevronRight className="w-5 h-5" />
                     </button>
                   </div>
                 </div>
+              </div>
 
-                {/* Comment Box */}
-                {activeRating?.startsWith(order.id) && (
-                  <div className="animate-in fade-in slide-in-from-top-2 duration-300">
-                    <div className="relative group/input">
-                      <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-gorola-charcoal/20 group-focus-within/input:text-gorola-charcoal/40 transition-colors" />
-                      <textarea
-                        value={ratingComment[order.id] || ""}
-                        onChange={(e) => setRatingComment({ ...ratingComment, [order.id]: e.target.value })}
-                        placeholder="Any feedback for the store? (Optional)"
-                        className="w-full bg-white border border-gorola-charcoal/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gorola-charcoal placeholder:text-gorola-charcoal/20 focus:outline-none focus:border-gorola-pine/30 transition-all resize-none h-20 shadow-inner"
-                      />
+              {/* Rating Section for Delivered Orders */}
+              {order.status === "DELIVERED" && (
+                <div className="px-5 py-3 bg-gorola-charcoal/[0.02] border-t border-gorola-charcoal/5 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="text-xs text-gorola-charcoal/40 font-medium">
+                      {order.rating !== null ? (
+                        <div className="space-y-1">
+                          <span className="flex items-center gap-1.5 text-green-600 font-bold">
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            Rating submitted
+                          </span>
+                          {order.ratingComment && (
+                            <p className="text-[10px] text-gorola-charcoal/50 italic">"{order.ratingComment}"</p>
+                          )}
+                        </div>
+                      ) : (
+                        "How was your order?"
+                      )}
                     </div>
-                    <div className="flex justify-end mt-2">
+                    
+                    <div className="flex items-center gap-3">
                       <button
-                        onClick={() => rateMutation.mutate({ 
-                          orderId: order.id, 
-                          rating: activeRating.endsWith(":up"), 
-                          comment: ratingComment[order.id] 
-                        })}
-                        className="px-4 py-1.5 bg-gorola-pine text-white text-xs font-bold rounded-lg hover:bg-gorola-pine/90 transition-colors shadow-md shadow-gorola-pine/10 disabled:opacity-50"
-                        disabled={rateMutation.isPending && rateMutation.variables?.orderId === order.id}
+                        onClick={() => setActiveRating(activeRating === `${order.id}:up` ? null : `${order.id}:up`)}
+                        disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          order.rating === true || activeRating === `${order.id}:up`
+                            ? 'bg-green-100 text-green-700 border border-green-200' 
+                            : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                        } disabled:opacity-50`}
+                        aria-label="Thumbs Up"
                       >
-                        Submit Feedback
+                        <ThumbsUp className="w-3.5 h-3.5" />
+                        {order.rating === true ? "Liked" : ""}
+                      </button>
+                      <button
+                        onClick={() => setActiveRating(activeRating === `${order.id}:down` ? null : `${order.id}:down`)}
+                        disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
+                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                          order.rating === false || activeRating === `${order.id}:down`
+                            ? 'bg-red-100 text-red-700 border border-red-200' 
+                            : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                        } disabled:opacity-50`}
+                        aria-label="Thumbs Down"
+                      >
+                        <ThumbsDown className="w-3.5 h-3.5" />
+                        {order.rating === false ? "Disliked" : ""}
                       </button>
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+
+                  {/* Comment Box */}
+                  {activeRating?.startsWith(order.id) && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300">
+                      <div className="relative group/input">
+                        <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-gorola-charcoal/20 group-focus-within/input:text-gorola-charcoal/40 transition-colors" />
+                        <textarea
+                          value={ratingComment[order.id] || ""}
+                          onChange={(e) => setRatingComment({ ...ratingComment, [order.id]: e.target.value })}
+                          placeholder="Any feedback for the store? (Optional)"
+                          className="w-full bg-white border border-gorola-charcoal/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gorola-charcoal placeholder:text-gorola-charcoal/20 focus:outline-none focus:border-gorola-pine/30 transition-all resize-none h-20 shadow-inner"
+                        />
+                      </div>
+                      <div className="flex justify-end mt-2">
+                        <button
+                          onClick={() => rateMutation.mutate({ 
+                            orderId: order.id, 
+                            rating: activeRating.endsWith(":up"), 
+                            comment: ratingComment[order.id] 
+                          })}
+                          className="px-4 py-1.5 bg-gorola-pine text-white text-xs font-bold rounded-lg hover:bg-gorola-pine/90 transition-colors shadow-md shadow-gorola-pine/10 disabled:opacity-50"
+                          disabled={rateMutation.isPending && rateMutation.variables?.orderId === order.id}
+                        >
+                          Submit Feedback
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

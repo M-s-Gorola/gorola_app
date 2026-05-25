@@ -30,6 +30,7 @@ export type ProductListItem = {
   imageUrl: string;
   storeId: string;
   storeName: string;
+  storeType: string;
   categoryId: string;
   highestPricedVariantId: string;
   price: string;
@@ -72,7 +73,8 @@ const productListInclude = Prisma.validator<Prisma.ProductInclude>()({
   store: {
     select: {
       id: true,
-      name: true
+      name: true,
+      storeType: true
     }
   },
   variants: {
@@ -220,6 +222,7 @@ export class ProductRepository {
         imageUrl: row.imageUrl,
         storeId: row.store.id,
         storeName: row.store.name,
+        storeType: row.store.storeType,
         categoryId: row.categoryId,
         highestPricedVariantId: row.variants[0]!.id,
         price: row.variants[0]!.price.toFixed(2),

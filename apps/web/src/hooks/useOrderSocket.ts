@@ -18,7 +18,7 @@ export function useOrderSocket(
   useEffect(() => {
     if (!orderId || !accessToken) return;
 
-    const baseURL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001";
+    const baseURL = import.meta.env.VITE_API_BASE_URL || "";
     const socket = io(baseURL, {
       auth: { token: accessToken },
       withCredentials: true,

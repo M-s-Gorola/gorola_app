@@ -61,11 +61,9 @@ test.describe('Checkout & Account', () => {
     // Wait for addresses to load so the radio buttons are stable
     await expect(page.locator('text=/Loading addresses/i')).not.toBeVisible({ timeout: 15000 });
 
-    // If a saved address already exists (from a previous test), explicitly select "New Location"
+    // Explicitly select "New Location" using Playwright's auto-waiting mechanism
     const newAddressRadio = page.locator('input[value="new"]');
-    if (await newAddressRadio.count() > 0) {
-      await newAddressRadio.click();
-    }
+    await newAddressRadio.click();
 
     // Assert address form visible
     await expect(page.locator('[name="landmarkDescription"]')).toBeVisible();

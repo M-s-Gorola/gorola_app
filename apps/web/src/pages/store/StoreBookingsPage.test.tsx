@@ -348,7 +348,7 @@ describe("StoreBookingsPage TDD", () => {
     await user.click(historyTab);
 
     expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
-    expect(screen.getByText("REJECTED")).toBeInTheDocument();
+    expect(screen.getByText("CANCELLED")).toBeInTheDocument();
     expect(screen.getByText(/Reason: Slot full/)).toBeInTheDocument();
   });
 
