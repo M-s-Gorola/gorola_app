@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, within } from "@testing-library/react";
+import { render, screen, within, fireEvent } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -115,18 +115,23 @@ describe("OrderConfirmationPage", () => {
   });
 
   it("loads order detail, line items, store trust block with tel link, and totals including discount amount", async () => {
-    getMock.mockResolvedValue({
-      data: {
-        success: true,
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
         data: {
-          ...baseEnvelope().data,
-          discount: {
-            amount: "10.00",
-            code: "SAVE10",
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            discount: {
+              amount: "10.00",
+              code: "SAVE10",
+            },
+            total: "220.00",
           },
-          total: "220.00",
         },
-      },
+      });
     });
 
     renderPage();
@@ -158,14 +163,19 @@ describe("OrderConfirmationPage", () => {
   });
 
   it("shows scheduling copy when scheduledFor is present", async () => {
-    getMock.mockResolvedValue({
-      data: {
-        success: true,
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
         data: {
-          ...baseEnvelope().data,
-          scheduledFor: "2026-05-07T17:30:00.000Z",
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            scheduledFor: "2026-05-07T17:30:00.000Z",
+          },
         },
-      },
+      });
     });
 
     renderPage();
@@ -174,8 +184,13 @@ describe("OrderConfirmationPage", () => {
 
   it("shows weather-route honest ETA copy when weather mode is toggled", async () => {
     useWeatherStore.setState({ isWeatherMode: true });
-    getMock.mockResolvedValue({
-      data: baseEnvelope(),
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: baseEnvelope(),
+      });
     });
 
     renderPage();
@@ -195,14 +210,19 @@ describe("OrderConfirmationPage", () => {
     ];
 
     for (const status of statuses) {
-      getMock.mockResolvedValueOnce({
-        data: {
-          success: true,
+      getMock.mockImplementation((url: string) => {
+        if (url.includes("/promotions/")) {
+          return Promise.resolve({ data: { success: true, data: [] } });
+        }
+        return Promise.resolve({
           data: {
-            ...baseEnvelope().data,
-            status: status.key,
+            success: true,
+            data: {
+              ...baseEnvelope().data,
+              status: status.key,
+            },
           },
-        },
+        });
       });
 
       renderPage(`/orders/o-${status.key}`);
@@ -211,5 +231,74 @@ describe("OrderConfirmationPage", () => {
       expect(heading).toBeInTheDocument();
       expect(heading.id).toBe("occ-heading");
     }
+  });
+
+  it("renders a collapsible discount breakdown showing itemized promotions when toggled", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              {
+                id: "o-flat",
+                title: "Flat Discount",
+                discountType: "FLAT",
+                discountValue: 10,
+                minOrderAmount: null,
+                maxDiscount: null,
+                startsAt: "2026-05-01T00:00:00.000Z",
+                endsAt: "2026-05-30T00:00:00.000Z",
+                isActive: true
+              }
+            ]
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            createdAt: "2026-05-15T12:00:00.000Z",
+            discount: {
+              amount: "10.00",
+              code: "SAVE10",
+            },
+            total: "220.00",
+          },
+        },
+      });
+    });
+
+    renderPage();
+
+    await screen.findByRole("heading", { name: "Thank you" });
+
+    // Assert summary row is shown
+    expect(screen.getByTestId("discount-summary-row")).toBeInTheDocument();
+    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("-Rs 10.00")).toBeInTheDocument();
+
+    const toggle = screen.getByTestId("discount-breakdown-toggle");
+    expect(toggle).toBeInTheDocument();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    // Breakdown is hidden by default
+    expect(screen.queryByTestId("discount-breakdown-list")).not.toBeInTheDocument();
+
+    // Toggle expansion
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+    
+    const breakdownList = screen.getByTestId("discount-breakdown-list");
+    expect(breakdownList).toBeInTheDocument();
+    expect(within(breakdownList).getByText(/• Discount \(Flat Discount\)/)).toBeInTheDocument();
+    expect(within(breakdownList).getByText("-Rs 10.00")).toBeInTheDocument();
+
+    // Collapse
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("discount-breakdown-list")).not.toBeInTheDocument();
   });
 });

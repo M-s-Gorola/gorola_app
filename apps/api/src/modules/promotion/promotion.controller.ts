@@ -4,6 +4,8 @@ import { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fa
 import { z } from "zod";
 
 import { getPrismaClient } from "../../lib/prisma.js";
+import { requireAuth } from "../auth/auth.middleware.js";
+import type { AccessTokenVerifier } from "../auth/auth.types.js";
 
 import { AdvertisementRepository } from "./advertisement.repository.js";
 import { DiscountRepository } from "./discount.repository.js";
@@ -35,7 +37,10 @@ function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): Succ
   };
 }
 
-export function registerPromotionRoutes(app: FastifyInstance): void {
+export function registerPromotionRoutes(
+  app: FastifyInstance,
+  deps?: { tokenVerifier: AccessTokenVerifier }
+): void {
   const discountRepo = new DiscountRepository(getPrismaClient());
   const adRepo = new AdvertisementRepository(getPrismaClient());
 
@@ -50,6 +55,28 @@ export function registerPromotionRoutes(app: FastifyInstance): void {
     }));
 
     return success(request, reply, serializedAds);
+  });
+
+  const getOffersPreHandler = deps ? { preHandler: requireAuth(deps.tokenVerifier) } : {};
+
+  app.get("/api/v1/promotions/store/:storeId/offers", getOffersPreHandler, async (request, reply) => {
+    const params = request.params as { storeId: string };
+    const offers = await getPrismaClient().offer.findMany({
+      where: { storeId: params.storeId },
+      orderBy: { createdAt: "desc" }
+    });
+    const serializedOffers = offers.map((offer) => ({
+      id: offer.id,
+      title: offer.title,
+      discountType: offer.discountType,
+      discountValue: Number(offer.discountValue),
+      minOrderAmount: offer.minOrderAmount === null ? null : Number(offer.minOrderAmount),
+      maxDiscount: offer.maxDiscount === null ? null : Number(offer.maxDiscount),
+      startsAt: offer.startsAt.toISOString(),
+      endsAt: offer.endsAt.toISOString(),
+      isActive: offer.isActive
+    }));
+    return success(request, reply, serializedOffers);
   });
 
   app.post("/api/v1/promotions/discounts/validate", async (request, reply) => {

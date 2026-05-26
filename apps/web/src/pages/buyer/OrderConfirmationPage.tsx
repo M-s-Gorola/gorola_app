@@ -261,6 +261,7 @@ export function OrderConfirmationPage(): ReactElement {
   const entranceDoneRef = useRef(false);
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
@@ -282,6 +283,85 @@ export function OrderConfirmationPage(): ReactElement {
   });
 
   const order = query.data;
+
+interface StoreOffer {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount?: number | null;
+  maxDiscount?: number | null;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+}
+
+  const storeId = order?.store?.id;
+  const { data: offersResponse } = useQuery({
+    enabled: !!storeId && !isBootstrapPending,
+    queryKey: ["promotions", "store", storeId, "offers"],
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: StoreOffer[] }>(`/api/v1/promotions/store/${storeId}/offers`);
+      return res.data;
+    }
+  });
+
+  const getAppliedDiscounts = (order: BuyerOrderDetail) => {
+    const subtotal = Number(order.subtotal);
+    const deliveryFee = Number(order.deliveryFee);
+    const total = Number(order.total);
+    const discountAmount = Number((subtotal + deliveryFee - total).toFixed(2));
+    if (discountAmount <= 0) return [];
+
+    const offers = Array.isArray(offersResponse?.data) ? offersResponse.data : [];
+    const orderTime = new Date(order.createdAt || "").getTime();
+
+    // Find all offers that were active at the order's creation time
+    const matchedOffers = (offers as StoreOffer[]).filter((o) => {
+      const start = new Date(o.startsAt).getTime();
+      const end = new Date(o.endsAt).getTime();
+      return orderTime >= start && orderTime <= end;
+    });
+
+    const result: { label: string; amount: number }[] = [];
+    let remainingDiscount = discountAmount;
+
+    for (const offer of matchedOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal < minOrder) continue;
+
+      let offerDiscount = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        offerDiscount = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          offerDiscount = Math.min(offerDiscount, offer.maxDiscount);
+        }
+      } else {
+        offerDiscount = offer.discountValue;
+      }
+      offerDiscount = Number(Math.min(subtotal, offerDiscount).toFixed(2));
+
+      if (offerDiscount > 0 && remainingDiscount > 0) {
+        const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
+        if (appliedAmt > 0.05) {
+          result.push({
+            label: `Discount (${offer.title})`,
+            amount: appliedAmt
+          });
+          remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
+        }
+      }
+    }
+
+    if (remainingDiscount > 0.05) {
+      result.push({
+        label: "Discount",
+        amount: remainingDiscount
+      });
+    }
+
+    return result;
+  };
   useEffect(() => {
     if (order && (order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE")) {
       navigate(`/bookings/${order.id}`, { replace: true });
@@ -441,7 +521,6 @@ export function OrderConfirmationPage(): ReactElement {
       {query.isSuccess && query.data ? (
         (() => {
           const order = query.data;
-          const discountAmount = order.discount?.amount ?? "0.00";
 
           const weatherPulse =
             isWeatherMode ?
@@ -583,12 +662,40 @@ export function OrderConfirmationPage(): ReactElement {
                     <span className="text-gorola-slate">Delivery fee:</span>
                     <span className="font-medium">Rs {order.deliveryFee}</span>
                   </div>
-                  {discountAmount !== "0.00" ? (
-                    <div className="flex justify-between text-emerald-700">
-                      <span>Discount:</span>
-                      <span className="font-medium">-Rs {discountAmount}</span>
-                    </div>
-                  ) : null}
+                  {(() => {
+                    const applied = getAppliedDiscounts(order);
+                    const totalAmt = applied.reduce((sum, d) => sum + d.amount, 0);
+                    if (totalAmt <= 0) return null;
+                    return (
+                      <div className="space-y-1" data-testid="discount-summary-row">
+                        <div className="flex justify-between items-center text-emerald-700">
+                          <button
+                            type="button"
+                            onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                            data-testid="discount-breakdown-toggle"
+                            aria-expanded={isDiscountExpanded}
+                            className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
+                          >
+                            <span>Discount:</span>
+                            <span className="text-[10px] transform transition-transform duration-200">
+                              {isDiscountExpanded ? "▼" : "▶"}
+                            </span>
+                          </button>
+                          <span className="font-medium">-Rs {totalAmt.toFixed(2)}</span>
+                        </div>
+                        {isDiscountExpanded && (
+                          <div className="space-y-1 pl-3 border-l border-emerald-100" data-testid="discount-breakdown-list">
+                            {applied.map((d, idx) => (
+                              <div key={idx} className="flex justify-between items-start gap-4 text-xs text-emerald-600/90 font-dm-sans italic w-full">
+                                <span className="break-words text-left flex-1">• {d.label}</span>
+                                <span className="text-right whitespace-nowrap shrink-0">-Rs {d.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
                     <span>Payment [{formatPayment(order.paymentMethod)}]:</span>
                     <span>Rs {order.total}</span>

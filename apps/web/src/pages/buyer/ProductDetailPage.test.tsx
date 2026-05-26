@@ -8,16 +8,40 @@ import { useCartStore } from "@/store/cart.store";
 
 import { ProductDetailPage } from "./ProductDetailPage";
 
-const { getMock, postMock, mockNavigate } = vi.hoisted(() => ({
+const { getMock, postMock, putMock, deleteMock, mockNavigate } = vi.hoisted(() => ({
   getMock: vi.fn(),
   postMock: vi.fn(),
+  putMock: vi.fn(),
+  deleteMock: vi.fn(),
   mockNavigate: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
-    get: getMock,
-    post: postMock
+    get: vi.fn().mockImplementation(async (url: string, config?: unknown) => {
+      if (url.includes("/api/v1/cart")) {
+        return {
+          data: {
+            success: true,
+            data: {
+              items: useCartStore.getState().lines.map((line) => ({
+                productVariantId: line.productVariantId,
+                quantity: line.quantity,
+                productName: line.productName,
+                variantLabel: line.variantLabel,
+                unitPrice: line.unitPrice
+              })),
+              activeOffer: null,
+              activeOffers: []
+            }
+          }
+        };
+      }
+      return getMock(url, config);
+    }),
+    post: postMock,
+    put: putMock,
+    delete: deleteMock
   }
 }));
 
@@ -96,7 +120,7 @@ describe("ProductDetailPage", () => {
 
     renderPage();
     expect(await screen.findByRole("heading", { name: "Apple" })).toBeInTheDocument();
-    
+
     const img = screen.getByAltText("Apple");
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute("src", "https://cdn.example.com/apple.jpg");
@@ -160,7 +184,13 @@ describe("ProductDetailPage", () => {
     postMock.mockResolvedValue({ data: { success: true } });
 
     renderPage();
+
+    // 1. Wait for the heading to appear
     await screen.findByRole("heading", { name: "Apple" });
+
+    // 2. FORCE the test runner to wait until the dynamic API variants are completely bound to the UI buttons
+    expect(await screen.findByRole("button", { name: "500g" })).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
 
@@ -320,7 +350,7 @@ describe("ProductDetailPage", () => {
 
     renderPage("/products/p2");
     await screen.findByRole("heading", { name: "CBC Panel" });
-    
+
     // Check that Add to Cart and quantity buttons are not rendered
     expect(screen.queryByRole("button", { name: "Add to cart" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Increase quantity" })).not.toBeInTheDocument();

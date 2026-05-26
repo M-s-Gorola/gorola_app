@@ -1,8 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { InitialEntry } from "react-router-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { useAuthStore } from "@/store/auth.store";
 
 import { StoreOrdersPage } from "./StoreOrdersPage";
 
@@ -41,6 +43,24 @@ describe("StoreOrdersPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     putMock.mockReset();
+
+    useAuthStore.getState().setStoreOwnerSession({
+      accessToken: "mock-access-token",
+      refreshToken: "mock-refresh-token",
+      userId: "mock-user-id",
+      storeId: "mock-store-id"
+    });
+
+    // Default mock implementations to prevent test breakages on auxiliary queries
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return new Promise(() => {}); // remains pending
+    });
   });
 
   it("renders skeletons during loading state", () => {
@@ -52,7 +72,18 @@ describe("StoreOrdersPage", () => {
   });
 
   it("renders error message when API call fails", async () => {
-    getMock.mockRejectedValueOnce(new Error("Network Error"));
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/orders")) {
+        return Promise.reject(new Error("Network Error"));
+      }
+      return Promise.reject(new Error("Not found"));
+    });
 
     renderStoreOrders();
 
@@ -69,8 +100,8 @@ describe("StoreOrdersPage", () => {
           storeId: "store-456",
           status: "PLACED",
           subtotal: 150.0,
-          deliveryFee: 20.0,
-          total: 170.0,
+          deliveryFee: 30.0,
+          total: 160.0,
           paymentMethod: "COD",
           landmarkDescription: "Near park",
           flatRoom: "Room 404",
@@ -104,7 +135,33 @@ describe("StoreOrdersPage", () => {
       }
     };
 
-    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              {
+                id: "offer-1",
+                title: "Inaugural Store Offer",
+                discountType: "FLAT",
+                discountValue: 20,
+                startsAt: new Date(Date.now() - 1000000).toISOString(),
+                endsAt: new Date(Date.now() + 1000000).toISOString(),
+                isActive: true
+              }
+            ]
+          }
+        });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
 
     renderStoreOrders();
 
@@ -116,7 +173,7 @@ describe("StoreOrdersPage", () => {
     // Verify order cards are rendered
     expect(await screen.findByTestId("order-card-order-1")).toBeInTheDocument();
     expect(screen.getByText("#ORDER-1")).toBeInTheDocument();
-    expect(screen.getByText("₹170.00")).toBeInTheDocument();
+    expect(screen.getByText("₹160.00")).toBeInTheDocument();
     expect(screen.getByText("Organic Bananas (x1)")).toBeInTheDocument();
     expect(screen.getByText("5m ago")).toBeInTheDocument();
 
@@ -126,6 +183,19 @@ describe("StoreOrdersPage", () => {
     // Verify Modal Dialog rendered
     expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
     expect(screen.getByText("*********3210")).toBeInTheDocument();
+    
+    // Verify applied discount displays in modal
+    expect(screen.getByTestId("store-order-discount")).toBeInTheDocument();
+    const discountToggle = screen.getByTestId("store-order-discount-toggle");
+    expect(discountToggle).toBeInTheDocument();
+    expect(discountToggle.getAttribute("aria-expanded")).toBe("false");
+    
+    // Expand the discount breakdown
+    fireEvent.click(discountToggle);
+    expect(discountToggle.getAttribute("aria-expanded")).toBe("true");
+    const discountContainer = screen.getByTestId("store-order-discount");
+    expect(within(discountContainer).getByText(/• Discount \(Inaugural Store Offer\)/)).toBeInTheDocument();
+    expect(within(discountContainer).getAllByText("-₹20.00").length).toBeGreaterThanOrEqual(1);
     
     // Verify complete delivery address displays inside detailed modal
     expect(screen.queryByText(/\[Office\]/)).not.toBeInTheDocument();
@@ -169,5 +239,190 @@ describe("StoreOrdersPage", () => {
         status: "PREPARING"
       });
     });
+  });
+
+  it("renders a collapsible discount breakdown in the order detail modal when toggled", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-2",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PLACED",
+          subtotal: 150.0,
+          deliveryFee: 30.0,
+          total: 160.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near park",
+          flatRoom: "Room 404",
+          addressLabel: "Office",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [
+            {
+              id: "item-2",
+              productName: "Organic Bananas",
+              variantLabel: "Pack of 6",
+              price: 150.0,
+              quantity: 1
+            }
+          ],
+          statusHistory: [
+            {
+              id: "hist-2",
+              status: "PLACED",
+              changedAt: new Date().toISOString(),
+              changedBy: "BUYER"
+            }
+          ]
+        }
+      ],
+      meta: {
+        total: 1,
+        page: 1,
+        limit: 10,
+        hasMore: false
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              {
+                id: "offer-1",
+                title: "Inaugural Store Offer",
+                discountType: "FLAT",
+                discountValue: 20,
+                startsAt: new Date(Date.now() - 1000000).toISOString(),
+                endsAt: new Date(Date.now() + 1000000).toISOString(),
+                isActive: true
+              }
+            ]
+          }
+        });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderStoreOrders();
+
+    await screen.findByTestId("order-card-order-2");
+    fireEvent.click(screen.getByTestId("order-card-order-2"));
+
+    expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
+    
+    // Check collapsible discount summary row is shown
+    expect(screen.getByTestId("store-order-discount")).toBeInTheDocument();
+    
+    const toggle = screen.getByTestId("store-order-discount-toggle");
+    expect(toggle).toBeInTheDocument();
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+
+    // List is hidden by default
+    expect(screen.queryByTestId("store-order-discount-list")).not.toBeInTheDocument();
+
+    // Toggle expand
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("true");
+
+    const discountList = screen.getByTestId("store-order-discount-list");
+    expect(discountList).toBeInTheDocument();
+    expect(within(discountList).getByText(/• Discount \(Inaugural Store Offer\)/)).toBeInTheDocument();
+    expect(within(discountList).getByText("-₹20.00")).toBeInTheDocument();
+
+    // Toggle collapse
+    fireEvent.click(toggle);
+    expect(toggle.getAttribute("aria-expanded")).toBe("false");
+    expect(screen.queryByTestId("store-order-discount-list")).not.toBeInTheDocument();
+  });
+
+  it("locks background body scroll when detailed order modal is open", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-3",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PLACED",
+          subtotal: 150.0,
+          deliveryFee: 30.0,
+          total: 180.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near park",
+          flatRoom: "Room 404",
+          addressLabel: "Office",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [
+            {
+              id: "item-3",
+              productName: "Organic Bananas",
+              variantLabel: "Pack of 6",
+              price: 150.0,
+              quantity: 1
+            }
+          ],
+          statusHistory: [
+            {
+              id: "hist-3",
+              status: "PLACED",
+              changedAt: new Date().toISOString(),
+              changedBy: "BUYER"
+            }
+          ]
+        }
+      ],
+      meta: {
+        total: 1,
+        page: 1,
+        limit: 10,
+        hasMore: false
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderStoreOrders();
+
+    await screen.findByTestId("order-card-order-3");
+    
+    // Before opening, body overflow should be empty
+    expect(document.body.style.overflow).toBe("");
+
+    // Open modal
+    fireEvent.click(screen.getByTestId("order-card-order-3"));
+    expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
+
+    // Assert scroll locked
+    expect(document.body.style.overflow).toBe("hidden");
+
+    // Close modal
+    fireEvent.click(screen.getByLabelText("Close modal"));
+    expect(screen.queryByTestId("order-details-modal")).not.toBeInTheDocument();
+
+    // Assert scroll lock is released
+    expect(document.body.style.overflow).toBe("");
   });
 });

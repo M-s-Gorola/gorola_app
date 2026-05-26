@@ -17,6 +17,7 @@ import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { lenis } from "@/lib/lenis";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -102,6 +103,25 @@ export function StoreOrdersPage(): ReactElement {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      document.body.style.overflow = "hidden";
+      lenis?.stop();
+    } else {
+      document.body.style.overflow = "";
+      lenis?.start();
+    }
+    return () => {
+      document.body.style.overflow = "";
+      lenis?.start();
+    };
+  }, [selectedOrder]);
+
+  useEffect(() => {
+    setIsDiscountExpanded(false);
+  }, [selectedOrder]);
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -117,6 +137,85 @@ export function StoreOrdersPage(): ReactElement {
     },
     enabled: !!storeId
   });
+
+interface StoreOffer {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount?: number | null;
+  maxDiscount?: number | null;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+}
+
+  const { data: offersResponse } = useQuery({
+    queryKey: ["store", "offers"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: StoreOffer[] }>("/api/v1/store/offers");
+      return res.data;
+    },
+    enabled: !!storeId
+  });
+
+  const getAppliedDiscounts = (order: Order) => {
+    const subtotal = Number(order.subtotal);
+    const deliveryFee = Number(order.deliveryFee);
+    const total = Number(order.total);
+    const discountAmount = Number((subtotal + deliveryFee - total).toFixed(2));
+    if (discountAmount <= 0) return [];
+
+    const offers = Array.isArray(offersResponse?.data) ? offersResponse.data : [];
+    const orderTime = new Date(order.createdAt).getTime();
+
+    // Find all offers that were active at the order's creation time
+    const matchedOffers = (offers as StoreOffer[]).filter((o) => {
+      const start = new Date(o.startsAt).getTime();
+      const end = new Date(o.endsAt).getTime();
+      return orderTime >= start && orderTime <= end;
+    });
+
+    const result: { label: string; amount: number }[] = [];
+    let remainingDiscount = discountAmount;
+
+    for (const offer of matchedOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal < minOrder) continue;
+
+      let offerDiscount = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        offerDiscount = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          offerDiscount = Math.min(offerDiscount, offer.maxDiscount);
+        }
+      } else {
+        offerDiscount = offer.discountValue;
+      }
+      offerDiscount = Number(Math.min(subtotal, offerDiscount).toFixed(2));
+
+      if (offerDiscount > 0 && remainingDiscount > 0) {
+        const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
+        if (appliedAmt > 0.05) {
+          result.push({
+            label: `Discount (${offer.title})`,
+            amount: appliedAmt
+          });
+          remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
+        }
+      }
+    }
+
+    if (remainingDiscount > 0.05) {
+      result.push({
+        label: "Discount",
+        amount: remainingDiscount
+      });
+    }
+
+    return result;
+  };
 
   useEffect(() => {
     if (storeProfile?.storeType === "BOOKING_COMMERCE") {
@@ -506,6 +605,7 @@ export function StoreOrdersPage(): ReactElement {
           <div
             className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
+            data-lenis-prevent
           >
             {/* Modal Header */}
             <div className="flex justify-between items-start gap-4">
@@ -651,21 +751,62 @@ export function StoreOrdersPage(): ReactElement {
             </div>
 
             {/* Total calculation panel */}
-            <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex flex-col gap-2">
-              <div className="flex justify-between items-center text-xs text-gorola-slate">
-                <span>Subtotal</span>
-                <span className="font-semibold">{formatCurrency(selectedOrder.subtotal)}</span>
-              </div>
-              <div className="flex justify-between items-center text-xs text-gorola-slate">
-                <span>Delivery Fee</span>
-                <span className="font-semibold">{formatCurrency(selectedOrder.deliveryFee)}</span>
-              </div>
-              <div className="h-px bg-gorola-mint/15 my-1" />
-              <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal">
-                <span>Grand Total</span>
-                <span className="text-lg text-gorola-pine">{formatCurrency(selectedOrder.total)}</span>
-              </div>
-            </div>
+            {(() => {
+              const subtotal = Number(selectedOrder.subtotal);
+              const deliveryFee = Number(selectedOrder.deliveryFee);
+              const total = Number(selectedOrder.total);
+              return (
+                <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex flex-col gap-2">
+                  <div className="flex justify-between items-center text-xs text-gorola-slate">
+                    <span>Subtotal</span>
+                    <span className="font-semibold">{formatCurrency(subtotal)}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-xs text-gorola-slate">
+                    <span>Delivery Fee</span>
+                    <span className="font-semibold">{formatCurrency(deliveryFee)}</span>
+                  </div>
+                  {(() => {
+                    const applied = getAppliedDiscounts(selectedOrder);
+                    const totalAmt = applied.reduce((sum, d) => sum + d.amount, 0);
+                    if (totalAmt <= 0) return null;
+                    return (
+                      <div className="space-y-1" data-testid="store-order-discount">
+                        <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                            data-testid="store-order-discount-toggle"
+                            aria-expanded={isDiscountExpanded}
+                            className="flex items-center gap-1 text-rose-600 hover:text-rose-700 transition-colors font-bold focus:outline-none"
+                          >
+                            <span>Discount:</span>
+                            <span className="text-[10px] transform transition-transform duration-200">
+                              {isDiscountExpanded ? "▼" : "▶"}
+                            </span>
+                          </button>
+                          <span className="font-semibold">-{formatCurrency(totalAmt)}</span>
+                        </div>
+                        {isDiscountExpanded && (
+                          <div className="space-y-1 pl-3 border-l border-rose-150" data-testid="store-order-discount-list">
+                            {applied.map((d, idx) => (
+                              <div key={idx} className="flex justify-between items-start gap-4 text-[11px] text-rose-500 font-dm-sans italic font-medium w-full">
+                                <span className="break-words text-left flex-1">• {d.label}</span>
+                                <span className="text-right whitespace-nowrap shrink-0">-{formatCurrency(d.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="h-px bg-gorola-mint/15 my-1" />
+                  <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal">
+                    <span>Grand Total</span>
+                    <span className="text-lg text-gorola-pine">{formatCurrency(total)}</span>
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Transitions actions buttons footer */}
             {allowedTransitions(selectedOrder.status).length > 0 && (

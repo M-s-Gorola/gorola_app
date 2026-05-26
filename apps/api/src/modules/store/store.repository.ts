@@ -1,11 +1,12 @@
 import { NotFoundError } from "@gorola/shared";
-import type { PrismaClient, Store } from "@prisma/client";
+import type { PrismaClient, Store, StoreType } from "@prisma/client";
 
 export type CreateStoreInput = {
   name: string;
   description: string;
   phone: string;
   address: string;
+  storeType?: StoreType;
   isActive?: boolean;
   weatherModeDeliveryWindow?: string | null;
 };
@@ -61,6 +62,7 @@ export class StoreRepository {
         description: input.description,
         phone: input.phone,
         address: input.address,
+        storeType: input.storeType ?? "QUICK_COMMERCE",
         isActive: input.isActive ?? true,
         weatherModeDeliveryWindow: input.weatherModeDeliveryWindow ?? null
       }

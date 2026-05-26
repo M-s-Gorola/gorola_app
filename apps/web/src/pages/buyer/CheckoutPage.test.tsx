@@ -295,4 +295,42 @@ describe("CheckoutPage", () => {
       );
     });
   });
+
+  it("shows active store offers in review step of CheckoutPage", async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({
+        lines: [
+          {
+            productName: "Apple",
+            quantity: 1,
+            productVariantId: "pv1",
+            unitPrice: 120,
+            variantLabel: "1kg"
+          }
+        ],
+        activeOffers: [
+          {
+            id: "o1",
+            title: "Weekend Deal",
+            discountType: "FLAT",
+            discountValue: 20,
+            minOrderAmount: null,
+            maxDiscount: null
+          }
+        ]
+      });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    expect(screen.getByTestId("checkout-offer-discount")).toHaveTextContent("Store Offer (Weekend Deal): -Rs 20.00");
+    // 120 + 30 (delivery) - 20 (offer) = 130
+    expect(screen.getByText("Total: Rs 130.00")).toBeInTheDocument();
+  });
 });

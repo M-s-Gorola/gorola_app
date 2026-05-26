@@ -22,7 +22,27 @@ const { deleteMock, getMock, postMock, putMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => ({
   api: {
     delete: deleteMock,
-    get: getMock,
+    get: vi.fn().mockImplementation(async (url: string, config?: unknown) => {
+      if (url.includes("/api/v1/cart")) {
+        return {
+          data: {
+            success: true,
+            data: {
+              items: useCartStore.getState().lines.map(line => ({
+                productVariantId: line.productVariantId,
+                quantity: line.quantity,
+                productName: line.productName,
+                variantLabel: line.variantLabel,
+                unitPrice: line.unitPrice
+              })),
+              activeOffer: null,
+              activeOffers: []
+            }
+          }
+        };
+      }
+      return getMock(url, config);
+    }),
     post: postMock,
     put: putMock
   }
@@ -46,12 +66,12 @@ class MockIntersectionObserver implements IntersectionObserver {
     };
   }
 
-  public disconnect(): void {}
-  public observe(): void {}
+  public disconnect(): void { }
+  public observe(): void { }
   public takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
-  public unobserve(): void {}
+  public unobserve(): void { }
 }
 
 function renderGrid(props: { categoryId?: string; storeId?: string } = {}): void {

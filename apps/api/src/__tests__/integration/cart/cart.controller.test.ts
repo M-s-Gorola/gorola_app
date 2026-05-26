@@ -288,4 +288,107 @@ describe("Cart controller", () => {
     await server.close();
     delete process.env.GOROLA_TEST_OTP;
   });
+
+  it("verifies activeOffers is returned in cart response when store has active offers", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, user.phone);
+
+    // Create an active flat offer for this store
+    const now = new Date();
+    const seededOffer = await db.offer.create({
+      data: {
+        storeId: store.id,
+        title: "Test Active Offer",
+        description: "Test Offer Desc",
+        discountType: "FLAT",
+        discountValue: "20.00",
+        minOrderAmount: "100.00",
+        maxDiscount: null,
+        startsAt: new Date(now.getTime() - 60000),
+        endsAt: new Date(now.getTime() + 60000),
+        isActive: true
+      }
+    });
+
+    // Add item to cart first so active offers can be fetched (scoped by store)
+    await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { productVariantId: variantA.id, quantity: 2 }
+    });
+
+    const getRes = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "GET",
+      url: "/api/v1/cart"
+    });
+
+    expect(getRes.statusCode).toBe(200);
+    const body = getRes.json() as {
+      success: boolean;
+      data: {
+        activeOffers: Array<{
+          id: string;
+          title: string;
+          discountType: string;
+          discountValue: number;
+          minOrderAmount: number | null;
+          maxDiscount: number | null;
+        }>;
+      };
+    };
+    expect(body.data.activeOffers).toBeDefined();
+    expect(body.data.activeOffers).toHaveLength(1);
+    expect(body.data.activeOffers[0]).toEqual({
+      id: seededOffer.id,
+      title: "Test Active Offer",
+      discountType: "FLAT",
+      discountValue: 20,
+      minOrderAmount: 100,
+      maxDiscount: null
+    });
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+  });
+
+  it("verifies activeOffers is empty when store has no active offers", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, user.phone);
+
+    // Add item to cart (store has no offers)
+    await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      url: "/api/v1/cart/items",
+      payload: { productVariantId: variantA.id, quantity: 2 }
+    });
+
+    const getRes = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "GET",
+      url: "/api/v1/cart"
+    });
+
+    expect(getRes.statusCode).toBe(200);
+    const body = getRes.json() as {
+      success: boolean;
+      data: {
+        activeOffers: unknown[];
+      };
+    };
+    expect(body.data.activeOffers).toEqual([]);
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+  });
 });

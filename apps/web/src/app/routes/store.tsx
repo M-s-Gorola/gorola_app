@@ -2,9 +2,11 @@ import type { ReactElement } from "react";
 import { Link, Navigate, Route } from "react-router-dom";
 
 import { StoreLayout } from "@/components/store/StoreLayout";
+import { StoreAdvertisementsPage } from "@/pages/store/StoreAdvertisementsPage";
 import { StoreBookingsPage } from "@/pages/store/StoreBookingsPage";
 import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
 import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
+import { StoreOffersPage } from "@/pages/store/StoreOffersPage";
 import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
 import { StoreProductFormPage } from "@/pages/store/StoreProductFormPage";
 import { StoreProductsPage } from "@/pages/store/StoreProductsPage";
@@ -128,6 +130,28 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
         <StoreRoute>
           <StoreLayout>
             <StoreBookingsPage />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-advertisements"
+      path={`${prefix}/advertisements`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreAdvertisementsPage />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-offers"
+      path={`${prefix}/offers`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreOffersPage />
           </StoreLayout>
         </StoreRoute>
       }

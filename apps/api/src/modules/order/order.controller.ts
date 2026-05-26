@@ -36,7 +36,12 @@ function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): Succ
 
 function serializeOrderResponse(
   order: OrderWithRelations,
-  discount: { amount: string; code: string | null }
+  discount: {
+    amount: string;
+    code: string | null;
+    appliedDiscountAmount?: string;
+    appliedOfferAmount?: string;
+  }
 ): Record<string, unknown> {
   return {
     createdAt: order.createdAt.toISOString(),
@@ -60,7 +65,12 @@ function serializeOrderResponse(
     paymentMethod: order.paymentMethod,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
     status: order.status,
-    discount,
+    discount: {
+      amount: discount.amount,
+      code: discount.code,
+      appliedDiscountAmount: discount.appliedDiscountAmount ?? discount.amount,
+      appliedOfferAmount: discount.appliedOfferAmount ?? "0.00"
+    },
     statusHistory: order.statusHistory.map((h) => ({
       changedAt: h.changedAt.toISOString(),
       changedBy: h.changedBy,
@@ -157,8 +167,12 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         request,
         reply,
         serializeOrderResponse(placed.order, {
-          amount: placed.appliedDiscountAmount,
-          code: placed.appliedDiscountCode
+          amount: (
+            Number(placed.appliedDiscountAmount) + Number(placed.appliedOfferAmount)
+          ).toFixed(2),
+          code: placed.appliedDiscountCode,
+          appliedDiscountAmount: placed.appliedDiscountAmount,
+          appliedOfferAmount: placed.appliedOfferAmount
         })
       );
 
