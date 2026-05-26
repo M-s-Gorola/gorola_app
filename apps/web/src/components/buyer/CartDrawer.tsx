@@ -58,11 +58,47 @@ export function CartDrawer(): ReactElement | null {
     }
   }, [isOpen]);
 
+  const activeOffers = useCartStore((s) => s.activeOffers);
+
   const subtotal = useMemo(
     () => lines.reduce((acc, line) => acc + (line.unitPrice ?? 0) * line.quantity, 0),
     [lines]
   );
-  const total = Math.max(subtotal + DELIVERY_FEE - savedAmount, 0);
+
+  const appliedOffers = useMemo(() => {
+    let currentSaved = 0;
+    const list: Array<{ id: string; title: string; savedAmount: number }> = [];
+    for (const offer of activeOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal >= minOrder) {
+        let saved = 0;
+        if (offer.discountType === "PERCENTAGE") {
+          saved = (subtotal * offer.discountValue) / 100;
+          if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+            saved = Math.min(saved, offer.maxDiscount);
+          }
+        } else {
+          saved = offer.discountValue;
+        }
+        const eligibleAmount = Math.max(0, Math.min(subtotal - currentSaved, saved));
+        if (eligibleAmount > 0) {
+          currentSaved += eligibleAmount;
+          list.push({
+            id: offer.id,
+            title: offer.title,
+            savedAmount: eligibleAmount
+          });
+        }
+      }
+    }
+    return list;
+  }, [activeOffers, subtotal]);
+
+  const offerSavedAmount = useMemo(() => {
+    return appliedOffers.reduce((acc, o) => acc + o.savedAmount, 0);
+  }, [appliedOffers]);
+
+  const total = Math.max(subtotal + DELIVERY_FEE - savedAmount - offerSavedAmount, 0);
 
   return (
     <>
@@ -178,11 +214,28 @@ export function CartDrawer(): ReactElement | null {
           )}
 
           <div className="space-y-4 border-t border-gorola-pine/10 pt-6">
-            {lines.length > 0 ? (
-              <p className="rounded-xl bg-gorola-saffron/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-charcoal border border-gorola-saffron/10">
-                Active offers and discounts may apply at checkout
-              </p>
-            ) : null}
+            {lines.length > 0 && (
+              <>
+                {activeOffers.some((o) => subtotal < (o.minOrderAmount ?? 0)) ? (
+                  (() => {
+                    const lockedOffer = activeOffers.find((o) => subtotal < (o.minOrderAmount ?? 0))!;
+                    return (
+                      <p className="rounded-xl bg-gorola-saffron/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-charcoal border border-gorola-saffron/10">
+                        Add Rs {((lockedOffer.minOrderAmount ?? 0) - subtotal).toFixed(2)} more to unlock offer: <span className="font-bold">{lockedOffer.title}</span>!
+                      </p>
+                    );
+                  })()
+                ) : appliedOffers.length > 0 ? (
+                  <p className="rounded-xl bg-gorola-pine/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-pine border border-gorola-pine/10">
+                    Store offers applied: <span className="font-bold">{appliedOffers.map((o) => o.title).join(", ")}</span>!
+                  </p>
+                ) : (
+                  <p className="rounded-xl bg-gorola-saffron/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-charcoal border border-gorola-saffron/10">
+                    Active offers and discounts may apply at checkout
+                  </p>
+                )}
+              </>
+            )}
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
@@ -192,6 +245,12 @@ export function CartDrawer(): ReactElement | null {
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee</span>
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {DELIVERY_FEE.toFixed(2)}</span>
               </div>
+              {appliedOffers.map((o) => (
+                <div key={o.id} className="flex justify-between text-gorola-pine font-bold" data-testid="cart-offer-discount">
+                  <span className="font-dm-sans text-sm">Store Offer ({o.title})</span>
+                  <span className="font-dm-sans text-sm">-Rs {o.savedAmount.toFixed(2)}</span>
+                </div>
+              ))}
               {savedAmount > 0 && (
                 <div className="flex justify-between text-gorola-pine font-bold">
                   <span className="font-dm-sans text-sm">Saved</span>

@@ -1,10 +1,12 @@
 import { api } from "@/lib/api";
 import { waitForAllCartMutations } from "@/lib/cart-variant-mutation-queue";
-import { type CartLine, useCartStore } from "@/store/cart.store";
+import { type ActiveOffer, type CartLine, useCartStore } from "@/store/cart.store";
 
 type CartGetEnvelope = {
   data?: {
     items?: unknown;
+    activeOffer?: ActiveOffer | null;
+    activeOffers?: ActiveOffer[];
   };
   success?: boolean;
 };
@@ -64,6 +66,8 @@ export async function syncBuyerCartFromServer(): Promise<void> {
   // 2. Fetch current server state
   const res = await api.get<CartGetEnvelope>("/api/v1/cart");
   const items = res.data.data?.items;
+  const activeOffer = res.data.data?.activeOffer;
+  const activeOffers = res.data.data?.activeOffers ?? (activeOffer ? [activeOffer] : []);
   const serverLines = mapBuyerCartItemsToLines(items);
 
   const localLines = useCartStore.getState().lines;
@@ -90,6 +94,10 @@ export async function syncBuyerCartFromServer(): Promise<void> {
       const retryLines = mapBuyerCartItemsToLines(retryRes.data.data?.items);
       if (retryLines.length > 0) {
         useCartStore.getState().replaceLines(retryLines);
+        const retryOffer = retryRes.data.data?.activeOffer ?? null;
+        const retryOffers = retryRes.data.data?.activeOffers ?? (retryOffer ? [retryOffer] : []);
+        useCartStore.getState().setActiveOffer(retryOffer);
+        useCartStore.getState().setActiveOffers(retryOffers);
       }
       // If still empty after failure, we just keep local state as is to prevent the "zero out" bug.
       return;
@@ -98,6 +106,10 @@ export async function syncBuyerCartFromServer(): Promise<void> {
     const secondRes = await api.get<CartGetEnvelope>("/api/v1/cart");
     const finalLines = mapBuyerCartItemsToLines(secondRes.data.data?.items);
     useCartStore.getState().replaceLines(finalLines);
+    const finalOffer = secondRes.data.data?.activeOffer ?? null;
+    const finalOffers = secondRes.data.data?.activeOffers ?? (finalOffer ? [finalOffer] : []);
+    useCartStore.getState().setActiveOffer(finalOffer);
+    useCartStore.getState().setActiveOffers(finalOffers);
     return;
   }
 
@@ -105,4 +117,6 @@ export async function syncBuyerCartFromServer(): Promise<void> {
   // BUT: If server is empty and local is empty, this just sets empty (correct).
   // AND: If server is empty but local is NOT, it was handled above.
   useCartStore.getState().replaceLines(serverLines);
+  useCartStore.getState().setActiveOffer(activeOffer ?? null);
+  useCartStore.getState().setActiveOffers(activeOffers);
 }

@@ -282,6 +282,85 @@ export function OrderConfirmationPage(): ReactElement {
   });
 
   const order = query.data;
+
+interface StoreOffer {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount?: number | null;
+  maxDiscount?: number | null;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+}
+
+  const storeId = order?.store?.id;
+  const { data: offersResponse } = useQuery({
+    enabled: !!storeId && !isBootstrapPending,
+    queryKey: ["promotions", "store", storeId, "offers"],
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: StoreOffer[] }>(`/api/v1/promotions/store/${storeId}/offers`);
+      return res.data;
+    }
+  });
+
+  const getAppliedDiscounts = (order: BuyerOrderDetail) => {
+    const subtotal = Number(order.subtotal);
+    const deliveryFee = Number(order.deliveryFee);
+    const total = Number(order.total);
+    const discountAmount = Number((subtotal + deliveryFee - total).toFixed(2));
+    if (discountAmount <= 0) return [];
+
+    const offers = Array.isArray(offersResponse?.data) ? offersResponse.data : [];
+    const orderTime = new Date(order.createdAt || "").getTime();
+
+    // Find all offers that were active at the order's creation time
+    const matchedOffers = (offers as StoreOffer[]).filter((o) => {
+      const start = new Date(o.startsAt).getTime();
+      const end = new Date(o.endsAt).getTime();
+      return orderTime >= start && orderTime <= end;
+    });
+
+    const result: { label: string; amount: number }[] = [];
+    let remainingDiscount = discountAmount;
+
+    for (const offer of matchedOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal < minOrder) continue;
+
+      let offerDiscount = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        offerDiscount = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          offerDiscount = Math.min(offerDiscount, offer.maxDiscount);
+        }
+      } else {
+        offerDiscount = offer.discountValue;
+      }
+      offerDiscount = Number(Math.min(subtotal, offerDiscount).toFixed(2));
+
+      if (offerDiscount > 0 && remainingDiscount > 0) {
+        const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
+        if (appliedAmt > 0.05) {
+          result.push({
+            label: `Discount (${offer.title})`,
+            amount: appliedAmt
+          });
+          remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
+        }
+      }
+    }
+
+    if (remainingDiscount > 0.05) {
+      result.push({
+        label: "Discount",
+        amount: remainingDiscount
+      });
+    }
+
+    return result;
+  };
   useEffect(() => {
     if (order && (order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE")) {
       navigate(`/bookings/${order.id}`, { replace: true });
@@ -441,7 +520,6 @@ export function OrderConfirmationPage(): ReactElement {
       {query.isSuccess && query.data ? (
         (() => {
           const order = query.data;
-          const discountAmount = order.discount?.amount ?? "0.00";
 
           const weatherPulse =
             isWeatherMode ?
@@ -583,12 +661,12 @@ export function OrderConfirmationPage(): ReactElement {
                     <span className="text-gorola-slate">Delivery fee:</span>
                     <span className="font-medium">Rs {order.deliveryFee}</span>
                   </div>
-                  {discountAmount !== "0.00" ? (
-                    <div className="flex justify-between text-emerald-700">
-                      <span>Discount:</span>
-                      <span className="font-medium">-Rs {discountAmount}</span>
+                  {getAppliedDiscounts(order).map((d, idx) => (
+                    <div key={idx} className="flex justify-between text-emerald-700">
+                      <span>{d.label}:</span>
+                      <span className="font-medium">-Rs {d.amount.toFixed(2)}</span>
                     </div>
-                  ) : null}
+                  ))}
                   <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
                     <span>Payment [{formatPayment(order.paymentMethod)}]:</span>
                     <span>Rs {order.total}</span>

@@ -81,7 +81,6 @@ export function registerAppRoutes(app: FastifyInstance): void {
   registerSubCategoryRoutes(app);
   registerProductRoutes(app);
   registerSearchRoutes(app);
-  registerPromotionRoutes(app);
 
   const prisma = getPrismaClient();
 
@@ -98,6 +97,10 @@ export function registerAppRoutes(app: FastifyInstance): void {
     publicKey: keys.publicKey,
     redis,
     refreshTtlSeconds: 7 * 24 * 60 * 60
+  });
+
+  registerPromotionRoutes(app, {
+    tokenVerifier: tokenService
   });
 
   const userRepo = new UserRepository(prisma);

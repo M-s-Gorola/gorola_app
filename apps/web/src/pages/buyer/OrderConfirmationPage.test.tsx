@@ -115,18 +115,23 @@ describe("OrderConfirmationPage", () => {
   });
 
   it("loads order detail, line items, store trust block with tel link, and totals including discount amount", async () => {
-    getMock.mockResolvedValue({
-      data: {
-        success: true,
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
         data: {
-          ...baseEnvelope().data,
-          discount: {
-            amount: "10.00",
-            code: "SAVE10",
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            discount: {
+              amount: "10.00",
+              code: "SAVE10",
+            },
+            total: "220.00",
           },
-          total: "220.00",
         },
-      },
+      });
     });
 
     renderPage();
@@ -158,14 +163,19 @@ describe("OrderConfirmationPage", () => {
   });
 
   it("shows scheduling copy when scheduledFor is present", async () => {
-    getMock.mockResolvedValue({
-      data: {
-        success: true,
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
         data: {
-          ...baseEnvelope().data,
-          scheduledFor: "2026-05-07T17:30:00.000Z",
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            scheduledFor: "2026-05-07T17:30:00.000Z",
+          },
         },
-      },
+      });
     });
 
     renderPage();
@@ -174,8 +184,13 @@ describe("OrderConfirmationPage", () => {
 
   it("shows weather-route honest ETA copy when weather mode is toggled", async () => {
     useWeatherStore.setState({ isWeatherMode: true });
-    getMock.mockResolvedValue({
-      data: baseEnvelope(),
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: baseEnvelope(),
+      });
     });
 
     renderPage();
@@ -195,14 +210,19 @@ describe("OrderConfirmationPage", () => {
     ];
 
     for (const status of statuses) {
-      getMock.mockResolvedValueOnce({
-        data: {
-          success: true,
+      getMock.mockImplementation((url: string) => {
+        if (url.includes("/promotions/")) {
+          return Promise.resolve({ data: { success: true, data: [] } });
+        }
+        return Promise.resolve({
           data: {
-            ...baseEnvelope().data,
-            status: status.key,
+            success: true,
+            data: {
+              ...baseEnvelope().data,
+              status: status.key,
+            },
           },
-        },
+        });
       });
 
       renderPage(`/orders/o-${status.key}`);

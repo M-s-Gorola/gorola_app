@@ -86,11 +86,47 @@ export function CheckoutPage(): ReactElement {
     }
   }, [addressDefaultSet, addressesList, addressesQuery.isSuccess]);
 
+  const activeOffers = useCartStore((s) => s.activeOffers);
+
   const subtotal = useMemo(
     () => lines.reduce((acc, line) => acc + (line.unitPrice ?? 0) * line.quantity, 0),
     [lines]
   );
-  const total = Math.max(subtotal + DELIVERY_FEE - discountSavedAmount, 0);
+
+  const appliedOffers = useMemo(() => {
+    let currentSaved = 0;
+    const list: Array<{ id: string; title: string; savedAmount: number }> = [];
+    for (const offer of activeOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal >= minOrder) {
+        let saved = 0;
+        if (offer.discountType === "PERCENTAGE") {
+          saved = (subtotal * offer.discountValue) / 100;
+          if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+            saved = Math.min(saved, offer.maxDiscount);
+          }
+        } else {
+          saved = offer.discountValue;
+        }
+        const eligibleAmount = Math.max(0, Math.min(subtotal - currentSaved, saved));
+        if (eligibleAmount > 0) {
+          currentSaved += eligibleAmount;
+          list.push({
+            id: offer.id,
+            title: offer.title,
+            savedAmount: eligibleAmount
+          });
+        }
+      }
+    }
+    return list;
+  }, [activeOffers, subtotal]);
+
+  const offerSavedAmount = useMemo(() => {
+    return appliedOffers.reduce((acc, o) => acc + o.savedAmount, 0);
+  }, [appliedOffers]);
+
+  const total = Math.max(subtotal + DELIVERY_FEE - discountSavedAmount - offerSavedAmount, 0);
 
   /** Sync guard — double-clicks can fire two POSTs before mutation pending state updates in the DOM. */
   const placeOrderInFlightRef = useRef(false);
@@ -361,6 +397,11 @@ export function CheckoutPage(): ReactElement {
             ))}
           </ul>
           <p className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee: Rs {DELIVERY_FEE.toFixed(2)}</p>
+          {appliedOffers.map((o) => (
+            <p key={o.id} className="font-dm-sans text-sm font-semibold text-gorola-pine" data-testid="checkout-offer-discount">
+              Store Offer ({o.title}): -Rs {o.savedAmount.toFixed(2)}
+            </p>
+          ))}
           {discountSavedAmount > 0 ? (
             <p className="font-dm-sans text-sm font-semibold text-gorola-pine">
               Discount ({discountCode || "Applied"}): -Rs {discountSavedAmount.toFixed(2)}

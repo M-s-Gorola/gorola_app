@@ -288,4 +288,64 @@ describe("CartDrawer", () => {
     renderShell();
     expect(screen.getByRole("button", { name: "Proceed to Checkout" })).toBeEnabled();
   });
+
+  it("renders store offer discount and correct total when activeOffers has applicable offers", () => {
+    useCartStore.setState({
+      lines: [
+        {
+          productVariantId: "v1",
+          quantity: 1,
+          productName: "Apple",
+          variantLabel: "1kg",
+          unitPrice: 120
+        }
+      ],
+      activeOffers: [
+        {
+          id: "o1",
+          title: "Weekend Deal",
+          discountType: "FLAT",
+          discountValue: 20,
+          minOrderAmount: null,
+          maxDiscount: null
+        }
+      ],
+      isOpen: true
+    });
+
+    renderShell();
+    expect(screen.getByTestId("cart-offer-discount")).toHaveTextContent("Store Offer (Weekend Deal)");
+    expect(screen.getByTestId("cart-offer-discount")).toHaveTextContent("-Rs 20.00");
+    // 120 + 30 (delivery) - 20 (offer) = 130
+    expect(screen.getByTestId("cart-total")).toHaveTextContent("Rs 130.00");
+  });
+
+  it("renders unlock teaser bar when activeOffers has an offer but subtotal does not meet minOrderAmount", () => {
+    useCartStore.setState({
+      lines: [
+        {
+          productVariantId: "v1",
+          quantity: 1,
+          productName: "Apple",
+          variantLabel: "1kg",
+          unitPrice: 120
+        }
+      ],
+      activeOffers: [
+        {
+          id: "o2",
+          title: "Big Discount",
+          discountType: "FLAT",
+          discountValue: 50,
+          minOrderAmount: 200,
+          maxDiscount: null
+        }
+      ],
+      isOpen: true
+    });
+
+    renderShell();
+    expect(screen.getByText(/Add Rs 80.00 more to unlock offer:/)).toBeInTheDocument();
+    expect(screen.queryByTestId("cart-offer-discount")).not.toBeInTheDocument();
+  });
 });

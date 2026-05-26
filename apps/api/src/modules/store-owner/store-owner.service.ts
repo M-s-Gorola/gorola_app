@@ -836,5 +836,84 @@ export class StoreOwnerService {
       where: { id: adId }
     });
   }
+
+  public async getOffers(storeId: string) {
+    return this.db.offer.findMany({
+      where: { storeId },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  public async createOffer(
+    storeId: string,
+    dto: {
+      title: string;
+      description?: string | undefined;
+      discountType: "PERCENTAGE" | "FLAT";
+      discountValue: number;
+      startsAt: string | Date;
+      endsAt: string | Date;
+      minOrderAmount?: number | undefined;
+      maxDiscount?: number | undefined;
+    }
+  ) {
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+
+    if (endsAt.getTime() < startsAt.getTime()) {
+      throw new AppError("endsAt cannot be before startsAt", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    if (dto.discountType === "PERCENTAGE" && dto.discountValue > 100) {
+      throw new AppError("Percentage discount cannot exceed 100%", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    if (dto.discountValue <= 0) {
+      throw new AppError("Discount value must be greater than 0", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    return this.db.offer.create({
+      data: {
+        storeId,
+        title: dto.title,
+        description: dto.description || dto.title,
+        discountType: dto.discountType,
+        discountValue: dto.discountValue,
+        minOrderAmount: dto.minOrderAmount ?? null,
+        maxDiscount: dto.maxDiscount ?? null,
+        startsAt,
+        endsAt,
+        isActive: true
+      }
+    });
+  }
+
+  public async deactivateOffer(storeId: string, offerId: string) {
+    const offer = await this.db.offer.findUnique({
+      where: { id: offerId }
+    });
+
+    if (!offer) {
+      throw new NotFoundError("Offer not found");
+    }
+
+    if (offer.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to access this offer");
+    }
+
+    return this.db.offer.update({
+      where: { id: offerId },
+      data: { isActive: false }
+    });
+  }
 }
 

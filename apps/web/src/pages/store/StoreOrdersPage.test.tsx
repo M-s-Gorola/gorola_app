@@ -4,6 +4,8 @@ import type { InitialEntry } from "react-router-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useAuthStore } from "@/store/auth.store";
+
 import { StoreOrdersPage } from "./StoreOrdersPage";
 
 const { getMock, putMock } = vi.hoisted(() => ({
@@ -41,6 +43,24 @@ describe("StoreOrdersPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     putMock.mockReset();
+
+    useAuthStore.getState().setStoreOwnerSession({
+      accessToken: "mock-access-token",
+      refreshToken: "mock-refresh-token",
+      userId: "mock-user-id",
+      storeId: "mock-store-id"
+    });
+
+    // Default mock implementations to prevent test breakages on auxiliary queries
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return new Promise(() => {}); // remains pending
+    });
   });
 
   it("renders skeletons during loading state", () => {
@@ -52,7 +72,18 @@ describe("StoreOrdersPage", () => {
   });
 
   it("renders error message when API call fails", async () => {
-    getMock.mockRejectedValueOnce(new Error("Network Error"));
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/orders")) {
+        return Promise.reject(new Error("Network Error"));
+      }
+      return Promise.reject(new Error("Not found"));
+    });
 
     renderStoreOrders();
 
@@ -69,8 +100,8 @@ describe("StoreOrdersPage", () => {
           storeId: "store-456",
           status: "PLACED",
           subtotal: 150.0,
-          deliveryFee: 20.0,
-          total: 170.0,
+          deliveryFee: 30.0,
+          total: 160.0,
           paymentMethod: "COD",
           landmarkDescription: "Near park",
           flatRoom: "Room 404",
@@ -104,7 +135,33 @@ describe("StoreOrdersPage", () => {
       }
     };
 
-    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              {
+                id: "offer-1",
+                title: "Inaugural Store Offer",
+                discountType: "FLAT",
+                discountValue: 20,
+                startsAt: new Date(Date.now() - 1000000).toISOString(),
+                endsAt: new Date(Date.now() + 1000000).toISOString(),
+                isActive: true
+              }
+            ]
+          }
+        });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
 
     renderStoreOrders();
 
@@ -116,7 +173,7 @@ describe("StoreOrdersPage", () => {
     // Verify order cards are rendered
     expect(await screen.findByTestId("order-card-order-1")).toBeInTheDocument();
     expect(screen.getByText("#ORDER-1")).toBeInTheDocument();
-    expect(screen.getByText("₹170.00")).toBeInTheDocument();
+    expect(screen.getByText("₹160.00")).toBeInTheDocument();
     expect(screen.getByText("Organic Bananas (x1)")).toBeInTheDocument();
     expect(screen.getByText("5m ago")).toBeInTheDocument();
 
@@ -126,6 +183,11 @@ describe("StoreOrdersPage", () => {
     // Verify Modal Dialog rendered
     expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
     expect(screen.getByText("*********3210")).toBeInTheDocument();
+    
+    // Verify applied discount displays in modal
+    expect(screen.getByTestId("store-order-discount")).toBeInTheDocument();
+    expect(screen.getByText("Discount (Inaugural Store Offer)")).toBeInTheDocument();
+    expect(screen.getByText("-₹20.00")).toBeInTheDocument();
     
     // Verify complete delivery address displays inside detailed modal
     expect(screen.queryByText(/\[Office\]/)).not.toBeInTheDocument();

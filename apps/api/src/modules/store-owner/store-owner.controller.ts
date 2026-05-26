@@ -682,6 +682,98 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // Offers Management Schema
+  const createOfferBodySchema = z.object({
+    title: z.string().trim().min(1, "Title is required"),
+    description: z.string().trim().optional(),
+    discountType: z.enum(["PERCENTAGE", "FLAT"]),
+    discountValue: z.coerce.number().positive("Discount value must be positive"),
+    startsAt: z.string().trim().min(1, "startsAt is required"),
+    endsAt: z.string().trim().min(1, "endsAt is required"),
+    minOrderAmount: z.coerce.number().nonnegative().optional(),
+    maxDiscount: z.coerce.number().nonnegative().optional()
+  });
+
+  // GET /api/v1/store/offers
+  app.get("/api/v1/store/offers", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const offers = await storeOwnerService.getOffers(owner.storeId);
+
+    return {
+      success: true,
+      data: offers,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // POST /api/v1/store/offers
+  app.post("/api/v1/store/offers", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = createOfferBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid offer data", parsed.error.flatten());
+    }
+
+    const offer = await storeOwnerService.createOffer(owner.storeId, parsed.data);
+
+    reply.code(201);
+    return {
+      success: true,
+      data: offer,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/offers/:id/deactivate
+  app.put("/api/v1/store/offers/:id/deactivate", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const offerId = params.id;
+    if (!offerId) {
+      throw new ValidationError("Offer ID is required");
+    }
+
+    await storeOwnerService.deactivateOffer(owner.storeId, offerId);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
 
 

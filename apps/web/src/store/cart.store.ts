@@ -8,12 +8,25 @@ export type CartLine = {
   unitPrice?: number;
 };
 
+export type ActiveOffer = {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount: number | null;
+  maxDiscount: number | null;
+};
+
 type CartState = {
   lines: CartLine[];
   isOpen: boolean;
   discountCode: string;
   discountSavedAmount: number;
   discountError: string | null;
+  activeOffer: ActiveOffer | null;
+  activeOffers: ActiveOffer[];
+  setActiveOffer: (offer: ActiveOffer | null) => void;
+  setActiveOffers: (offers: ActiveOffer[]) => void;
   addOrMergeLine: (line: CartLine) => void;
   /** Replaces all lines (e.g. after `GET /api/v1/cart`). */
   replaceLines: (lines: CartLine[]) => void;
@@ -61,6 +74,10 @@ export const useCartStore = create<CartState>((set, get) => ({
   discountCode: "",
   discountSavedAmount: 0,
   discountError: null,
+  activeOffer: null,
+  activeOffers: [],
+  setActiveOffer: (offer) => set({ activeOffer: offer }),
+  setActiveOffers: (offers) => set({ activeOffers: offers }),
   addOrMergeLine: (line) =>
     set((s) => ({
       lines: mergeLine(s.lines, line)
@@ -101,7 +118,9 @@ export const useCartStore = create<CartState>((set, get) => ({
       lines: [],
       discountCode: "",
       discountError: null,
-      discountSavedAmount: 0
+      discountSavedAmount: 0,
+      activeOffer: null,
+      activeOffers: []
     }),
   totalItemCount: () => get().lines.reduce((acc, l) => acc + l.quantity, 0)
 }));
