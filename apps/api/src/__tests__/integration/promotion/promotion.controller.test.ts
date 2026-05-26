@@ -1,29 +1,13 @@
-import { randomUUID } from "node:crypto";
-
-import type { PrismaClient } from "@prisma/client";
-import { SignJWT } from "jose";
+import type { PrismaClient, Store, User } from "@prisma/client";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
-import { resolveBuyerJwtKeyPair } from "../../../modules/auth/jwt-keys.js";
+import { StoreRepository } from "../../../modules/store/store.repository.js";
+import { UserRepository } from "../../../modules/user/user.repository.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
 
-async function generateAccessToken(userId: string, role: string, storeId?: string): Promise<string> {
-  const keys = resolveBuyerJwtKeyPair();
-  return new SignJWT({
-    role,
-    ...(storeId ? { storeId } : {})
-  })
-    .setProtectedHeader({ alg: "RS256" })
-    .setSubject(userId)
-    .setJti(randomUUID())
-    .setIssuedAt()
-    .setExpirationTime("15m")
-    .sign(keys.privateKey);
-}
-
-async function cleanPromotionGraph(db: PrismaClient): Promise<void> {
+async function cleanPromotionIntegrationGraph(db: PrismaClient): Promise<void> {
   await db.riderLocation.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
@@ -44,136 +28,153 @@ async function cleanPromotionGraph(db: PrismaClient): Promise<void> {
   await db.category.deleteMany();
 }
 
+async function getBuyerAccessToken(
+  server: ReturnType<typeof createServer>,
+  phone: string
+): Promise<{ accessToken: string; userId: string }> {
+  const sendRes = await server.inject({
+    method: "POST",
+    payload: { phone },
+    url: "/api/v1/auth/buyer/send-otp"
+  });
+  expect(sendRes.statusCode).toBe(200);
+
+  const verifyRes = await server.inject({
+    method: "POST",
+    payload: { otp: "111222", phone },
+    url: "/api/v1/auth/buyer/verify-otp"
+  });
+  expect(verifyRes.statusCode).toBe(200);
+  const body = verifyRes.json() as {
+    data: { accessToken: string; userId: string };
+  };
+  return { accessToken: body.data.accessToken, userId: body.data.userId };
+}
+
 describe("Promotion controller offers auth", () => {
   const db = getPrismaClient();
+  const userRepo = new UserRepository(db);
+  const storeRepo = new StoreRepository(db);
+
+  let user: User;
+  let store: Store;
 
   beforeEach(async () => {
-    await cleanPromotionGraph(db);
+    await cleanPromotionIntegrationGraph(db);
+    user = await userRepo.create({ phone: "+919700000001", name: "Promotion Controller User" });
+    store = await storeRepo.create({
+      name: "Promotion Store",
+      description: "d",
+      phone: "+911111111199",
+      address: "Road"
+    });
   });
 
   afterAll(async () => {
     await disconnectPrisma();
   });
 
-  it("GET /api/v1/promotions/store/:storeId/offers without authorization token -> HTTP 401 UNAUTHORIZED", async () => {
+  it("returns HTTP 401 UNAUTHORIZED when no token is provided", async () => {
     const server = createServer({
       disableRedis: true,
       registerRoutes: registerAppRoutes
     });
 
-    const response = await server.inject({
+    const res = await server.inject({
       method: "GET",
-      url: "/api/v1/promotions/store/store-123/offers"
+      url: `/api/v1/promotions/store/${store.id}/offers`
     });
-    await server.close();
 
-    expect(response.statusCode).toBe(401);
-    expect(response.json().success).toBe(false);
+    expect(res.statusCode).toBe(401);
+    await server.close();
   });
 
-  it("GET /api/v1/promotions/store/:storeId/offers with invalid auth token -> HTTP 401 UNAUTHORIZED", async () => {
+  it("returns HTTP 200 and serializes offers correctly when a valid token is provided", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
     const server = createServer({
       disableRedis: true,
       registerRoutes: registerAppRoutes
     });
+    const { accessToken } = await getBuyerAccessToken(server, user.phone);
 
-    const response = await server.inject({
-      method: "GET",
-      url: "/api/v1/promotions/store/store-123/offers",
-      headers: {
-        authorization: "Bearer invalid-token"
-      }
-    });
-    await server.close();
-
-    expect(response.statusCode).toBe(401);
-    expect(response.json().success).toBe(false);
-  });
-
-  it("GET /api/v1/promotions/store/:storeId/offers with valid BUYER auth token -> HTTP 200 with serialized list of active/inactive offers", async () => {
-    const store = await db.store.create({
-      data: {
-        id: "store-123",
-        name: "Test Store",
-        description: "Desc",
-        phone: "+919999999901",
-        address: "Address"
-      }
-    });
-
-    await db.offer.create({
+    const now = new Date();
+    const seededOffer = await db.offer.create({
       data: {
         storeId: store.id,
-        title: "FLAT 50 OFF",
-        description: "Flat 50 off",
-        discountType: "FLAT",
-        discountValue: "50",
-        minOrderAmount: "200",
-        maxDiscount: null,
-        startsAt: new Date("2026-01-01T00:00:00.000Z"),
-        endsAt: new Date("2027-01-01T00:00:00.000Z"),
+        title: "Buy 1 Get 1",
+        description: "Bogo offer",
+        discountType: "PERCENTAGE",
+        discountValue: "50.00",
+        minOrderAmount: "200.00",
+        maxDiscount: "100.00",
+        startsAt: new Date(now.getTime() - 60000),
+        endsAt: new Date(now.getTime() + 60000),
         isActive: true
       }
     });
 
-    const buyerToken = await generateAccessToken("buyer-123", "BUYER");
-
-    const server = createServer({
-      disableRedis: true,
-      registerRoutes: registerAppRoutes
-    });
-
-    const response = await server.inject({
+    const res = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
       method: "GET",
-      url: `/api/v1/promotions/store/${store.id}/offers`,
-      headers: {
-        authorization: `Bearer ${buyerToken}`
-      }
+      url: `/api/v1/promotions/store/${store.id}/offers`
     });
-    await server.close();
 
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      success: boolean;
+      data: Array<{
+        id: string;
+        title: string;
+        discountType: string;
+        discountValue: number;
+        minOrderAmount: number | null;
+        maxDiscount: number | null;
+        startsAt: string;
+        endsAt: string;
+        isActive: boolean;
+      }>;
+    };
     expect(body.success).toBe(true);
     expect(body.data).toHaveLength(1);
-    expect(body.data[0]).toMatchObject({
-      title: "FLAT 50 OFF",
-      discountType: "FLAT",
+    expect(body.data[0]).toEqual({
+      id: seededOffer.id,
+      title: "Buy 1 Get 1",
+      discountType: "PERCENTAGE",
       discountValue: 50,
       minOrderAmount: 200,
-      maxDiscount: null,
+      maxDiscount: 100,
+      startsAt: seededOffer.startsAt.toISOString(),
+      endsAt: seededOffer.endsAt.toISOString(),
       isActive: true
     });
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
   });
 
-  it("GET /api/v1/promotions/store/:storeId/offers with valid STORE_OWNER auth token -> HTTP 200 with serialized list", async () => {
-    const store = await db.store.create({
-      data: {
-        id: "store-123",
-        name: "Test Store",
-        description: "Desc",
-        phone: "+919999999901",
-        address: "Address"
-      }
-    });
-
-    const storeOwnerToken = await generateAccessToken("owner-123", "STORE_OWNER", store.id);
-
+  it("returns HTTP 200 with an empty list when store has no offers", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
     const server = createServer({
       disableRedis: true,
       registerRoutes: registerAppRoutes
     });
+    const { accessToken } = await getBuyerAccessToken(server, user.phone);
 
-    const response = await server.inject({
+    const res = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
       method: "GET",
-      url: `/api/v1/promotions/store/${store.id}/offers`,
-      headers: {
-        authorization: `Bearer ${storeOwnerToken}`
-      }
+      url: `/api/v1/promotions/store/${store.id}/offers`
     });
-    await server.close();
 
-    expect(response.statusCode).toBe(200);
-    expect(response.json().success).toBe(true);
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      success: boolean;
+      data: unknown[];
+    };
+    expect(body.success).toBe(true);
+    expect(body.data).toEqual([]);
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
   });
 });

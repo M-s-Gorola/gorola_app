@@ -11,7 +11,7 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2, 3.5, 3.6, and 3.6.1 completed; Phase 3.7 planned |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2, 3.5, 3.6, 3.6.1, and 3.6.2 completed; Phase 3.7 planned |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
@@ -19,7 +19,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-27
-- **Session Summary:** Fully completed the Phase 3.6.1 Multi-Offer Discount Hardening remediation. Secured the promotions API, corrected brittle URL-aware mocked requests, resolved all outstanding TypeScript/ESLint warnings to a 100% clean check, and validated additive stacking mathematical logic across all components and tests.
+- **Session Summary:** Fully completed the Phase 3.6.2 Discount UX Hardening, Cart Offer Pills & Modal Scroll Fix under strict TDD compliance.
 - **Next Session Must Start With:** Phase 3.7 — Discount/Coupon Code Management.
 - **In Progress Right Now:** None (Ready for Phase 3.7).
 - **Current Blocker:** None.
@@ -29,7 +29,7 @@
 
 ## In Progress Right Now
 
-_(None - Phase 3.6.1 is completed successfully. Next task is Phase 3.7.)_
+_(None - Phase 3.6.2 is completed successfully. Next task is Phase 3.7.)_
 
 ---
 
@@ -574,6 +574,151 @@ Secure the offers endpoint by requiring standard authenticated access (available
 
 **Verification chain:**
 - Secure authentication blocks unauthorized offers endpoint calls → Checkout returns precise stacked offer and coupon data → CartDrawer displays details and min-amount teasers → CheckoutPage correctly breaks down final summary → StoreOrdersPage and OrderConfirmationPage pass validation with perfectly consistent, URL-aware mock data → ✅ Done.
+
+---
+
+### 3.6.2 — Discount UX Hardening, Cart Offer Pills & Modal Scroll Fix
+
+**Root Cause / Goal:**
+Harden the user experience and visual reliability of store-wide offers across both buyer and store portals by addressing four distinct issues:
+1. **Missing Backend Test Coverage**:
+   - Gap A: `cart.controller.test.ts` integration tests assert on the cart shape but fail to verify `activeOffers` responses.
+   - Gap B: There are no integration tests validating the `requireAuth` guard and role checks on `GET /api/v1/promotions/store/:storeId/offers`.
+2. **Collapsible Discount Breakdown**: The buyer order confirmation receipt page and the store-owner order detail modal both render multiple stacked discounts as separate flat lines, which consumes excessive screen real estate.
+3. **Cart Offer Pills in CartDrawer**: The buyer `CartDrawer.tsx` renders a static banner instead of itemizing available store-wide offers, locking/applying them dynamically based on the subtotal.
+4. **Store Order Detail Modal Scroll Bug**: In `StoreOrdersPage.tsx`, the order detail modal background scrolls instead of the modal content itself, and lacks inner scrolling overflow limits.
+
+**Fix / Approach:**
+Write targeted integration/unit tests for all four features and apply matching backend/frontend updates: secure and test promotions API route authorization; replace multiple flat discount lines with a collapsible widget utilizing click chevrons; swap out the static cart banner with dynamic locked/applied offer pills; and implement background scroll locks alongside maximum modal height CSS limits.
+
+---
+
+- [x] **Problem 1: Missing Backend Test Coverage (Cart activeOffers & Promotions auth)**
+  - [x] **RED — Integration (`cart.controller.test.ts`):**
+    - [x] Test: Seed a store with one active FLAT offer (`discountType: 'FLAT', discountValue: 20, isActive: true, startsAt: now - 1min, endsAt: now + 1min`). Add one item from this store to the cart, then call `GET /api/v1/cart`. Assert the response explicitly contains `activeOffers` with exactly one item matching the seeded offer (including `id`, `title`, `discountType: 'FLAT'`, `discountValue: 20`, `minOrderAmount: null`, and `maxDiscount: null`).
+    - [x] Test: Seed a store with no active offers. Call `GET /api/v1/cart`. Assert that the response explicitly contains `activeOffers` as an empty array `[]`.
+    - [x] **Run — confirm RED**
+  - [x] **GREEN — Tests only (no production code change needed):**
+    - [x] [Test] Add two new `it(...)` blocks to the existing `cart.controller.test.ts` integration test file — the controller already returns `activeOffers` in the response. The test simply needs to be written to assert it. No changes required to `cart.controller.ts`.
+    - [x] Run integration tests — **confirm GREEN**
+  - [x] **RED — Integration (`promotion.controller.test.ts`):**
+    - [x] Test: `GET /api/v1/promotions/store/:storeId/offers` with no authorization header → HTTP 401 `UNAUTHORIZED`.
+    - [x] Test: `GET /api/v1/promotions/store/:storeId/offers` with a valid buyer JWT token → HTTP 200, returns array of active offers, each containing `{ id, title, discountType, discountValue, minOrderAmount, maxDiscount, startsAt, endsAt, isActive }`.
+    - [x] Test: `GET /api/v1/promotions/store/:storeId/offers` for a `storeId` with no offers → HTTP 200 with `data: []` or empty array `[]`.
+    - [x] **Run — confirm RED**
+  - [x] **GREEN — Tests only (no production code change needed):**
+    - [x] [Test] Create `apps/api/src/__tests__/integration/promotion/promotion.controller.test.ts` as a new file. The `requireAuth` guard and route registration are already implemented in `promotion.controller.ts` and `routes.ts`. No production code changes are required — only the test file needs to be created.
+    - [x] Run integration tests — **confirm GREEN**
+
+- [x] **Problem 2: Collapsible Discount Breakdown (Buyer Receipt & Store Order Modal)**
+  - [x] **RED — Unit (`OrderConfirmationPage.test.tsx`):**
+    - [x] Test: With an order containing two applied offers (mocking `discount.appliedOfferAmount` to `"157.00"`, `discount.appliedDiscountAmount` to `"0.00"`, and the offers API returning two matching offers):
+      - [x] Assert `data-testid="discount-summary-row"` displays `-Rs 157.00` with the same font weight as subtotal.
+      - [x] Assert that the individual breakdown list (`data-testid="discount-breakdown-item"`) is NOT visible by default.
+      - [x] User clicks the clickable `data-testid="discount-toggle-chevron"` → assert breakdown items become visible, each displaying the correct small size (`text-xs` class) and matching individual offer titles and amounts.
+      - [x] User clicks chevron again → assert breakdown items are hidden again.
+    - [x] **Run — confirm RED**
+  - [x] **GREEN — Frontend:**
+    - [x] [Component] In `apps/web/src/pages/buyer/OrderConfirmationPage.tsx`, replace flat discount lines with a collapsible summary component that tracks toggle state (`isOpen`) and toggles a chevron icon and breakdown items list with `text-xs` class.
+    - [x] Run unit tests — **confirm GREEN**
+  - [x] **RED — Unit (`StoreOrdersPage.test.tsx`):**
+    - [x] Test: Inside the store-owner order detail modal (with an order containing two applied offers summing to ₹157.00):
+      - [x] Assert `data-testid="store-order-discount-summary"` is visible and displays `-₹157.00`.
+      - [x] Assert that `data-testid="store-order-discount-breakdown-item"` lines are hidden by default.
+      - [x] Click the toggle button/chevron `data-testid="store-order-discount-chevron"` → assert the detailed breakdown items list becomes visible using `text-xs` font size.
+      - [x] Click `data-testid="store-order-discount-chevron"` again → assert breakdown items are hidden again.
+    - [x] **Run — confirm RED**
+  - [x] **GREEN — Frontend:**
+    - [x] [Component] In `apps/web/src/pages/store/StoreOrdersPage.tsx`, replace the flat discount rendering in the order details modal with the collapsible list, integrating the expansion chevron and smaller itemized details.
+    - [x] Run unit tests — **confirm GREEN**
+
+- [x] **Problem 3: Cart Offer Pills & Collapsible Discount Dropdown in CartDrawer**
+
+  **Root cause:**
+  The CartDrawer has four broken behaviours:
+  (a) It shows a vague static banner "Active offers and discounts may apply at checkout" — no offer specifics.
+  (b) It shows a "Add Rs X more to unlock offer: ..." text message for locked offers — user explicitly does not want this text.
+  (c) It shows a flat visible `"Store Offer (Title): -Rs X"` line in the totals section — the amount must not be visible by default.
+  (d) It has no collapsible dropdown for the total discount — the amount should only be visible after the user clicks to expand.
+
+  **Fix / Approach:**
+  Replace the static banner and all flat offer/discount rows with:
+  1. A compact pill row per offer (same height as the existing banner) with TWO states:
+     - **Locked** (subtotal < minOrderAmount): shows `"[Offer Title] · Min Rs [X]"` and if maxDiscount is set also `"· Max Rs [Y]"`. Neutral background. No amount shown. No "Add X more" text anywhere.
+     - **Applied** (subtotal ≥ minOrderAmount OR no minOrderAmount): shows `"✅ [Offer Title]"`. Green-tinted background. No amount shown in the pill. No "Saved Rs X" text.
+  2. Remove the existing flat `"Store Offer (Title): -Rs X"` totals line entirely.
+  3. Add a collapsible total discount row in the totals section (same pattern as Problem 2):
+     - One summary row: `"Total Discount  -Rs X"` with a chevron arrow
+     - Clicking expands a dropdown showing each offer in `text-xs` font: `"[Title]  -Rs X.XX"`
+     - Only visible when at least one offer is applied OR a coupon code is active
+  4. Remove the old "Active offers and discounts may apply at checkout" static banner entirely.
+  5. Remove the old "Add Rs X more to unlock offer" teaser text entirely.
+
+  - [x] **RED — Unit (`CartDrawer.test.tsx`):**
+    - [x] Test A (Locked pill): Set `activeOffers: [{ id: 'o1', title: 'Early Bird', discountType: 'FLAT', discountValue: 100, minOrderAmount: 200, maxDiscount: null }]` with one cart item worth ₹120.
+      - Assert `data-testid="offer-pill-o1"` is in the document.
+      - Assert pill contains text `"Early Bird"` and `"Min Rs 200"`.
+      - Assert pill does NOT contain `"✅"` and does NOT contain `"Applied"` and does NOT contain `"100"`.
+      - Assert text `"Add Rs"` does NOT exist anywhere in the document.
+      - Assert `data-testid="cart-discount-summary"` does NOT exist (no discount applied).
+      - Assert `data-testid="cart-total"` shows `Rs 150.00` (₹120 + ₹30 delivery, no discount).
+    - [x] Test B (Locked pill with maxDiscount): Set same offer but add `maxDiscount: 30`.
+      - Assert pill contains `"Max Rs 30"`.
+    - [x] Test C (Applied pill): Same offer `minOrderAmount: 200` but cart subtotal is ₹220 (two items worth ₹110 each).
+      - Assert `data-testid="offer-pill-o1"` is in the document.
+      - Assert pill contains `"✅"` and `"Early Bird"`.
+      - Assert pill does NOT contain `"-Rs"` and does NOT contain `"100"` and does NOT contain `"Saved"`.
+      - Assert `data-testid="cart-discount-summary"` is in the document showing `"Total Discount  -Rs 100.00"`.
+      - Assert `data-testid="cart-discount-breakdown-item"` is NOT visible by default (collapsed).
+      - User clicks `data-testid="cart-discount-toggle-chevron"` → assert `data-testid="cart-discount-breakdown-item"` becomes visible with text `"Early Bird"` and `"-Rs 100.00"` in `text-xs` class.
+      - Assert `data-testid="cart-total"` shows `Rs 150.00` (₹220 + ₹30 - ₹100).
+      - Assert the text `"Store Offer"` does NOT appear as a flat totals row outside the dropdown.
+    - [x] Test D (PERCENTAGE offer with maxDiscount cap): Set `activeOffers: [{ id: 'o2', title: 'Summer 10%', discountType: 'PERCENTAGE', discountValue: 10, minOrderAmount: null, maxDiscount: 15 }]` with subtotal ₹200.
+      - Assert `data-testid="offer-pill-o2"` shows `"✅"` and `"Summer 10%"`, does NOT show `"15"` or `"Rs"` inside the pill.
+      - Assert `data-testid="cart-discount-summary"` shows `"-Rs 15.00"` (10% of 200 = 20, capped at 15).
+      - Assert `data-testid="cart-total"` shows `Rs 215.00` (₹200 + ₹30 - ₹15).
+    - [x] Test E (Applied reverts to locked when subtotal drops): Start with subtotal ₹220 (applied). Reduce to ₹120.
+      - Assert pill reverts: contains `"Min Rs 200"`, does NOT contain `"✅"`.
+      - Assert `data-testid="cart-discount-summary"` does NOT exist.
+      - Assert `data-testid="cart-total"` shows `Rs 150.00` (₹120 + ₹30, no discount).
+    - [x] Test F (No offers): Set `activeOffers: []`.
+      - Assert no element with `data-testid` starting with `"offer-pill-"` exists in the DOM.
+      - Assert text `"Active offers and discounts may apply at checkout"` does NOT exist.
+      - Assert text `"Add Rs"` does NOT exist.
+    - [x] **Run — confirm RED.**
+
+  - [x] **GREEN — Frontend (`CartDrawer.tsx`):**
+    - [x] [Component] In `apps/web/src/components/buyer/CartDrawer.tsx`:
+      - DELETE the static `"Active offers and discounts may apply at checkout"` banner element.
+      - DELETE any element that renders `"Add Rs X more to unlock"` text.
+      - DELETE the existing flat `"Store Offer (Title): -Rs X"` row from the totals section (the one with `data-testid="cart-offer-discount"`).
+      - ADD: a mapped list of compact pill rows above the subtotal line, one per offer in `activeOffers`. Each pill is the same height as the old banner. Pill content:
+        - If `subtotal < offer.minOrderAmount`: show `"[offer.title] · Min Rs [minOrderAmount]"` plus `"· Max Rs [maxDiscount]"` if maxDiscount is not null. Neutral background (e.g. `bg-stone-50 border border-stone-200`). No amount shown.
+        - If `subtotal >= offer.minOrderAmount` OR `minOrderAmount` is null: show `"✅ [offer.title]"`. Green-tinted background (e.g. `bg-emerald-50 border border-emerald-200 text-emerald-700`). No amount shown inside the pill.
+        - Give each pill `data-testid="offer-pill-[offer.id]"`.
+      - ADD: a collapsible total discount row in the totals section, only rendered when `appliedOfferAmount > 0` OR `discountSavedAmount > 0`. Structure:
+        - A summary row with `data-testid="cart-discount-summary"` showing `"Total Discount  -Rs [total].00"` with a chevron button `data-testid="cart-discount-toggle-chevron"`.
+        - A hidden-by-default list, shown when chevron is clicked, with one `data-testid="cart-discount-breakdown-item"` per applied offer in `text-xs` font showing `"[offer.title]  -Rs [amount].00"`.
+        - If a coupon code discount is also active, add it as a separate `data-testid="cart-discount-breakdown-item"` showing `"[coupon code]  -Rs [amount].00"`.
+    - [x] Run unit tests — **confirm GREEN.**
+
+  - [x] **Verification chain:**
+    - [x] Buyer opens cart with one item below the offer threshold → sees compact locked pill `"Early Bird · Min Rs 200"` with neutral background, no amount, no "Add X more" text → adds more items to cross ₹200 → pill changes to `"✅ Early Bird"` with green background → totals section shows single collapsed `"Total Discount  -Rs 100.00"` row → buyer clicks chevron → breakdown list opens in small font showing `"Early Bird  -Rs 100.00"` → buyer removes items below threshold → pill reverts to locked, discount removed → ✅ Done.
+
+- [x] **Problem 4: Store Order Detail Modal Scroll Bug**
+  - [x] **RED — Unit (`StoreOrdersPage.test.tsx`):**
+    - [x] Test: When the order detail modal is open, assert that `document.body.style.overflow` is set to `'hidden'`.
+    - [x] Test: When the modal is closed (clicking close/dismiss X button), assert that `document.body.style.overflow` is set to `''` or `'unset'`.
+    - [x] Test: Assert that the modal content wrapper has `data-testid="order-detail-modal-body"` and its `className` includes `overflow-y-auto`.
+    - [x] **Run — confirm RED**
+  - [x] **GREEN — Frontend:**
+    - [x] [Component] In `apps/web/src/pages/store/StoreOrdersPage.tsx`, add a `useEffect` inside the order detail modal component (or matching wrapper) to set `document.body.style.overflow = 'hidden'` on mount/open, and clean up to `'unset'` on unmount/close. Add the container class list adjustments (`overflow-y-auto max-h-[90vh]`) and assign `data-testid="order-detail-modal-body"` to the scrolling container element.
+    - [x] Run unit tests — **confirm GREEN**
+
+---
+
+**Verification chain:**
+- Cart response serves `activeOffers` details dynamically and auth gates promotions offers API correctly → Order confirmation receipts and store order modals collapse multiple lines into a single clickable Total Discount row with an expandable chevron details list → CartDrawer renders responsive locked vs green applied offer pills with dynamic threshold validations → Store order detail modals scroll cleanly with background scrolling securely locked → ✅ Done.
 
 ---
 
@@ -1265,6 +1410,14 @@ _(Append new entries here — never delete old entries.)_
   - Corrected mathematical inconsistencies inside `StoreOrdersPage.test.tsx` mocks to match the standardized ₹30 delivery fee structure.
   - Refactored `OrderConfirmationPage.test.tsx` API mock handlers to be fully URL-aware, eliminating fragile `mockResolvedValueOnce` behaviors.
 - **100% Green Unit & Integration Tests**: Executed all backend (471 tests) and frontend (261 tests) tests, achieving a completely passing suite across the monorepo.
+
+### Session 15 — 2026-05-27 — Completed Phase 3.6.2 (Discount UX Hardening, Cart Offer Pills & Modal Scroll Fix)
+- **Completed Phase 3.6.2 Tasks**: Closed all hardening UX, styling, and test requirements for Phase 3.6.2 under strict TDD compliance.
+- **Dynamic Cart Offer Pills**: Replaced the static promotion text in `CartDrawer.tsx` with rounded, responsive saffron (locked) and green (applied) interactive pills tracking subtotal thresholds in real time.
+- **Improved Text Wrapping & Styling**: Refactored the discount collapsible breakdowns in `OrderConfirmationPage.tsx` and `StoreOrdersPage.tsx` to handle long offer titles elegantly without text wrapping and spacing overflows.
+- **Data Consistency & Server Sync**: Wired cart mutations in `CartDrawer.tsx` and `ProductGrid.tsx` to automatically trigger backend reconciliation through `syncBuyerCartFromServer` on action callbacks, preventing stale local pricing states.
+- **Modal Scroll & Lenis Control**: Hardened the scrollable store order detail modal in `StoreOrdersPage.tsx` by stopping/starting Lenis smooth scrolling and adding `data-lenis-prevent` attributes.
+- **Robust Automated Verification**: Wrote and validated extensive backend and frontend unit tests for all updated modules, maintaining a 100% clean global compilation and green status.
 
 
 

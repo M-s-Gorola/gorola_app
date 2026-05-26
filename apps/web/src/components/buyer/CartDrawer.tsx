@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { lenis } from "@/lib/lenis";
 import { useAuthStore } from "@/store/auth.store";
@@ -28,6 +29,7 @@ export function CartDrawer(): ReactElement | null {
   const accessToken = useAuthStore((s) => s.accessToken);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
+  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const upiEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_UPI_ENABLED"));
   const cardEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_CARD_ENABLED"));
 
@@ -38,6 +40,9 @@ export function CartDrawer(): ReactElement | null {
     if (isOpen) {
       document.body.style.overflow = "hidden";
       lenis?.stop();
+      if (accessToken !== null) {
+        void syncBuyerCartFromServer().catch(() => {});
+      }
     } else {
       document.body.style.overflow = "";
       lenis?.start();
@@ -46,7 +51,7 @@ export function CartDrawer(): ReactElement | null {
       document.body.style.overflow = "";
       lenis?.start();
     };
-  }, [isOpen]);
+  }, [isOpen, accessToken]);
 
   useGSAP(() => {
     if (isOpen) {
@@ -161,6 +166,7 @@ export function CartDrawer(): ReactElement | null {
                               });
                             }
                           });
+                          void syncBuyerCartFromServer();
                         }
                       }}
                       className="h-8 w-8 flex items-center justify-center rounded-full border border-gorola-pine/20 text-gorola-charcoal hover:bg-gorola-pine/5 transition-colors"
@@ -183,6 +189,7 @@ export function CartDrawer(): ReactElement | null {
                               quantity: next
                             });
                           });
+                          void syncBuyerCartFromServer();
                         }
                       }}
                       className="h-8 w-8 flex items-center justify-center rounded-full border border-gorola-pine/20 text-gorola-charcoal hover:bg-gorola-pine/5 transition-colors"
@@ -200,6 +207,7 @@ export function CartDrawer(): ReactElement | null {
                           void enqueueCartVariantMutation(variantId, async () => {
                             await client.delete(`/api/v1/cart/items/${variantId}`);
                           });
+                          void syncBuyerCartFromServer();
                         }
                       }}
                       className="ml-auto text-xs font-bold text-gorola-slate hover:text-red-600 transition-colors"
@@ -214,27 +222,44 @@ export function CartDrawer(): ReactElement | null {
           )}
 
           <div className="space-y-4 border-t border-gorola-pine/10 pt-6">
-            {lines.length > 0 && (
-              <>
-                {activeOffers.some((o) => subtotal < (o.minOrderAmount ?? 0)) ? (
-                  (() => {
-                    const lockedOffer = activeOffers.find((o) => subtotal < (o.minOrderAmount ?? 0))!;
+            {lines.length > 0 && activeOffers.length > 0 && (
+              <div className="space-y-2">
+                {activeOffers.map((offer) => {
+                  const minOrder = offer.minOrderAmount ?? 0;
+                  const isLocked = subtotal < minOrder;
+                  if (isLocked) {
                     return (
-                      <p className="rounded-xl bg-gorola-saffron/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-charcoal border border-gorola-saffron/10">
-                        Add Rs {((lockedOffer.minOrderAmount ?? 0) - subtotal).toFixed(2)} more to unlock offer: <span className="font-bold">{lockedOffer.title}</span>!
-                      </p>
+                      <div
+                        key={offer.id}
+                        data-testid={`offer-pill-${offer.id}`}
+                        className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 font-dm-sans text-xs font-semibold text-amber-800 flex flex-col gap-0.5"
+                      >
+                        <div>{offer.title}</div>
+                        {offer.minOrderAmount !== null && offer.minOrderAmount !== undefined && offer.minOrderAmount > 0 && (
+                          <div className="text-amber-700 font-normal">
+                            · Minimum purchase: Rs {offer.minOrderAmount}
+                          </div>
+                        )}
+                        {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                          <div className="text-amber-700 font-normal">
+                            · Discount up to: Rs {offer.maxDiscount}
+                          </div>
+                        )}
+                      </div>
                     );
-                  })()
-                ) : appliedOffers.length > 0 ? (
-                  <p className="rounded-xl bg-gorola-pine/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-pine border border-gorola-pine/10">
-                    Store offers applied: <span className="font-bold">{appliedOffers.map((o) => o.title).join(", ")}</span>!
-                  </p>
-                ) : (
-                  <p className="rounded-xl bg-gorola-saffron/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-charcoal border border-gorola-saffron/10">
-                    Active offers and discounts may apply at checkout
-                  </p>
-                )}
-              </>
+                  } else {
+                    return (
+                      <div
+                        key={offer.id}
+                        data-testid={`offer-pill-${offer.id}`}
+                        className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 font-dm-sans text-xs font-semibold text-emerald-700 flex flex-col gap-0.5"
+                      >
+                        <div>✅ {offer.title}</div>
+                      </div>
+                    );
+                  }
+                })}
+              </div>
             )}
             <div className="space-y-2">
               <div className="flex justify-between">
@@ -245,16 +270,59 @@ export function CartDrawer(): ReactElement | null {
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee</span>
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {DELIVERY_FEE.toFixed(2)}</span>
               </div>
-              {appliedOffers.map((o) => (
-                <div key={o.id} className="flex justify-between text-gorola-pine font-bold" data-testid="cart-offer-discount">
-                  <span className="font-dm-sans text-sm">Store Offer ({o.title})</span>
-                  <span className="font-dm-sans text-sm">-Rs {o.savedAmount.toFixed(2)}</span>
-                </div>
-              ))}
-              {savedAmount > 0 && (
-                <div className="flex justify-between text-gorola-pine font-bold">
-                  <span className="font-dm-sans text-sm">Saved</span>
-                  <span className="font-dm-sans text-sm">-Rs {savedAmount.toFixed(2)}</span>
+              {offerSavedAmount + savedAmount > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-gorola-pine font-bold" data-testid="cart-discount-summary">
+                    <div className="flex items-center gap-1.5 font-dm-sans text-sm">
+                      <span>Total Discount</span>
+                      <button
+                        type="button"
+                        data-testid="cart-discount-toggle-chevron"
+                        onClick={() => setIsDiscountOpen(!isDiscountOpen)}
+                        className="text-gorola-pine hover:bg-gorola-pine/5 rounded p-0.5 transition-colors flex items-center justify-center"
+                        aria-label="Toggle discount breakdown"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className={`h-4 w-4 transition-transform duration-200 ${isDiscountOpen ? "rotate-180" : ""}`}
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span className="font-dm-sans text-sm">-Rs {(offerSavedAmount + savedAmount).toFixed(2)}</span>
+                  </div>
+                  {isDiscountOpen && (
+                    <div className="space-y-1.5 pl-4">
+                      {appliedOffers.map((o) => (
+                        <div
+                          key={o.id}
+                          data-testid="cart-discount-breakdown-item"
+                          className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
+                        >
+                          <span className="break-words text-left flex-1">{o.title}</span>
+                          <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {savedAmount > 0 && (
+                        <div
+                          data-testid="cart-discount-breakdown-item"
+                          className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
+                        >
+                          <span className="break-words text-left flex-1">{discountCode || "Coupon"}</span>
+                          <span className="text-right whitespace-nowrap shrink-0">-Rs {savedAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex justify-between border-t border-gorola-pine/5 pt-2">

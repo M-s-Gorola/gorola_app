@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate,useParams } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
@@ -222,6 +223,7 @@ export function ProductDetailPage(): ReactElement {
                             });
                           }
                         });
+                        void syncBuyerCartFromServer();
                       }
                     } else {
                       setLocalQuantity((current) => Math.max(1, current - 1));
@@ -249,6 +251,7 @@ export function ProductDetailPage(): ReactElement {
                             quantity: next
                           });
                         });
+                        void syncBuyerCartFromServer();
                       }
                     } else {
                       setLocalQuantity((current) => Math.min(current + 1, maxQty));
@@ -285,6 +288,7 @@ export function ProductDetailPage(): ReactElement {
                         quantity: localQuantity
                       });
                     });
+                    void syncBuyerCartFromServer();
                   }}
                   disabled={!canAddToCart}
                   className="flex-1 rounded-full bg-gorola-saffron px-8 py-3 font-dm-sans text-base font-bold text-gorola-charcoal shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 sm:flex-none"

@@ -56,8 +56,8 @@ test.describe('Cart & Discounts', () => {
     await discountInput.fill('TESTDEAL10');
     await page.locator('button', { hasText: /Apply/i }).click();
 
-    // Assert subtotal or total reflects a change or simply that "Saved" appears
-    await expect(page.locator('aside')).toContainText(/Saved/i);
+    // Assert the collapsible "Total Discount" row is visible (Phase 3.6.2 UI)
+    await expect(page.locator('aside')).toContainText(/Total Discount/i);
     await expect(page.locator('aside')).toContainText(/-Rs/i);
 
     // Assert total shown is less than (subtotal + delivery fee)

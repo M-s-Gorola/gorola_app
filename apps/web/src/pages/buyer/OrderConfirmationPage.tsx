@@ -261,6 +261,7 @@ export function OrderConfirmationPage(): ReactElement {
   const entranceDoneRef = useRef(false);
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
@@ -661,12 +662,40 @@ interface StoreOffer {
                     <span className="text-gorola-slate">Delivery fee:</span>
                     <span className="font-medium">Rs {order.deliveryFee}</span>
                   </div>
-                  {getAppliedDiscounts(order).map((d, idx) => (
-                    <div key={idx} className="flex justify-between text-emerald-700">
-                      <span>{d.label}:</span>
-                      <span className="font-medium">-Rs {d.amount.toFixed(2)}</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const applied = getAppliedDiscounts(order);
+                    const totalAmt = applied.reduce((sum, d) => sum + d.amount, 0);
+                    if (totalAmt <= 0) return null;
+                    return (
+                      <div className="space-y-1" data-testid="discount-summary-row">
+                        <div className="flex justify-between items-center text-emerald-700">
+                          <button
+                            type="button"
+                            onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                            data-testid="discount-breakdown-toggle"
+                            aria-expanded={isDiscountExpanded}
+                            className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
+                          >
+                            <span>Discount:</span>
+                            <span className="text-[10px] transform transition-transform duration-200">
+                              {isDiscountExpanded ? "▼" : "▶"}
+                            </span>
+                          </button>
+                          <span className="font-medium">-Rs {totalAmt.toFixed(2)}</span>
+                        </div>
+                        {isDiscountExpanded && (
+                          <div className="space-y-1 pl-3 border-l border-emerald-100" data-testid="discount-breakdown-list">
+                            {applied.map((d, idx) => (
+                              <div key={idx} className="flex justify-between items-start gap-4 text-xs text-emerald-600/90 font-dm-sans italic w-full">
+                                <span className="break-words text-left flex-1">• {d.label}</span>
+                                <span className="text-right whitespace-nowrap shrink-0">-Rs {d.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
                     <span>Payment [{formatPayment(order.paymentMethod)}]:</span>
                     <span>Rs {order.total}</span>

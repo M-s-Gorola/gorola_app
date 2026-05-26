@@ -17,6 +17,7 @@ import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { lenis } from "@/lib/lenis";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -102,6 +103,25 @@ export function StoreOrdersPage(): ReactElement {
   const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "ALL">("ALL");
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      document.body.style.overflow = "hidden";
+      lenis?.stop();
+    } else {
+      document.body.style.overflow = "";
+      lenis?.start();
+    }
+    return () => {
+      document.body.style.overflow = "";
+      lenis?.start();
+    };
+  }, [selectedOrder]);
+
+  useEffect(() => {
+    setIsDiscountExpanded(false);
+  }, [selectedOrder]);
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -585,6 +605,7 @@ interface StoreOffer {
           <div
             className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
+            data-lenis-prevent
           >
             {/* Modal Header */}
             <div className="flex justify-between items-start gap-4">
@@ -744,12 +765,40 @@ interface StoreOffer {
                     <span>Delivery Fee</span>
                     <span className="font-semibold">{formatCurrency(deliveryFee)}</span>
                   </div>
-                  {getAppliedDiscounts(selectedOrder).map((d, idx) => (
-                    <div key={idx} className="flex justify-between items-center text-xs text-rose-600 font-bold" data-testid="store-order-discount">
-                      <span>{d.label}</span>
-                      <span className="font-semibold">-{formatCurrency(d.amount)}</span>
-                    </div>
-                  ))}
+                  {(() => {
+                    const applied = getAppliedDiscounts(selectedOrder);
+                    const totalAmt = applied.reduce((sum, d) => sum + d.amount, 0);
+                    if (totalAmt <= 0) return null;
+                    return (
+                      <div className="space-y-1" data-testid="store-order-discount">
+                        <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                            data-testid="store-order-discount-toggle"
+                            aria-expanded={isDiscountExpanded}
+                            className="flex items-center gap-1 text-rose-600 hover:text-rose-700 transition-colors font-bold focus:outline-none"
+                          >
+                            <span>Discount:</span>
+                            <span className="text-[10px] transform transition-transform duration-200">
+                              {isDiscountExpanded ? "▼" : "▶"}
+                            </span>
+                          </button>
+                          <span className="font-semibold">-{formatCurrency(totalAmt)}</span>
+                        </div>
+                        {isDiscountExpanded && (
+                          <div className="space-y-1 pl-3 border-l border-rose-150" data-testid="store-order-discount-list">
+                            {applied.map((d, idx) => (
+                              <div key={idx} className="flex justify-between items-start gap-4 text-[11px] text-rose-500 font-dm-sans italic font-medium w-full">
+                                <span className="break-words text-left flex-1">• {d.label}</span>
+                                <span className="text-right whitespace-nowrap shrink-0">-{formatCurrency(d.amount)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
                   <div className="h-px bg-gorola-mint/15 my-1" />
                   <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal">
                     <span>Grand Total</span>

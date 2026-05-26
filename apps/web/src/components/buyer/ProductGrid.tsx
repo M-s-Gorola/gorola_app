@@ -5,6 +5,7 @@ import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { initGorolaGsapOnce } from "@/lib/gsap";
 import { useAuthStore } from "@/store/auth.store";
@@ -198,6 +199,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
         quantity
       });
     });
+    void syncBuyerCartFromServer();
   }
 
   function syncQtyChange(productVariantId: string, quantity: number): void {
@@ -207,12 +209,13 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     void enqueueCartVariantMutation(productVariantId, async () => {
       if (quantity <= 0) {
         await api!.delete(`/api/v1/cart/items/${productVariantId}`);
-        return;
+      } else {
+        await api!.put(`/api/v1/cart/items/${productVariantId}`, {
+          quantity
+        });
       }
-      await api!.put(`/api/v1/cart/items/${productVariantId}`, {
-        quantity
-      });
     });
+    void syncBuyerCartFromServer();
   }
 
   if (query.isLoading) {
