@@ -594,6 +594,94 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // Advertisements Management Schema
+  const createAdBodySchema = z.object({
+    imageUrl: z.string().trim().min(1, "Image URL is required"),
+    title: z.string().trim().min(1, "Title is required"),
+    startsAt: z.string().trim().min(1, "startsAt is required"),
+    endsAt: z.string().trim().min(1, "endsAt is required")
+  });
+
+  // GET /api/v1/store/advertisements
+  app.get("/api/v1/store/advertisements", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const ads = await storeOwnerService.getAds(owner.storeId);
+
+    return {
+      success: true,
+      data: ads,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // POST /api/v1/store/advertisements
+  app.post("/api/v1/store/advertisements", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = createAdBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid advertisement data", parsed.error.flatten());
+    }
+
+    const ad = await storeOwnerService.createAd(owner.storeId, parsed.data);
+
+    reply.code(201);
+    return {
+      success: true,
+      data: ad,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // DELETE /api/v1/store/advertisements/:id
+  app.delete("/api/v1/store/advertisements/:id", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const adId = params.id;
+    if (!adId) {
+      throw new ValidationError("Advertisement ID is required");
+    }
+
+    await storeOwnerService.deleteAd(owner.storeId, adId);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
 
 

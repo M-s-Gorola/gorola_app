@@ -17,7 +17,7 @@
 | Phase | File | Status | Notes |
 |-------|------|--------|-------|
 | Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | ✅ COMPLETE    | 2.1–2.23 complete. **File locked.** |
-| Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | 🟡 IN PROGRESS | Phase 3 started (3.1 complete) |
+| Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | 🟡 IN PROGRESS | Phase 3 in progress (3.5 complete) |
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | 🔴 NOT STARTED | Independent of Phase 3 & 4 |
 | Phase 6 | [`phase6_state.md`](./phase6_state.md) | 🟡 IN PROGRESS | Subdomain Routing & Maintenance (6.1 complete) |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
@@ -30,7 +30,7 @@
 | ------- | -------------------- | -------------- | ----- |
 | Phase 1 | NFR Foundation       | ✅ COMPLETE    | All 1.1–1.10 items complete |
 | Phase 2 | Buyer Web Experience | ✅ COMPLETE    | 2.1–2.23 complete. |
-| Phase 3 | Store Owner Panel    | 🟡 IN PROGRESS | Phase 3.1 completed successfully |
+| Phase 3 | Store Owner Panel    | 🟡 IN PROGRESS | Phase 3.5 completed successfully |
 | Phase 4 | Admin Panel          | 🔴 NOT STARTED | After Phase 3 complete |
 | Phase 5 | Rider Interface      | 🔴 NOT STARTED | Independent — can start any time after Phase 2 |
 | Phase 6 | Subdomain Routing    | 🟡 IN PROGRESS | Phase 6.1 complete; Phase 6.2 planned |

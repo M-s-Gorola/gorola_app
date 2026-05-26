@@ -777,5 +777,64 @@ export class StoreOwnerService {
       return variant;
     });
   }
+
+  public async getAds(storeId: string) {
+    return this.db.advertisement.findMany({
+      where: { storeId },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  public async createAd(
+    storeId: string,
+    dto: { imageUrl: string; title: string; startsAt: string | Date; endsAt: string | Date }
+  ) {
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+
+    if (endsAt.getTime() < startsAt.getTime()) {
+      throw new AppError("endsAt cannot be before startsAt", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    return this.db.advertisement.create({
+      data: {
+        storeId,
+        title: dto.title,
+        imageUrl: dto.imageUrl,
+        startsAt,
+        endsAt,
+        isApproved: false,
+        isActive: true
+      }
+    });
+  }
+
+  public async deleteAd(storeId: string, adId: string) {
+    const ad = await this.db.advertisement.findUnique({
+      where: { id: adId }
+    });
+
+    if (!ad) {
+      throw new NotFoundError("Advertisement not found");
+    }
+
+    if (ad.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to access this advertisement");
+    }
+
+    if (ad.isApproved) {
+      throw new AppError("Cannot delete an approved advertisement", {
+        code: "CANNOT_DELETE_APPROVED_AD",
+        statusCode: 422
+      });
+    }
+
+    await this.db.advertisement.delete({
+      where: { id: adId }
+    });
+  }
 }
 

@@ -70,6 +70,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
     ...(isBooking
       ? [{ label: "Bookings", path: getScopedPath("/store/bookings", "store", isSubdomainMode) }]
       : []),
+    { label: "Advertisements", path: getScopedPath("/store/advertisements", "store", isSubdomainMode) },
     { label: "Settings", path: getScopedPath("/store/settings", "store", isSubdomainMode) }
   ];
 
