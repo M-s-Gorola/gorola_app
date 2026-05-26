@@ -127,7 +127,48 @@ await deleteItem.click();
 
 ---
 
-## 5. Case Study: Timezone-Boundary Validation Fallbacks
+## 5. The Double-Click Event Race: GSAP Animations vs. Radix UI Focus Lifecycle
+
+In modern premium websites, animations (like GSAP timelines) and interactive overlays (like Radix UI Dropdowns, Modals, and Drawers) are ubiquitous. In E2E testing, these present two highly deceptive timing races that can easily fail your pipeline.
+
+### A. The GSAP / CSS Animation Trap
+* **The Concept:** GSAP and CSS animations animate elements smoothly over time. In E2E tests, clicking an element while it is sliding or fading in/out can cause the click coordinates to miss or target a half-rendered state.
+* **The Native Solution:** We often bypass this by globally disabling GSAP or setting transition durations to `0` in E2E environments (e.g., `gsap.globalTimeline.clear()`, or CSS `* { transition: none !important; animation: none !important; }`).
+* **The Gotcha:** While disabling the visual animation makes the element instantly appear/disappear, **it does NOT disable the underlying Javascript rendering ticks or component lifecycle delays**.
+
+### B. The Radix UI Focus & Pointer-Event Overlay Race (Why clicks get lost)
+Even with animations completely disabled, UI primitives (like Radix UI / Shadcn UI) have complex internal event-handling routines that run asynchronously:
+1. **Focus Restoration (`FocusScope`):** When a dropdown menu, modal, or popover closes, Radix schedules a microtask to asynchronously return keyboard focus back to the button that triggered it (`menuBtn`).
+2. **Pointer-Event Interceptor (`DismissableLayer`):** To prevent mouse clicks from firing on the background page while a dropdown is open, Radix mounts a full-screen transparent overlay with `pointer-events: auto`.
+3. **The Race Condition:**
+   - **Step 1:** You click a menu item (like "Set as Default").
+   - **Step 2:** The dropdown closes. The portal is unmounted.
+   - **Step 3:** Radix begins tearing down the `DismissableLayer` and restoring focus to `menuBtn` inside an asynchronous tick.
+   - **Step 4:** Playwright immediately fires a click on `menuBtn` to reopen the menu for another action (like "Delete").
+   - **Step 5:** Because the tear-down of the overlay and focus restoration takes a frame, the click event is **intercepted and swallowed** by the dying pointer-event overlay. The menu never opens, and the next expectation fails.
+
+### C. The Bulletproof Pattern for Future Projects
+Whenever you are performing consecutive interactions with the **same trigger element** (e.g. opening a menu, clicking an item, and then immediately opening the menu again to click another item):
+
+1. **Assert complete unmounting of the overlay first:**
+   ```typescript
+   // Wait for the popup menu to be completely removed from the DOM/Viewport
+   await expect(page.getByRole('menu')).not.toBeVisible();
+   ```
+2. **Add a brief event-binding cooldown buffer:**
+   ```typescript
+   // A tiny 300ms-500ms timeout guarantees the browser thread has finished Radix focus restoration
+   await page.waitForTimeout(500);
+   ```
+3. **Confirm the overlay is open before querying its child items:**
+   ```typescript
+   await menuBtn.click();
+   await expect(page.getByRole('menu')).toBeVisible(); // Confirms Radix has painted the new portal
+   ```
+
+---
+
+## 6. Case Study: Timezone-Boundary Validation Fallbacks
 ### The Problem
 When E2E tests select "tomorrow" (`+1 day`) for booking slots, timezone discrepancies between the local system running the browser and the backend server (especially near the midnight boundary) can cause the server to calculate the selection as "today". If the backend enforces a `1-day` minimum lead-time restriction, this results in an unexpected validation failure (`INVALID_BOOKING_DATE`).
 
