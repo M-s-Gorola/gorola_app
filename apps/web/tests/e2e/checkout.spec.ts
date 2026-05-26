@@ -187,10 +187,17 @@ test.describe('Checkout & Account', () => {
     // 3. Wait for database and UI state synchronization to settle 100%
     await defaultRefreshPromise;
     await expect(addressCard.locator('[data-testid="default-badge"]')).toBeVisible();
+    
+    // 4. Ensure the dropdown menu from the "Set as Default" click has completely finished its close transition/unmount
+    await expect(page.getByRole('menu')).not.toBeVisible();
+    await page.waitForTimeout(500); // Brief buffer to allow Radix UI to re-bind event handlers to the updated menu trigger
  
     // Delete
     page.on('dialog', dialog => dialog.accept());
     await menuBtn.click();
+    
+    // Ensure the menu has successfully opened in response to the click
+    await expect(page.getByRole('menu')).toBeVisible();
     const deleteItem = page.getByRole('menuitem', { name: /Delete/i });
     await expect(deleteItem).toBeVisible({ timeout: 10000 });
     await deleteItem.click();
