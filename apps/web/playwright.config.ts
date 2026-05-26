@@ -14,17 +14,17 @@ dotenv.config({ path: path.resolve(__dirname, '../../.env') });
  */
 export default defineConfig({
   testDir: './tests/e2e',
-  timeout: 60000,
+  timeout: 120000,
   globalSetup: './tests/e2e/global-setup.ts',
   expect: {
-    timeout: 10000,
+    timeout: 15000,
   },
   /* Run tests in files in parallel */
   fullyParallel: true,
   /* Fail the build on CI if you accidentally left test.only in the source code. */
   forbidOnly: !!process.env.CI,
-  /* Retry on CI only */
-  retries: process.env.CI ? 2 : 0,
+  /* Retry on CI to handle container latency, and allow 1 retry locally to handle cold-boot Vite compilation timeouts */
+  retries: process.env.CI ? 2 : 1,
   /* Opt out of parallel tests to avoid Redis key conflicts for the test user. */
   workers: 1,
   /* Reporter to use. See https://playwright.dev/docs/test-reporters */

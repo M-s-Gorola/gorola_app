@@ -170,7 +170,22 @@ test.describe('Checkout & Account', () => {
     
     const defaultItem = page.getByRole('menuitem', { name: /Set as Default/i });
     await expect(defaultItem).toBeVisible({ timeout: 10000 });
+
+    // 1. Hook the GET address network response representing the post-update refresh
+    const defaultRefreshPromise = page.waitForResponse(async (resp) => {
+      if (resp.url().includes('/api/v1/addresses') && resp.request().method() === 'GET') {
+        const json = await resp.json().catch(() => ({}));
+        // Check that our modified address card is returned with its default state true
+        return json.data?.addresses?.some((a: any) => a.label === uniqueLabel && a.isDefault === true);
+      }
+      return false;
+    }, { timeout: 20000 });
+
+    // 2. Click "Set as Default"
     await defaultItem.click();
+
+    // 3. Wait for database and UI state synchronization to settle 100%
+    await defaultRefreshPromise;
     await expect(addressCard.locator('[data-testid="default-badge"]')).toBeVisible();
  
     // Delete
