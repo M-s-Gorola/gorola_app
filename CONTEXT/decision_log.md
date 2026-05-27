@@ -1345,4 +1345,43 @@ Additionally, confirmation pages must display a clear, high-fidelity on-screen p
 
 ---
 
+## [DECISION-046] Store-Scoped Discount Codes & Applied Code Persistence on Orders
+
+**Date:** 2026-05-28
+**Status:** Accepted
+
+**Context:**
+The original `Discount` model was designed with a globally unique `code` field (`code String @unique`) and a nullable `storeId` (`String?`). This was intended to allow both platform-wide and store-specific discount codes. Two problems emerged from this design:
+
+1. **Tenant-isolation bug:** Because the `code` column is globally unique, two independent merchants cannot both create a coupon named `SAVE10`. This is a hard database-level conflict that has no valid business justification — two separate stores' coupon namespaces should never interfere with each other.
+2. **Discount code name is lost after order placement:** When a buyer applies a coupon code (e.g., `SAVE10`) at checkout, the code string is validated and used to compute the discount amount. However, neither the `Order` nor `BookingOrder` record saves the code name — only the final calculated totals are persisted. This means all downstream UIs (order receipt, store-owner order detail modal, booking dashboard) have no way to retrieve which code was applied. They are forced to fall back to a generic `"Discount"` label in the collapsible discount breakdown dropdown, which is a data transparency failure for both buyers and store owners.
+
+**Decision:**
+Two schema changes are implemented together as a single atomic migration:
+
+1. **Make `storeId` required on `Discount`:** Remove the nullable `String?` and promote it to a required `String`. Every discount code must belong to exactly one store. Platform-wide discount codes are out of scope for this phase and will be revisited under Phase 4 (Admin Panel) if needed.
+
+2. **Replace the global unique constraint with a per-store composite unique:** Remove `code String @unique` and add `@@unique([storeId, code])`. This means a code is unique within a store's own namespace, but Store A and Store B are completely free to each have their own `SAVE10` without conflict.
+
+3. **Add `appliedDiscountCode String?` to the `Order` model:** This field is written exactly once — at the moment the order is placed — and is never modified. It stores the normalized (uppercased, trimmed) code string that was applied. It is `null` when no coupon code was used.
+
+4. **Expose `appliedDiscountCode` through all order and booking API serializers:** All endpoints that return order or booking data (`GET /api/v1/orders/:id`, `GET /api/v1/store/orders`, `GET /api/v1/store/bookings`, `GET /api/v1/bookings/:orderId`) must include this field in their response payload.
+
+5. **Update all frontend discount breakdown functions:** The `getAppliedDiscounts` helper in `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `OrderConfirmationPage.tsx`, and `BookingConfirmationPage.tsx` must use the persisted `appliedDiscountCode` field as the label for the coupon line item in the collapsible discount dropdown instead of the `"Discount"` fallback.
+
+**Rationale:**
+- **Correct tenant isolation:** Merchant A's coupon namespace must never conflict with Merchant B's. This is a fundamental multi-tenant data isolation requirement.
+- **Data transparency:** Buyers and store owners are entitled to see the exact coupon code name that was applied to an order. Displaying `"Discount"` is a UX failure that undermines trust in the discount system.
+- **Immutable audit trail:** Persisting the code name on the order creates a permanent, immutable financial record. Even if the discount code is later deactivated or deleted (soft), the order history correctly reflects what was applied at the time of purchase.
+- **Simplifies validation logic:** With `storeId` now always required, the conditional check `if (discount.storeId !== null && discount.storeId !== storeId)` simplifies to `if (discount.storeId !== storeId)`, removing a branch that previously allowed accidental platform-wide coupon application.
+
+**Tradeoffs:**
+- Existing discount records in the database with `storeId = null` (platform-wide) must be backfilled or removed before the migration can run. This is acceptable as no production data exists in this state.
+- The `appliedDiscountCode` column adds a small amount of storage per order row, which is negligible.
+
+**Alternatives Considered:**
+1. **Keep global uniqueness, enforce store-scoping only in the service layer:** Rejected. Service-layer-only enforcement is fragile — a future developer could bypass it. The database constraint is the correct place to enforce this invariant.
+2. **Store offer-to-order links in a junction table (`OrderAppliedOffer`):** Rejected for this phase. Offers are already reconstructed retroactively via the `getAppliedDiscounts` time-based matching logic, which works correctly. Only the coupon code name — which has no equivalent retroactive mechanism — needs to be persisted.
+
+---
 

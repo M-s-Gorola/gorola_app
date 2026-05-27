@@ -72,6 +72,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
       : []),
     { label: "Advertisements", path: getScopedPath("/store/advertisements", "store", isSubdomainMode) },
     { label: "Offers", path: getScopedPath("/store/offers", "store", isSubdomainMode) },
+    { label: "Discounts", path: getScopedPath("/store/discounts", "store", isSubdomainMode) },
     { label: "Settings", path: getScopedPath("/store/settings", "store", isSubdomainMode) }
   ];
 

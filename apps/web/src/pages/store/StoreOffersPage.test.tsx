@@ -7,17 +7,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StoreOffersPage } from "./StoreOffersPage";
 
-const { getMock, postMock, putMock } = vi.hoisted(() => ({
+const { getMock, postMock, putMock, deleteMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
   postMock: vi.fn(),
-  putMock: vi.fn()
+  putMock: vi.fn(),
+  deleteMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
     get: getMock,
     post: postMock,
-    put: putMock
+    put: putMock,
+    delete: deleteMock
   }
 }));
 
@@ -44,6 +46,7 @@ describe("StoreOffersPage", () => {
     getMock.mockReset();
     postMock.mockReset();
     putMock.mockReset();
+    deleteMock.mockReset();
     window.confirm = vi.fn().mockReturnValue(true);
   });
 
@@ -181,7 +184,9 @@ describe("StoreOffersPage", () => {
     await user.type(titleInput, "Monsoon Special");
     await user.selectOptions(typeSelect, "PERCENTAGE");
     await user.type(valueInput, "15");
+    await user.clear(startsInput);
     await user.type(startsInput, "2026-07-01T00:00");
+    await user.clear(endsInput);
     await user.type(endsInput, "2026-07-15T00:00");
 
     postMock.mockResolvedValueOnce({
@@ -215,4 +220,114 @@ describe("StoreOffersPage", () => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "offers"] });
     });
   });
+
+  it("renders edit and delete buttons, enters edit mode, and handles cancel", async () => {
+    const mockOffers = [
+      {
+        id: "offer-1",
+        title: "Weekend Dairy Deal",
+        discountType: "PERCENTAGE",
+        discountValue: 10,
+        startsAt: "2026-06-01T00:00:00.000Z",
+        endsAt: "2026-06-10T00:00:00.000Z",
+        isActive: true
+      }
+    ];
+
+    getMock.mockResolvedValueOnce({
+      data: { success: true, data: mockOffers }
+    });
+
+    renderStoreOffers();
+
+    // Verify presence of edit button
+    const editBtn = await screen.findByTestId("edit-offer-offer-1");
+    expect(editBtn).toBeInTheDocument();
+
+    const user = userEvent.setup();
+
+    // Click edit -> should enter edit mode and populate form fields
+    await user.click(editBtn);
+
+    expect(screen.getByRole("heading", { name: /edit offer/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/offer title/i)).toHaveValue("Weekend Dairy Deal");
+    expect(screen.getByLabelText(/discount type/i)).toHaveValue("PERCENTAGE");
+    expect(screen.getByLabelText(/discount value/i)).toHaveValue(10);
+
+    // Active status checkbox should render only in edit mode
+    const statusCheckbox = screen.getByLabelText(/active status/i);
+    expect(statusCheckbox).toBeInTheDocument();
+    expect(statusCheckbox).toBeChecked();
+
+    // Click Cancel -> should restore default form
+    const cancelBtn = screen.getByRole("button", { name: /cancel/i });
+    await user.click(cancelBtn);
+
+    expect(screen.getByRole("heading", { name: /create offer/i })).toBeInTheDocument();
+    expect(screen.queryByLabelText(/active status/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/offer title/i)).toHaveValue("");
+  });
+
+  it("handles successful form submission in edit mode (PUT update and reactivation)", async () => {
+    const mockOffers = [
+      {
+        id: "offer-1",
+        title: "Weekend Dairy Deal",
+        discountType: "PERCENTAGE",
+        discountValue: 10,
+        startsAt: "2026-06-01T00:00:00.000Z",
+        endsAt: "2026-06-10T00:00:00.000Z",
+        isActive: false // deactivated
+      }
+    ];
+
+    getMock.mockResolvedValueOnce({
+      data: { success: true, data: mockOffers }
+    });
+
+    renderStoreOffers();
+
+    const editBtn = await screen.findByTestId("edit-offer-offer-1");
+    const user = userEvent.setup();
+
+    // Click edit -> populate form and active checkbox
+    await user.click(editBtn);
+
+    const titleInput = screen.getByLabelText(/offer title/i);
+    const valueInput = screen.getByLabelText(/discount value/i);
+    const statusCheckbox = screen.getByLabelText(/active status/i);
+    const submitBtn = screen.getByRole("button", { name: /save changes/i });
+
+    expect(statusCheckbox).not.toBeChecked();
+
+    // Modify fields and reactivate
+    await user.clear(titleInput);
+    await user.type(titleInput, "Weekend Dairy Deal v2");
+    await user.clear(valueInput);
+    await user.type(valueInput, "15");
+    await user.click(statusCheckbox); // Toggle active state to true
+
+    expect(statusCheckbox).toBeChecked();
+
+    putMock.mockResolvedValueOnce({
+      data: { success: true }
+    });
+
+    const invalidateSpy = vi.spyOn(QueryClient.prototype, "invalidateQueries");
+
+    await user.click(submitBtn);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/offers/offer-1", expect.objectContaining({
+        title: "Weekend Dairy Deal v2",
+        discountValue: 15,
+        isActive: true
+      }));
+    });
+
+    await waitFor(() => {
+      expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "offers"] });
+    });
+  });
+
 });
