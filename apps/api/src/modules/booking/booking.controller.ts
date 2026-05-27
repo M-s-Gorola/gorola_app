@@ -104,6 +104,7 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     subtotal: order.subtotal.toString(),
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
+    discountAmount: (Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2),
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     landmarkDescription: order.landmarkDescription,
@@ -168,7 +169,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
       .min(1),
     scheduledDate: z.string().datetime(),
     timeslot: z.string().min(1),
-    addressId: z.string().min(1)
+    addressId: z.string().min(1),
+    discountCode: z.string().optional()
   });
 
   const queryBookingsSchema = z.object({
@@ -210,7 +212,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
           scheduledDate,
           timeslot: body.timeslot,
           addressId: body.addressId
-        }
+        },
+        body.discountCode
       );
 
       const bookingOrderRecord = await deps.bookingService.repository.findById(placedOrder.id);

@@ -26,10 +26,35 @@ type BookingItem = {
   quantity?: number;
 };
 
+type BookingStatusHistory = {
+  id: string;
+  status: string;
+  changedAt: string;
+  changedBy: string;
+};
+
+type StoreOffer = {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount?: number | null;
+  maxDiscount?: number | null;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+};
+
 type Booking = {
   id: string;
   orderId?: string;
   status: string;
+  subtotal?: string;
+  deliveryFee?: string;
+  total?: string;
+  paymentMethod?: string;
+  discountAmount?: string;
+  discountCode?: string | null;
   createdAt: string;
   customerPhone?: string;
   buyerMaskedPhone?: string;
@@ -37,6 +62,7 @@ type Booking = {
   flatRoom?: string | null;
   addressLabel?: string | null;
   items: BookingItem[];
+  statusHistory?: BookingStatusHistory[];
   bookingOrder: {
     scheduledDate: string;
     timeslot: string;
@@ -82,9 +108,95 @@ export function StoreBookingsPage(): ReactElement {
   const [activeTab, setActiveTab] = useState<"PENDING" | "UPCOMING" | "HISTORY">("PENDING");
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
+
+  const { data: offersResponse } = useQuery({
+    enabled: !!storeId,
+    queryKey: ["promotions", "store", storeId, "offers"],
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: StoreOffer[] }>(
+        `/api/v1/promotions/store/${storeId}/offers`
+      );
+      return res.data;
+    }
+  });
+
+  const getAppliedDiscounts = (booking: Booking) => {
+    const subtotal = Number(booking.subtotal || 0);
+    const deliveryFee = Number(booking.deliveryFee || 0);
+    const total = Number(booking.total || 0);
+    const discountAmount = Number(booking.discountAmount) > 0
+      ? Number(booking.discountAmount)
+      : Number((subtotal + deliveryFee - total).toFixed(2));
+    if (discountAmount <= 0) return [];
+
+    const offers = Array.isArray(offersResponse?.data) ? offersResponse.data : [];
+    const orderTime = new Date(booking.createdAt || "").getTime();
+
+    const matchedOffers = offers.filter((o) => {
+      const start = new Date(o.startsAt).getTime();
+      const end = new Date(o.endsAt).getTime();
+      return orderTime >= start && orderTime <= end;
+    });
+
+    const result: { label: string; amount: number }[] = [];
+    let remainingDiscount = discountAmount;
+
+    for (const offer of matchedOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal < minOrder) continue;
+
+      let offerDiscount = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        offerDiscount = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          offerDiscount = Math.min(offerDiscount, offer.maxDiscount);
+        }
+      } else {
+        offerDiscount = offer.discountValue;
+      }
+      offerDiscount = Number(Math.min(subtotal, offerDiscount).toFixed(2));
+
+      if (offerDiscount > 0 && remainingDiscount > 0) {
+        const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
+        if (appliedAmt > 0.05) {
+          result.push({
+            label: `Discount (${offer.title})`,
+            amount: appliedAmt
+          });
+          remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
+        }
+      }
+    }
+
+    if (remainingDiscount > 0.05) {
+      result.push({
+        label: booking.discountCode || "Discount",
+        amount: remainingDiscount
+      });
+    }
+
+    return result;
+  };
+
+  useEffect(() => {
+    if (selectedBooking) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedBooking]);
+
+  useEffect(() => {
+    setIsDiscountExpanded(false);
+  }, [selectedBooking]);
 
   // WebSocket Live Updates Handler
   useEffect(() => {
@@ -166,6 +278,7 @@ export function StoreBookingsPage(): ReactElement {
       toast.success("Appointment request rejected.");
       setRejectingBooking(null);
       setRejectionReason("");
+      setSelectedBooking(null);
       void queryClient.invalidateQueries({ queryKey: ["store", "bookings"] });
       void queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
     },
@@ -341,7 +454,9 @@ export function StoreBookingsPage(): ReactElement {
             return (
               <div
                 key={booking.id}
-                className="bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between"
+                data-testid={`booking-card-${booking.id}`}
+                onClick={() => setSelectedBooking(booking)}
+                className="bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
               >
                 <div className="space-y-4">
                   {/* Card Header Info */}
@@ -398,43 +513,9 @@ export function StoreBookingsPage(): ReactElement {
                   </div>
                 </div>
 
-                {/* Approve/Reject Actions Footer */}
-                {activeTab === "PENDING" && (
-                  <div className="flex gap-3 mt-6 pt-4 border-t border-gorola-mint/10">
-                    <button
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={() => handleApprove(booking)}
-                      className="flex-1 py-3 px-4 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
-                    >
-                      {approveMutation.isPending ? "Approving..." : "Approve"}
-                    </button>
-
-                    <button
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={() => openRejectModal(booking)}
-                      className="flex-1 py-3 px-4 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold uppercase tracking-wide rounded-xl transition-all disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-
-                {/* Mark Completed Actions Footer */}
-                {activeTab === "UPCOMING" && (
-                  <div className="flex gap-3 mt-6 pt-4 border-t border-gorola-mint/10">
-                    <button
-                      disabled={completeMutation.isPending}
-                      onClick={() => completeMutation.mutate(booking.orderId || booking.id)}
-                      className="flex-1 py-3 px-4 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
-                    >
-                      {completeMutation.isPending ? "Completing..." : "Mark Completed"}
-                    </button>
-                  </div>
-                )}
-
-                {/* Read-Only Status Indicator badges for non-pending requests */}
+                {/* Read-Only Status Indicator badges for non-pending requests inside card */}
                 {activeTab !== "PENDING" && (
-                  <div className="mt-6 pt-4 border-t border-gorola-mint/10 flex items-center justify-between">
+                  <div className="mt-4 pt-3 border-t border-gorola-mint/10 flex items-center justify-between">
                     <span className="text-[10px] text-gorola-slate uppercase tracking-wider font-extrabold">
                       Appointment Status
                     </span>
@@ -458,6 +539,20 @@ export function StoreBookingsPage(): ReactElement {
                     </span>
                   </div>
                 )}
+
+                <div className="pt-4 mt-6 border-t border-gorola-mint/10 flex items-center justify-between">
+                  <div>
+                    <p className="text-[10px] text-gorola-slate uppercase tracking-wider font-bold">
+                      Grand Total
+                    </p>
+                    <p className="text-base font-black text-gorola-charcoal">
+                      Rs {Number(booking.total || 0).toFixed(2)}
+                    </p>
+                  </div>
+                  <span className="text-xs font-extrabold text-gorola-pine hover:underline">
+                    View Details →
+                  </span>
+                </div>
               </div>
             );
           })}
@@ -474,10 +569,264 @@ export function StoreBookingsPage(): ReactElement {
         </div>
       )}
 
+      {/* Detailed Booking Modal Dialog */}
+      {selectedBooking && (
+        <div
+          data-testid="booking-details-modal"
+          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setSelectedBooking(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-start gap-4">
+              <div>
+                <span
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border mb-3 ${
+                    selectedBooking.bookingOrder?.approvalStatus === "APPROVED"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
+                      : (selectedBooking.bookingOrder?.approvalStatus === "REJECTED" || selectedBooking.bookingOrder?.approvalStatus === "CANCELLED")
+                      ? "bg-rose-50 text-rose-700 border-rose-200/50"
+                      : selectedBooking.bookingOrder?.approvalStatus === "PENDING_APPROVAL"
+                      ? "bg-amber-100 text-amber-800 border-amber-200/50"
+                      : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
+                  }`}
+                >
+                  {selectedBooking.bookingOrder?.approvalStatus === "REJECTED" ? "CANCELLED" : selectedBooking.bookingOrder?.approvalStatus?.replace("_", " ")}
+                </span>
+                <h2 className="font-mono text-xl md:text-2xl font-black text-gorola-charcoal">
+                  #{selectedBooking.id.toUpperCase()}
+                </h2>
+                <p className="text-xs text-gorola-slate mt-1 font-medium">
+                  Placed on: {new Date(selectedBooking.createdAt).toLocaleString("en-IN")}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedBooking(null)}
+                className="h-8 w-8 rounded-full border border-gorola-mint/20 hover:border-gorola-pine/20 flex items-center justify-center font-bold text-gorola-slate transition-all"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="grid gap-6 md:grid-cols-2">
+              {/* Buyer & Appointment details */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
+                  Buyer & Appointment
+                </h3>
+                <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 space-y-3 shadow-inner">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 bg-gorola-pine/10 rounded-lg flex items-center justify-center text-gorola-pine">
+                      <Calendar className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gorola-slate font-bold">Schedule Slot</p>
+                      <p className="text-xs font-black text-gorola-charcoal">
+                        {formatDateString(selectedBooking.bookingOrder?.scheduledDate)} at {selectedBooking.bookingOrder?.timeslot}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 bg-sky-50 text-sky-700 rounded-lg flex items-center justify-center">
+                      <Phone className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gorola-slate font-bold">Contact Number</p>
+                      <p className="text-xs font-black text-gorola-charcoal">
+                        {formatMaskedPhone(selectedBooking.customerPhone || selectedBooking.buyerMaskedPhone || "")}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-3">
+                    <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0">
+                      <MapPin className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gorola-slate font-bold">Appointment Address</p>
+                      <p className="text-xs font-black text-gorola-charcoal">
+                        {selectedBooking.flatRoom ? `${selectedBooking.flatRoom}, ` : ""}
+                        {selectedBooking.landmarkDescription || "No address provided"}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Status Transition Log */}
+              <div className="space-y-4">
+                <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
+                  Status Transition Log
+                </h3>
+                <div className="relative pl-6 space-y-4 border-l border-gorola-mint/15" data-testid="status-history-list">
+                  {selectedBooking.statusHistory && selectedBooking.statusHistory.length > 0 ? (
+                    selectedBooking.statusHistory.map((hist, idx) => (
+                      <div key={hist.id} className="relative">
+                        <span
+                          className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full ${
+                            idx === selectedBooking.statusHistory!.length - 1
+                              ? "bg-gorola-pine scale-125"
+                              : "bg-gorola-mint"
+                          }`}
+                        />
+                        <p className="text-xs font-black text-gorola-charcoal">
+                          {hist.status.replace(/_/g, " ")}
+                        </p>
+                        <p className="text-[10px] text-gorola-slate mt-0.5">
+                          By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}
+                        </p>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="relative">
+                      <span className="absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full bg-gorola-pine scale-125" />
+                      <p className="text-xs font-black text-gorola-charcoal text-[11px] font-black uppercase ring-1 ring-inset uppercase rounded-full">
+                        {selectedBooking.bookingOrder?.approvalStatus?.replace(/_/g, " ")}
+                      </p>
+                      <p className="text-[10px] text-gorola-slate mt-0.5">
+                        Created at {new Date(selectedBooking.createdAt).toLocaleTimeString("en-IN")}
+                      </p>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Itemized Table */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
+                Itemized Summary
+              </h3>
+              <div className="border border-gorola-mint/15 rounded-2xl overflow-hidden shadow-sm bg-white">
+                <table className="w-full text-left border-collapse">
+                  <thead>
+                    <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
+                      <th className="p-3 text-xs font-black text-gorola-charcoal uppercase">Product</th>
+                      <th className="p-3 text-xs font-black text-gorola-charcoal uppercase text-center">Qty</th>
+                      <th className="p-3 text-xs font-black text-gorola-charcoal uppercase text-right">Price</th>
+                      <th className="p-3 text-xs font-black text-gorola-charcoal uppercase text-right">Total</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedBooking.items.map((item) => (
+                      <tr key={item.id} className="border-b border-gorola-mint/10 last:border-0">
+                        <td className="p-3">
+                          <p className="text-xs font-black text-gorola-charcoal">{item.productName}</p>
+                          <p className="text-[10px] text-gorola-slate">{item.variantLabel}</p>
+                        </td>
+                        <td className="p-3 text-xs font-bold text-center text-gorola-charcoal">
+                          {item.quantity || 1}
+                        </td>
+                        <td className="p-3 text-xs text-right font-medium text-gorola-slate">
+                          Rs {Number(item.price || 0).toFixed(2)}
+                        </td>
+                        <td className="p-3 text-xs text-right font-black text-gorola-charcoal">
+                          Rs {(Number(item.price || 0) * (item.quantity || 1)).toFixed(2)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            {/* Receipt Summary panel with collapsible discounts */}
+            <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex flex-col gap-2">
+              <div className="flex justify-between items-center text-xs text-gorola-slate">
+                <span>Subtotal</span>
+                <span className="font-semibold">Rs {Number(selectedBooking.subtotal || 0).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between items-center text-xs text-gorola-slate">
+                <span>Delivery Fee</span>
+                <span className="font-semibold">Rs {Number(selectedBooking.deliveryFee || 0).toFixed(2)}</span>
+              </div>
+              {Number(selectedBooking.discountAmount || 0) > 0 && (
+                <div className="space-y-1" data-testid="store-booking-discount">
+                  <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                    <button
+                      type="button"
+                      onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                      data-testid="store-booking-discount-toggle"
+                      aria-expanded={isDiscountExpanded}
+                      className="flex items-center gap-1 text-rose-600 hover:text-rose-700 transition-colors font-bold focus:outline-none"
+                    >
+                      <span>Discount:</span>
+                      <span className="text-[10px] transform transition-transform duration-200">
+                        {isDiscountExpanded ? "▼" : "▶"}
+                      </span>
+                    </button>
+                    <span className="font-semibold">-Rs {Number(selectedBooking.discountAmount).toFixed(2)}</span>
+                  </div>
+                  {isDiscountExpanded && (
+                    <div className="space-y-1 pl-3 border-l border-rose-200" data-testid="store-booking-discount-list">
+                      {getAppliedDiscounts(selectedBooking).map((d, idx) => (
+                        <div key={idx} className="flex justify-between items-start gap-4 text-[11px] text-rose-500 font-dm-sans italic font-medium w-full">
+                          <span className="break-words text-left flex-1">• {d.label}</span>
+                          <span className="text-right whitespace-nowrap shrink-0">-Rs {d.amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+              <div className="h-px bg-gorola-mint/15 my-1" />
+              <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal">
+                <span>Grand Total</span>
+                <span className="text-lg text-gorola-pine">Rs {Number(selectedBooking.total || 0).toFixed(2)}</span>
+              </div>
+            </div>
+
+            {/* CTAs in Modal Footer */}
+            {selectedBooking.bookingOrder?.approvalStatus === "PENDING_APPROVAL" && (
+              <div className="pt-4 border-t border-gorola-mint/10 flex gap-3">
+                <button
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  onClick={() => {
+                    handleApprove(selectedBooking);
+                    setSelectedBooking(null);
+                  }}
+                  className="flex-1 py-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-md transition-all disabled:opacity-50"
+                >
+                  {approveMutation.isPending ? "Approving..." : "Approve Booking"}
+                </button>
+
+                <button
+                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  onClick={() => openRejectModal(selectedBooking)}
+                  className="flex-1 py-3 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold uppercase tracking-wide rounded-xl transition-all disabled:opacity-50"
+                >
+                  Reject Booking
+                </button>
+              </div>
+            )}
+
+            {selectedBooking.bookingOrder?.approvalStatus === "APPROVED" && (
+              <div className="pt-4 border-t border-gorola-mint/10 flex gap-3">
+                <button
+                  disabled={completeMutation.isPending}
+                  onClick={() => {
+                    completeMutation.mutate(selectedBooking.orderId || selectedBooking.id);
+                    setSelectedBooking(null);
+                  }}
+                  className="flex-1 py-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-md transition-all disabled:opacity-50"
+                >
+                  {completeMutation.isPending ? "Completing..." : "Mark Completed"}
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Modern High-End Rejection Modal Overlay Dialog */}
       {rejectingBooking && (
         <div
-          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200"
           onClick={() => setRejectingBooking(null)}
         >
           <div
@@ -540,3 +889,4 @@ export function StoreBookingsPage(): ReactElement {
     </div>
   );
 }
+

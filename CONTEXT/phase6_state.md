@@ -17,14 +17,16 @@
 | Phase 6.5 | Logout & Routing Bug TDD Suite | COMPLETE | Fully verified with robust unit tests across auth.store, subdomain-resolver, bootstrap-state, and StoreLayout. Fixed and updated the router integration test. |
 | Phase 6.6 | Smooth Scroll Lifecycle Fix | COMPLETE | Prevent duplicate useGorolaMotion calls with static scanning & lifecycle unit tests. |
 | Phase 6.7 | Refresh Token Race Condition | COMPLETE | Deduplicate overlapping /refresh calls in Axios interceptor to prevent unexpected logouts on reload or parallel requests. |
+| Phase 6.8 | E2E Test Suite Alignment | COMPLETE | Aligned category segregation homepage assertions and E2E test routes. |
+| Phase 6.9 | Booking Commerce Feature Parity & Discount Integration | COMPLETE | Standardized discount pipelines, collapsible itemized detail modals, and transparent maximum discount disclosure rules. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-21
-- **Session Summary:** Standardized toggles and session auth stability. Resolved the session logout race condition under Refresh Token Rotation (RTR) by implementing parallel Axios request queueing and deduplication, verified with new robust integration tests. Checked that the entire workspace passes all 432 unit/integration tests and ESLint checks 100% cleanly.
-- **Next Session Must Start With:** Phase 3.4.2 — Product Active/Inactive Toggle (Soft-Delete) in Store Owner Panel.
+- **Date:** 2026-05-27
+- **Session Summary:** Standardized offer transparency and maximum discount disclosures across both Quick Commerce (CartDrawer) and Booking Commerce (BookingTimeslotPage) for both locked and applied states. Completed the Phase 6.9 checklist for Booking Commerce Feature Parity & Discount Integration, and verified all 23 integration and unit tests are passing cleanly.
+- **Next Session Must Start With:** Phase 7 integration or maintenance tasks.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -450,56 +452,61 @@ The goal of this phase is to establish absolute parity by building a fully integ
 
 ---
 
-- [ ] **RED — Integration / HTTP Route (`apps/api/src/__tests__/integration/booking/booking.discount.test.ts`):**
-  - [ ] Test: `POST /api/v1/bookings` with a valid, active discount code `code: "SAVE20"` (e.g. 20% off) and a service subtotal of `Rs 1000.00` successfully applies the discount, sets the created `Order` record's `total` to `Rs 800.00`, and increments the discount's `usedCount` in the database.
-  - [ ] Test: `POST /api/v1/bookings` with active store-wide offers (e.g. 10% store offer with a minimum subtotal of `Rs 500.00`) automatically applies the offer, stacking with the valid discount code greedily.
-  - [ ] Test: `POST /api/v1/bookings` with an invalid or expired discount code returns a `400 Bad Request` with a descriptive validation error: `"Invalid or expired discount code"`.
-  - [ ] Test: `POST /api/v1/bookings` with a valid coupon code but where the order subtotal is below the minimum threshold (e.g. `minOrderAmount: 2000`) returns `400 Bad Request` with error: `"Discount minimum subtotal not met"`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration / HTTP Route (`apps/api/src/__tests__/integration/booking/booking.discount.test.ts`):**
+  - [x] Test: `POST /api/v1/bookings` with a valid, active discount code `code: "SAVE20"` (e.g. 20% off) and a service subtotal of `Rs 1000.00` successfully applies the discount, sets the created `Order` record's `total` to `Rs 800.00`, and increments the discount's `usedCount` in the database.
+  - [x] Test: `POST /api/v1/bookings` with active store-wide offers (e.g. 10% store offer with a minimum subtotal of `Rs 500.00`) automatically applies the offer, stacking with the valid discount code greedily.
+  - [x] Test: `POST /api/v1/bookings` with an invalid or expired discount code returns a `400 Bad Request` with a descriptive validation error: `"Invalid or expired discount code"`.
+  - [x] Test: `POST /api/v1/bookings` with a valid coupon code but where the order subtotal is below the minimum threshold (e.g. `minOrderAmount: 2000`) returns `400 Bad Request` with error: `"Discount minimum subtotal not met"`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Service → Controller):**
-  - [ ] [Service] In `apps/api/src/modules/booking/booking-order.service.ts`, update `placeBookingRequest` to accept an optional `discountCode` string parameter.
-  - [ ] [Service] In `placeBookingRequest`, replicate `BuyerCheckoutService`'s greedy additive discount logic:
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `apps/api/src/modules/booking/booking-order.service.ts`, update `placeBookingRequest` to accept an optional `discountCode` string parameter.
+  - [x] [Service] In `placeBookingRequest`, replicate `BuyerCheckoutService`'s greedy additive discount logic:
     - Validate the `discountCode` if present by fetching it via `this.db.discount.findUnique`. Check active timeline dates, store scope restrictions, and usage limits.
     - Fetch active store-wide offers for the store via `this.db.offer.findMany` with active date bounds.
     - Calculate the stacked discount savings: apply percentage/flat store offers greedily first, followed by the coupon code discount.
     - Within the transaction block, save the discounted `total` on the `Order` record, and call `tx.discount.update` to increment the `usedCount` of the validated coupon.
-  - [ ] [Controller] In `apps/api/src/modules/booking/booking.controller.ts`, update the `placeBookingBodySchema` validator to include `discountCode: z.string().optional()`.
-  - [ ] [Controller] In `apps/api/src/modules/booking/booking.controller.ts`, parse `discountCode` from the request body and pass it into the `placeBookingRequest` service call.
-  - [ ] [Controller] In `serializeBookingOrder`, add `discountAmount` to the returned record: `(Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2)`.
-  - [ ] Run integration test — **confirm GREEN**.
+  - [x] [Controller] In `apps/api/src/modules/booking/booking.controller.ts`, update the `placeBookingBodySchema` validator to include `discountCode: z.string().optional()`.
+  - [x] [Controller] In `apps/api/src/modules/booking/booking.controller.ts`, parse `discountCode` from the request body and pass it into the `placeBookingRequest` service call.
+  - [x] [Controller] In `serializeBookingOrder`, add `discountAmount` to the returned record: `(Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2)`.
+  - [x] Run integration test — **confirm GREEN**.
 
-- [ ] **RED — Component / Unit (`apps/web/src/pages/buyer/BookingTimeslotPage.test.tsx` and `StoreBookingsPage.test.tsx`):**
-  - [ ] Test (`BookingTimeslotPage`): When a variant is loaded, query `/api/v1/promotions/store/:storeId/offers` and render list of active offer pills. Show eligible offers marked green, and locked offers (subtotal below minimum order threshold) marked amber with progress descriptions.
-  - [ ] Test (`BookingTimeslotPage`): Renders a discount input field. Entering a valid code and clicking "Apply" successfully queries `/api/v1/promotions/discounts/validate` and renders a collapsible financial summary with a dropdown chevron showing the detailed stacked discount breakdown.
-  - [ ] Test (`StoreBookingsPage`): Clicking an appointment card sets the `selectedBooking` state and displays the high-fidelity detail modal.
-  - [ ] Test (`StoreBookingsPage`): Detail modal renders the masked phone number, a tabular itemized service breakdown, a chronological status history log timeline, a collapsible stacked discount breakdown, and status actions (Approve / Complete) that successfully trigger mutations.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Component / Unit (`apps/web/src/pages/buyer/BookingTimeslotPage.test.tsx` and `StoreBookingsPage.test.tsx`):**
+  - [x] Test (`BookingTimeslotPage`): When a variant is loaded, query `/api/v1/promotions/store/:storeId/offers` and render list of active offer pills. Show eligible offers marked green, and locked offers (subtotal below minimum order threshold) marked amber with progress descriptions.
+  - [x] Test (`BookingTimeslotPage`): Renders a discount input field. Entering a valid code and clicking "Apply" successfully queries `/api/v1/promotions/discounts/validate` and renders a collapsible financial summary with a dropdown chevron showing the detailed stacked discount breakdown.
+  - [x] Test (`StoreBookingsPage`): Clicking an appointment card sets the `selectedBooking` state and displays the high-fidelity detail modal.
+  - [x] Test (`StoreBookingsPage`): Detail modal renders the masked phone number, a tabular itemized service breakdown, a chronological status history log timeline, a collapsible stacked discount breakdown, and status actions (Approve / Complete) that successfully trigger mutations.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Component / Unit (`apps/web/src/pages/buyer/BookingConfirmationPage.test.tsx`):**
-  - [ ] Test: When the API returns a mock booking response where `discountAmount` is `"200.00"`, the component renders a `data-testid="booking-discount-row"` element displaying `-Rs 200.00`.
-  - [ ] Test: When `discountAmount` is `"0.00"`, verify that no element with `data-testid="booking-discount-row"` is present in the DOM.
-  - [ ] Test: Clicking the discount chevron toggle button alternates the `aria-expanded` attribute between `"true"` and `"false"` and correctly shows/hides the discount breakdown detail elements.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Component / Unit (`apps/web/src/pages/buyer/BookingConfirmationPage.test.tsx`):**
+  - [x] Test: When the API returns a mock booking response where `discountAmount` is `"200.00"`, the component renders a `data-testid="booking-discount-row"` element displaying `-Rs 200.00`.
+  - [x] Test: When `discountAmount` is `"0.00"`, verify that no element with `data-testid="booking-discount-row"` is present in the DOM.
+  - [x] Test: Clicking the discount chevron toggle button alternates the `aria-expanded` attribute between `"true"` and `"false"` and correctly shows/hides the discount breakdown detail elements.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Types] In `apps/web/src/pages/store/StoreBookingsPage.tsx`, update the local `Booking` type to declare optional `discountAmount?: string`, `deliveryFee?: string`, `subtotal?: string`, `total?: string`, and complete `statusHistory` array details.
-  - [ ] [Component] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`, implement the promotional offer fetching logic via query. Render the offer pills matching the `CartDrawer` design. Implement the validation action state machine, calculating subtotal, Rs 0.00 delivery, applied discount breakdown, and grand total. Add `discountCode` into the `handlePlaceBooking` API body payload.
-  - [ ] [Types] In `apps/web/src/pages/buyer/BookingConfirmationPage.tsx`, update the `BookingEnvelope` type definition to include the `discountAmount: string` field.
-  - [ ] [Component] In `apps/web/src/pages/buyer/BookingConfirmationPage.tsx`, add the local state `const [isDiscountOpen, setIsDiscountOpen] = useState(false)` to handle the collapsible discount dropdown.
-  - [ ] [Component] In the pricing section (between the delivery fee row and the grand total row), insert a conditional block: when `Number(booking.discountAmount) > 0`, render a `data-testid="booking-discount-row"` div containing a chevron toggle button (`aria-expanded={isDiscountOpen}`) and the amount `-Rs {booking.discountAmount}`. When the button is toggled open, show the itemized breakdown detail line below it, matching the exact styling classes and markup structure of the collapsible discount row in `OrderConfirmationPage.tsx`. Keep `data-testid="order-subtotal"` and `data-testid="order-total"` completely intact and unmodified.
-  - [ ] [Component] In `apps/web/src/pages/store/StoreBookingsPage.tsx`, introduce a `selectedBooking` state. Add a click handler to the booking cards. Build a beautiful interactive detail modal:
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `apps/web/src/pages/store/StoreBookingsPage.tsx`, update the local `Booking` type to declare optional `discountAmount?: string`, `deliveryFee?: string`, `subtotal?: string`, `total?: string`, and complete `statusHistory` array details.
+  - [x] [Component] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`, implement the promotional offer fetching logic via query. Render the offer pills matching the `CartDrawer` design. Implement the validation action state machine, calculating subtotal, Rs 0.00 delivery, applied discount breakdown, and grand total. Add `discountCode` into the `handlePlaceBooking` API body payload.
+  - [x] [Types] In `apps/web/src/pages/buyer/BookingConfirmationPage.tsx`, update the `BookingEnvelope` type definition to include the `discountAmount: string` field.
+  - [x] [Component] In `apps/web/src/pages/buyer/BookingConfirmationPage.tsx`, add the local state `const [isDiscountOpen, setIsDiscountOpen] = useState(false)` to handle the collapsible discount dropdown.
+  - [x] [Component] In the pricing section (between the delivery fee row and the grand total row), insert a conditional block: when `Number(booking.discountAmount) > 0`, render a `data-testid="booking-discount-row"` div containing a chevron toggle button (`aria-expanded={isDiscountOpen}`) and the amount `-Rs {booking.discountAmount}`. When the button is toggled open, show the itemized breakdown detail line below it, matching the exact styling classes and markup structure of the collapsible discount row in `OrderConfirmationPage.tsx`. Keep `data-testid="order-subtotal"` and `data-testid="order-total"` completely intact and unmodified.
+  - [x] [Component] In `apps/web/src/pages/store/StoreBookingsPage.tsx`, introduce a `selectedBooking` state. Add a click handler to the booking cards. Build a beautiful interactive detail modal:
     - Display masked contacts and landmark address labels.
     - Render itemized tables showing service product names, variant labels, quantities, and pricing.
     - Render the status history list as a chronological timeline list.
     - Render the subtotal, delivery fee, collapsible discount breakdown with stacked offers, and grand total.
     - Wire modal actions to approve, reject, and complete mutations.
-  - [ ] Run unit tests — **confirm GREEN**.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Buyer navigates to checkout page for a booking service -> Views active store-wide offer pills (green for eligible, amber for locked) -> Enters a valid coupon code and clicks Apply -> Chevron appears allowing them to toggle a collapsible breakdown showing stacked savings -> Clicks Confirm Booking -> Order is successfully created.
-  - [ ] Buyer places a booking with an active offer -> Is redirected to `BookingConfirmationPage` -> Sees `Subtotal`, `Delivery fee`, and a collapsed `Discount` row showing `-Rs 200.00` -> Clicks the `▶` chevron -> Breakdown expands showing the offer name and saved amount -> `Grand Total` reflects the discounted price -> ✅ Done.
-  - [ ] Merchant logs into store dashboard and visits Bookings -> Clicks on the new booking card -> Premium detail modal slides open -> Modal displays masked phone number (`+91 98765 ***55`), tabular item description, dynamic chronological status history timeline, collapsible discount details matching the checkout calculations, and workflow state action buttons -> Clicks Approve -> Status changes to APPROVED instantly on both detail modal and main list -> ✅ Done.
+- [x] **UX Enhancement — Maximum Discount Disclosures:**
+  - [x] Integrate standard maximum discount informational bullets (e.g., `· Maximum discount: Rs {amount}`) on applied/unlocked offer pills.
+  - [x] Extend this layout disclosure to both **Quick Commerce (CartDrawer)** and **Booking Commerce (BookingTimeslotPage)** checkout flows to unify UX clarity on potential discount savings.
+  - [x] Ensure locked states display `· Discount up to: Rs {amount}` consistently across both platforms.
+
+- [x] **Verification chain:**
+  - [x] Buyer navigates to checkout page for a booking service -> Views active store-wide offer pills (green for eligible, amber for locked) -> Enters a valid coupon code and clicks Apply -> Chevron appears allowing them to toggle a collapsible breakdown showing stacked savings -> Clicks Confirm Booking -> Order is successfully created.
+  - [x] Buyer places a booking with an active offer -> Is redirected to `BookingConfirmationPage` -> Sees `Subtotal`, `Delivery fee`, and a collapsed `Discount` row showing `-Rs 200.00` -> Clicks the `▶` chevron -> Breakdown expands showing the offer name and saved amount -> `Grand Total` reflects the discounted price -> ✅ Done.
+  - [x] Merchant logs into store dashboard and visits Bookings -> Clicks on the new booking card -> Premium detail modal slides open -> Modal displays masked phone number (`+91 98765 ***55`), tabular item description, dynamic chronological status history timeline, collapsible discount details matching the checkout calculations, and workflow state action buttons -> Clicks Approve -> Status changes to APPROVED instantly on both detail modal and main list -> ✅ Done.
 
 
 ---

@@ -454,9 +454,7 @@ describe("CartDrawer", () => {
       expect(pill).toBeInTheDocument();
       expect(pill.textContent).toContain("✅");
       expect(pill.textContent).toContain("Summer 10%");
-      expect(pill.textContent).not.toContain("Discount up to");
-      expect(pill.textContent).not.toContain("15");
-      expect(pill.textContent).not.toContain("Rs");
+      expect(pill.textContent).toContain("Maximum discount: Rs 15");
 
       const summary = screen.getByTestId("cart-discount-summary");
       expect(summary).toHaveTextContent("-Rs 15.00");
