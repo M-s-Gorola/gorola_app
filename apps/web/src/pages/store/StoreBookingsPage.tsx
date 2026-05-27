@@ -449,7 +449,6 @@ export function StoreBookingsPage(): ReactElement {
         <div className="grid gap-6 md:grid-cols-2">
           {getActiveList().map((booking) => {
             const item = booking.items?.[0];
-            const customerPhone = booking.customerPhone || booking.buyerMaskedPhone || "";
 
             return (
               <div
@@ -477,84 +476,7 @@ export function StoreBookingsPage(): ReactElement {
                       )}
                     </div>
                   </div>
-
-                  {/* Scheduled Timeslot Info */}
-                  <div className="bg-gorola-mint/5 border border-gorola-mint/10 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-2.5 text-xs text-gorola-charcoal font-semibold">
-                      <Calendar className="h-4 w-4 text-gorola-pine" />
-                      <span>
-                        {formatDateString(booking.bookingOrder?.scheduledDate)} at{" "}
-                        <span className="font-mono text-gorola-pine">
-                          {booking.bookingOrder?.timeslot}
-                        </span>
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2.5 text-xs text-gorola-charcoal font-semibold">
-                      <Phone className="h-4 w-4 text-gorola-pine" />
-                      <span>{formatMaskedPhone(customerPhone)}</span>
-                    </div>
-
-                    <div className="flex items-start gap-2.5 text-xs text-gorola-charcoal font-semibold">
-                      <MapPin className="h-4 w-4 mt-0.5 text-gorola-pine flex-shrink-0" />
-                      <div>
-                        {booking.flatRoom ? `${booking.flatRoom}, ` : ""}
-                        {booking.landmarkDescription || "No address provided"}
-                      </div>
-                    </div>
-
-                    {/* Display rejection reason if present */}
-                    {(booking.bookingOrder?.approvalStatus === "REJECTED" || booking.bookingOrder?.approvalStatus === "CANCELLED") &&
-                      booking.bookingOrder?.rejectionReason && (
-                        <div className="pt-2 border-t border-gorola-mint/10 text-xs text-red-600 font-bold">
-                          Reason: {booking.bookingOrder.rejectionReason}
-                        </div>
-                      )}
-                  </div>
                 </div>
-
-                {/* Approve/Reject Actions Footer */}
-                {activeTab === "PENDING" && !selectedBooking && (
-                  <div className="flex gap-3 mt-4 pt-3 border-t border-gorola-mint/10">
-                    <button
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleApprove(booking);
-                      }}
-                      className="flex-1 py-2.5 px-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
-                    >
-                      {approveMutation.isPending ? "Approving..." : "Approve"}
-                    </button>
-
-                    <button
-                      disabled={approveMutation.isPending || rejectMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openRejectModal(booking);
-                      }}
-                      className="flex-1 py-2.5 px-3 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold uppercase tracking-wide rounded-xl transition-all disabled:opacity-50"
-                    >
-                      Reject
-                    </button>
-                  </div>
-                )}
-
-                {/* Mark Completed Actions Footer */}
-                {activeTab === "UPCOMING" && !selectedBooking && (
-                  <div className="flex gap-3 mt-4 pt-3 border-t border-gorola-mint/10">
-                    <button
-                      disabled={completeMutation.isPending}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        completeMutation.mutate(booking.orderId || booking.id);
-                      }}
-                      className="flex-1 py-2.5 px-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
-                    >
-                      {completeMutation.isPending ? "Completing..." : "Mark Completed"}
-                    </button>
-                  </div>
-                )}
 
                 {/* Read-Only Status Indicator badges for non-pending requests inside card */}
                 {activeTab !== "PENDING" && (
@@ -645,6 +567,12 @@ export function StoreBookingsPage(): ReactElement {
                 <p className="text-xs text-gorola-slate mt-1 font-medium">
                   Placed on: {new Date(selectedBooking.createdAt).toLocaleString("en-IN")}
                 </p>
+                {(selectedBooking.bookingOrder?.approvalStatus === "REJECTED" || selectedBooking.bookingOrder?.approvalStatus === "CANCELLED") &&
+                  selectedBooking.bookingOrder?.rejectionReason && (
+                    <p className="text-xs font-bold text-red-600 mt-2">
+                      Reason: {selectedBooking.bookingOrder.rejectionReason}
+                    </p>
+                  )}
               </div>
               <button
                 onClick={() => setSelectedBooking(null)}

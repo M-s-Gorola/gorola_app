@@ -243,8 +243,13 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByLabelText(/^Home$/));
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
-    expect(screen.getByText("Discount (SAVE20): -Rs 20.00")).toBeInTheDocument();
-    expect(screen.getByText("Total: Rs 110.00")).toBeInTheDocument();
+    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("-Rs 20.00")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("discount-breakdown-toggle"));
+    expect(screen.getByTestId("checkout-coupon-discount")).toHaveTextContent("Discount (SAVE20)");
+    expect(screen.getByText("Total:")).toBeInTheDocument();
+    expect(screen.getByText(/Rs\s*110\.00/)).toBeInTheDocument();
   });
 
   it("sends active discount code in place-order payload", async () => {
@@ -329,8 +334,13 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByLabelText(/^Home$/));
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
-    expect(screen.getByTestId("checkout-offer-discount")).toHaveTextContent("Store Offer (Weekend Deal): -Rs 20.00");
+    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("-Rs 20.00")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("discount-breakdown-toggle"));
+    expect(screen.getByTestId("checkout-offer-discount")).toHaveTextContent("Store Offer (Weekend Deal)");
     // 120 + 30 (delivery) - 20 (offer) = 130
-    expect(screen.getByText("Total: Rs 130.00")).toBeInTheDocument();
+    expect(screen.getByText("Total:")).toBeInTheDocument();
+    expect(screen.getByText(/Rs\s*130\.00/)).toBeInTheDocument();
   });
 });

@@ -51,6 +51,7 @@ export function CheckoutPage(): ReactElement {
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const [addressDefaultSet, setAddressDefaultSet] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const addressesList = addressesQuery.data ?? [];
 
@@ -242,130 +243,133 @@ export function CheckoutPage(): ReactElement {
             <p className="font-dm-sans text-sm text-gorola-slate">Loading addresses…</p>
           ) : (
             <>
-              <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Deliver to:</p>
+              <div className="w-full space-y-4 rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm">
+                <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Deliver to:</p>
 
-              <div className="space-y-2">
-                {addressesList.map((a) => (
-                  <label key={a.id} className="flex items-start gap-2 font-dm-sans text-sm text-gorola-charcoal">
+                <div className="space-y-3">
+                  {addressesList.map((a) => (
+                    <label key={a.id} className="flex items-start gap-2.5 font-dm-sans text-sm text-gorola-charcoal cursor-pointer">
+                      <input
+                        aria-label={a.label}
+                        checked={deliveryChoice === a.id}
+                        name="delivery-address-group"
+                        onChange={() => {
+                          setMapCoords(null);
+                          setDeliveryChoice(a.id);
+                        }}
+                        type="radio"
+                        value={a.id}
+                        className="mt-1"
+                      />
+                      <span>
+                        <span className="font-semibold">{a.label}</span>
+                        <span className="block text-xs text-gorola-slate mt-0.5">{a.landmarkDescription}</span>
+                      </span>
+                    </label>
+                  ))}
+                  <label className="flex items-center gap-2.5 font-dm-sans text-sm text-gorola-charcoal cursor-pointer">
                     <input
-                      aria-label={a.label}
-                      checked={deliveryChoice === a.id}
+                      aria-label="Deliver to new location"
+                      checked={deliveryChoice === "new"}
                       name="delivery-address-group"
                       onChange={() => {
-                        setMapCoords(null);
-                        setDeliveryChoice(a.id);
+                        setDeliveryChoice("new");
                       }}
                       type="radio"
-                      value={a.id}
+                      value="new"
                     />
-                    <span>
-                      <span className="font-semibold">{a.label}</span>
-                      <span className="block text-xs text-gorola-slate">{a.landmarkDescription}</span>
-                    </span>
+                    <span className="font-semibold">Deliver to new location</span>
                   </label>
-                ))}
-                <label className="flex items-center gap-2 font-dm-sans text-sm text-gorola-charcoal">
-                  <input
-                    aria-label="Deliver to new location"
-                    checked={deliveryChoice === "new"}
-                    name="delivery-address-group"
-                    onChange={() => {
-                      setDeliveryChoice("new");
-                    }}
-                    type="radio"
-                    value="new"
-                  />
-                  Deliver to new location
-                </label>
-              </div>
+                </div>
 
-              {deliveryChoice === "new" ? (
-                <div className="space-y-3 rounded-xl border border-gorola-pine/15 p-4">
-                  <label className="block space-y-1">
-                    <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
-                      Landmark (required)
-                    </span>
-                    <textarea
-                      className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
-                      name="landmarkDescription"
-                      onChange={(e) => {
-                        setLandmarkInput(e.target.value);
-                      }}
-                      placeholder="E.g. — near the red gate, behind Hotel Padmini"
-                      rows={3}
-                      value={landmarkInput}
-                    />
-                  </label>
-                  <label className="block space-y-1">
-                    <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
-                      Flat / room (optional)
-                    </span>
-                    <input
-                      className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
-                      name="flatRoom"
-                      onChange={(e) => {
-                        setFlatRoom(e.target.value);
-                      }}
-                      value={flatRoom}
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2 font-dm-sans text-sm text-gorola-charcoal">
-                    <input
-                      aria-label="Save this address"
-                      checked={saveAddress}
-                      onChange={(e) => {
-                        setSaveAddress(e.target.checked);
-                      }}
-                      type="checkbox"
-                    />
-                    Save this address
-                  </label>
-
-                  {saveAddress ? (
+                {deliveryChoice === "new" ? (
+                  <div className="space-y-3 rounded-xl border border-gorola-pine/15 p-4 bg-gorola-mint/5 mt-4">
                     <label className="block space-y-1">
                       <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
-                        Label for saved address
+                        Landmark (required)
+                      </span>
+                      <textarea
+                        className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                        name="landmarkDescription"
+                        onChange={(e) => {
+                          setLandmarkInput(e.target.value);
+                        }}
+                        placeholder="E.g. — near the red gate, behind Hotel Padmini"
+                        rows={3}
+                        value={landmarkInput}
+                      />
+                    </label>
+                    <label className="block space-y-1">
+                      <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
+                        Flat / room (optional)
                       </span>
                       <input
                         className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                        name="flatRoom"
                         onChange={(e) => {
-                          setAddressLabel(e.target.value);
+                          setFlatRoom(e.target.value);
                         }}
-                        value={addressLabel}
+                        value={flatRoom}
                       />
                     </label>
-                  ) : null}
 
-                  <div className="space-y-1 pt-2">
-                    <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
-                      Drag the pin near your entrance
-                    </p>
-                    <AddressMapPicker
-                      center={MUSSOORIE_AREA_CENTER}
-                      onCoordinatesChange={handleMapCoordinates}
-                    />
-                    <p className="font-dm-sans text-xs text-gorola-slate">
-                      Tiles ©{" "}
-                      <a
-                        className="text-gorola-pine underline"
-                        href="https://www.openstreetmap.org/copyright"
-                        rel="noopener noreferrer"
-                        target="_blank"
-                      >
-                        OpenStreetMap
-                      </a>
-                    </p>
+                    <label className="flex items-center gap-2 font-dm-sans text-sm text-gorola-charcoal cursor-pointer">
+                      <input
+                        aria-label="Save this address"
+                        checked={saveAddress}
+                        onChange={(e) => {
+                          setSaveAddress(e.target.checked);
+                        }}
+                        type="checkbox"
+                      />
+                      Save this address
+                    </label>
+
+                    {saveAddress ? (
+                      <label className="block space-y-1">
+                        <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
+                          Label for saved address
+                        </span>
+                        <input
+                          className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                          onChange={(e) => {
+                            setAddressLabel(e.target.value);
+                          }}
+                          value={addressLabel}
+                        />
+                      </label>
+                    ) : null}
+
+                    <div className="space-y-1 pt-2">
+                      <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">
+                        Drag the pin near your entrance
+                      </p>
+                      <AddressMapPicker
+                        center={MUSSOORIE_AREA_CENTER}
+                        onCoordinatesChange={handleMapCoordinates}
+                      />
+                      <p className="font-dm-sans text-xs text-gorola-slate">
+                        Tiles ©{" "}
+                        <a
+                          className="text-gorola-pine underline"
+                          href="https://www.openstreetmap.org/copyright"
+                          rel="noopener noreferrer"
+                          target="_blank"
+                        >
+                          OpenStreetMap
+                        </a>
+                      </p>
+                    </div>
                   </div>
-                </div>
-              ) : null}
+                ) : null}
+              </div>
 
               {step1Error !== null ? (
                 <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{step1Error}</p>
               ) : null}
 
               <button
-                className="rounded-full bg-gorola-pine px-6 py-2 font-dm-sans text-sm font-semibold text-white"
+                className="rounded-full bg-gorola-pine px-6 py-2.5 font-dm-sans text-sm font-semibold text-white hover:bg-gorola-pine/90 transition-colors shadow-sm"
                 onClick={() => {
                   handleContinueFromAddress();
                 }}
@@ -383,34 +387,91 @@ export function CheckoutPage(): ReactElement {
           <h2 className="font-playfair text-2xl text-gorola-charcoal" id="checkout-review-heading">
             Review
           </h2>
-          <ul className="space-y-2">
-            {lines.map((line) => (
-              <li key={line.productVariantId}>
-                <p className="font-dm-sans text-sm text-gorola-charcoal">
-                  {(line.productName ?? "Item")}{" "}
-                  <span aria-hidden={true}>×</span>
-                  {" "}
-                  {line.quantity}: Rs{" "}
-                  {((line.unitPrice ?? 0) * line.quantity).toFixed(2)}
-                </p>
-              </li>
-            ))}
-          </ul>
-          <p className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee: Rs {DELIVERY_FEE.toFixed(2)}</p>
-          {appliedOffers.map((o) => (
-            <p key={o.id} className="font-dm-sans text-sm font-semibold text-gorola-pine" data-testid="checkout-offer-discount">
-              Store Offer ({o.title}): -Rs {o.savedAmount.toFixed(2)}
-            </p>
-          ))}
-          {discountSavedAmount > 0 ? (
-            <p className="font-dm-sans text-sm font-semibold text-gorola-pine">
-              Discount ({discountCode || "Applied"}): -Rs {discountSavedAmount.toFixed(2)}
-            </p>
-          ) : null}
-          <p className="font-dm-sans text-lg font-semibold text-gorola-charcoal">Total: Rs {total.toFixed(2)}</p>
-          <p className="font-dm-sans text-sm text-gorola-slate">
-            Payment: {paymentMethod === "COD" ? "Cash on delivery" : paymentMethod}
-          </p>
+
+          <div className="w-full space-y-4 rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm">
+            <div className="pb-2 border-b border-gorola-pine/10">
+              <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Your items</h3>
+            </div>
+            <ul aria-label="Order items" className="space-y-2">
+              {lines.map((line) => (
+                <li
+                  className="flex justify-between gap-3 border-b border-gorola-pine/10 pb-2 font-dm-sans text-sm last:border-0 last:pb-0"
+                  key={line.productVariantId}
+                >
+                  <span className="text-gorola-charcoal">
+                    {line.productName ?? "Item"}{" "}
+                    <span className="text-gorola-slate">× {line.quantity}</span>
+                  </span>
+                  <span className="shrink-0 font-medium text-gorola-charcoal">
+                    Rs {((line.unitPrice ?? 0) * line.quantity).toFixed(2)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+
+            <div className="space-y-1.5 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
+              <div className="flex justify-between">
+                <span className="text-gorola-slate">Subtotal:</span>
+                <span className="font-medium">Rs {subtotal.toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gorola-slate">Delivery fee:</span>
+                <span className="font-medium">Rs {DELIVERY_FEE.toFixed(2)}</span>
+              </div>
+              {(() => {
+                const totalDiscount = offerSavedAmount + discountSavedAmount;
+                if (totalDiscount <= 0) return null;
+                return (
+                  <div className="space-y-1 font-dm-sans text-sm" data-testid="discount-summary-row">
+                    <div className="flex justify-between items-center text-emerald-700">
+                      <button
+                        type="button"
+                        onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                        data-testid="discount-breakdown-toggle"
+                        aria-expanded={isDiscountExpanded}
+                        className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
+                      >
+                        <span>Discount:</span>
+                        <span className="text-[10px] transform transition-transform duration-200">
+                          {isDiscountExpanded ? "▼" : "▶"}
+                        </span>
+                      </button>
+                      <span className="font-medium">-Rs {totalDiscount.toFixed(2)}</span>
+                    </div>
+                    {isDiscountExpanded && (
+                      <div className="space-y-1 pl-3 border-l border-emerald-100" data-testid="discount-breakdown-list">
+                        {appliedOffers.map((o) => (
+                          <div key={o.id} className="flex justify-between items-start gap-4 text-xs text-emerald-600/90 italic" data-testid="checkout-offer-discount">
+                            <span className="text-left flex-1">• Store Offer ({o.title})</span>
+                            <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
+                          </div>
+                        ))}
+                        {discountSavedAmount > 0 && (
+                          <div className="flex justify-between items-start gap-4 text-xs text-emerald-600/90 italic" data-testid="checkout-coupon-discount">
+                            <span className="text-left flex-1">• Discount ({discountCode || "Applied"})</span>
+                            <span className="text-right whitespace-nowrap shrink-0">-Rs {discountSavedAmount.toFixed(2)}</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+              <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold">
+                <span>Total:</span>
+                <span>Rs {total.toFixed(2)}</span>
+              </div>
+            </div>
+
+            <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-slate">
+              <div className="flex justify-between font-dm-sans text-sm text-gorola-charcoal">
+                <span className="text-gorola-slate">Payment Method:</span>
+                <span className="font-medium">
+                  {paymentMethod === "COD" ? "Cash on delivery" : paymentMethod}
+                </span>
+              </div>
+            </div>
+          </div>
 
           <div
             aria-live="polite"

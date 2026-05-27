@@ -25,8 +25,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-27
-- **Session Summary:** Standardized offer transparency and maximum discount disclosures across both Quick Commerce (CartDrawer) and Booking Commerce (BookingTimeslotPage) for both locked and applied states. Completed the Phase 6.9 checklist for Booking Commerce Feature Parity & Discount Integration, and verified all 23 integration and unit tests are passing cleanly.
-- **Next Session Must Start With:** Phase 7 integration or maintenance tasks.
+- **Session Summary:** Completed Checkout UX parity. Wrapped the Address step selection and form elements inside a premium white card container matching the style of the review receipt card. Stripped all monospace (`font-mono`) classes from the pricing amounts on the `CheckoutPage` to ensure numbers render in the gorgeous, standard `font-dm-sans` of the page. Streamlined the `StoreBookingsPage` merchant dashboard list cards by centralizing details inside the modal, updated associated Vitest suites, and achieved 100% clean typecheck and ESLint states.
+- **Next Session Must Start With:** Run automatic Playwright/Vitest verification suites to double-check E2E coverage.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -618,5 +618,19 @@ The goal of this phase is to establish absolute parity by building a fully integ
 - **Problem (E2E Playwright Selector Failures & Testing Library Conflicts):** The Playwright booking E2E suite expected the workflow action buttons (`Approve`, `Reject`, `Mark Completed`) to be visible and clickable directly on the dashboard tab cards. However, moving them into the detail modal broke the Playwright locators, while rendering them in both places broke Testing Library's singular-element queries due to duplicates.
 - **Solution (Conditional Actions):** Added action button footers back directly onto the tab cards but wrapped them with a conditional `!selectedBooking` guard. The buttons are fully visible to Playwright when browsing the lists, but are safely unmounted when the detail modal is active, completely resolving duplicate DOM conflicts.
 - **Validation:** 100% passing Vitest suite (8/8 on `StoreBookingsPage.test.tsx`, 229/229 globally) and clean workspace-wide compilation (`tsc --noEmit` and `eslint` exiting with 0 errors).
+
+### 2026-05-27: Checkout & Bookings Dashboard UX Parity Refinements
+- **Problem (Visual Inconsistency, Redundant Elements, & Monospace Pricing):** 
+  1. The `CheckoutPage` Address selection and Review sections lacked premium, unified white card styling.
+  2. The unit prices, subtotals, discounts, and total amounts rendered in a system default monospace font (`font-mono`), which clashed with the page's premium typography design.
+  3. The `StoreBookingsPage` dashboard cards contained redundant scheduled time slots, phone contacts, addresses, and action buttons, duplicating elements already present inside the details modal.
+- **Solution:**
+  1. **Address Step White Card:** Wrapped the Address selection options and dynamic new location input elements inside a premium white card container styled identically to the receipt card.
+  2. **Monospace Pricing Removal:** Stripped all `font-mono` styles from pricing lines, standardising all amounts with the elegant `font-dm-sans` of the page.
+  3. **Dashboard Streamlining:** Removed redundant appointment slots, phone contacts, map address pins, and active buttons from merchant list-view cards.
+  4. **Rejection Modal Header:** Integrated the rejection/cancellation reason inside the detailed modal header for clean historical records.
+  5. **Test Adjustments:** Refactored unit/integration tests (`CheckoutPage.test.tsx`, `StoreBookingsPage.test.tsx`) to assert layout compliance.
+- **Validation:** Entire workspace typecheck (`tsc --noEmit`) and strict ESLint checks pass with 100% green, warning-free exits.
+
 
 

@@ -95,18 +95,19 @@ describe("StoreBookingsPage TDD", () => {
     renderWithProviders(<StoreBookingsPage />);
 
     expect(await screen.findByText("Blood Sugar (Fasting)")).toBeInTheDocument();
-    expect(screen.getByText("+91 98765 ***55")).toBeInTheDocument(); // Masked phone: "+91 98765 ***55"
-    expect(screen.getByText(/06:00-09:00/)).toBeInTheDocument();
     expect(screen.getByText(/Fasting Required/i)).toBeInTheDocument();
-
-    // Verify complete address rendering on the bookings card
-    expect(screen.queryByText(/\[Home\]:/)).not.toBeInTheDocument();
-    expect(screen.getByText(/Flat 101, Near Picture Palace/)).toBeInTheDocument();
 
     // Click on the booking card to open details modal
     const user = userEvent.setup();
     const card = screen.getByTestId("booking-card-booking-1");
     await user.click(card);
+
+    expect(screen.getByText("+91 98765 ***55")).toBeInTheDocument(); // Masked phone: "+91 98765 ***55"
+    expect(screen.getByText(/06:00-09:00/)).toBeInTheDocument();
+
+    // Verify complete address rendering on the bookings card
+    expect(screen.queryByText(/\[Home\]:/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Flat 101, Near Picture Palace/)).toBeInTheDocument();
 
     const approveBtn = screen.getByRole("button", { name: /approve booking/i });
     const rejectBtn = screen.getByRole("button", { name: /reject booking/i });
@@ -358,8 +359,13 @@ describe("StoreBookingsPage TDD", () => {
     await user.click(historyTab);
 
     expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
-    expect(screen.getByText("CANCELLED")).toBeInTheDocument();
-    expect(screen.getByText(/Reason: Slot full/)).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-hist-1");
+    await user.click(card);
+
+    const modal = screen.getByTestId("booking-details-modal");
+    expect(within(modal).getByText("CANCELLED")).toBeInTheDocument();
+    expect(within(modal).getByText(/Reason: Slot full/)).toBeInTheDocument();
   });
 
   it("Navigation link Bookings in StoreLayout is hidden when storeType is QUICK_COMMERCE, shown when BOOKING_COMMERCE", async () => {
