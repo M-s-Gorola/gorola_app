@@ -255,6 +255,11 @@ export function CartDrawer(): ReactElement | null {
                         className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 font-dm-sans text-xs font-semibold text-emerald-700 flex flex-col gap-0.5"
                       >
                         <div>✅ {offer.title}</div>
+                        {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                          <div className="text-emerald-600 font-normal">
+                            · Maximum discount: Rs {offer.maxDiscount}
+                          </div>
+                        )}
                       </div>
                     );
                   }

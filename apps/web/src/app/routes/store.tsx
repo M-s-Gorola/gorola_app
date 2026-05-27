@@ -5,6 +5,7 @@ import { StoreLayout } from "@/components/store/StoreLayout";
 import { StoreAdvertisementsPage } from "@/pages/store/StoreAdvertisementsPage";
 import { StoreBookingsPage } from "@/pages/store/StoreBookingsPage";
 import { StoreDashboardPage } from "@/pages/store/StoreDashboardPage";
+import { StoreDiscountsPage } from "@/pages/store/StoreDiscountsPage";
 import { StoreLoginPage } from "@/pages/store/StoreLoginPage";
 import { StoreOffersPage } from "@/pages/store/StoreOffersPage";
 import { StoreOrdersPage } from "@/pages/store/StoreOrdersPage";
@@ -152,6 +153,17 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
         <StoreRoute>
           <StoreLayout>
             <StoreOffersPage />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-discounts"
+      path={`${prefix}/discounts`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreDiscountsPage />
           </StoreLayout>
         </StoreRoute>
       }

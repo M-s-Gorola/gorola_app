@@ -1,5 +1,5 @@
 /* eslint-disable simple-import-sort/imports */
-import { ValidationError } from "@gorola/shared";
+import { AppError, ValidationError } from "@gorola/shared";
 import { type FastifyInstance, type FastifyReply, type FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -8,7 +8,6 @@ import { requireAuth } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 
 import { AdvertisementRepository } from "./advertisement.repository.js";
-import { DiscountRepository } from "./discount.repository.js";
 
 type SuccessEnvelope<T> = {
   success: true;
@@ -41,7 +40,6 @@ export function registerPromotionRoutes(
   app: FastifyInstance,
   deps?: { tokenVerifier: AccessTokenVerifier }
 ): void {
-  const discountRepo = new DiscountRepository(getPrismaClient());
   const adRepo = new AdvertisementRepository(getPrismaClient());
 
   app.get("/api/v1/promotions/advertisements", async (request, reply) => {
@@ -87,8 +85,20 @@ export function registerPromotionRoutes(
 
     const code = parsed.data.code.trim().toUpperCase();
     const subtotal = parsed.data.subtotal;
-    const discount = await discountRepo.findActiveByCode(code);
+    const discount = await getPrismaClient().discount.findFirst({
+      where: { code }
+    });
     if (discount === null) {
+      return success(request, reply, { valid: false as const });
+    }
+    if (!discount.isActive) {
+      throw new AppError("Discount is inactive", {
+        code: "DISCOUNT_INACTIVE",
+        statusCode: 422
+      });
+    }
+    const now = new Date();
+    if (discount.startsAt > now || discount.endsAt < now) {
       return success(request, reply, { valid: false as const });
     }
     if (discount.usageLimit !== null && discount.usedCount >= discount.usageLimit) {

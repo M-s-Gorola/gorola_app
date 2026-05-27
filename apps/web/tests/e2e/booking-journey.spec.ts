@@ -133,21 +133,27 @@ test.describe('Booking Journey Pipeline E2E', () => {
     await storePage.locator('text=Bookings').filter({ visible: true }).first().click();
     await expect(storePage.locator('h1', { hasText: 'Bookings Dashboard' })).toBeVisible({ timeout: 15000 });
 
-    // Under Pending tab, locate and approve the booking
+    // Under Pending tab, click the booking card to open details modal
+    await storePage.locator('text=View Details').first().click();
+
+    // Now the Approve button in the modal should be visible
     const approveBtn = storePage.locator('button', { hasText: 'Approve' }).first();
     await expect(approveBtn).toBeVisible({ timeout: 15000 });
-    await approveBtn.click();
+    await approveBtn.click({ force: true });
 
     // Confirm booking moves to Upcoming tab
     await storePage.locator('button[role="tab"]', { hasText: /upcoming/i }).click();
-    const markCompletedBtn = storePage.locator('button', { hasText: 'Mark Completed' }).first();
-    await expect(markCompletedBtn).toBeVisible({ timeout: 15000 });
+
+    // Click upcoming card to open details modal
+    await storePage.locator('text=View Details').first().click();
 
     // 4. Assert Live Socket update on Buyer's screen: Pending Approval -> Confirmed
     await expect(buyerPage.locator('text=/Confirmed/i').first()).toBeVisible({ timeout: 25000 });
 
     // 5. Store Owner completes the booking (Phase 7.8.1 completion button)
-    await markCompletedBtn.click();
+    const markCompletedBtn = storePage.locator('button', { hasText: 'Mark Completed' }).first();
+    await expect(markCompletedBtn).toBeVisible({ timeout: 15000 });
+    await markCompletedBtn.click({ force: true });
 
     // Confirm booking moves to History tab
     await storePage.locator('button[role="tab"]', { hasText: /history/i }).click();
@@ -214,9 +220,12 @@ test.describe('Booking Journey Pipeline E2E', () => {
     // In-app sidebar navigation to preserve in-memory session tokens
     await storePage.locator('text=Bookings').filter({ visible: true }).first().click();
 
+    // Click card to open modal
+    await storePage.locator('text=View Details').first().click();
+
     const rejectBtn = storePage.locator('button', { hasText: 'Reject' }).first();
     await expect(rejectBtn).toBeVisible({ timeout: 15000 });
-    await rejectBtn.click();
+    await rejectBtn.click({ force: true });
 
     // Input rejection reason
     const reasonTextarea = storePage.locator('textarea[placeholder*="reason"]');

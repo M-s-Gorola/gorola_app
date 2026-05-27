@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { MockInstance } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -92,6 +92,8 @@ describe("BookingConfirmationPage", () => {
         requiresFasting: true,
         rejectionReason,
       },
+      discountAmount: undefined as string | undefined,
+      discountCode: undefined as string | null | undefined,
     },
   });
 
@@ -165,5 +167,44 @@ describe("BookingConfirmationPage", () => {
 
     expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
     expect(screen.queryByText(/Max Labs Mussoorie/)).not.toBeInTheDocument();
+  });
+
+  it("renders collapsible discount breakdown row when booking has discountAmount and discountCode", async () => {
+    const envelope = mockBookingEnvelope("APPROVED");
+    envelope.data = {
+      ...envelope.data,
+      discountAmount: "50.00",
+      discountCode: "SAVE50",
+    };
+
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+
+    // 1. Verify discount summary row renders
+    const discountSummary = screen.getByTestId("discount-summary");
+    expect(discountSummary).toBeInTheDocument();
+    expect(discountSummary).toHaveTextContent("-Rs 50.00");
+
+    // 2. Verify breakdown is not visible initially
+    expect(screen.queryByTestId("discount-breakdown")).not.toBeInTheDocument();
+
+    // 3. Toggle breakdown via chevron button
+    const toggleChevron = screen.getByTestId("discount-toggle-chevron");
+    fireEvent.click(toggleChevron);
+
+    // 4. Verify breakdown is now visible with discount code and correct itemized discount amount
+    const breakdown = screen.getByTestId("discount-breakdown");
+    expect(breakdown).toBeInTheDocument();
+    expect(within(breakdown).getByText("SAVE50")).toBeInTheDocument();
+    expect(within(breakdown).getByText("-Rs 50.00")).toBeInTheDocument();
+
+    // 5. Toggle breakdown again to hide
+    fireEvent.click(toggleChevron);
+    expect(screen.queryByTestId("discount-breakdown")).not.toBeInTheDocument();
   });
 });

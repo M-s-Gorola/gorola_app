@@ -915,5 +915,242 @@ export class StoreOwnerService {
       data: { isActive: false }
     });
   }
+
+  public async getDiscounts(storeId: string) {
+    return this.db.discount.findMany({
+      where: { storeId },
+      orderBy: { createdAt: "desc" }
+    });
+  }
+
+  public async createDiscount(
+    storeId: string,
+    dto: {
+      code: string;
+      discountType: "PERCENTAGE" | "FLAT";
+      discountValue: number;
+      maxUsageCount?: number | undefined;
+      startsAt: string | Date;
+      endsAt: string | Date;
+    }
+  ) {
+    const startsAt = new Date(dto.startsAt);
+    const endsAt = new Date(dto.endsAt);
+
+    if (endsAt.getTime() < startsAt.getTime()) {
+      throw new AppError("endsAt cannot be before startsAt", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    if (dto.discountType === "PERCENTAGE" && dto.discountValue > 100) {
+      throw new AppError("Percentage discount cannot exceed 100%", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    if (dto.discountValue <= 0) {
+      throw new AppError("Discount value must be greater than 0", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    const code = dto.code.trim().toUpperCase();
+
+    const existing = await this.db.discount.findFirst({
+      where: { storeId, code }
+    });
+
+    if (existing) {
+      throw new AppError("A discount code with this name already exists for this store", {
+        code: "CONFLICT",
+        statusCode: 409
+      });
+    }
+
+    return this.db.discount.create({
+      data: {
+        storeId,
+        code,
+        discountType: dto.discountType,
+        discountValue: dto.discountValue,
+        usageLimit: dto.maxUsageCount ?? null,
+        startsAt,
+        endsAt,
+        isActive: true
+      }
+    });
+  }
+
+  public async deactivateDiscount(storeId: string, discountId: string) {
+    const discount = await this.db.discount.findUnique({
+      where: { id: discountId }
+    });
+
+    if (!discount) {
+      throw new NotFoundError("Discount not found");
+    }
+
+    if (discount.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to access this discount");
+    }
+
+    return this.db.discount.update({
+      where: { id: discountId },
+      data: { isActive: false }
+    });
+  }
+
+  public async deleteDiscount(storeId: string, discountId: string) {
+    const discount = await this.db.discount.findUnique({
+      where: { id: discountId }
+    });
+
+    if (!discount) {
+      throw new NotFoundError("Discount not found");
+    }
+
+    if (discount.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to delete this discount");
+    }
+
+    return this.db.discount.delete({
+      where: { id: discountId }
+    });
+  }
+
+  public async deleteOffer(storeId: string, offerId: string) {
+    const offer = await this.db.offer.findUnique({
+      where: { id: offerId }
+    });
+
+    if (!offer) {
+      throw new NotFoundError("Offer not found");
+    }
+
+    if (offer.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to delete this offer");
+    }
+
+    return this.db.offer.delete({
+      where: { id: offerId }
+    });
+  }
+
+  public async updateDiscount(
+    storeId: string,
+    discountId: string,
+    dto: {
+      code?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      maxUsageCount?: number | null;
+      startsAt?: Date | undefined;
+      endsAt?: Date | undefined;
+      isActive?: boolean;
+    }
+  ) {
+    const discount = await this.db.discount.findUnique({
+      where: { id: discountId }
+    });
+
+    if (!discount) {
+      throw new NotFoundError("Discount not found");
+    }
+
+    if (discount.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to update this discount");
+    }
+
+    if (dto.code) {
+      const code = dto.code.trim().toUpperCase();
+      if (code !== discount.code) {
+        const existing = await this.db.discount.findFirst({
+          where: { storeId, code }
+        });
+        if (existing) {
+          throw new AppError("A discount code with this name already exists for this store", {
+            code: "CONFLICT",
+            statusCode: 409
+          });
+        }
+      }
+    }
+
+    if (dto.discountValue !== undefined && dto.discountValue <= 0) {
+      throw new AppError("Discount value must be greater than 0", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    const updateData: Prisma.DiscountUpdateInput = {};
+    if (dto.code !== undefined) updateData.code = dto.code.trim().toUpperCase();
+    if (dto.discountType !== undefined) updateData.discountType = dto.discountType;
+    if (dto.discountValue !== undefined) updateData.discountValue = new Prisma.Decimal(dto.discountValue.toString());
+    if (dto.maxUsageCount !== undefined) updateData.usageLimit = dto.maxUsageCount;
+    if (dto.startsAt !== undefined) updateData.startsAt = dto.startsAt;
+    if (dto.endsAt !== undefined) updateData.endsAt = dto.endsAt;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+
+    return this.db.discount.update({
+      where: { id: discountId },
+      data: updateData
+    });
+  }
+
+  public async updateOffer(
+    storeId: string,
+    offerId: string,
+    dto: {
+      title?: string;
+      description?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      minOrderAmount?: number | null;
+      maxDiscount?: number | null;
+      startsAt?: Date | undefined;
+      endsAt?: Date | undefined;
+      isActive?: boolean;
+    }
+  ) {
+    const offer = await this.db.offer.findUnique({
+      where: { id: offerId }
+    });
+
+    if (!offer) {
+      throw new NotFoundError("Offer not found");
+    }
+
+    if (offer.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to update this offer");
+    }
+
+    if (dto.discountValue !== undefined && dto.discountValue <= 0) {
+      throw new AppError("Discount value must be greater than 0", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    const updateData: Prisma.OfferUpdateInput = {};
+    if (dto.title !== undefined) updateData.title = dto.title;
+    if (dto.description !== undefined) updateData.description = dto.description;
+    if (dto.discountType !== undefined) updateData.discountType = dto.discountType;
+    if (dto.discountValue !== undefined) updateData.discountValue = new Prisma.Decimal(dto.discountValue.toString());
+    if (dto.minOrderAmount !== undefined) updateData.minOrderAmount = dto.minOrderAmount ? new Prisma.Decimal(dto.minOrderAmount.toString()) : null;
+    if (dto.maxDiscount !== undefined) updateData.maxDiscount = dto.maxDiscount ? new Prisma.Decimal(dto.maxDiscount.toString()) : null;
+    if (dto.startsAt !== undefined) updateData.startsAt = dto.startsAt;
+    if (dto.endsAt !== undefined) updateData.endsAt = dto.endsAt;
+    if (dto.isActive !== undefined) updateData.isActive = dto.isActive;
+
+    return this.db.offer.update({
+      where: { id: offerId },
+      data: updateData
+    });
+  }
 }
 

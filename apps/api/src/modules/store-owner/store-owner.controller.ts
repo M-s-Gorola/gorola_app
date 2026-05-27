@@ -774,6 +774,332 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // Discounts Management Schema
+  const createDiscountBodySchema = z.object({
+    code: z.string().trim().min(1, "Code is required"),
+    discountType: z.enum(["PERCENTAGE", "FLAT"]),
+    discountValue: z.coerce.number().positive("Discount value must be positive"),
+    maxUsageCount: z.coerce.number().int().positive().optional(),
+    startsAt: z.string().trim().min(1, "startsAt is required"),
+    endsAt: z.string().trim().min(1, "endsAt is required")
+  });
+
+  // GET /api/v1/store/discounts
+  app.get("/api/v1/store/discounts", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const discounts = await storeOwnerService.getDiscounts(owner.storeId);
+
+    return {
+      success: true,
+      data: discounts.map((d) => ({
+        id: d.id,
+        code: d.code,
+        discountType: d.discountType,
+        discountValue: Number(d.discountValue),
+        usedCount: d.usedCount,
+        maxUsageCount: d.usageLimit,
+        isActive: d.isActive,
+        startsAt: d.startsAt.toISOString(),
+        endsAt: d.endsAt.toISOString()
+      })),
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // POST /api/v1/store/discounts
+  app.post("/api/v1/store/discounts", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = createDiscountBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid discount data", parsed.error.flatten());
+    }
+
+    const discount = await storeOwnerService.createDiscount(owner.storeId, parsed.data);
+
+    reply.code(201);
+    return {
+      success: true,
+      data: {
+        id: discount.id,
+        code: discount.code,
+        discountType: discount.discountType,
+        discountValue: Number(discount.discountValue),
+        usedCount: discount.usedCount,
+        maxUsageCount: discount.usageLimit,
+        isActive: discount.isActive,
+        startsAt: discount.startsAt.toISOString(),
+        endsAt: discount.endsAt.toISOString()
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/discounts/:id/deactivate
+  app.put("/api/v1/store/discounts/:id/deactivate", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const discountId = params.id;
+    if (!discountId) {
+      throw new ValidationError("Discount ID is required");
+    }
+
+    await storeOwnerService.deactivateDiscount(owner.storeId, discountId);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // DELETE /api/v1/store/discounts/:id
+  app.delete("/api/v1/store/discounts/:id", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const discountId = params.id;
+    if (!discountId) {
+      throw new ValidationError("Discount ID is required");
+    }
+
+    await storeOwnerService.deleteDiscount(owner.storeId, discountId);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // DELETE /api/v1/store/offers/:id
+  app.delete("/api/v1/store/offers/:id", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const offerId = params.id;
+    if (!offerId) {
+      throw new ValidationError("Offer ID is required");
+    }
+
+    await storeOwnerService.deleteOffer(owner.storeId, offerId);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/discounts/:id
+  app.put("/api/v1/store/discounts/:id", { preHandler }, async (request) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const discountId = params.id;
+    if (!discountId) {
+      throw new ValidationError("Discount ID is required");
+    }
+
+    const body = request.body as {
+      code?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      maxUsageCount?: number;
+      startsAt?: string;
+      endsAt?: string;
+      isActive?: boolean;
+    };
+
+    let startsAt: Date | undefined;
+    let endsAt: Date | undefined;
+    if (body.startsAt) {
+      startsAt = new Date(body.startsAt);
+      if (isNaN(startsAt.getTime())) {
+        throw new ValidationError("Invalid startsAt date string");
+      }
+    }
+    if (body.endsAt) {
+      endsAt = new Date(body.endsAt);
+      if (isNaN(endsAt.getTime())) {
+        throw new ValidationError("Invalid endsAt date string");
+      }
+    }
+
+    if (startsAt && endsAt && endsAt.getTime() < startsAt.getTime()) {
+      throw new ValidationError("endsAt cannot be before startsAt");
+    }
+
+    if (body.discountValue !== undefined && body.discountType === "PERCENTAGE" && body.discountValue > 100) {
+      throw new ValidationError("Percentage discount cannot exceed 100%");
+    }
+
+    const updateData: {
+      code?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      maxUsageCount?: number;
+      startsAt?: Date;
+      endsAt?: Date;
+      isActive?: boolean;
+    } = {};
+
+    if (body.code !== undefined) updateData.code = body.code;
+    if (body.discountType !== undefined) updateData.discountType = body.discountType;
+    if (body.discountValue !== undefined) updateData.discountValue = body.discountValue;
+    if (body.maxUsageCount !== undefined) updateData.maxUsageCount = body.maxUsageCount;
+    if (startsAt !== undefined) updateData.startsAt = startsAt;
+    if (endsAt !== undefined) updateData.endsAt = endsAt;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    const updated = await storeOwnerService.updateDiscount(owner.storeId, discountId, updateData);
+
+    return {
+      success: true,
+      data: updated
+    };
+  });
+
+  // PUT /api/v1/store/offers/:id
+  app.put("/api/v1/store/offers/:id", { preHandler }, async (request) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const params = request.params as Record<string, string>;
+    const offerId = params.id;
+    if (!offerId) {
+      throw new ValidationError("Offer ID is required");
+    }
+
+    const body = request.body as {
+      title?: string;
+      description?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      minOrderAmount?: number;
+      maxDiscount?: number;
+      startsAt?: string;
+      endsAt?: string;
+      isActive?: boolean;
+    };
+
+    let startsAt: Date | undefined;
+    let endsAt: Date | undefined;
+    if (body.startsAt) {
+      startsAt = new Date(body.startsAt);
+      if (isNaN(startsAt.getTime())) {
+        throw new ValidationError("Invalid startsAt date string");
+      }
+    }
+    if (body.endsAt) {
+      endsAt = new Date(body.endsAt);
+      if (isNaN(endsAt.getTime())) {
+        throw new ValidationError("Invalid endsAt date string");
+      }
+    }
+
+    if (startsAt && endsAt && endsAt.getTime() < startsAt.getTime()) {
+      throw new ValidationError("endsAt cannot be before startsAt");
+    }
+
+    if (body.discountValue !== undefined && body.discountType === "PERCENTAGE" && body.discountValue > 100) {
+      throw new ValidationError("Percentage discount cannot exceed 100%");
+    }
+
+    const updateData: {
+      title?: string;
+      description?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      minOrderAmount?: number | null;
+      maxDiscount?: number | null;
+      startsAt?: Date;
+      endsAt?: Date;
+      isActive?: boolean;
+    } = {};
+
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.discountType !== undefined) updateData.discountType = body.discountType;
+    if (body.discountValue !== undefined) updateData.discountValue = body.discountValue;
+    if (body.minOrderAmount !== undefined) updateData.minOrderAmount = body.minOrderAmount;
+    if (body.maxDiscount !== undefined) updateData.maxDiscount = body.maxDiscount;
+    if (startsAt !== undefined) updateData.startsAt = startsAt;
+    if (endsAt !== undefined) updateData.endsAt = endsAt;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    const updated = await storeOwnerService.updateOffer(owner.storeId, offerId, updateData);
+
+    return {
+      success: true,
+      data: updated
+    };
+  });
 }
 
 

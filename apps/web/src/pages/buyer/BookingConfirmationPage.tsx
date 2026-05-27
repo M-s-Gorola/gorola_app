@@ -24,6 +24,18 @@ type BookingItem = {
   quantity: number;
 };
 
+type StoreOffer = {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount?: number | null;
+  maxDiscount?: number | null;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+};
+
 type BookingEnvelope = {
   id: string;
   status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "DELIVERED";
@@ -43,6 +55,8 @@ type BookingEnvelope = {
   };
   items: BookingItem[];
   bookingOrder: BookingOrderDetails;
+  discountAmount?: string;
+  discountCode?: string | null;
 };
 
 const statusConfig = {
@@ -110,6 +124,7 @@ export function BookingConfirmationPage(): ReactElement {
   const entranceDoneRef = useRef(false);
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
+  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
 
   const query = useQuery({
     queryKey: ["booking-order-confirmation", id],
@@ -122,6 +137,76 @@ export function BookingConfirmationPage(): ReactElement {
     },
     enabled: !!id,
   });
+
+  const storeId = query.data?.store?.id;
+  const { data: offersResponse } = useQuery({
+    enabled: !!storeId,
+    queryKey: ["promotions", "store", storeId, "offers"],
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: StoreOffer[] }>(
+        `/api/v1/promotions/store/${storeId}/offers`
+      );
+      return res.data;
+    }
+  });
+
+  const getAppliedDiscounts = (booking: BookingEnvelope) => {
+    const subtotal = Number(booking.subtotal || 0);
+    const deliveryFee = Number(booking.deliveryFee || 0);
+    const total = Number(booking.total || 0);
+    const discountAmount = Number(booking.discountAmount) > 0
+      ? Number(booking.discountAmount)
+      : Number((subtotal + deliveryFee - total).toFixed(2));
+    if (discountAmount <= 0) return [];
+
+    const offers = Array.isArray(offersResponse?.data) ? offersResponse.data : [];
+    const orderTime = new Date(booking.createdAt || "").getTime();
+
+    const matchedOffers = offers.filter((o) => {
+      const start = new Date(o.startsAt).getTime();
+      const end = new Date(o.endsAt).getTime();
+      return orderTime >= start && orderTime <= end;
+    });
+
+    const result: { label: string; amount: number }[] = [];
+    let remainingDiscount = discountAmount;
+
+    for (const offer of matchedOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal < minOrder) continue;
+
+      let offerDiscount = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        offerDiscount = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          offerDiscount = Math.min(offerDiscount, offer.maxDiscount);
+        }
+      } else {
+        offerDiscount = offer.discountValue;
+      }
+      offerDiscount = Number(Math.min(subtotal, offerDiscount).toFixed(2));
+
+      if (offerDiscount > 0 && remainingDiscount > 0) {
+        const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
+        if (appliedAmt > 0.05) {
+          result.push({
+            label: `Discount (${offer.title})`,
+            amount: appliedAmt
+          });
+          remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
+        }
+      }
+    }
+
+    if (remainingDiscount > 0.05) {
+      result.push({
+        label: booking.discountCode || "Discount",
+        amount: remainingDiscount
+      });
+    }
+
+    return result;
+  };
 
   const currentStatus = query.data?.status;
   const lastStatusRef = useRef<string | null>(null);
@@ -398,6 +483,52 @@ export function BookingConfirmationPage(): ReactElement {
               <span className="text-gorola-slate">Delivery fee:</span>
               <span className="font-medium">Rs {booking.deliveryFee}</span>
             </div>
+            {Number(booking.discountAmount || 0) > 0 && (
+              <div className="space-y-1">
+                <div className="flex justify-between text-gorola-pine font-bold" data-testid="discount-summary">
+                  <div className="flex items-center gap-1.5 font-dm-sans text-sm">
+                    <span>Total Discount</span>
+                    <button
+                      type="button"
+                      data-testid="discount-toggle-chevron"
+                      onClick={() => setIsDiscountOpen(!isDiscountOpen)}
+                      className="text-gorola-pine hover:bg-gorola-pine/5 rounded p-0.5 transition-colors flex items-center justify-center"
+                      aria-label="Toggle discount breakdown"
+                    >
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`h-4 w-4 transition-transform duration-200 ${isDiscountOpen ? "rotate-180" : ""}`}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  </div>
+                  <span className="font-dm-sans text-sm">-Rs {Number(booking.discountAmount).toFixed(2)}</span>
+                </div>
+                {isDiscountOpen && (
+                  <div className="space-y-1.5 pl-4 font-dm-sans font-bold" data-testid="discount-breakdown">
+                    {getAppliedDiscounts(booking).map((d, idx) => (
+                      <div
+                        key={idx}
+                        data-testid="discount-breakdown-item"
+                        className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
+                      >
+                        <span className="break-words text-left flex-1">{d.label}</span>
+                        <span className="text-right whitespace-nowrap shrink-0">-Rs {d.amount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
               <span>Payment [{booking.paymentMethod === "COD" ? "Pay on Service" : booking.paymentMethod}]:</span>
               <span>Rs {booking.total}</span>

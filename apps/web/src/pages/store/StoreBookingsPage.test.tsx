@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -95,16 +95,22 @@ describe("StoreBookingsPage TDD", () => {
     renderWithProviders(<StoreBookingsPage />);
 
     expect(await screen.findByText("Blood Sugar (Fasting)")).toBeInTheDocument();
+    expect(screen.getByText(/Fasting Required/i)).toBeInTheDocument();
+
+    // Click on the booking card to open details modal
+    const user = userEvent.setup();
+    const card = screen.getByTestId("booking-card-booking-1");
+    await user.click(card);
+
     expect(screen.getByText("+91 98765 ***55")).toBeInTheDocument(); // Masked phone: "+91 98765 ***55"
     expect(screen.getByText(/06:00-09:00/)).toBeInTheDocument();
-    expect(screen.getByText(/Fasting Required/i)).toBeInTheDocument();
 
     // Verify complete address rendering on the bookings card
     expect(screen.queryByText(/\[Home\]:/)).not.toBeInTheDocument();
     expect(screen.getByText(/Flat 101, Near Picture Palace/)).toBeInTheDocument();
 
-    const approveBtn = screen.getByRole("button", { name: /approve/i });
-    const rejectBtn = screen.getByRole("button", { name: /reject/i });
+    const approveBtn = screen.getByRole("button", { name: /approve booking/i });
+    const rejectBtn = screen.getByRole("button", { name: /reject booking/i });
 
     expect(approveBtn).toBeInTheDocument();
     expect(rejectBtn).toBeInTheDocument();
@@ -114,7 +120,6 @@ describe("StoreBookingsPage TDD", () => {
       data: { success: true }
     });
 
-    const user = userEvent.setup();
     await user.click(approveBtn);
 
     await waitFor(() => {
@@ -157,8 +162,11 @@ describe("StoreBookingsPage TDD", () => {
 
     expect(await screen.findByText("Urine Routine")).toBeInTheDocument();
 
-    const rejectBtn = screen.getByRole("button", { name: /reject/i });
     const user = userEvent.setup();
+    const card = screen.getByTestId("booking-card-booking-2");
+    await user.click(card);
+
+    const rejectBtn = screen.getByRole("button", { name: /reject booking/i });
     await user.click(rejectBtn);
 
     // Rejection modal should open
@@ -295,6 +303,9 @@ describe("StoreBookingsPage TDD", () => {
 
     expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
 
+    const card = screen.getByTestId("booking-card-booking-upcoming-complete");
+    await user.click(card);
+
     const completeBtn = screen.getByRole("button", { name: /mark completed/i });
     expect(completeBtn).toBeInTheDocument();
 
@@ -348,8 +359,13 @@ describe("StoreBookingsPage TDD", () => {
     await user.click(historyTab);
 
     expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
-    expect(screen.getByText("CANCELLED")).toBeInTheDocument();
-    expect(screen.getByText(/Reason: Slot full/)).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-hist-1");
+    await user.click(card);
+
+    const modal = screen.getByTestId("booking-details-modal");
+    expect(within(modal).getByText("CANCELLED")).toBeInTheDocument();
+    expect(within(modal).getByText(/Reason: Slot full/)).toBeInTheDocument();
   });
 
   it("Navigation link Bookings in StoreLayout is hidden when storeType is QUICK_COMMERCE, shown when BOOKING_COMMERCE", async () => {
@@ -406,5 +422,146 @@ describe("StoreBookingsPage TDD", () => {
       const links = screen.getAllByRole("link", { name: /bookings/i });
       expect(links.length).toBeGreaterThan(0);
     });
+  });
+
+  it("displays collapsible discount breakdown inside the detailed bookings modal", async () => {
+    const mockBookings = [
+      {
+        id: "booking-discount-test",
+        orderId: "order-discount-test",
+        status: "PENDING_APPROVAL",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-discount",
+            productName: "Full Body Checkup",
+            variantLabel: "Premium",
+            price: 1500,
+            quantity: 1
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-23T08:00:00.000Z",
+          timeslot: "06:00-09:00",
+          requiresFasting: true,
+          approvalStatus: "PENDING_APPROVAL"
+        },
+        subtotal: 1500,
+        deliveryFee: 50,
+        discountAmount: 200,
+        discountCode: "WELCOME200",
+        total: 1350,
+        statusHistory: [
+          { id: "hist-1", status: "PENDING_APPROVAL", changedBy: "system", changedAt: "2026-05-21T22:00:00.000Z" }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    expect(await screen.findByText("Full Body Checkup")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-discount-test");
+    await user.click(card);
+
+    // Verify detailed modal details are displayed
+    const modal = screen.getByTestId("booking-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText("Buyer & Appointment")).toBeInTheDocument();
+    expect(within(modal).getAllByText("Rs 1500.00")[0]).toBeInTheDocument();
+    expect(within(modal).getByText("Rs 50.00")).toBeInTheDocument();
+    expect(within(modal).getByText("Rs 1350.00")).toBeInTheDocument();
+
+    // Verify discount is visible in its initial collapsed state
+    const discountRow = screen.getByTestId("store-booking-discount");
+    expect(discountRow).toBeInTheDocument();
+    expect(within(discountRow).getByText("-Rs 200.00")).toBeInTheDocument();
+
+    // Verify discount list detail is not rendered initially
+    expect(screen.queryByTestId("store-booking-discount-list")).not.toBeInTheDocument();
+
+    // Click toggle button to expand discount list details
+    const toggleButton = screen.getByTestId("store-booking-discount-toggle");
+    await user.click(toggleButton);
+
+    // Verify discount list detail is now visible and contains promo info
+    const discountList = screen.getByTestId("store-booking-discount-list");
+    expect(discountList).toBeInTheDocument();
+    expect(within(discountList).getByText(/• WELCOME200/)).toBeInTheDocument();
+    expect(within(discountList).getByText("-Rs 200.00")).toBeInTheDocument();
+
+    // Click toggle again to collapse
+    await user.click(toggleButton);
+    expect(screen.queryByTestId("store-booking-discount-list")).not.toBeInTheDocument();
+  });
+
+  it("renders status transition logs in the detailed modal", async () => {
+    const mockBookings = [
+      {
+        id: "booking-timeline-test",
+        orderId: "order-timeline-test",
+        status: "APPROVED",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-timeline",
+            productName: "Blood Glucose Test",
+            variantLabel: "Standard",
+            price: 300,
+            quantity: 1
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-23T08:00:00.000Z",
+          timeslot: "06:00-09:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        },
+        subtotal: 300,
+        deliveryFee: 30,
+        discountAmount: 0,
+        discountCode: "",
+        total: 330,
+        statusHistory: [
+          { id: "hist-1", status: "PENDING_APPROVAL", changedBy: "system", changedAt: "2026-05-21T22:00:00.000Z" },
+          { id: "hist-2", status: "APPROVED", changedBy: "system", changedAt: "2026-05-21T23:00:00.000Z" }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const upcomingTab = await screen.findByRole("tab", { name: /upcoming/i });
+    await user.click(upcomingTab);
+
+    expect(await screen.findByText("Blood Glucose Test")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-timeline-test");
+    await user.click(card);
+
+    // Verify timeline logs are displayed
+    expect(screen.getByText("Status Transition Log")).toBeInTheDocument();
+    
+    const historyList = screen.getByTestId("status-history-list");
+    expect(within(historyList).getByText("PENDING APPROVAL")).toBeInTheDocument();
+    expect(within(historyList).getByText("APPROVED")).toBeInTheDocument();
   });
 });
