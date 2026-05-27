@@ -19,8 +19,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-27
-- **Session Summary:** Fully completed the Phase 3.6.2 Discount UX Hardening, Cart Offer Pills & Modal Scroll Fix under strict TDD compliance.
-- **Next Session Must Start With:** Phase 3.7 — Discount/Coupon Code Management.
+- **Session Summary:** Successfully resolved the queue-reconciliation deadlock in frontend pages (`CartDrawer`, `ProductGrid`, `ProductDetailPage`), fixed stale E2E assertions matching the new collapsible discount row UI, and verified robust RTL test gates. Entire unit, integration, and Playwright E2E test suites are now 100% GREEN.
+- **Next Session Must Start With:** Phase 3.7 — Discount/Coupon Code Management (REST APIs & Store Coupon Panel).
 - **In Progress Right Now:** None (Ready for Phase 3.7).
 - **Current Blocker:** None.
 
@@ -1418,6 +1418,12 @@ _(Append new entries here — never delete old entries.)_
 - **Data Consistency & Server Sync**: Wired cart mutations in `CartDrawer.tsx` and `ProductGrid.tsx` to automatically trigger backend reconciliation through `syncBuyerCartFromServer` on action callbacks, preventing stale local pricing states.
 - **Modal Scroll & Lenis Control**: Hardened the scrollable store order detail modal in `StoreOrdersPage.tsx` by stopping/starting Lenis smooth scrolling and adding `data-lenis-prevent` attributes.
 - **Robust Automated Verification**: Wrote and validated extensive backend and frontend unit tests for all updated modules, maintaining a 100% clean global compilation and green status.
+
+### Session 16 — 2026-05-27 — Cart Sync Deadlock Resolution, E2E Stale Assertion Corrections, & RTL Wait Verification
+- **Resolved Frontend Cart Sync Deadlock**: Decoupled `syncBuyerCartFromServer` from queue work blocks inside `CartDrawer.tsx`, `ProductGrid.tsx`, and `ProductDetailPage.tsx`. Moving the query reconciliation outside the `enqueueCartVariantMutation` promises resolves the recursive await cycle under latency, preventing UI deadlocks.
+- **Fixed Stale Playwright E2E Assertion (`cart.spec.ts`)**: Updated the test assertion from `/Saved/i` to `/Total Discount/i` to align with the Phase 3.6.2 design system. This resolves the failed Playwright checkout discount code test, bringing all 48 E2E test runs to **100% green**.
+- **Stabilized URL-Aware Mock Parameter Preservation**: Corrected the global mock interceptor in `ProductGrid.test.tsx` to forward both the URL and configuration options (like cursor, parameters) to the inner `getMock` wrapper. This resolves a pagination sentinel test failure, restoring complete unit test green status.
+- **Verified RTL Wait Gates (`ProductDetailPage.test.tsx`)**: Verified the developer's new dynamic RTL wait gates (heading & variant container queries) which correctly block test interactions until asynchronous elements are fully bound to the DOM, rendering the suite robust and bulletproof.
 
 
 
