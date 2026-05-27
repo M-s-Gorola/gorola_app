@@ -513,6 +513,49 @@ export function StoreBookingsPage(): ReactElement {
                   </div>
                 </div>
 
+                {/* Approve/Reject Actions Footer */}
+                {activeTab === "PENDING" && !selectedBooking && (
+                  <div className="flex gap-3 mt-4 pt-3 border-t border-gorola-mint/10">
+                    <button
+                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleApprove(booking);
+                      }}
+                      className="flex-1 py-2.5 px-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
+                    >
+                      {approveMutation.isPending ? "Approving..." : "Approve"}
+                    </button>
+
+                    <button
+                      disabled={approveMutation.isPending || rejectMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openRejectModal(booking);
+                      }}
+                      className="flex-1 py-2.5 px-3 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold uppercase tracking-wide rounded-xl transition-all disabled:opacity-50"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+
+                {/* Mark Completed Actions Footer */}
+                {activeTab === "UPCOMING" && !selectedBooking && (
+                  <div className="flex gap-3 mt-4 pt-3 border-t border-gorola-mint/10">
+                    <button
+                      disabled={completeMutation.isPending}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        completeMutation.mutate(booking.orderId || booking.id);
+                      }}
+                      className="flex-1 py-2.5 px-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-sm hover:shadow transition-all disabled:opacity-50"
+                    >
+                      {completeMutation.isPending ? "Completing..." : "Mark Completed"}
+                    </button>
+                  </div>
+                )}
+
                 {/* Read-Only Status Indicator badges for non-pending requests inside card */}
                 {activeTab !== "PENDING" && (
                   <div className="mt-4 pt-3 border-t border-gorola-mint/10 flex items-center justify-between">

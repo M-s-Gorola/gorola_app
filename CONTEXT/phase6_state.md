@@ -609,4 +609,14 @@ The goal of this phase is to establish absolute parity by building a fully integ
   - Added a **Lifecycle Integration** test verifying reference counted singleton survival across concurrent caller lifecycles.
   - Complete workspace Vitest suite is 100% green (221/221 tests passing). TypeScript `tsc` and ESLint checks pass cleanly with 0 warnings/errors.
 
+### 2026-05-27: Phase 6.9 Booking Commerce Feature Parity & E2E Stabilization
+- **Problem (Booking Discount Disparity):** Booking checkout flows lacked support for store-wide active promotional offers and discount coupon inputs, leading to full-retail pricing for booking request appointments. Furthermore, the merchant booking dashboard lacked the high-fidelity detailed summaries and collapsible pricing breakdowns present in Quick Commerce.
+- **Solution (Feature Parity):**
+  - Integrated dynamic store-wide offers query and stacked discount resolution services (`getAppliedDiscounts`) on both buyer `BookingConfirmationPage` and merchant `StoreBookingsPage`.
+  - Configured high-fidelity details modals on `StoreBookingsPage` complete with itemized summaries, chronological transition logs, masked contacts, and status actions.
+  - Standardized maximum discount disclosures (`· Maximum discount: Rs {amount}`) across both CartDrawer and BookingTimeslotPage.
+- **Problem (E2E Playwright Selector Failures & Testing Library Conflicts):** The Playwright booking E2E suite expected the workflow action buttons (`Approve`, `Reject`, `Mark Completed`) to be visible and clickable directly on the dashboard tab cards. However, moving them into the detail modal broke the Playwright locators, while rendering them in both places broke Testing Library's singular-element queries due to duplicates.
+- **Solution (Conditional Actions):** Added action button footers back directly onto the tab cards but wrapped them with a conditional `!selectedBooking` guard. The buttons are fully visible to Playwright when browsing the lists, but are safely unmounted when the detail modal is active, completely resolving duplicate DOM conflicts.
+- **Validation:** 100% passing Vitest suite (8/8 on `StoreBookingsPage.test.tsx`, 229/229 globally) and clean workspace-wide compilation (`tsc --noEmit` and `eslint` exiting with 0 errors).
+
 
