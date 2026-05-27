@@ -942,7 +942,7 @@ export function registerStoreOwnerRoutes(
   });
 
   // PUT /api/v1/store/discounts/:id
-  app.put("/api/v1/store/discounts/:id", { preHandler }, async (request, reply) => {
+  app.put("/api/v1/store/discounts/:id", { preHandler }, async (request) => {
     const userId = request.user?.sub;
     if (!userId) {
       throw new ValidationError("User subject missing from auth context");
@@ -959,7 +959,15 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Discount ID is required");
     }
 
-    const body = request.body as any;
+    const body = request.body as {
+      code?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      maxUsageCount?: number;
+      startsAt?: string;
+      endsAt?: string;
+      isActive?: boolean;
+    };
 
     let startsAt: Date | undefined;
     let endsAt: Date | undefined;
@@ -980,19 +988,29 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("endsAt cannot be before startsAt");
     }
 
-    if (body.discountType === "PERCENTAGE" && body.discountValue > 100) {
+    if (body.discountValue !== undefined && body.discountType === "PERCENTAGE" && body.discountValue > 100) {
       throw new ValidationError("Percentage discount cannot exceed 100%");
     }
 
-    const updated = await storeOwnerService.updateDiscount(owner.storeId, discountId, {
-      code: body.code,
-      discountType: body.discountType,
-      discountValue: body.discountValue,
-      maxUsageCount: body.maxUsageCount,
-      startsAt,
-      endsAt,
-      isActive: body.isActive
-    });
+    const updateData: {
+      code?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      maxUsageCount?: number;
+      startsAt?: Date;
+      endsAt?: Date;
+      isActive?: boolean;
+    } = {};
+
+    if (body.code !== undefined) updateData.code = body.code;
+    if (body.discountType !== undefined) updateData.discountType = body.discountType;
+    if (body.discountValue !== undefined) updateData.discountValue = body.discountValue;
+    if (body.maxUsageCount !== undefined) updateData.maxUsageCount = body.maxUsageCount;
+    if (startsAt !== undefined) updateData.startsAt = startsAt;
+    if (endsAt !== undefined) updateData.endsAt = endsAt;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    const updated = await storeOwnerService.updateDiscount(owner.storeId, discountId, updateData);
 
     return {
       success: true,
@@ -1001,7 +1019,7 @@ export function registerStoreOwnerRoutes(
   });
 
   // PUT /api/v1/store/offers/:id
-  app.put("/api/v1/store/offers/:id", { preHandler }, async (request, reply) => {
+  app.put("/api/v1/store/offers/:id", { preHandler }, async (request) => {
     const userId = request.user?.sub;
     if (!userId) {
       throw new ValidationError("User subject missing from auth context");
@@ -1018,7 +1036,17 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Offer ID is required");
     }
 
-    const body = request.body as any;
+    const body = request.body as {
+      title?: string;
+      description?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      minOrderAmount?: number;
+      maxDiscount?: number;
+      startsAt?: string;
+      endsAt?: string;
+      isActive?: boolean;
+    };
 
     let startsAt: Date | undefined;
     let endsAt: Date | undefined;
@@ -1039,21 +1067,33 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("endsAt cannot be before startsAt");
     }
 
-    if (body.discountType === "PERCENTAGE" && body.discountValue > 100) {
+    if (body.discountValue !== undefined && body.discountType === "PERCENTAGE" && body.discountValue > 100) {
       throw new ValidationError("Percentage discount cannot exceed 100%");
     }
 
-    const updated = await storeOwnerService.updateOffer(owner.storeId, offerId, {
-      title: body.title,
-      description: body.description,
-      discountType: body.discountType,
-      discountValue: body.discountValue,
-      minOrderAmount: body.minOrderAmount,
-      maxDiscount: body.maxDiscount,
-      startsAt,
-      endsAt,
-      isActive: body.isActive
-    });
+    const updateData: {
+      title?: string;
+      description?: string;
+      discountType?: "PERCENTAGE" | "FLAT";
+      discountValue?: number;
+      minOrderAmount?: number | null;
+      maxDiscount?: number | null;
+      startsAt?: Date;
+      endsAt?: Date;
+      isActive?: boolean;
+    } = {};
+
+    if (body.title !== undefined) updateData.title = body.title;
+    if (body.description !== undefined) updateData.description = body.description;
+    if (body.discountType !== undefined) updateData.discountType = body.discountType;
+    if (body.discountValue !== undefined) updateData.discountValue = body.discountValue;
+    if (body.minOrderAmount !== undefined) updateData.minOrderAmount = body.minOrderAmount;
+    if (body.maxDiscount !== undefined) updateData.maxDiscount = body.maxDiscount;
+    if (startsAt !== undefined) updateData.startsAt = startsAt;
+    if (endsAt !== undefined) updateData.endsAt = endsAt;
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+
+    const updated = await storeOwnerService.updateOffer(owner.storeId, offerId, updateData);
 
     return {
       success: true,

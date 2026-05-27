@@ -4,12 +4,11 @@ import {
   AlertTriangle,
   Calendar,
   Loader2,
+  Pencil,
   Percent,
   Plus,
   PowerOff,
-  Ticket,
-  Pencil
-} from "lucide-react";
+  Ticket} from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
