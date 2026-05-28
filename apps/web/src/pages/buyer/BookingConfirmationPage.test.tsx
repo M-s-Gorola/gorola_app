@@ -151,11 +151,12 @@ describe("BookingConfirmationPage", () => {
     renderComponent();
 
     expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
-    expect(screen.getByText("Booking Cancelled")).toBeInTheDocument();
+    expect(screen.getByText("Booking Rejected")).toBeInTheDocument();
     expect(
       screen.getByText("Rejection Reason: No available doctors for that slot"),
     ).toBeInTheDocument();
   });
+
 
   it("renders robustly and does not crash even if the store field is null or undefined", async () => {
     const envelope = mockBookingEnvelope("PENDING_APPROVAL");

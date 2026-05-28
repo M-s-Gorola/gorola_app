@@ -500,7 +500,7 @@ export function StoreBookingsPage(): ReactElement {
                       ) : (
                         <XCircle className="h-3 w-3" />
                       )}
-                      {booking.bookingOrder?.approvalStatus === "REJECTED" ? "CANCELLED" : booking.bookingOrder?.approvalStatus?.replace("_", " ")}
+                      {booking.bookingOrder?.approvalStatus?.replace("_", " ")}
                     </span>
                   </div>
                 )}
@@ -559,7 +559,7 @@ export function StoreBookingsPage(): ReactElement {
                       : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
                   }`}
                 >
-                  {selectedBooking.bookingOrder?.approvalStatus === "REJECTED" ? "CANCELLED" : selectedBooking.bookingOrder?.approvalStatus?.replace("_", " ")}
+                  {selectedBooking.bookingOrder?.approvalStatus?.replace("_", " ")}
                 </span>
                 <h2 className="font-mono text-xl md:text-2xl font-black text-gorola-charcoal">
                   #{selectedBooking.id.toUpperCase()}
@@ -646,7 +646,17 @@ export function StoreBookingsPage(): ReactElement {
                           }`}
                         />
                         <p className="text-xs font-black text-gorola-charcoal">
-                          {hist.status.replace(/_/g, " ")}
+                          {/* DELIVERED is the raw DB status for a completed booking-commerce service.
+                              We display it as COMPLETED to match the booking-facing terminology.
+                              CANCELLED is written to statusHistory by rejectBooking() — when the
+                              bookingOrder.approvalStatus is REJECTED, we surface it as REJECTED to
+                              distinguish a store rejection from a buyer-initiated cancellation. */}
+                          {hist.status === "DELIVERED"
+                            ? "COMPLETED"
+                            : hist.status === "CANCELLED" &&
+                              selectedBooking.bookingOrder?.approvalStatus === "REJECTED"
+                            ? "REJECTED"
+                            : hist.status.replace(/_/g, " ")}
                         </p>
                         <p className="text-[10px] text-gorola-slate mt-0.5">
                           By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}

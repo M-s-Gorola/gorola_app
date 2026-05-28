@@ -53,6 +53,7 @@ interface BookingOrderWithRelations {
     subtotal: { toString: () => string };
     deliveryFee: { toString: () => string };
     total: { toString: () => string };
+    appliedDiscountCode: string | null;
     createdAt: Date;
     updatedAt: Date;
     landmarkDescription: string;
@@ -107,6 +108,10 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
     discountAmount: (Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2),
+    // appliedDiscountCode is the coupon code the buyer used at checkout.
+    // Serialized here so both the buyer receipt and store booking dashboard
+    // can display itemized coupon breakdowns instead of falling back to "Discount".
+    discountCode: order.appliedDiscountCode ?? null,
     rating: order.rating,
     ratingComment: order.ratingComment,
     createdAt: order.createdAt.toISOString(),

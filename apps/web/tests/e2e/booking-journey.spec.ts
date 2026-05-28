@@ -239,8 +239,9 @@ test.describe('Booking Journey Pipeline E2E', () => {
     await storePage.locator('button[role="tab"]', { hasText: /history/i }).click();
     await expect(storePage.locator('text=/REJECTED/i').first()).toBeVisible({ timeout: 15000 });
 
-    // 3. Assert Live Socket update on Buyer's screen: Pending Approval -> Cancelled with reason
-    await expect(buyerPage.locator('text=/Cancelled/i').first()).toBeVisible({ timeout: 25000 });
+    // 3. Assert Live Socket update on Buyer's screen: Pending Approval -> Rejected with reason
+    await expect(buyerPage.locator('text=/Rejected/i').first()).toBeVisible({ timeout: 25000 });
+
     await expect(buyerPage.locator('text=/Equipment failure/i')).toBeVisible({ timeout: 15000 });
 
     await buyerContext.close();

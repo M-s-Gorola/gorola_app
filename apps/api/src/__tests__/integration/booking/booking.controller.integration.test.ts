@@ -769,6 +769,143 @@ describe("Booking HTTP Endpoints (Integration)", () => {
     expect(getRes.statusCode).toBe(404);
   });
 
+  it("should include discountCode in GET /api/v1/bookings/:orderId response when placed with a coupon", async () => {
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+
+    const addr = await db.address.create({
+      data: {
+        userId: buyerUser.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+
+    // Seed a store-scoped discount code for the store
+    await db.discount.create({
+      data: {
+        code: "TEST20",
+        storeId: store.id,
+        discountType: "PERCENTAGE",
+        discountValue: new Prisma.Decimal("20"),
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 3_600_000),
+        usedCount: 0
+      }
+    });
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const placeRes = await server.inject({
+      headers: { authorization: `Bearer ${buyerToken}` },
+      method: "POST",
+      payload: {
+        storeId: store.id,
+        items: [{ productId: product.id, variantId: variantStandard.id }],
+        scheduledDate: tomorrow.toISOString(),
+        timeslot: "09:00-12:00",
+        addressId: addr.id,
+        discountCode: "TEST20"
+      },
+      url: "/api/v1/bookings"
+    });
+    expect(placeRes.statusCode).toBe(201);
+    const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
+
+    // GET the booking as buyer — response must include discountCode
+    const getRes = await server.inject({
+      headers: { authorization: `Bearer ${buyerToken}` },
+      method: "GET",
+      url: `/api/v1/bookings/${orderId}`
+    });
+
+    await server.close();
+
+    expect(getRes.statusCode).toBe(200);
+    const envelope = getRes.json() as {
+      success: boolean;
+      data: { discountCode: string | null };
+    };
+    expect(envelope.success).toBe(true);
+    // discountCode must be the applied coupon string, not null
+    expect(envelope.data.discountCode).toBe("TEST20");
+  });
+
+  it("should include discountCode in GET /api/v1/store/bookings response when booking was placed with a coupon", async () => {
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+    const ownerToken = await signTestToken(owner.id, "STORE_OWNER");
+
+    const addr = await db.address.create({
+      data: {
+        userId: buyerUser.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+
+    // Seed discount
+    await db.discount.create({
+      data: {
+        code: "SAVE20",
+        storeId: store.id,
+        discountType: "PERCENTAGE",
+        discountValue: new Prisma.Decimal("20"),
+        isActive: true,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 3_600_000),
+        usedCount: 0
+      }
+    });
+
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    const placeRes = await server.inject({
+      headers: { authorization: `Bearer ${buyerToken}` },
+      method: "POST",
+      payload: {
+        storeId: store.id,
+        items: [{ productId: product.id, variantId: variantStandard.id }],
+        scheduledDate: tomorrow.toISOString(),
+        timeslot: "09:00-12:00",
+        addressId: addr.id,
+        discountCode: "SAVE20"
+      },
+      url: "/api/v1/bookings"
+    });
+    expect(placeRes.statusCode).toBe(201);
+
+    // GET /api/v1/store/bookings as owner — response must include discountCode
+    const listRes = await server.inject({
+      headers: { authorization: `Bearer ${ownerToken}` },
+      method: "GET",
+      url: "/api/v1/store/bookings?status=ALL"
+    });
+
+    await server.close();
+
+    expect(listRes.statusCode).toBe(200);
+    const envelope = listRes.json() as {
+      success: boolean;
+      data: { bookings: Array<{ discountCode: string | null }> };
+    };
+    expect(envelope.success).toBe(true);
+    expect(envelope.data.bookings).toHaveLength(1);
+    // Store owner must see the applied coupon code on the booking row
+    expect(envelope.data.bookings[0]!.discountCode).toBe("SAVE20");
+  });
+
   describe("completeBooking Route", () => {
     it("should allow owner to complete an APPROVED booking (HTTP 200)", async () => {
       const server = createServer({
