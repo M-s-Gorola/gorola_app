@@ -38,8 +38,18 @@ describe("Discount controller", () => {
   });
 
   it("POST /api/v1/promotions/discounts/validate returns amountSaved for active discount", async () => {
+    const store = await db.store.create({
+      data: {
+        name: "Validate Store",
+        description: "d",
+        phone: "+911111111155",
+        address: "Address"
+      }
+    });
+
     await db.discount.create({
       data: {
+        storeId: store.id,
         code: "SAVE20",
         discountType: "PERCENTAGE",
         discountValue: "20",
@@ -59,7 +69,8 @@ describe("Discount controller", () => {
       url: "/api/v1/promotions/discounts/validate",
       payload: {
         code: "save20",
-        subtotal: 500
+        subtotal: 500,
+        storeId: store.id
       }
     });
     await server.close();
@@ -88,7 +99,62 @@ describe("Discount controller", () => {
       url: "/api/v1/promotions/discounts/validate",
       payload: {
         code: "UNKNOWN",
-        subtotal: 500
+        subtotal: 500,
+        storeId: "00000000-0000-0000-0000-000000000000"
+      }
+    });
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { success: boolean; data: { valid: boolean } };
+    expect(body.success).toBe(true);
+    expect(body.data.valid).toBe(false);
+  });
+
+  it("POST /api/v1/promotions/discounts/validate enforces store tenant isolation and rejects coupon from a different store", async () => {
+    const storeA = await db.store.create({
+      data: {
+        name: "Store A",
+        description: "d",
+        phone: "+911111111101",
+        address: "Address A"
+      }
+    });
+
+    const storeB = await db.store.create({
+      data: {
+        name: "Store B",
+        description: "d",
+        phone: "+911111111102",
+        address: "Address B"
+      }
+    });
+
+    await db.discount.create({
+      data: {
+        storeId: storeA.id,
+        code: "STOREA20",
+        discountType: "PERCENTAGE",
+        discountValue: "20",
+        startsAt: new Date("2026-01-01T00:00:00.000Z"),
+        endsAt: new Date("2027-01-01T00:00:00.000Z"),
+        isActive: true
+      }
+    });
+
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    // Validate STOREA20 for Store B -> should be invalid!
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/v1/promotions/discounts/validate",
+      payload: {
+        code: "STOREA20",
+        subtotal: 500,
+        storeId: storeB.id
       }
     });
     await server.close();

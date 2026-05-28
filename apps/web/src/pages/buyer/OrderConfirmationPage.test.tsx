@@ -301,4 +301,83 @@ describe("OrderConfirmationPage", () => {
     expect(toggle.getAttribute("aria-expanded")).toBe("false");
     expect(screen.queryByTestId("discount-breakdown-list")).not.toBeInTheDocument();
   });
+
+  it("does not render rating/feedback form when status is not DELIVERED", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            status: "PLACED",
+            rating: null,
+            ratingComment: null,
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Thank you" });
+    expect(screen.queryByTestId("rate-order-section")).not.toBeInTheDocument();
+  });
+
+  it("renders empty rating/feedback form when status is DELIVERED and rating is null", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            status: "DELIVERED",
+            rating: null,
+            ratingComment: null,
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Order Delivered" });
+    
+    expect(screen.getByTestId("rate-order-section")).toBeInTheDocument();
+    expect(screen.getByText("Rate your order")).toBeInTheDocument();
+    expect(screen.getByText("How was your overall experience?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Thumbs Up/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Thumbs Down/i })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Any feedback for the store/i)).not.toBeInTheDocument();
+  });
+
+  it("displays existing rating submitted state if already rated", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            status: "DELIVERED",
+            rating: true,
+            ratingComment: "Super awesome service!",
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Order Delivered" });
+    
+    expect(screen.getByTestId("rate-order-section")).toBeInTheDocument();
+    expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText(/"Super awesome service!"/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
+  });
 });

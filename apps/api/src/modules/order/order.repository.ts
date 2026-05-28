@@ -40,6 +40,7 @@ export type CreateOrderInput = {
   flatRoom?: string | null;
   deliveryNote?: string | null;
   scheduledFor?: Date | null;
+  appliedDiscountCode?: string | null;
   items: Array<{
     productVariantId: string;
     productName: string;
@@ -100,6 +101,7 @@ export class OrderRepository {
           flatRoom: input.flatRoom ?? null,
           deliveryNote: input.deliveryNote ?? null,
           scheduledFor: input.scheduledFor ?? null,
+          appliedDiscountCode: input.appliedDiscountCode ?? null,
           items: {
             create: input.items.map((item) => ({
               productVariantId: item.productVariantId,

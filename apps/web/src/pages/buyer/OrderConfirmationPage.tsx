@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { Bike, CheckCircle2, Home, Package } from "lucide-react";
+import { Bike, CheckCircle2, Home, MessageSquare,Package, ThumbsDown, ThumbsUp } from "lucide-react";
 import {
   type ReactElement,
   useCallback,
@@ -10,6 +10,7 @@ import {
   useState,
 } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
@@ -48,6 +49,8 @@ export type BuyerOrderDetail = {
   addressLabel?: string | null;
   flatRoom?: string | null;
   paymentMethod: string;
+  rating: boolean | null;
+  ratingComment: string | null;
   scheduledFor?: string | null;
   status: string;
   statusHistory?: StatusHistoryItem[];
@@ -262,6 +265,29 @@ export function OrderConfirmationPage(): ReactElement {
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
+  const [ratingComment, setRatingComment] = useState("");
+
+  const queryClient = useQueryClient();
+
+  const rateMutation = useMutation({
+    mutationFn: async ({ rating, comment }: { rating: boolean; comment?: string | undefined }) => {
+      const res = await api!.put(`/api/v1/orders/${id}/rate`, { 
+        rating,
+        ratingComment: comment 
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      toast.success("Thank you for your rating!");
+      setActiveRating(null);
+      setRatingComment("");
+      void queryClient.invalidateQueries({ queryKey: ["buyer-order-confirmation", id] });
+    },
+    onError: () => {
+      toast.error("Failed to submit rating");
+    }
+  });
 
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
@@ -368,7 +394,6 @@ interface StoreOffer {
     }
   }, [order, navigate]);
 
-  const queryClient = useQueryClient();
   const onStatusChanged = useCallback(
     (data: { orderId: string; status: string }) => {
       if (data.orderId === id) {
@@ -720,6 +745,114 @@ interface StoreOffer {
                   )}
                 </div>
               </div>
+
+              {/* Clean Rate Your Order Section */}
+              {order.status === "DELIVERED" && (
+                <div 
+                  data-testid="rate-order-section"
+                  className="w-full bg-white border border-gorola-pine/10 rounded-2xl p-5 text-left shadow-sm font-dm-sans space-y-4"
+                >
+                  <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Rate your order</h3>
+                  
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-sm text-gorola-slate font-medium">
+                      {order.rating !== null ? (
+                        <div className="space-y-1">
+                          <span className="flex items-center gap-1.5 text-green-600 font-bold">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Rating submitted
+                          </span>
+                          {order.ratingComment && (
+                            <p className="text-xs text-gorola-slate italic">"{order.ratingComment}"</p>
+                          )}
+                        </div>
+                      ) : (
+                        "How was your overall experience?"
+                      )}
+                    </div>
+                    
+                    {order.rating === null && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setActiveRating(activeRating === "up" ? null : "up")}
+                          disabled={rateMutation.isPending}
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                            activeRating === "up"
+                              ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' 
+                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                          } disabled:opacity-50`}
+                          aria-label="Thumbs Up"
+                        >
+                          <ThumbsUp className="w-4 h-4" />
+                          Liked
+                        </button>
+                        <button
+                          onClick={() => setActiveRating(activeRating === "down" ? null : "down")}
+                          disabled={rateMutation.isPending}
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                            activeRating === "down"
+                              ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm' 
+                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                          } disabled:opacity-50`}
+                          aria-label="Thumbs Down"
+                        >
+                          <ThumbsDown className="w-4 h-4" />
+                          Disliked
+                        </button>
+                      </div>
+                    )}
+
+                    {order.rating !== null && (
+                      <div className="flex items-center gap-3">
+                        <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${
+                          order.rating === true 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-red-50 text-red-700 border-red-200'
+                        }`}>
+                          {order.rating === true ? (
+                            <>
+                              <ThumbsUp className="w-4 h-4" />
+                              Liked
+                            </>
+                          ) : (
+                            <>
+                              <ThumbsDown className="w-4 h-4" />
+                              Disliked
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comment Box */}
+                  {activeRating !== null && order.rating === null && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-3 pt-2">
+                      <div className="relative group/input">
+                        <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-gorola-charcoal/20 group-focus-within/input:text-gorola-charcoal/40 transition-colors" />
+                        <textarea
+                          value={ratingComment}
+                          onChange={(e) => setRatingComment(e.target.value)}
+                          placeholder="Any feedback for the store? (Optional)"
+                          className="w-full bg-white border border-gorola-charcoal/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gorola-charcoal placeholder:text-gorola-charcoal/20 focus:outline-none focus:border-gorola-pine/30 transition-all resize-none h-20 shadow-inner"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => rateMutation.mutate({ 
+                            rating: activeRating === "up", 
+                            comment: ratingComment || undefined
+                          })}
+                          className="px-6 py-2 bg-gorola-pine text-white text-xs font-bold rounded-full hover:bg-gorola-pine/90 transition-all shadow-md shadow-gorola-pine/10 disabled:opacity-50"
+                          disabled={rateMutation.isPending}
+                        >
+                          {rateMutation.isPending ? "Submitting..." : "Submit Feedback"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                 <blockquote className="w-full rounded-2xl border border-gorola-pine/10 bg-gorola-fog/80 p-4 text-left shadow-inner">

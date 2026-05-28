@@ -476,6 +476,7 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
       }
     });
     await discountRepo.create({
+      storeId: store.id,
       code: "SAVE10",
       discountType: "FLAT",
       discountValue: 10,
@@ -516,7 +517,7 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     };
     expect(getPayload.success).toBe(true);
     expect(getPayload.data.discount.amount).toBe("10.00");
-    expect(getPayload.data.discount.code).toBeNull();
+    expect(getPayload.data.discount.code).toBe("SAVE10");
     expect(
       Number(getPayload.data.subtotal) + Number(getPayload.data.deliveryFee) - Number(getPayload.data.discount.amount)
     ).toBe(Number(getPayload.data.total));

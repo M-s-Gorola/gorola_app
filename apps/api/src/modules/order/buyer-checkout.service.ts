@@ -121,14 +121,9 @@ export class BuyerCheckoutService {
 
     if (typeof body.discountCode === "string" && body.discountCode.trim().length > 0) {
       const normalizedCode = body.discountCode.trim().toUpperCase();
-      const discount = await this.discountRepo.findActiveByCode(normalizedCode);
+      const discount = await this.discountRepo.findActiveByCode(normalizedCode, storeId);
       if (discount === null) {
         throw new ValidationError("Invalid or expired discount code", {
-          discountCode: normalizedCode
-        });
-      }
-      if (discount.storeId !== null && discount.storeId !== storeId) {
-        throw new ValidationError("Discount code is not valid for this store", {
           discountCode: normalizedCode
         });
       }
@@ -206,6 +201,7 @@ export class BuyerCheckoutService {
       landmarkDescription,
       addressLabel,
       flatRoom,
+      appliedDiscountCode,
       paymentMethod: body.paymentMethod,
       scheduledFor: null,
       storeId,

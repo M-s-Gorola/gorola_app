@@ -5,9 +5,22 @@ const prisma = new PrismaClient();
 async function main() {
   console.info("Seeding E2E test data...");
 
+  const store = await prisma.store.findFirst({
+    where: { id: "store_gorola_hillside_mart" },
+  });
+
+  if (!store) {
+    throw new Error("Store not found. Please run regular seed first.");
+  }
+
   // 1. Seed Discount Code
   await prisma.discount.upsert({
-    where: { code: "TESTDEAL10" },
+    where: {
+      storeId_code: {
+        storeId: store.id,
+        code: "TESTDEAL10",
+      },
+    },
     update: {
       isActive: true,
       discountValue: 10,
@@ -16,6 +29,7 @@ async function main() {
       endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days from now
     },
     create: {
+      storeId: store.id,
       code: "TESTDEAL10",
       discountType: DiscountType.PERCENTAGE,
       discountValue: 10,
@@ -45,14 +59,6 @@ async function main() {
   const user12 = users[2];
 
   // 3. Seed orders for the main order test user (9876543212)
-  const store = await prisma.store.findFirst({
-    where: { id: "store_gorola_hillside_mart" },
-  });
-
-  if (!store) {
-    throw new Error("Store not found. Please run regular seed first.");
-  }
-
   const variant = await prisma.productVariant.findFirst({
     where: { productId: "prod_rice_1" },
   });

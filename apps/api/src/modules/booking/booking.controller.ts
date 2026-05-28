@@ -58,6 +58,8 @@ interface BookingOrderWithRelations {
     landmarkDescription: string;
     flatRoom: string | null;
     addressLabel: string | null;
+    rating: boolean | null;
+    ratingComment: string | null;
     store: {
       id: string;
       name: string;
@@ -105,6 +107,8 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
     discountAmount: (Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2),
+    rating: order.rating,
+    ratingComment: order.ratingComment,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
     landmarkDescription: order.landmarkDescription,
