@@ -103,8 +103,8 @@ const statusConfig = {
     borderColor: "border-red-200 hover:border-red-300",
     shadowColor: "shadow-red-100/10",
     badgeBg: "bg-red-50 border border-red-200 text-red-800",
-    badgeLabel: "This booking has been cancelled.",
-    title: "Booking Cancelled",
+    badgeLabel: "This booking has been rejected by the store.",
+    title: "Booking Rejected",
     accentBorder: "border-l-4 border-l-red-500",
     iconColor: "text-red-500",
   },
@@ -410,7 +410,8 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.status === "PENDING_APPROVAL" ? "Pending Approval" :
                booking.status === "APPROVED" ? "Confirmed" :
                (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "Completed" :
-               (booking.status === "REJECTED" || booking.status === "CANCELLED") ? "Cancelled" :
+               booking.status === "REJECTED" ? "Rejected" :
+               booking.status === "CANCELLED" ? "Cancelled" :
                (booking.status as string).replace("_", " ")}
             </div>
           </div>
@@ -424,7 +425,8 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.id.length > 8 ? `…${booking.id.slice(-8)}` : booking.id}
             </span>{" "}
             {booking.status === "COMPLETED" || booking.status === "DELIVERED" ? "has been completed at" :
-             (booking.status === "REJECTED" || booking.status === "CANCELLED") ? "has been cancelled by" :
+             booking.status === "REJECTED" ? "has been rejected by" :
+             booking.status === "CANCELLED" ? "has been cancelled by" :
              booking.status === "APPROVED" ? "is confirmed with" : "has been requested from"}{" "}
             <span className="font-semibold text-gorola-charcoal">{booking.store?.name}</span>.
           </p>

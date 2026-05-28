@@ -11,17 +11,18 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2, 3.5, 3.6, 3.6.1, 3.6.2, 3.7, and 3.7.1 completed; Phase 3.8 planned |
+| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2, 3.5, 3.6, 3.6.1, 3.6.2, 3.7, 3.7.1, and 3.7.2 completed; Phase 3.8 planned |
 | Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-28
-- **Session Summary:** Hardened and secured the cross-store coupon validation pipeline by enforcing strict tenant-isolated discount application. Updated the backend `/api/v1/promotions/discounts/validate` endpoint to require and validate by `storeId`, extended the serialized buyer cart response to contain `storeId`, synchronized the `storeId` within the frontend Zustand cart store, and successfully modified the buyer `CartDrawer` coupon validation payload. In addition, updated and added robust backend integration and frontend unit tests to enforce store boundaries. Global linting (`pnpm lint`), typechecking (`pnpm typecheck`), and workspace builds are 100% green and clean!
+- **Date:** 2026-05-29
+- **Session Summary:** Completed Phase 3.7.2 (Booking Status Alignment & Coupon Serialization). Enabled native "REJECTED" rendering in the store and buyer UIs to replace inaccurate "CANCELLED" labels, and mapped "CANCELLED" in status transition history entries to display as "REJECTED" when the overall booking status is rejected. Mapped backend "DELIVERED" states to user-facing "COMPLETED" display labels in the timeline log. Resolved discount visibility issues by serializing the `appliedDiscountCode` in the order controller, rendering the real coupon code in both buyer and store receipt breakdowns. Fixed buyer receipt headers to state "Booking Rejected" and mapped the order history page badges to display "Rejected". Confirmed that 100% of frontend and backend tests pass perfectly, and the codebase is completely clean of linting and type errors.
 - **Next Session Must Start With:** Phase 3.8 — Store Settings & Security.
-- **In Progress Right Now:** None (Phase 3.7.1 cross-store security validation completed).
+
+- **In Progress Right Now:** None (Phase 3.7.2 Booking Status Alignment & Coupon Serialization completed).
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -29,7 +30,7 @@
 
 ## In Progress Right Now
 
-None. Phase 3.7.1 cross-store security validation completed.
+None. Phase 3.7.2 Booking Status Alignment & Coupon Serialization completed.
 
 ---
 
@@ -837,6 +838,47 @@ Three interlinked problems exist with the current discount system:
 
 ---
 
+### 3.7.2 — Booking Status Alignment & Coupon Serialization
+
+**Root Cause / Goal:**
+1. In the Store Bookings UI, status transition logs show completed appointments as `"DELIVERED"` (because of the base `Order` status history), but store owners expect `"COMPLETED"`.
+2. Rejected bookings display as `"CANCELLED"` in store dashboard cards and headers due to manual frontend mapping, which is inaccurate since buyer-side cancellation is not yet built.
+3. Buyer receipt breakdown and store booking cards show generic `"Discount"` instead of the actual applied discount code name because the API does not serialize the `appliedDiscountCode` field.
+
+**Fix / Approach:**
+1. Update `serializeBookingOrder` in `booking.controller.ts` to include `discountCode: order.appliedDiscountCode ?? null` in the API output.
+2. In `StoreBookingsPage.tsx`, map `"DELIVERED"` to `"COMPLETED"` strictly in the transition timeline log presentation, with a clarifying developer comment.
+3. In `StoreBookingsPage.tsx`, remove the manual mapping of `"REJECTED"` to `"CANCELLED"`, rendering `"REJECTED"` natively instead.
+4. Update `StoreBookingsPage.test.tsx` and relevant integration/unit tests to expect `"REJECTED"` and `"COMPLETED"` correctly.
+
+---
+
+- [x] **RED — Integration (`booking.controller.integration.test.ts`):**
+  - [x] Test: `GET /api/v1/bookings/:orderId` response includes `discountCode: "TEST20"` when placed with a valid coupon.
+  - [x] Test: `GET /api/v1/store/bookings` response includes `discountCode: "SAVE20"`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] [Controller — `booking.controller.ts`] Updated `BookingOrderWithRelations` interface to include `appliedDiscountCode: string | null`.
+  - [x] [Controller — `booking.controller.ts`] Added `discountCode: order.appliedDiscountCode ?? null` to `serializeBookingOrder` with explanatory comment.
+  - [x] Run integration tests — **confirm GREEN. 16/16 pass.**
+
+- [x] **RED → GREEN — Unit (`StoreBookingsPage.test.tsx`):**
+  - [x] Existing test updated: REJECTED booking card modal now asserts `"REJECTED"` display (was asserting `"CANCELLED"` — incorrect).
+  - [x] New test: `"status transition log maps DELIVERED entries to COMPLETED display label"` asserts `"DELIVERED"` is remapped to `"COMPLETED"` in the timeline log.
+  - [x] [Component — `StoreBookingsPage.tsx`] Removed manual `"REJECTED" ? "CANCELLED"` mapping in both booking card badge (L503) and modal header badge (L562). Now renders `approvalStatus.replace("_", " ")` natively.
+  - [x] [Component — `StoreBookingsPage.tsx`] Status transition log now maps `hist.status === "DELIVERED" ? "COMPLETED"` with dev comment.
+  - [x] [Component — `BookingConfirmationPage.tsx`] Buyer badge now shows `"Rejected"` for `REJECTED` status (not `"Cancelled"`). Status copy: `"has been rejected by"` vs `"has been cancelled by"`.
+  - [x] Run all unit tests — **confirm GREEN. 55 files, 289 tests pass.**
+
+- [x] **Verification chain:**
+  - [x] Integration: `discountCode` serialized via `GET /api/v1/bookings/:orderId` and `GET /api/v1/store/bookings` — confirmed by 2 new integration tests ✅
+  - [x] Unit: Store bookings modal displays `"REJECTED"` natively ✅
+  - [x] Unit: Status log maps `"DELIVERED"` → `"COMPLETED"` ✅
+  - [x] Unit: Buyer receipt shows `"Rejected"` for store-rejected bookings ✅
+
+---
+
 ### 3.8 — Store Settings & Security
 
 **Root Cause / Goal:**
@@ -1543,6 +1585,12 @@ _(Append new entries here — never delete old entries.)_
 - **Added Dynamic Verification Coverage**: Added comprehensive backend integration tests verifying that correct discount codes from a different store are rejected with `valid: false`, and secured existing integration/unit tests to include `storeId` parameters.
 - **100% Green Monorepo Status**: Confirmed that global linting (`pnpm lint`), typechecking (`pnpm typecheck`), all front-end and back-end test suites, and workspace building are 100% green and successful!
 
-
-
-
+### Session 22 — 2026-05-29 — Complete Booking Status Terminal Alignment & History Page Resolution (Phase 3.7.2 Alignment)
+- **Completed Phase 3.7.2 Realignment**: Polished and resolved the remaining terminological and display inconsistencies surrounding booking status pipelines across both buyer and store owners' user experiences.
+- **Fixed Store Timeline Status Translation**: Handled order history logs in `StoreBookingsPage.tsx` where status events saved as `"CANCELLED"` by the server's `rejectBooking()` flow were incorrectly rendering literally. Added dynamic re-mapping: if history status is `"CANCELLED"` but the booking's actual overall `approvalStatus` is `"REJECTED"`, it correctly displays as `"REJECTED"`. Pure buyer-initiated cancellations properly continue to render as `"CANCELLED"`.
+- **Corrected Buyer Receipt Header Display**: Resolved an oversight in `BookingConfirmationPage.tsx` under the `REJECTED` state configuration. Changed the H1 title from `"Booking Cancelled"` to `"Booking Rejected"` and updated the status message text from `"This booking has been cancelled."` to `"This booking has been rejected by the store."` to match native terminology.
+- **Remediated Buyer Order History Badging**: Updated the badge renderer inside `OrderHistoryPage.tsx` for `BOOKING_COMMERCE` orders. Mapped the `REJECTED` status block from `"Cancelled"` to `"Rejected"` natively, resolving status inconsistencies across the user dashboard.
+- **Robust Integration & Unit Test Coverage**:
+  - Updated frontend test suite inside `BookingConfirmationPage.test.tsx` to assert `"Booking Rejected"` instead of the stale `"Booking Cancelled"`.
+  - Created a new unit test in `StoreBookingsPage.test.tsx` verifying that a `"CANCELLED"` status transition log history entry dynamically maps and displays as `"REJECTED"` when `bookingOrder.approvalStatus` is `"REJECTED"`.
+- **100% Passing & Lint-Free**: Verified 100% passing test status across 55 test files and 290 total unit tests with completely clean global lints (`pnpm lint`) and typechecks (`pnpm typecheck`).

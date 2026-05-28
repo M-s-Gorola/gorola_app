@@ -364,9 +364,137 @@ describe("StoreBookingsPage TDD", () => {
     await user.click(card);
 
     const modal = screen.getByTestId("booking-details-modal");
-    expect(within(modal).getByText("CANCELLED")).toBeInTheDocument();
+    // REJECTED booking must display "REJECTED" natively — NOT "CANCELLED"
+    // Note: two REJECTED nodes appear (badge + status fallback), both are correct.
+    expect(within(modal).getAllByText("REJECTED").length).toBeGreaterThan(0);
     expect(within(modal).getByText(/Reason: Slot full/)).toBeInTheDocument();
   });
+
+
+  it("status transition log maps DELIVERED entries to COMPLETED display label", async () => {
+    const mockBookings = [
+      {
+        id: "booking-delivered-test",
+        orderId: "order-delivered-test",
+        status: "COMPLETED",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-delivered",
+            productName: "Urine Microalbumin",
+            variantLabel: "Standard",
+            price: 400,
+            quantity: 1
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-22T09:00:00.000Z",
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "COMPLETED"
+        },
+        subtotal: 400,
+        deliveryFee: 0,
+        discountAmount: 0,
+        total: 400,
+        statusHistory: [
+          { id: "hist-d-1", status: "PENDING_APPROVAL", changedBy: "system", changedAt: "2026-05-21T22:00:00.000Z" },
+          { id: "hist-d-2", status: "APPROVED", changedBy: "owner", changedAt: "2026-05-21T23:00:00.000Z" },
+          // DELIVERED is the raw DB status — the UI must display it as COMPLETED
+          { id: "hist-d-3", status: "DELIVERED", changedBy: "owner", changedAt: "2026-05-22T10:00:00.000Z" }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const historyTab = await screen.findByRole("tab", { name: /history/i });
+    await user.click(historyTab);
+
+    expect(await screen.findByText("Urine Microalbumin")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-delivered-test");
+    await user.click(card);
+
+    const historyList = screen.getByTestId("status-history-list");
+    // The raw "DELIVERED" entry in the log must display as "COMPLETED" for booking commerce clarity
+    expect(within(historyList).getByText("COMPLETED")).toBeInTheDocument();
+    // "DELIVERED" raw string must NOT appear
+    expect(within(historyList).queryByText("DELIVERED")).not.toBeInTheDocument();
+  });
+
+
+  it("status transition log maps CANCELLED history entries to REJECTED when bookingOrder.approvalStatus is REJECTED", async () => {
+    const mockBookings = [
+      {
+        id: "booking-reject-log-test",
+        orderId: "order-reject-log-test",
+        status: "REJECTED",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-reject-log",
+            productName: "Haemoglobin Test",
+            variantLabel: "Standard",
+            price: 200,
+            quantity: 1
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-22T09:00:00.000Z",
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "REJECTED",
+          rejectionReason: "No capacity"
+        },
+        subtotal: 200,
+        deliveryFee: 0,
+        discountAmount: 0,
+        total: 200,
+        statusHistory: [
+          { id: "hist-r-1", status: "PENDING_APPROVAL", changedBy: "system", changedAt: "2026-05-21T22:00:00.000Z" },
+          // Backend writes "CANCELLED" to orderStatusHistory during rejectBooking().
+          // The UI must surface this as "REJECTED" when approvalStatus is REJECTED.
+          { id: "hist-r-2", status: "CANCELLED", changedBy: "store-owner:owner-1", changedAt: "2026-05-21T23:00:00.000Z" }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const historyTab = await screen.findByRole("tab", { name: /history/i });
+    await user.click(historyTab);
+
+    expect(await screen.findByText("Haemoglobin Test")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-reject-log-test");
+    await user.click(card);
+
+    const historyList = screen.getByTestId("status-history-list");
+    // The "CANCELLED" statusHistory entry must render as "REJECTED" when approvalStatus is REJECTED
+    expect(within(historyList).getAllByText("REJECTED").length).toBeGreaterThan(0);
+    // The raw "CANCELLED" string must NOT appear in the log entries
+    expect(within(historyList).queryByText("CANCELLED")).not.toBeInTheDocument();
+  });
+
 
   it("Navigation link Bookings in StoreLayout is hidden when storeType is QUICK_COMMERCE, shown when BOOKING_COMMERCE", async () => {
     // 1. Mock QUICK_COMMERCE store profile
