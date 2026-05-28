@@ -10,14 +10,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 
-// 1. Settings DTO schema
 const storeSettingsSchema = z.object({
   name: z.string().trim().min(1, "Store name is required"),
-  description: z.string().trim().default(""),
-  phone: z.string().trim().default(""),
-  address: z.string().trim().default(""),
-  weatherModeDeliveryWindowStart: z.string().trim().default(""),
-  weatherModeDeliveryWindowEnd: z.string().trim().default("")
+  description: z.string().trim(),
+  phone: z.string().trim(),
+  address: z.string().trim(),
+  weatherModeDeliveryWindowStart: z.string().trim(),
+  weatherModeDeliveryWindowEnd: z.string().trim()
 });
 
 type StoreSettingsFormValues = z.infer<typeof storeSettingsSchema>;
@@ -106,7 +105,7 @@ export function StoreSettingsPage(): ReactElement {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const res = await api.get<SettingsApiResponse>("/api/v1/store/settings");
+      const res = await api!.get<SettingsApiResponse>("/api/v1/store/settings");
       if (res.data.success && res.data.data) {
         setSettings(res.data.data);
         resetSettings({
@@ -120,7 +119,7 @@ export function StoreSettingsPage(): ReactElement {
       } else {
         toast.error("Failed to load settings.");
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to fetch store settings.");
     } finally {
       setLoading(false);
@@ -135,7 +134,7 @@ export function StoreSettingsPage(): ReactElement {
   const onSaveSettings = handleSubmitSettings(async (vals) => {
     setSubmittingSettings(true);
     try {
-      const res = await api.put("/api/v1/store/settings", vals);
+      const res = await api!.put("/api/v1/store/settings", vals);
       if (res.data.success) {
         toast.success("Settings updated successfully!");
         setSettings((prev) => prev ? { ...prev, ...vals } : null);
@@ -154,7 +153,7 @@ export function StoreSettingsPage(): ReactElement {
   const onUpdatePassword = handleSubmitPassword(async (vals) => {
     setSubmittingPassword(true);
     try {
-      const res = await api.put("/api/v1/auth/store-owner/change-password", {
+      const res = await api!.put("/api/v1/auth/store-owner/change-password", {
         currentPassword: vals.currentPassword,
         newPassword: vals.newPassword
       });
@@ -182,7 +181,7 @@ export function StoreSettingsPage(): ReactElement {
     setSetupError(null);
     setSubmitting2FA(true);
     try {
-      const res = await api.post<{ success?: boolean; data?: { secret: string; qrCodeUri: string } }>(
+      const res = await api!.post<{ success?: boolean; data?: { secret: string; qrCodeUri: string } }>(
         "/api/v1/auth/store-owner/setup-2fa",
         { email: settings.email }
       );
@@ -191,7 +190,7 @@ export function StoreSettingsPage(): ReactElement {
       } else {
         setSetupError("Failed to generate 2FA secret key.");
       }
-    } catch (err) {
+    } catch {
       setSetupError("Failed to initiate 2FA setup.");
     } finally {
       setSubmitting2FA(false);
@@ -204,7 +203,7 @@ export function StoreSettingsPage(): ReactElement {
     setSetupError(null);
     setSubmitting2FA(true);
     try {
-      const res = await api.post<{ success?: boolean; data?: { verified: boolean } }>(
+      const res = await api!.post<{ success?: boolean; data?: { verified: boolean } }>(
         "/api/v1/auth/store-owner/verify-2fa",
         {
           email: settings.email,
@@ -219,7 +218,7 @@ export function StoreSettingsPage(): ReactElement {
       } else {
         setSetupError("Verification failed.");
       }
-    } catch (err) {
+    } catch {
       setSetupError("Invalid TOTP code.");
     } finally {
       setSubmitting2FA(false);

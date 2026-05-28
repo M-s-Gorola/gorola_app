@@ -94,6 +94,7 @@ model Store {
   storeType                 StoreType       @default(QUICK_COMMERCE)
   bookingLeadDays           Int             @default(1)
   isAcceptingBookings       Boolean         @default(true)
+  isAcceptingOrders         Boolean         @default(true)
   isDeleted                 Boolean         @default(false)
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
@@ -203,6 +204,7 @@ model ProductVariant {
   isInStock  Boolean     @default(true)
   unit       String
   isActive   Boolean     @default(true)
+  isAvailableForBooking Boolean @default(true)
   allowedTimeslots String[]
   requiresFasting  Boolean     @default(false)
   createdAt  DateTime    @default(now())

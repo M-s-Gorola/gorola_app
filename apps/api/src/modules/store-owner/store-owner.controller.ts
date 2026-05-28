@@ -37,7 +37,16 @@ export function registerStoreOwnerRoutes(
     }
 
     const storeId = owner.storeId;
-    const data = await storeOwnerService.getDashboard(storeId);
+
+    const querySchema = z.object({
+      range: z.enum(["TODAY", "WEEK", "MONTH", "YEAR", "ALL"]).default("WEEK"),
+      groupBy: z.enum(["HOURLY", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]).default("DAILY")
+    });
+
+    const parsedQuery = querySchema.safeParse(request.query);
+    const { range, groupBy } = parsedQuery.success ? parsedQuery.data : { range: "WEEK" as const, groupBy: "DAILY" as const };
+
+    const data = await storeOwnerService.getDashboard(storeId, range, groupBy);
 
     return {
       success: true,
@@ -1185,6 +1194,87 @@ export function registerStoreOwnerRoutes(
       }
     };
   });
+
+  // PUT /api/v1/store/availability
+  const toggleStoreAvailabilitySchema = z.object({
+    isAcceptingOrders: z.boolean()
+  });
+
+  app.put("/api/v1/store/availability", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = toggleStoreAvailabilitySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid availability data", parsed.error.flatten());
+    }
+
+    await storeOwnerService.setStoreAvailability(owner.storeId, parsed.data.isAcceptingOrders);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/products/:productId/variants/:variantId/availability
+  const toggleVariantAvailabilitySchema = z.object({
+    isAvailableForBooking: z.boolean()
+  });
+
+  const toggleVariantParamsSchema = z.object({
+    productId: z.string().min(1, "Product ID is required"),
+    variantId: z.string().min(1, "Variant ID is required")
+  });
+
+  app.put(
+    "/api/v1/store/products/:productId/variants/:variantId/availability",
+    { preHandler },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new ValidationError("User subject missing from auth context");
+      }
+
+      const owner = await storeOwnerRepository.findById(userId);
+      if (!owner) {
+        throw new ValidationError("Store owner profile not found");
+      }
+
+      const paramsParsed = toggleVariantParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+      }
+
+      const bodyParsed = toggleVariantAvailabilitySchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        throw new ValidationError("Invalid availability data", bodyParsed.error.flatten());
+      }
+
+      await storeOwnerService.setVariantAvailability(
+        owner.storeId,
+        paramsParsed.data.productId,
+        paramsParsed.data.variantId,
+        bodyParsed.data.isAvailableForBooking
+      );
+
+      return {
+        success: true,
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+  );
 }
 
 

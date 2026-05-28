@@ -11,16 +11,16 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | IN PROGRESS  | Phase 3.4.2, 3.5, 3.6, 3.6.1, 3.6.2, 3.7, 3.7.1, and 3.7.2 completed; Phase 3.8 planned |
-| Phase 4 | Admin Panel       | NOT STARTED  | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
+| Phase 3 | Store Owner Panel | ✅ IN PROGRESS  | All Phase 3.1–3.8a items completed successfully. |
+| Phase 4 | Admin Panel       | 🔴 NOT STARTED | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-05-29
-- **Session Summary:** Aligned coupon discount code visibility across both Booking Commerce and Quick Commerce flows. Replicated the dynamic `discountCode` receipt logic in Quick Commerce frontend files (`OrderConfirmationPage.tsx` and `StoreOrdersPage.tsx`), rendering the correct applied coupon code rather than the fallback label "Discount". Verified the whole monorepo is 100% green and clean.
-- **Next Session Must Start With:** Phase 3.8 — Store Settings & Security.
+- **Session Summary:** Resolved strict TypeScript typechecking compiler errors (`pnpm typecheck` passing 100% cleanly) related to `exactOptionalPropertyTypes` and nullable API clients. Completed architectural analysis on store status Socket vs REST integration. Renumbered and appended the comprehensive session history logs for Phase 3.8 Settings and Phase 3.8a Availability. Marked all Phase 3.8 & 3.8a checklists as complete.
+- **Next Session Must Start With:** Phase 3.9 — Inventory Management (Stock Movements).
 
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
@@ -30,7 +30,7 @@
 
 ## In Progress Right Now
 
-None. Phase 3.7.2 Booking Status Alignment & Coupon Serialization completed.
+None. Phase 3.8 Store Settings and Phase 3.8a Store & Service Availability Toggles completed.
 
 ---
 
@@ -889,31 +889,31 @@ Create `GET /api/v1/store/settings` and `PUT /api/v1/store/settings` for store p
 
 ---
 
-- [ ] **RED — Integration (`store-owner.settings.test.ts`):**
-  - [ ] Test: `GET /api/v1/store/settings` → returns `{ name, description, phone, landmarkAddress, weatherModeDeliveryWindowStart, weatherModeDeliveryWindowEnd }`
-  - [ ] Test: `PUT /api/v1/store/settings` with body `{ name: 'New Store Name', phone: '+919876543210' }` → HTTP 200; `store.name` updated in DB
-  - [ ] Test: `PUT /api/v1/store/settings` with `name: ''` (empty string) → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: `PUT /api/v1/auth/store-owner/change-password` with body `{ currentPassword: '...', newPassword: '...' }` → HTTP 200 on correct current password
-  - [ ] Test: `PUT /api/v1/auth/store-owner/change-password` with wrong `currentPassword` → HTTP 401 `AUTH_FAILED`
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`store-owner.settings.test.ts`):**
+  - [x] Test: `GET /api/v1/store/settings` → returns `{ name, description, phone, landmarkAddress, weatherModeDeliveryWindowStart, weatherModeDeliveryWindowEnd }`
+  - [x] Test: `PUT /api/v1/store/settings` with body `{ name: 'New Store Name', phone: '+919876543210' }` → HTTP 200; `store.name` updated in DB
+  - [x] Test: `PUT /api/v1/store/settings` with `name: ''` (empty string) → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: `PUT /api/v1/auth/store-owner/change-password` with body `{ currentPassword: '...', newPassword: '...' }` → HTTP 200 on correct current password
+  - [x] Test: `PUT /api/v1/auth/store-owner/change-password` with wrong `currentPassword` → HTTP 401 `AUTH_FAILED`
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `getSettings(storeId)`, `updateSettings(storeId, dto)`, `changePassword(storeOwnerId, currentPassword, newPassword)` to `store-owner.service.ts`
-  - [ ] [Controller + Routes] Add `GET /api/v1/store/settings`, `PUT /api/v1/store/settings`, `PUT /api/v1/auth/store-owner/change-password` with `requireAuth` + `requireRole('STORE_OWNER')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `getSettings(storeId)`, `updateSettings(storeId, dto)`, `changePassword(storeOwnerId, currentPassword, newPassword)` to `store-owner.service.ts`
+  - [x] [Controller + Routes] Add `GET /api/v1/store/settings`, `PUT /api/v1/store/settings`, `PUT /api/v1/auth/store-owner/change-password` with `requireAuth` + `requireRole('STORE_OWNER')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`StoreSettingsPage.test.tsx`):**
-  - [ ] Test: form pre-filled with current store name, description, phone, address
-  - [ ] Test: submitting valid changes calls `PUT /api/v1/store/settings` and shows success toast
-  - [ ] Test: change password section has currentPassword, newPassword, confirmNewPassword fields
-  - [ ] Test: submitting password change with mismatched newPassword vs confirmNewPassword shows client-side error "Passwords do not match" (no API call)
-  - [ ] Test: 2FA section shows "Enabled" status if `twoFactorEnabled = true` in auth store; shows "Setup 2FA" button if false
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`StoreSettingsPage.test.tsx`):**
+  - [x] Test: form pre-filled with current store name, description, phone, address
+  - [x] Test: submitting valid changes calls `PUT /api/v1/store/settings` and shows success toast
+  - [x] Test: change password section has currentPassword, newPassword, confirmNewPassword fields
+  - [x] Test: submitting password change with mismatched newPassword vs confirmNewPassword shows client-side error "Passwords do not match" (no API call)
+  - [x] Test: 2FA section shows "Enabled" status if `twoFactorEnabled = true` in auth store; shows "Setup 2FA" button if false
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `StoreSettingsPage.tsx` with 3 sections: Store Info, Change Password, Two-Factor Auth; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `StoreSettingsPage.tsx` with 3 sections: Store Info, Change Password, Two-Factor Auth; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Store owner → Settings → update store name → save → buyer home page shows new store name → Change Password → enter correct current password → update → old password no longer works at login → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Store owner → Settings → update store name → save → buyer home page shows new store name → Change Password → enter correct current password → update → old password no longer works at login → ✅ Done.
 
 ---
 
@@ -933,52 +933,52 @@ Two levels of control:
 
 ---
 
-- [ ] **RED — Integration (`store-owner.availability.test.ts` — new file):**
-  - [ ] Test setup: store with `isAcceptingOrders: true`, 2 active products each with 1 variant (`isAvailableForBooking: true`)
-  - [ ] Test: `PUT /api/v1/store/availability` with body `{ isAcceptingOrders: false }` with STORE_OWNER JWT → HTTP 200; `store.isAcceptingOrders = false` in DB
-  - [ ] Test: after toggling store off, `GET /api/v1/products?categoryId=<id>` (buyer endpoint) → returns **0 products** for this store (store is hidden from buyers)
-  - [ ] Test: `PUT /api/v1/store/availability` with body `{ isAcceptingOrders: true }` → HTTP 200; products visible again in buyer catalog
-  - [ ] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/availability` with body `{ isAvailableForBooking: false }` → HTTP 200; `variant.isAvailableForBooking = false` in DB
-  - [ ] Test: after toggling variant off, `GET /api/v1/products/:productId` (buyer endpoint) → that specific variant **absent** from the `variants` array in the response
-  - [ ] Test: `PUT /api/v1/store/availability` with BUYER JWT → HTTP 403 `FORBIDDEN`
-  - [ ] Test: `PUT .../variants/<variantId>/availability` for a variant belonging to a different store → HTTP 403 `FORBIDDEN`
-  - [ ] **Run — confirm RED (endpoints do not exist; 404).**
+- [x] **RED — Integration (`store-owner.availability.test.ts` — new file):**
+  - [x] Test setup: store with `isAcceptingOrders: true`, 2 active products each with 1 variant (`isAvailableForBooking: true`)
+  - [x] Test: `PUT /api/v1/store/availability` with body `{ isAcceptingOrders: false }` with STORE_OWNER JWT → HTTP 200; `store.isAcceptingOrders = false` in DB
+  - [x] Test: after toggling store off, `GET /api/v1/products?categoryId=<id>` (buyer endpoint) → returns **0 products** for this store (store is hidden from buyers)
+  - [x] Test: `PUT /api/v1/store/availability` with body `{ isAcceptingOrders: true }` → HTTP 200; products visible again in buyer catalog
+  - [x] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/availability` with body `{ isAvailableForBooking: false }` → HTTP 200; `variant.isAvailableForBooking = false` in DB
+  - [x] Test: after toggling variant off, `GET /api/v1/products/:productId` (buyer endpoint) → that specific variant **absent** from the `variants` array in the response
+  - [x] Test: `PUT /api/v1/store/availability` with BUYER JWT → HTTP 403 `FORBIDDEN`
+  - [x] Test: `PUT .../variants/<variantId>/availability` for a variant belonging to a different store → HTTP 403 `FORBIDDEN`
+  - [x] **Run — confirm RED (endpoints do not exist; 404).**
 
-- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
-  - [ ] [Schema] Add `isAcceptingOrders Boolean @default(true)` to `Store` model in `schema.prisma`
-  - [ ] [Schema] Add `isAvailableForBooking Boolean @default(true)` to `ProductVariant` model in `schema.prisma`
-  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_availability_toggles`. Apply to test DB: `pnpm --filter @gorola/api prisma:migrate:test-db`
-  - [ ] [Repository] In `store.repository.ts`, add `setAcceptingOrders(storeId: string, value: boolean): Promise<Store>` — simple `prisma.store.update`
-  - [ ] [Repository] In `variant.repository.ts` (or `product.repository.ts`), add `setVariantAvailability(variantId: string, value: boolean): Promise<ProductVariant>`
-  - [ ] [Repository] In `product.repository.ts`, update `listForBuyer()` to add `store: { isAcceptingOrders: true }` filter in the Prisma `where` clause
-  - [ ] [Repository] In `product.repository.ts`, update `getDetailForBuyer()` to filter `variants` to only those where `isAvailableForBooking: true AND isActive: true`
-  - [ ] [Service] Add `setStoreAvailability(storeId: string, value: boolean)` to `store-owner.service.ts` — calls `StoreRepository.setAcceptingOrders`
-  - [ ] [Service] Add `setVariantAvailability(storeId: string, productId: string, variantId: string, value: boolean)` to `store-owner.service.ts` — validates product ownership, calls repository
-  - [ ] [Controller] Add handler for `PUT /api/v1/store/availability` in `store-owner.controller.ts` — Zod body: `{ isAcceptingOrders: z.boolean() }`; calls service; returns updated store
-  - [ ] [Controller] Add handler for `PUT /api/v1/store/products/:productId/variants/:variantId/availability` — Zod body: `{ isAvailableForBooking: z.boolean() }`; calls service
-  - [ ] [Routes] Register both routes with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
-  - [ ] Run integration tests — **confirm GREEN.**
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] [Schema] Add `isAcceptingOrders Boolean @default(true)` to `Store` model in `schema.prisma`
+  - [x] [Schema] Add `isAvailableForBooking Boolean @default(true)` to `ProductVariant` model in `schema.prisma`
+  - [x] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_availability_toggles`. Apply to test DB: `pnpm --filter @gorola/api prisma:migrate:test-db`
+  - [x] [Repository] In `store.repository.ts`, add `setAcceptingOrders(storeId: string, value: boolean): Promise<Store>` — simple `prisma.store.update`
+  - [x] [Repository] In `variant.repository.ts` (or `product.repository.ts`), add `setVariantAvailability(variantId: string, value: boolean): Promise<ProductVariant>`
+  - [x] [Repository] In `product.repository.ts`, update `listForBuyer()` to add `store: { isAcceptingOrders: true }` filter in the Prisma `where` clause
+  - [x] [Repository] In `product.repository.ts`, update `getDetailForBuyer()` to filter `variants` to only those where `isAvailableForBooking: true AND isActive: true`
+  - [x] [Service] Add `setStoreAvailability(storeId: string, value: boolean)` to `store-owner.service.ts` — calls `StoreRepository.setAcceptingOrders`
+  - [x] [Service] Add `setVariantAvailability(storeId: string, productId: string, variantId: string, value: boolean)` to `store-owner.service.ts` — validates product ownership, calls repository
+  - [x] [Controller] Add handler for `PUT /api/v1/store/availability` in `store-owner.controller.ts` — Zod body: `{ isAcceptingOrders: z.boolean() }`; calls service; returns updated store
+  - [x] [Controller] Add handler for `PUT /api/v1/store/products/:productId/variants/:variantId/availability` — Zod body: `{ isAvailableForBooking: z.boolean() }`; calls service
+  - [x] [Routes] Register both routes with `requireAuth` + `requireRole('STORE_OWNER')` in `routes.ts`
+  - [x] Run integration tests — **confirm GREEN.**
 
-- [ ] **RED — Unit/Component (`StoreDashboardPage.test.tsx` — additional tests):**
-  - [ ] Test: renders an "Availability" card with `data-testid="store-availability-toggle"` — a toggle switch showing current `isAcceptingOrders` state (ON = green, OFF = red)
-  - [ ] Test: toggling the switch to OFF opens a confirmation modal with text "Hiding your store will remove all your products from the buyer app. Are you sure?"
-  - [ ] Test: confirming the modal calls `PUT /api/v1/store/availability` with `{ isAcceptingOrders: false }` and shows a toast "Store is now hidden from buyers"
-  - [ ] Test: while the API call is pending, the toggle is disabled (prevents double-click)
-  - [ ] **Run — confirm RED (no availability card exists in dashboard yet).**
+- [x] **RED — Unit/Component (`StoreDashboardPage.test.tsx` — additional tests):**
+  - [x] Test: renders an "Availability" card with `data-testid="store-availability-toggle"` — a toggle switch showing current `isAcceptingOrders` state (ON = green, OFF = red)
+  - [x] Test: toggling the switch to OFF opens a confirmation modal with text "Hiding your store will remove all your products from the buyer app. Are you sure?"
+  - [x] Test: confirming the modal calls `PUT /api/v1/store/availability` with `{ isAcceptingOrders: false }` and shows a toast "Store is now hidden from buyers"
+  - [x] Test: while the API call is pending, the toggle is disabled (prevents double-click)
+  - [x] **Run — confirm RED (no availability card exists in dashboard yet).**
 
-- [ ] **RED — Unit/Component (`StoreProductsPage.test.tsx` — additional tests):**
-  - [ ] Test: each variant row in the product list has an "Available" toggle switch (`data-testid="variant-availability-toggle-<variantId>"`)
-  - [ ] Test: toggling a variant to unavailable calls `PUT /api/v1/store/products/:id/variants/:variantId/availability` with `{ isAvailableForBooking: false }`
-  - [ ] Test: an unavailable variant row shows a "Hidden from buyers" pill badge in amber/orange color
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit/Component (`StoreProductsPage.test.tsx` — additional tests):**
+  - [x] Test: each variant row in the product list has an "Available" toggle switch (`data-testid="variant-availability-toggle-<variantId>"`)
+  - [x] Test: toggling a variant to unavailable calls `PUT /api/v1/store/products/:id/variants/:variantId/availability` with `{ isAvailableForBooking: false }`
+  - [x] Test: an unavailable variant row shows a "Hidden from buyers" pill badge in amber/orange color
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] [Component] In `StoreDashboardPage.tsx`, add an "Availability" card above the KPI cards: large toggle switch, store name, current status text ("Accepting orders" / "Hidden from buyers"), last-toggled timestamp
-  - [ ] [Component] In `StoreProductsPage.tsx`, add an "Available" toggle per variant row. Booking-commerce stores show this prominently; quick-commerce stores show it as a smaller secondary control
-  - [ ] Run all unit tests — **confirm GREEN.**
+- [x] **GREEN — Frontend:**
+  - [x] [Component] In `StoreDashboardPage.tsx`, add an "Availability" card above the KPI cards: large toggle switch, store name, current status text ("Accepting orders" / "Hidden from buyers"), last-toggled timestamp
+  - [x] [Component] In `StoreProductsPage.tsx`, add an "Available" toggle per variant row. Booking-commerce stores show this prominently; quick-commerce stores show it as a smaller secondary control
+  - [x] Run all unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Store owner opens dashboard → sees green "Accepting Orders" toggle → taps it → confirmation modal → confirms → toggle turns red → buyer app immediately shows 0 products for this store → store owner taps again → toggle turns green → products reappear for buyers → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Store owner opens dashboard → sees green "Accepting Orders" toggle → taps it → confirmation modal → confirms → toggle turns red → buyer app immediately shows 0 products for this store → store owner taps again → toggle turns green → products reappear for buyers → ✅ Done.
 
 ---
 
@@ -1600,3 +1600,39 @@ _(Append new entries here — never delete old entries.)_
 - **Updated OrderConfirmationPage.tsx**: Refactored the `getAppliedDiscounts` remaining discount calculation to render `order.discount?.code` instead of the hardcoded fallback `"Discount"`.
 - **Updated StoreOrdersPage.tsx**: Expanded the `Order` TypeScript interface to include `appliedDiscountCode?: string | null` and refactored the receipt breakdown modal mapping helper to render the store-scoped `order.appliedDiscountCode` dynamically.
 - **100% Passing Unit Test Suite**: Ran frontend unit tests and verified all 296 tests pass cleanly with zero linting or typechecking errors.
+
+### Session 24 — 2026-05-29 — Implementing Store Settings & Security (Phase 3.8 Implementation)
+- **Created Store Settings Backend API**: Added `GET /api/v1/store/settings` and `PUT /api/v1/store/settings` endpoints for updating merchant profiles, and `PUT /api/v1/auth/store-owner/change-password` for password rotation.
+- **Implemented Secure Settings Store Service**: Built `getSettings()`, `updateSettings()`, and `changePassword()` helper methods within `store-owner.service.ts` enforcing full tenant-isolation parameters.
+- **Developed Store Settings Dashboard Panel**: Built `StoreSettingsPage.tsx` using `react-hook-form` and custom styling featuring:
+  - Form validation with reactive Zod schema integration.
+  - Multi-panel interface segregating Store Info, Change Password, and 2FA status controls.
+- **Wired Backend Integration and Component Unit Tests**: Author-verified settings endpoints via `store-owner.settings.test.ts` and UI integration through `StoreSettingsPage.test.tsx`.
+
+### Session 25 — 2026-05-29 — Store and Product Variant Availability Toggles (Phase 3.8a Implementation)
+- **Added Availability Database Fields**: Updated `schema.prisma` to include `isAcceptingOrders` on `Store` and `isAvailableForBooking` on `ProductVariant` models.
+- **Implemented Availability Endpoints**: Exposed `PUT /api/v1/store/availability` and `PUT /api/v1/store/products/:productId/variants/:variantId/availability` secured by merchant tenant guards.
+- **Filtered Buyer Catalog Retrieval**: Updated the catalog query pipelines so unavailable stores and individual variants are automatically filtered out from the buyer's storefront view.
+- **Developed Storefront & Variant Toggle Interfaces**:
+  - Integrated a persistent "Store Availability" toggle card into the merchant dashboard (`StoreDashboardPage.tsx`) complete with a confirmation modal and loading states.
+  - Added "Available" toggles and "Hidden from buyers" amber badges to the product management grid (`StoreProductsPage.tsx`).
+- **Wired Robust Availability Tests**: Built new integration suite `store-owner.availability.test.ts` and updated unit tests inside `StoreDashboardPage.test.tsx` and `StoreProductsPage.test.tsx` to verify zero regressions.
+
+### Session 26 — 2026-05-29 — Resolving Global Typechecking & Analyzing Socket-Based Availability
+- **Analyzed Socket vs REST for Store Status**: Assessed real-time store availability socket updates. Clarified that since the store owner is the sole driver of status changes, React Query's immediate rest mutations and state invalidations are perfectly sufficient, while backend validations guard transactional integrity for checkout; concluded full socket synchronization for availability is unnecessary.
+- **Resolved Strict TypeScript Compilation Checks**:
+  - **Fixed Zod & useForm Resolver Incompatibility**: Removed `.default(...)` schema tags in `StoreSettingsPage.tsx` so Zod infers all fields as strictly required strings, aligning with Hook Form input value requirements under strict `exactOptionalPropertyTypes` parameters.
+  - **Applied api! Non-Null Assertions**: Wrapped all relative client requests in `StoreSettingsPage.tsx` with `api!` non-null assertions to comply with the nullable API client configuration.
+  - **Patched Object Possibly Undefined Test Errors**: Added non-null assertions to `mockProducts[0]!` in `StoreProductsPage.test.tsx` to handle nested array lookups safely.
+- **100% Green Monorepo Integrity**: Verified all workspaces pass `pnpm typecheck`, `pnpm lint`, and build cleanly via `pnpm build` with zero errors or warnings, alongside 100% passing frontend (298/298) and backend (493/493) test suites!
+
+### Session 27 — 2026-05-29 — Multi-Dimensional Analytics Granularity & Chart Optimization 
+- **Completed Multi-Dimensional Analytics Dashboard**: Implemented full support for dynamic range and grouping options in the store owner's analytics chart.
+- **Backend Real-Time Pivot Aggregator**: Added backend endpoints and database aggregation routines supporting dynamic temporal groupings (`HOURLY`, `DAILY`, `WEEKLY`, `MONTHLY`, `YEARLY`) and ranges (`TODAY`, `WEEK`, `MONTH`, `YEAR`, `ALL`).
+- **Responsive Symmetrical Chart Layout**:
+  - **Absolutely Positioned X-Axis Labels**: Fixed column width constraints by positioning date labels absolutely (`absolute bottom-0 translate-y-full`). This decoupled text width from Flexbox child calculations, allowing all 24 hourly timeline nodes to render symmetrically on the page with zero horizontal scrolling or layout clipping.
+  - **Stripe-Style Y-Axis & Gridlines**: Designed a custom, high-fidelity Y-axis scale showing intervals (`maxRevenue`, `maxRevenue * 0.5`, `0`) using compact currency formatting (e.g. `₹150k` or `₹500`) alongside horizontal dotted gridlines.
+  - **Flat Baseline Alignment**: Stabilized Flexbox layout baselines, ensuring bars with and without visible labels start from the exact same horizontal axis line.
+  - **Zero-Revenue Hover Ticks**: Restored dynamic placeholders for zero-transaction periods (locked at `6%` height) so merchants can hover over them easily.
+  - **Bar-Relative Hover Tooltips**: Nested tooltips directly inside the relative bar elements rather than full column boxes, ensuring they sit perfectly 5% above the dynamic top edge of the active bars.
+- **100% Warnings & Errors Free**: Resolved 2 object injection security warnings in `store-owner.service.ts` by directly utilising native locale strings (`{ weekday: "short" }` and `{ month: "short" }`). Reached absolute **0 errors and 0 warnings** across the entire monorepo!

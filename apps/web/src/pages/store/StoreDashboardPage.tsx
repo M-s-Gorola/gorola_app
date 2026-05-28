@@ -8,7 +8,7 @@ import {
   ShoppingBag,
   TrendingUp} from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 
@@ -55,6 +55,12 @@ export function StoreDashboardPage(): ReactElement {
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
 
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+
+  const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
+  const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+
   useEffect(() => {
     if (!storeId || !accessToken) return;
 
@@ -92,7 +98,7 @@ export function StoreDashboardPage(): ReactElement {
     queryKey: ["store", "profile"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      const res = await api.get<{ success: boolean; data: { storeType: string; isAcceptingOrders: boolean } }>("/api/v1/store/profile");
       return res.data.data;
     },
     enabled: !!storeId
@@ -100,16 +106,39 @@ export function StoreDashboardPage(): ReactElement {
 
   const isBooking = storeProfile?.storeType === "BOOKING_COMMERCE";
 
+  const handleToggleAvailability = async (newValue: boolean) => {
+    if (!newValue) {
+      setShowConfirmModal(true);
+    } else {
+      await updateAvailability(true);
+    }
+  };
+
+  const updateAvailability = async (value: boolean) => {
+    setIsUpdating(true);
+    try {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put("/api/v1/store/availability", { isAcceptingOrders: value });
+      await queryClient.invalidateQueries({ queryKey: ["store", "profile"] });
+    } catch (err) {
+      console.error("Failed to update store availability", err);
+    } finally {
+      setIsUpdating(false);
+      setShowConfirmModal(false);
+    }
+  };
+
   const { data: dashboard, isLoading, error } = useQuery<DashboardData>({
-    queryKey: ["store", "dashboard"],
+    queryKey: ["store", "dashboard", range, groupBy],
     queryFn: async () => {
       if (!api) {
         throw new Error("API helper not initialized");
       }
-      const res = await api.get<DashboardEnvelope>("/api/v1/store/dashboard");
+      const res = await api.get<DashboardEnvelope>(`/api/v1/store/dashboard?range=${range}&groupBy=${groupBy}`);
       return res.data.data;
     },
-    staleTime: 60000 // 60 seconds
+    staleTime: 60000, // 60 seconds
+    placeholderData: (prev) => prev
   });
 
   const formatCurrency = (val: number): string => {
@@ -120,15 +149,19 @@ export function StoreDashboardPage(): ReactElement {
   };
 
   const formatDateLabel = (dateStr: string): string => {
-    try {
-      const date = new Date(dateStr);
-      return date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
-    } catch {
-      return dateStr;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      try {
+        const date = new Date(dateStr);
+        const formatted = date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
+        return formatted === "Invalid Date" ? dateStr : formatted;
+      } catch {
+        return dateStr;
+      }
     }
+    return dateStr;
   };
 
-  if (isLoading) {
+  if (isLoading && !dashboard) {
     return (
       <div className="space-y-8 animate-pulse">
         {/* KPI Skeleton Grid */}
@@ -182,6 +215,32 @@ export function StoreDashboardPage(): ReactElement {
   // Calculate chart metrics
   const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1);
 
+  const formatYAxisLabel = (val: number): string => {
+    if (val >= 1000) {
+      return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+    }
+    return `₹${Math.round(val)}`;
+  };
+
+  const gapClass = dashboard.weeklyRevenue.length > 20
+    ? "gap-1 sm:gap-1.5"
+    : dashboard.weeklyRevenue.length > 10
+    ? "gap-2"
+    : "gap-4";
+
+  const barMaxWidthClass = dashboard.weeklyRevenue.length > 20
+    ? "max-w-[8px] sm:max-w-[12px]"
+    : dashboard.weeklyRevenue.length > 10
+    ? "max-w-[16px]"
+    : "max-w-[40px]";
+
+  const shouldShowLabel = (idx: number, total: number): boolean => {
+    if (total <= 10) return true;
+    if (total <= 15) return idx % 2 === 0;
+    if (total <= 24) return idx % 4 === 0 || idx === total - 1;
+    return idx % 5 === 0 || idx === total - 1;
+  };
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -193,6 +252,51 @@ export function StoreDashboardPage(): ReactElement {
           </p>
         </div>
       </header>
+
+      {/* Store Availability Toggle Card */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm hover:shadow-md transition-all duration-300">
+        <div className="flex items-center gap-4">
+          <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors ${
+            storeProfile?.isAcceptingOrders ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
+          }`}>
+            <ShoppingBag className="h-6 w-6" />
+          </div>
+          <div>
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal flex items-center gap-2">
+              Store Status:{" "}
+              <span className={`text-sm px-2.5 py-0.5 rounded-full font-sans font-bold ${
+                storeProfile?.isAcceptingOrders ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+              }`}>
+                {storeProfile?.isAcceptingOrders ? "Accepting Orders" : "Closed"}
+              </span>
+            </h2>
+            <p className="text-xs text-gorola-slate font-dm-sans mt-0.5">
+              {storeProfile?.isAcceptingOrders
+                ? "Your store is active, and products/services are visible to buyers on the app."
+                : "Your store is hidden. Buyers cannot browse or book your products/services."}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center">
+          <button
+            role="switch"
+            aria-checked={storeProfile?.isAcceptingOrders ?? false}
+            aria-label="Toggle store status"
+            disabled={isUpdating || storeProfile === undefined}
+            onClick={() => handleToggleAvailability(!storeProfile?.isAcceptingOrders)}
+            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+              storeProfile?.isAcceptingOrders ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                storeProfile?.isAcceptingOrders ? "translate-x-6" : "translate-x-1"
+              }`}
+            />
+          </button>
+        </div>
+      </div>
 
       {/* KPI Cards Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
@@ -290,37 +394,127 @@ export function StoreDashboardPage(): ReactElement {
       {/* Main Panel layout Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Weekly Revenue Trend Chart */}
-        <div className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col`}>
-          <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-6">
-            Weekly Revenue Trend
-          </h2>
+        <div className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden`}>
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
+              {range === "TODAY"
+                ? "Hourly Revenue Today"
+                : range === "WEEK"
+                ? "Weekly Revenue Trend"
+                : range === "MONTH"
+                ? "Monthly Revenue Trend"
+                : range === "YEAR"
+                ? "Yearly Revenue Trend"
+                : "All-Time Revenue Trend"}
+            </h2>
+            
+            {/* Elegant control panel */}
+            <div className="flex items-center gap-3">
+              {/* Range Select */}
+              <div className="relative">
+                <select
+                  data-testid="analytics-range-select"
+                  value={range}
+                  onChange={(e) => {
+                    const nextRange = e.target.value as "TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL";
+                    setRange(nextRange);
+                    // Guardrail: today forces Hourly. Other ranges default logically.
+                    if (nextRange === "TODAY") {
+                      setGroupBy("HOURLY");
+                    } else if (nextRange === "WEEK" || nextRange === "MONTH") {
+                      setGroupBy("DAILY");
+                    } else if (nextRange === "YEAR") {
+                      setGroupBy("MONTHLY");
+                    } else if (nextRange === "ALL") {
+                      setGroupBy("YEARLY");
+                    }
+                  }}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                >
+                  <option value="TODAY">Today</option>
+                  <option value="WEEK">Last 7 Days</option>
+                  <option value="MONTH">Last 30 Days</option>
+                  <option value="YEAR">Current Year</option>
+                  <option value="ALL">All Time</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              </div>
+
+              {/* GroupBy Select */}
+              <div className="relative">
+                <select
+                  data-testid="analytics-groupby-select"
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
+                  disabled={range === "TODAY"}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {range === "TODAY" ? (
+                    <option value="HOURLY">Hourly</option>
+                  ) : (
+                    <>
+                      <option value="HOURLY">Hourly (Pattern)</option>
+                      <option value="DAILY">Daily</option>
+                      <option value="MONTHLY" disabled={range === "WEEK" || range === "MONTH"}>Monthly</option>
+                      <option value="YEARLY" disabled={range !== "ALL"}>Yearly</option>
+                    </>
+                  )}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              </div>
+            </div>
+          </div>
           {/* Custom SVG Bar Chart */}
-          <div className="relative flex-1 min-h-[260px] flex items-end gap-4 w-full pt-6">
-            {dashboard.weeklyRevenue.map((item, index) => {
-              const barHeightPct = (item.revenue / maxRevenue) * 85 + 5; // bounds 5%-90%
-              const isToday = index === dashboard.weeklyRevenue.length - 1;
-              return (
-                <div key={item.date} className="flex-1 flex flex-col items-center group h-full justify-end">
-                  {/* Tooltip on hover */}
-                  <div className="opacity-0 group-hover:opacity-100 absolute bottom-[90%] bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-10 pointer-events-none shadow-md">
-                    Revenue: {formatCurrency(item.revenue)}
-                  </div>
-                  {/* The bar */}
-                  <div
-                    style={{ height: `${barHeightPct}%` }}
-                    className={`w-full max-w-[40px] rounded-t-xl transition-all duration-300 group-hover:opacity-90 ${
-                      isToday
-                        ? "bg-gorola-saffron shadow-lg shadow-gorola-saffron/10"
-                        : "bg-gorola-pine"
-                    }`}
-                  />
-                  {/* Date label */}
-                  <span className="text-[10px] text-gorola-slate/60 mt-3 font-semibold whitespace-nowrap">
-                    {formatDateLabel(item.date)}
-                  </span>
-                </div>
-              );
-            })}
+          <div className="flex-1 min-h-[260px] w-full select-none flex items-stretch mt-4">
+            {/* Y-Axis Scale Labels */}
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 select-none text-right min-w-[50px] border-r border-gorola-charcoal/5">
+              <span>{formatYAxisLabel(maxRevenue)}</span>
+              <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
+              <span>{formatYAxisLabel(0)}</span>
+            </div>
+
+            {/* Chart Area with Gridlines & Bars */}
+            <div className="flex-1 h-full relative ml-3">
+              {/* Gridlines */}
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
+                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
+                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
+                <div className="w-full border-b border-gorola-charcoal/10" />
+              </div>
+
+              {/* Bars container */}
+              <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${gapClass} pr-4 z-10`}>
+                {dashboard.weeklyRevenue.map((item, index) => {
+                  const barHeightPct = maxRevenue > 0 && item.revenue > 0 ? (item.revenue / maxRevenue) * 94 + 6 : 6;
+                  const isToday = index === dashboard.weeklyRevenue.length - 1;
+                  return (
+                    <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
+                      {/* The bar */}
+                      <div
+                        style={{ height: `${barHeightPct}%` }}
+                        className={`relative w-full ${barMaxWidthClass} rounded-t-sm transition-all duration-300 group-hover:opacity-90 ${
+                          isToday
+                            ? "bg-gorola-saffron shadow-lg shadow-gorola-saffron/10"
+                            : "bg-gorola-pine"
+                        }`}
+                      >
+                        {/* Tooltip on hover */}
+                        <div className="opacity-0 group-hover:opacity-100 absolute bottom-[105%] left-1/2 -translate-x-1/2 bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-20 pointer-events-none shadow-md whitespace-nowrap">
+                          {formatDateLabel(item.date)} • {formatCurrency(item.revenue)}
+                        </div>
+                      </div>
+
+                      {/* Date label (absolutely positioned below baseline) */}
+                      <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-slate/60 font-semibold whitespace-nowrap mt-1 select-none ${
+                        shouldShowLabel(index, dashboard.weeklyRevenue.length) ? "" : "invisible"
+                      }`}>
+                        {formatDateLabel(item.date)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         </div>
 
@@ -447,6 +641,36 @@ export function StoreDashboardPage(): ReactElement {
           </table>
         </div>
       </div>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Confirm Store Closure
+            </h3>
+            <p className="text-sm text-gorola-slate font-dm-sans mt-3">
+              Hiding your store will remove all your products from the buyer app. Are you sure?
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                disabled={isUpdating}
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 border border-gorola-charcoal/10 hover:bg-gorola-charcoal/5 rounded-xl font-bold text-sm text-gorola-slate transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isUpdating}
+                onClick={() => updateAvailability(false)}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold text-sm shadow-sm transition-colors"
+              >
+                {isUpdating ? "Confirming..." : "Yes, Hide Store"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
