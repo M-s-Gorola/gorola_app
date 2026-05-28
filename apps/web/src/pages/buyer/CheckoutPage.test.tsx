@@ -163,6 +163,8 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     expect(screen.getByRole("heading", { name: /^Review$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Home");
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Near landmark text here area tenchars");
 
     await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
 
@@ -201,6 +203,11 @@ describe("CheckoutPage", () => {
     fireEvent.change(landmark, { target: { value: landmarkText } });
 
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    
+    expect(screen.getByRole("heading", { name: /^Review$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("New Location");
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent(landmarkText);
+
     await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
 
     await waitFor(() => {

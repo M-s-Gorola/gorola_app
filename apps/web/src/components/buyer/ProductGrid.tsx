@@ -388,7 +388,8 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                       quantity: 1,
                       productName: item.name,
                       unitPrice: Number(item.price),
-                      variantLabel: item.unit
+                      variantLabel: item.unit,
+                      storeId: item.storeId
                     });
                     syncAddCartItem(item.highestPricedVariantId, 1);
                   }}

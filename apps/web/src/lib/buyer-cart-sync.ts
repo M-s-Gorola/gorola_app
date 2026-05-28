@@ -7,6 +7,7 @@ type CartGetEnvelope = {
     items?: unknown;
     activeOffer?: ActiveOffer | null;
     activeOffers?: ActiveOffer[];
+    storeId?: string | null;
   };
   success?: boolean;
 };
@@ -68,6 +69,7 @@ export async function syncBuyerCartFromServer(): Promise<void> {
   const items = res.data.data?.items;
   const activeOffer = res.data.data?.activeOffer;
   const activeOffers = res.data.data?.activeOffers ?? (activeOffer ? [activeOffer] : []);
+  const storeId = res.data.data?.storeId ?? null;
   const serverLines = mapBuyerCartItemsToLines(items);
 
   const localLines = useCartStore.getState().lines;
@@ -96,8 +98,10 @@ export async function syncBuyerCartFromServer(): Promise<void> {
         useCartStore.getState().replaceLines(retryLines);
         const retryOffer = retryRes.data.data?.activeOffer ?? null;
         const retryOffers = retryRes.data.data?.activeOffers ?? (retryOffer ? [retryOffer] : []);
+        const retryStoreId = retryRes.data.data?.storeId ?? null;
         useCartStore.getState().setActiveOffer(retryOffer);
         useCartStore.getState().setActiveOffers(retryOffers);
+        useCartStore.getState().setStoreId(retryStoreId);
       }
       // If still empty after failure, we just keep local state as is to prevent the "zero out" bug.
       return;
@@ -108,8 +112,10 @@ export async function syncBuyerCartFromServer(): Promise<void> {
     useCartStore.getState().replaceLines(finalLines);
     const finalOffer = secondRes.data.data?.activeOffer ?? null;
     const finalOffers = secondRes.data.data?.activeOffers ?? (finalOffer ? [finalOffer] : []);
+    const finalStoreId = secondRes.data.data?.storeId ?? null;
     useCartStore.getState().setActiveOffer(finalOffer);
     useCartStore.getState().setActiveOffers(finalOffers);
+    useCartStore.getState().setStoreId(finalStoreId);
     return;
   }
 
@@ -119,4 +125,5 @@ export async function syncBuyerCartFromServer(): Promise<void> {
   useCartStore.getState().replaceLines(serverLines);
   useCartStore.getState().setActiveOffer(activeOffer ?? null);
   useCartStore.getState().setActiveOffers(activeOffers);
+  useCartStore.getState().setStoreId(storeId);
 }

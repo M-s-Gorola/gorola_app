@@ -184,9 +184,10 @@ describe("Booking Discount Integration Tests", () => {
 
     expect(Number(dbOrder.subtotal)).toBe(1000);
     expect(Number(dbOrder.total)).toBe(800);
+    expect(dbOrder.appliedDiscountCode).toBe("SAVE20");
 
     const dbDiscount = await db.discount.findUniqueOrThrow({
-      where: { code: "SAVE20" }
+      where: { storeId_code: { storeId: store.id, code: "SAVE20" } }
     });
     expect(dbDiscount.usedCount).toBe(1);
   });
@@ -265,6 +266,7 @@ describe("Booking Discount Integration Tests", () => {
     // Total should be 1000 - 200 - 100 = 700
     expect(Number(dbOrder.subtotal)).toBe(1000);
     expect(Number(dbOrder.total)).toBe(700);
+    expect(dbOrder.appliedDiscountCode).toBe("SAVE20");
   });
 
   it("POST /api/v1/bookings with an invalid or expired discount code returns a 400 Bad Request", async () => {

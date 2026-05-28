@@ -137,11 +137,17 @@ export class BookingOrderService {
     // --- Discount & Offer logic matching BuyerCheckoutService ---
     let appliedDiscountAmount = new Prisma.Decimal(0);
     let discountIdToIncrement: string | null = null;
+    let normalizedCode: string | null = null;
 
     if (discountCode) {
-      const normalizedCode = discountCode.trim().toUpperCase();
+      normalizedCode = discountCode.trim().toUpperCase();
       const discount = await this.db.discount.findUnique({
-        where: { code: normalizedCode }
+        where: {
+          storeId_code: {
+            storeId,
+            code: normalizedCode
+          }
+        }
       });
 
       if (!discount || !discount.isActive) {
@@ -241,6 +247,7 @@ export class BookingOrderService {
           landmarkDescription: address.landmarkDescription,
           addressLabel: address.label,
           flatRoom: address.flatRoom,
+          appliedDiscountCode: discountIdToIncrement ? normalizedCode : null,
           items: {
             create: items.map((item) => {
               const v = variantMap.get(item.variantId)!;

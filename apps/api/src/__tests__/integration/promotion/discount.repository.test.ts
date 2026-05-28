@@ -85,7 +85,7 @@ describe("DiscountRepository", () => {
       endsAt: new Date("2026-03-20T00:00:00.000Z")
     });
 
-    const found = await repo.findActiveByCode("ACTIVE", now);
+    const found = await repo.findActiveByCode("ACTIVE", store.id, now);
     expect(found?.id).toBe(d.id);
   });
 
@@ -99,7 +99,7 @@ describe("DiscountRepository", () => {
       endsAt: new Date("2026-01-20T00:00:00.000Z")
     });
 
-    const found = await repo.findActiveByCode("OLD", new Date("2026-03-01T00:00:00.000Z"));
+    const found = await repo.findActiveByCode("OLD", store.id, new Date("2026-03-01T00:00:00.000Z"));
     expect(found).toBeNull();
   });
 

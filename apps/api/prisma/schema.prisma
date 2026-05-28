@@ -276,6 +276,7 @@ model Order {
   scheduledFor        DateTime?
   rating              Boolean?
   ratingComment       String?
+  appliedDiscountCode String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -374,8 +375,8 @@ model Offer {
 
 model Discount {
   id             String       @id @default(cuid())
-  storeId        String?
-  code           String       @unique
+  storeId        String
+  code           String
   discountType   DiscountType
   discountValue  Decimal      @db.Decimal(10, 2)
   usageLimit     Int?
@@ -386,8 +387,9 @@ model Discount {
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  store          Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  store          Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@unique([storeId, code])
   @@index([storeId, isActive])
   @@index([code, isActive])
   @@index([startsAt, endsAt])

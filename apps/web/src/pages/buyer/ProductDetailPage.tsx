@@ -277,7 +277,8 @@ export function ProductDetailPage(): ReactElement {
                       quantity: localQuantity,
                       productName: query.data.name,
                       unitPrice: Number(selected.price),
-                      variantLabel: selected.label
+                      variantLabel: selected.label,
+                      storeId: query.data.store.id
                     });
                     if (accessToken === null) {
                       return;

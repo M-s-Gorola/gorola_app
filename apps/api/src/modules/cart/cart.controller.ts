@@ -76,12 +76,14 @@ type SerializedBuyerCart =
       userId: string;
       activeOffer?: SerializedActiveOffer | null;
       activeOffers?: SerializedActiveOffer[];
+      storeId?: string | null;
     }
   | {
       items: [];
       userId: string;
       activeOffer?: null;
       activeOffers?: [];
+      storeId?: null;
     };
 
 function toIso(d: Date): string {
@@ -141,8 +143,9 @@ function serializeBuyerCart(
   activeOffers: SerializedActiveOffer[] = []
 ): SerializedBuyerCart {
   if (!("id" in cart)) {
-    return { items: [], userId: cart.userId, activeOffer: null, activeOffers: [] };
+    return { items: [], userId: cart.userId, activeOffer: null, activeOffers: [], storeId: null };
   }
+  const storeId = cart.items[0]?.productVariant.product.storeId ?? null;
   return {
     createdAt: toIso(cart.createdAt),
     id: cart.id,
@@ -150,7 +153,8 @@ function serializeBuyerCart(
     updatedAt: toIso(cart.updatedAt),
     userId: cart.userId,
     activeOffer: activeOffers[0] ?? null,
-    activeOffers
+    activeOffers,
+    storeId
   };
 }
 

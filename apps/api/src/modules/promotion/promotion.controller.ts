@@ -19,7 +19,8 @@ type SuccessEnvelope<T> = {
 
 const validateDiscountSchema = z.object({
   code: z.string().min(1, "Discount code is required"),
-  subtotal: z.coerce.number().min(0, "Subtotal must be non-negative")
+  subtotal: z.coerce.number().min(0, "Subtotal must be non-negative"),
+  storeId: z.string().min(1, "Store ID is required")
 });
 
 function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
@@ -85,8 +86,9 @@ export function registerPromotionRoutes(
 
     const code = parsed.data.code.trim().toUpperCase();
     const subtotal = parsed.data.subtotal;
+    const storeId = parsed.data.storeId;
     const discount = await getPrismaClient().discount.findFirst({
-      where: { code }
+      where: { storeId, code }
     });
     if (discount === null) {
       return success(request, reply, { valid: false as const });
@@ -112,8 +114,8 @@ export function registerPromotionRoutes(
     const discountValue = Number(discount.discountValue);
     const amountSaved =
       discount.discountType === "PERCENTAGE"
-        ? Number(((subtotal * discountValue) / 100).toFixed(2))
-        : Number(discountValue.toFixed(2));
+          ? Number(((subtotal * discountValue) / 100).toFixed(2))
+          : Number(discountValue.toFixed(2));
 
     return success(request, reply, {
       amountSaved: Math.max(0, Math.min(subtotal, amountSaved)),

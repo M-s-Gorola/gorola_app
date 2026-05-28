@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
+import { Home } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -128,6 +129,29 @@ export function CheckoutPage(): ReactElement {
   }, [appliedOffers]);
 
   const total = Math.max(subtotal + DELIVERY_FEE - discountSavedAmount - offerSavedAmount, 0);
+
+  const selectedAddressLabel = useMemo(() => {
+    if (deliveryChoice === "new") {
+      return saveAddress && addressLabel.trim().length > 0 ? addressLabel.trim() : null;
+    }
+    const addr = addressesList.find((a) => a.id === deliveryChoice);
+    return addr ? addr.label : null;
+  }, [deliveryChoice, saveAddress, addressLabel, addressesList]);
+
+  const selectedFlatRoom = useMemo(() => {
+    if (deliveryChoice === "new") {
+      return flatRoom.trim().length > 0 ? flatRoom.trim() : null;
+    }
+    return null;
+  }, [deliveryChoice, flatRoom]);
+
+  const selectedLandmark = useMemo(() => {
+    if (deliveryChoice === "new") {
+      return landmarkInput.trim();
+    }
+    const addr = addressesList.find((a) => a.id === deliveryChoice);
+    return addr ? addr.landmarkDescription : "";
+  }, [deliveryChoice, landmarkInput, addressesList]);
 
   /** Sync guard — double-clicks can fire two POSTs before mutation pending state updates in the DOM. */
   const placeOrderInFlightRef = useRef(false);
@@ -469,6 +493,27 @@ export function CheckoutPage(): ReactElement {
                 <span className="font-medium">
                   {paymentMethod === "COD" ? "Cash on delivery" : paymentMethod}
                 </span>
+              </div>
+            </div>
+
+            <div className="space-y-1 border-t border-gorola-pine/10 pt-3 text-left">
+              <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Delivery Address</p>
+              <div className="space-y-1 text-left" data-testid="review-delivery-address">
+                {selectedAddressLabel ? (
+                  <div className="flex items-center gap-1.5 font-dm-sans text-sm font-bold text-gorola-charcoal">
+                    <Home className="h-3.5 w-3.5 text-gorola-pine" />
+                    {selectedAddressLabel}
+                  </div>
+                ) : (
+                  <div className="flex items-center gap-1.5 font-dm-sans text-sm font-bold text-gorola-charcoal">
+                    <Home className="h-3.5 w-3.5 text-gorola-pine" />
+                    New Location
+                  </div>
+                )}
+                <p className="font-dm-sans text-sm text-gorola-slate">
+                  {selectedFlatRoom ? `${selectedFlatRoom}, ` : ""}
+                  {selectedLandmark}
+                </p>
               </div>
             </div>
           </div>

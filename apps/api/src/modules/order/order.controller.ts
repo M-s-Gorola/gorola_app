@@ -196,7 +196,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       const orders = await deps.orders.findByUserId(buyerId);
       return success(request, reply, {
         orders: orders.map((o) =>
-          serializeOrderResponse(o, { amount: inferDiscountAmount(o), code: null })
+          serializeOrderResponse(o, { amount: inferDiscountAmount(o), code: o.appliedDiscountCode })
         )
       });
     }
@@ -220,7 +220,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         reply,
         serializeOrderResponse(order, {
           amount: inferDiscountAmount(order),
-          code: null
+          code: order.appliedDiscountCode
         })
       );
     }
@@ -305,7 +305,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       return success(
         request,
         reply,
-        serializeOrderResponse(updated, { amount: inferDiscountAmount(updated), code: null })
+        serializeOrderResponse(updated, { amount: inferDiscountAmount(updated), code: updated.appliedDiscountCode })
       );
     }
   );

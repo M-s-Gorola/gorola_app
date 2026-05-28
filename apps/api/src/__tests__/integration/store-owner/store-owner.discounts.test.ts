@@ -262,7 +262,8 @@ describe("StoreOwner Discounts Integration Tests", () => {
       url: "/api/v1/promotions/discounts/validate",
       payload: {
         code: "SAVE10",
-        subtotal: 500
+        subtotal: 500,
+        storeId: storeA.id
       }
     });
     expect(validateRes.statusCode).toBe(422);
@@ -324,5 +325,79 @@ describe("StoreOwner Discounts Integration Tests", () => {
     });
     expect(recreateRes.statusCode).toBe(201);
     expect(recreateRes.json().data.code).toBe("SAVE10");
+  });
+
+  it("should allow different stores to create the same coupon code (tenant-isolated uniqueness)", async () => {
+    // 1. Setup Store A & Store B
+    const storeA = await storeRepo.create({
+      name: "Store A",
+      description: "Quick Commerce Store A",
+      phone: "+919999999901",
+      address: "Store A Address",
+      storeType: "QUICK_COMMERCE"
+    });
+
+    const storeB = await storeRepo.create({
+      name: "Store B",
+      description: "Booking Commerce Store B",
+      phone: "+919999999902",
+      address: "Store B Address",
+      storeType: "BOOKING_COMMERCE"
+    });
+
+    // 2. Setup Store Owners
+    const ownerA = await ownerRepo.create({
+      email: "owner.a.unique@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: storeA.id
+    });
+
+    const ownerB = await ownerRepo.create({
+      email: "owner.b.unique@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: storeB.id
+    });
+
+    const tokenA = await generateAccessToken(ownerA.id, "STORE_OWNER", storeA.id);
+    const tokenB = await generateAccessToken(ownerB.id, "STORE_OWNER", storeB.id);
+
+    const startsAt = new Date(Date.now() + 86400000).toISOString();
+    const endsAt = new Date(Date.now() + 86400000 * 5).toISOString();
+
+    // Store A creates code "SAVE20"
+    const postResA = await server.inject({
+      method: "POST",
+      url: "/api/v1/store/discounts",
+      headers: {
+        authorization: `Bearer ${tokenA}`
+      },
+      payload: {
+        code: "SAVE20",
+        discountType: "PERCENTAGE",
+        discountValue: 20,
+        maxUsageCount: 100,
+        startsAt,
+        endsAt
+      }
+    });
+    expect(postResA.statusCode).toBe(201);
+
+    // Store B creates the EXACT same code "SAVE20" -> should succeed if tenant-isolated
+    const postResB = await server.inject({
+      method: "POST",
+      url: "/api/v1/store/discounts",
+      headers: {
+        authorization: `Bearer ${tokenB}`
+      },
+      payload: {
+        code: "SAVE20",
+        discountType: "PERCENTAGE",
+        discountValue: 20,
+        maxUsageCount: 100,
+        startsAt,
+        endsAt
+      }
+    });
+    expect(postResB.statusCode).toBe(201);
   });
 });

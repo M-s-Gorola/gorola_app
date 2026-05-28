@@ -236,6 +236,7 @@ export function BookingTimeslotPage(): ReactElement {
         {
           code: couponCodeInput.trim().toUpperCase(),
           subtotal,
+          storeId: product?.store.id ?? "",
         }
       );
       if (res.data?.success && typeof res.data.data?.amountSaved === "number") {

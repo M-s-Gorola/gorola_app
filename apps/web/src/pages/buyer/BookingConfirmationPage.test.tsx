@@ -94,6 +94,8 @@ describe("BookingConfirmationPage", () => {
       },
       discountAmount: undefined as string | undefined,
       discountCode: undefined as string | null | undefined,
+      rating: null as boolean | null | undefined,
+      ratingComment: null as string | null | undefined,
     },
   });
 
@@ -206,5 +208,57 @@ describe("BookingConfirmationPage", () => {
     // 5. Toggle breakdown again to hide
     fireEvent.click(toggleChevron);
     expect(screen.queryByTestId("discount-breakdown")).not.toBeInTheDocument();
+  });
+
+  it("does not render rating/feedback form when status is not COMPLETED or DELIVERED", async () => {
+    apiGetSpy.mockResolvedValue({
+      data: mockBookingEnvelope("PENDING_APPROVAL"),
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    expect(screen.queryByTestId("rate-service-section")).not.toBeInTheDocument();
+  });
+
+  it("renders empty rating/feedback form when status is COMPLETED and rating is null", async () => {
+    const envelope = mockBookingEnvelope("COMPLETED");
+    envelope.data = {
+      ...envelope.data,
+      rating: null,
+      ratingComment: null,
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    
+    expect(screen.getByTestId("rate-service-section")).toBeInTheDocument();
+    expect(screen.getByText("Rate your service")).toBeInTheDocument();
+    expect(screen.getByText("How was your overall experience?")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Thumbs Up/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Thumbs Down/i })).toBeInTheDocument();
+    expect(screen.queryByPlaceholderText(/Any feedback for the store/i)).not.toBeInTheDocument();
+  });
+
+  it("displays existing service rating submitted state if already rated", async () => {
+    const envelope = mockBookingEnvelope("COMPLETED");
+    envelope.data = {
+      ...envelope.data,
+      rating: false,
+      ratingComment: "It was too late",
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    
+    expect(screen.getByTestId("rate-service-section")).toBeInTheDocument();
+    expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText(/"It was too late"/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
   });
 });

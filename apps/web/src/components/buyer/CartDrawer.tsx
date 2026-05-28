@@ -27,6 +27,7 @@ export function CartDrawer(): ReactElement | null {
   const discountError = useCartStore((s) => s.discountError);
   const setDiscountState = useCartStore((s) => s.setDiscountState);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const storeId = useCartStore((s) => s.storeId);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
@@ -358,7 +359,8 @@ export function CartDrawer(): ReactElement | null {
                   void api
                     .post("/api/v1/promotions/discounts/validate", {
                       code: discountCode.trim(),
-                      subtotal
+                      subtotal,
+                      storeId: storeId ?? ""
                     })
                     .then((response) => {
                       const amount = response.data?.data?.amountSaved;
