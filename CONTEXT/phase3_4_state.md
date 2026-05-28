@@ -19,10 +19,10 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-29
-- **Session Summary:** Completed Phase 3.7.2 (Booking Status Alignment & Coupon Serialization). Enabled native "REJECTED" rendering in the store and buyer UIs to replace inaccurate "CANCELLED" labels, and mapped "CANCELLED" in status transition history entries to display as "REJECTED" when the overall booking status is rejected. Mapped backend "DELIVERED" states to user-facing "COMPLETED" display labels in the timeline log. Resolved discount visibility issues by serializing the `appliedDiscountCode` in the order controller, rendering the real coupon code in both buyer and store receipt breakdowns. Fixed buyer receipt headers to state "Booking Rejected" and mapped the order history page badges to display "Rejected". Confirmed that 100% of frontend and backend tests pass perfectly, and the codebase is completely clean of linting and type errors.
+- **Session Summary:** Aligned coupon discount code visibility across both Booking Commerce and Quick Commerce flows. Replicated the dynamic `discountCode` receipt logic in Quick Commerce frontend files (`OrderConfirmationPage.tsx` and `StoreOrdersPage.tsx`), rendering the correct applied coupon code rather than the fallback label "Discount". Verified the whole monorepo is 100% green and clean.
 - **Next Session Must Start With:** Phase 3.8 — Store Settings & Security.
 
-- **In Progress Right Now:** None (Phase 3.7.2 Booking Status Alignment & Coupon Serialization completed).
+- **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -1594,3 +1594,9 @@ _(Append new entries here — never delete old entries.)_
   - Updated frontend test suite inside `BookingConfirmationPage.test.tsx` to assert `"Booking Rejected"` instead of the stale `"Booking Cancelled"`.
   - Created a new unit test in `StoreBookingsPage.test.tsx` verifying that a `"CANCELLED"` status transition log history entry dynamically maps and displays as `"REJECTED"` when `bookingOrder.approvalStatus` is `"REJECTED"`.
 - **100% Passing & Lint-Free**: Verified 100% passing test status across 55 test files and 290 total unit tests with completely clean global lints (`pnpm lint`) and typechecks (`pnpm typecheck`).
+
+### Session 23 — 2026-05-29 — Aligning Quick Commerce Coupon Receipt Labels (Phase 3.7.2 Parity)
+- **Aligned Quick Commerce Coupon Visibility**: Extended the successful coupon code receipt display fix from booking appointments to standard quick commerce transactions.
+- **Updated OrderConfirmationPage.tsx**: Refactored the `getAppliedDiscounts` remaining discount calculation to render `order.discount?.code` instead of the hardcoded fallback `"Discount"`.
+- **Updated StoreOrdersPage.tsx**: Expanded the `Order` TypeScript interface to include `appliedDiscountCode?: string | null` and refactored the receipt breakdown modal mapping helper to render the store-scoped `order.appliedDiscountCode` dynamically.
+- **100% Passing Unit Test Suite**: Ran frontend unit tests and verified all 296 tests pass cleanly with zero linting or typechecking errors.

@@ -13,6 +13,7 @@ import { StoreProductFormPage } from "@/pages/store/StoreProductFormPage";
 import { StoreProductsPage } from "@/pages/store/StoreProductsPage";
 import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
 import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
+import { StoreSettingsPage } from "@/pages/store/StoreSettingsPage";
 
 import { StoreRoute } from "./guards";
 
@@ -119,7 +120,7 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
       element={
         <StoreRoute>
           <StoreLayout>
-            <PlaceholderPage title="Settings" prefix={prefix} />
+            <StoreSettingsPage />
           </StoreLayout>
         </StoreRoute>
       }

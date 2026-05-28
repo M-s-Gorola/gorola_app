@@ -1,5 +1,6 @@
-import { AppError, ForbiddenError, NotFoundError } from "@gorola/shared";
+import { AppError, ForbiddenError, NotFoundError, UnauthorizedError } from "@gorola/shared";
 import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
+import { compare, hash } from "bcryptjs";
 
 export type DashboardKpiSummary = {
   todayOrderCount: number;
@@ -1150,6 +1151,113 @@ export class StoreOwnerService {
     return this.db.offer.update({
       where: { id: offerId },
       data: updateData
+    });
+  }
+
+  public async getSettings(storeId: string) {
+    const store = await this.db.store.findUnique({
+      where: { id: storeId }
+    });
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+
+    const owner = await this.db.storeOwner.findFirst({
+      where: { storeId }
+    });
+    if (!owner) {
+      throw new NotFoundError("Store owner not found");
+    }
+
+    let weatherModeDeliveryWindowStart = "";
+    let weatherModeDeliveryWindowEnd = "";
+    if (store.weatherModeDeliveryWindow) {
+      const match = store.weatherModeDeliveryWindow.match(/^(\d+)-(\d+)\s*min$/);
+      if (match) {
+        weatherModeDeliveryWindowStart = match[1];
+        weatherModeDeliveryWindowEnd = match[2];
+      }
+    }
+
+    return {
+      name: store.name,
+      description: store.description ?? "",
+      phone: store.phone ?? "",
+      address: store.address ?? "",
+      weatherModeDeliveryWindowStart,
+      weatherModeDeliveryWindowEnd,
+      email: owner.email,
+      totpEnabled: owner.totpEnabled
+    };
+  }
+
+  public async updateSettings(
+    storeId: string,
+    dto: {
+      name: string;
+      description?: string;
+      phone?: string;
+      address?: string;
+      weatherModeDeliveryWindowStart?: string;
+      weatherModeDeliveryWindowEnd?: string;
+    }
+  ) {
+    if (!dto.name || dto.name.trim() === "") {
+      throw new AppError("Store name cannot be empty", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    let weatherModeDeliveryWindow: string | null = null;
+    if (dto.weatherModeDeliveryWindowStart && dto.weatherModeDeliveryWindowEnd) {
+      weatherModeDeliveryWindow = `${dto.weatherModeDeliveryWindowStart}-${dto.weatherModeDeliveryWindowEnd} min`;
+    }
+
+    await this.db.store.update({
+      where: { id: storeId },
+      data: {
+        name: dto.name,
+        description: dto.description ?? null,
+        phone: dto.phone ?? null,
+        address: dto.address ?? null,
+        weatherModeDeliveryWindow
+      }
+    });
+  }
+
+  public async changePassword(
+    storeOwnerId: string,
+    dto: {
+      currentPassword?: string;
+      newPassword?: string;
+    }
+  ) {
+    if (!dto.currentPassword || !dto.newPassword) {
+      throw new AppError("Current password and new password are required", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    const owner = await this.db.storeOwner.findUnique({
+      where: { id: storeOwnerId }
+    });
+    if (!owner) {
+      throw new NotFoundError("Store owner not found");
+    }
+
+    const isMatch = await compare(dto.currentPassword, owner.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedError("Invalid current password");
+    }
+
+    const newHash = await hash(dto.newPassword, 8);
+    await this.db.storeOwner.update({
+      where: { id: storeOwnerId },
+      data: {
+        passwordHash: newHash
+      }
     });
   }
 }

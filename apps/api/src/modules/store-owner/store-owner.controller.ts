@@ -1100,6 +1100,91 @@ export function registerStoreOwnerRoutes(
       data: updated
     };
   });
+
+  // GET /api/v1/store/settings
+  app.get("/api/v1/store/settings", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const data = await storeOwnerService.getSettings(owner.storeId);
+    return {
+      success: true,
+      data,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/settings
+  const updateStoreSettingsSchema = z.object({
+    name: z.string().trim().min(1, "Store name is required"),
+    description: z.string().trim().optional(),
+    phone: z.string().trim().optional(),
+    address: z.string().trim().optional(),
+    weatherModeDeliveryWindowStart: z.string().trim().optional(),
+    weatherModeDeliveryWindowEnd: z.string().trim().optional()
+  });
+
+  app.put("/api/v1/store/settings", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = updateStoreSettingsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid settings data", parsed.error.flatten());
+    }
+
+    await storeOwnerService.updateSettings(owner.storeId, parsed.data);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/auth/store-owner/change-password
+  const changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(1, "New password is required")
+  });
+
+  app.put("/api/v1/auth/store-owner/change-password", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const parsed = changePasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid password data", parsed.error.flatten());
+    }
+
+    await storeOwnerService.changePassword(userId, parsed.data);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
 
 

@@ -59,6 +59,7 @@ type Order = {
   buyerMaskedPhone: string;
   items: OrderItem[];
   statusHistory: OrderStatusHistory[];
+  appliedDiscountCode?: string | null;
 };
 
 type OrdersEnvelope = {
@@ -209,7 +210,7 @@ interface StoreOffer {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: "Discount",
+        label: order.appliedDiscountCode ? `Discount (${order.appliedDiscountCode})` : "Discount",
         amount: remainingDiscount
       });
     }
