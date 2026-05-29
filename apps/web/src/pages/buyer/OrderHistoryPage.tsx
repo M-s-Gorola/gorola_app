@@ -237,10 +237,10 @@ export function OrderHistoryPage() {
       </header>
 
       {/* Filter Tabs */}
-      <div className="flex gap-2 p-1 bg-gorola-charcoal/[0.04] rounded-2xl mb-6 max-w-xl md:max-w-2xl w-full overflow-x-auto scrollbar-none">
+      <div className="flex flex-wrap gap-2 p-1 bg-gorola-charcoal/[0.04] rounded-2xl mb-6 w-full select-none">
         <button
           onClick={() => setFilter("all")}
-          className={`flex-1 py-2 px-4 text-center rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+          className={`flex-1 py-2 px-3 sm:px-4 text-center rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
             filter === "all"
               ? "bg-white text-gorola-charcoal shadow-sm"
               : "text-gorola-charcoal/50 hover:text-gorola-charcoal"
@@ -250,7 +250,7 @@ export function OrderHistoryPage() {
         </button>
         <button
           onClick={() => setFilter("quick")}
-          className={`flex-1 py-2 px-4 text-center rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+          className={`flex-1 py-2 px-3 sm:px-4 text-center rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
             filter === "quick"
               ? "bg-white text-gorola-pine shadow-sm"
               : "text-gorola-charcoal/50 hover:text-gorola-charcoal"
@@ -260,7 +260,7 @@ export function OrderHistoryPage() {
         </button>
         <button
           onClick={() => setFilter("booking")}
-          className={`flex-1 py-2 px-4 text-center rounded-xl text-xs md:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
+          className={`flex-1 py-2 px-3 sm:px-4 text-center rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
             filter === "booking"
               ? "bg-white text-indigo-600 shadow-sm"
               : "text-gorola-charcoal/50 hover:text-gorola-charcoal"
@@ -280,44 +280,44 @@ export function OrderHistoryPage() {
               data-testid="order-card"
               className="group relative bg-white border border-gorola-charcoal/10 rounded-2xl overflow-hidden hover:border-gorola-pine/30 transition-all duration-300 shadow-sm hover:shadow-md"
             >
-              <div className="p-5 flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <h3 className="font-bold text-lg text-gorola-charcoal">{order.store.name}</h3>
-                    <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${badge.classes}`}>
+              <div className="p-3.5 sm:p-5 flex flex-col md:flex-row md:items-center justify-between gap-2.5 md:gap-4">
+                <div className="space-y-1 min-w-0 w-full md:w-auto">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <h3 className="font-bold text-sm sm:text-lg text-gorola-charcoal truncate">{order.store.name}</h3>
+                    <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${badge.classes} shrink-0`}>
                       {badge.label}
                     </span>
                   </div>
-                  <p className="text-sm text-gorola-charcoal/40">
+                  <p className="text-[11px] sm:text-sm text-gorola-charcoal/40">
                     {format(new Date(order.createdAt), "MMM d, yyyy • h:mm a")}
                   </p>
                   
                   {isBooking && order.bookingOrder && (
-                    <div className="mt-2 space-y-1 text-xs text-gorola-charcoal/60 bg-gorola-charcoal/[0.02] p-2.5 rounded-xl border border-gorola-charcoal/5">
+                    <div className="mt-1 space-y-0.5 text-xs text-gorola-charcoal/60 bg-gorola-charcoal/[0.02] p-2 rounded-xl border border-gorola-charcoal/5">
                       <div className="flex items-center gap-1.5 font-semibold text-gorola-charcoal">
-                        <Clock className="w-3.5 h-3.5 text-gorola-pine" />
-                        <span>Scheduled: {format(new Date(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
+                        <Clock className="w-3.5 h-3.5 text-gorola-pine shrink-0" />
+                        <span className="truncate">Scheduled: {format(new Date(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
                       </div>
-                      <div className="pl-5">
+                      <div className="pl-5 text-[11px]">
                         Slot: {order.bookingOrder.timeslot}
                       </div>
                       {order.bookingOrder.requiresFasting && (
-                        <div className="pl-5 text-amber-600 font-bold flex items-center gap-1 mt-0.5">
+                        <div className="pl-5 text-amber-600 font-bold flex items-center gap-1 mt-0.5 text-[10px]">
                           <span>⚠️ Fasting Required (min 8-10 hours)</span>
                         </div>
                       )}
                     </div>
                   )}
 
-                  <div className="pt-2 text-sm text-gorola-charcoal/70">
+                  <div className="pt-0.5 text-xs sm:text-sm text-gorola-charcoal/70 truncate">
                     {order.items.map(i => `${i.quantity}x ${i.productName}`).join(", ")}
                   </div>
                 </div>
 
-                <div className="flex items-center gap-6">
-                  <div className="text-right">
-                    <p className="text-xs text-gorola-charcoal/40 uppercase tracking-widest font-bold">Total</p>
-                    <p className="text-xl font-black text-gorola-charcoal">₹{order.total}</p>
+                <div className="flex items-center justify-between md:justify-start gap-4 md:gap-6 w-full md:w-auto md:border-t-0 md:pt-0 shrink-0 mt-1 md:mt-0">
+                  <div className="text-left md:text-right">
+                    <p className="text-[10px] sm:text-xs text-gorola-charcoal/40 uppercase tracking-widest font-bold">Total</p>
+                    <p className="text-base sm:text-xl font-black text-gorola-charcoal">₹{order.total}</p>
                   </div>
                   
                   <div className="flex items-center gap-2">
@@ -329,21 +329,21 @@ export function OrderHistoryPage() {
                             navigate(`/bookings/new?productId=${firstItem.productId ?? ""}&variantId=${firstItem.productVariantId}`);
                           }
                         }}
-                        className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl font-bold text-sm transition-all duration-300 shadow-md shadow-indigo-600/10"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gorola-slate text-white hover:bg-gorola-slate/90 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 shadow-md shadow-gorola-slate/10"
                         aria-label="Book Again"
                       >
-                        <RefreshCcw className="w-4 h-4" />
+                        <RefreshCcw className="w-3.5 h-3.5" />
                         Book Again
                       </button>
                     ) : (
                       <button
                         onClick={() => reorderMutation.mutate(order.id)}
                         disabled={reorderMutation.isPending}
-                        className="flex items-center gap-2 px-4 py-2 bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl font-bold text-sm transition-all duration-300 disabled:opacity-50 shadow-md shadow-gorola-pine/10"
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl font-bold text-xs sm:text-sm transition-all duration-300 disabled:opacity-50 shadow-md shadow-gorola-pine/10"
                         aria-label="Reorder"
                       >
                         <RefreshCcw 
-                          className={`w-4 h-4 ${(reorderMutation.isPending && reorderMutation.variables === order.id) ? 'animate-spin' : ''}`} 
+                          className={`w-3.5 h-3.5 ${(reorderMutation.isPending && reorderMutation.variables === order.id) ? 'animate-spin' : ''}`} 
                         />
                         Reorder
                       </button>
@@ -356,9 +356,9 @@ export function OrderHistoryPage() {
                           navigate(`/orders/${order.id}`);
                         }
                       }}
-                      className="p-2 bg-gorola-charcoal/5 hover:bg-gorola-charcoal/10 rounded-xl text-gorola-charcoal/60 hover:text-gorola-charcoal transition-colors"
+                      className="p-1.5 sm:p-2 bg-gorola-charcoal/5 hover:bg-gorola-charcoal/10 rounded-xl text-gorola-charcoal/60 hover:text-gorola-charcoal transition-colors"
                     >
-                      <ChevronRight className="w-5 h-5" />
+                      <ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" />
                     </button>
                   </div>
                 </div>
@@ -366,7 +366,7 @@ export function OrderHistoryPage() {
 
               {/* Rating Section for Delivered Orders */}
               {order.status === "DELIVERED" && (
-                <div className="px-5 py-3 bg-gorola-charcoal/[0.02] border-t border-gorola-charcoal/5 space-y-3">
+                <div className="px-4 sm:px-5 py-2.5 sm:py-3 bg-gorola-charcoal/[0.02] border-t border-gorola-charcoal/5 space-y-2 sm:space-y-3">
                   <div className="flex items-center justify-between">
                     <div className="text-xs text-gorola-charcoal/40 font-medium">
                       {order.rating !== null ? (

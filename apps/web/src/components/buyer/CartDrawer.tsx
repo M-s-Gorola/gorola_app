@@ -71,6 +71,53 @@ export function CartDrawer(): ReactElement | null {
     [lines]
   );
 
+  const lastSubtotalRef = useRef(subtotal);
+  useEffect(() => {
+    if (subtotal !== lastSubtotalRef.current) {
+      lastSubtotalRef.current = subtotal;
+      if (subtotal === 0) {
+        setDiscountState({
+          code: "",
+          error: null,
+          savedAmount: 0
+        });
+        return;
+      }
+      if (api !== null && discountCode.trim().length > 0 && storeId !== null && savedAmount > 0) {
+        const activeCode = discountCode.trim();
+        void api
+          .post("/api/v1/promotions/discounts/validate", {
+            code: activeCode,
+            subtotal,
+            storeId
+          })
+          .then((response) => {
+            const amount = response.data?.data?.amountSaved;
+            if (response.data?.success === true && typeof amount === "number") {
+              setDiscountState({
+                code: activeCode,
+                error: null,
+                savedAmount: amount
+              });
+            } else {
+              setDiscountState({
+                code: activeCode,
+                error: "Invalid or expired discount code",
+                savedAmount: 0
+              });
+            }
+          })
+          .catch(() => {
+            setDiscountState({
+              code: activeCode,
+              error: "Could not validate discount code",
+              savedAmount: 0
+            });
+          });
+      }
+    }
+  }, [subtotal, discountCode, savedAmount, storeId, setDiscountState]);
+
   const appliedOffers = useMemo(() => {
     let currentSaved = 0;
     const list: Array<{ id: string; title: string; savedAmount: number }> = [];

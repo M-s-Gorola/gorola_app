@@ -146,7 +146,6 @@ describe("ProductGrid", () => {
     });
     renderGrid({ categoryId: "c1" });
     expect(await screen.findByText("Apple")).toBeInTheDocument();
-    expect(screen.getByText("Peak Mart")).toBeInTheDocument();
     expect(screen.getByText("Rs 220.00")).toBeInTheDocument();
 
     const img = screen.getByAltText("Apple");

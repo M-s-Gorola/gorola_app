@@ -66,7 +66,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
     ...(!isBooking
       ? [{ label: "Orders", path: getScopedPath("/store/orders", "store", isSubdomainMode) }]
       : []),
-    { label: "Products", path: getScopedPath("/store/products", "store", isSubdomainMode) },
+    { label: isBooking ? "Services" : "Products", path: getScopedPath("/store/products", "store", isSubdomainMode) },
     ...(isBooking
       ? [{ label: "Bookings", path: getScopedPath("/store/bookings", "store", isSubdomainMode) }]
       : []),
@@ -90,22 +90,30 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
           </Link>
         </div>
         <nav className="flex-1 space-y-1 px-4 py-6 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
-                    : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+          {storeProfile === undefined ? (
+            <div className="space-y-3 animate-pulse">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="h-10 bg-gorola-mint/10 rounded-xl" />
+              ))}
+            </div>
+          ) : (
+            navItems.map((item) => {
+              const isActive = location.pathname.startsWith(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                    isActive
+                      ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
+                      : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })
+          )}
         </nav>
         <div className="p-4 border-t border-gorola-mint/15 shrink-0">
           <Button className="w-full justify-start gap-2 rounded-xl" onClick={handleLogout} variant="ghost">
@@ -143,22 +151,30 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
 
         {/* Mobile Sub-Navigation Bar */}
         <nav className="flex md:hidden bg-white border-b border-gorola-mint/15 px-4 py-2 overflow-x-auto gap-2 scrollbar-none">
-          {navItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
-                  isActive
-                    ? "bg-gorola-pine text-white"
-                    : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+          {storeProfile === undefined ? (
+            <div className="flex gap-2 animate-pulse w-full">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-8 w-20 bg-gorola-mint/10 rounded-lg shrink-0" />
+              ))}
+            </div>
+          ) : (
+            navItems.map((item) => {
+              const isActive = location.pathname.startsWith(item.path);
+              return (
+                <Link
+                  key={item.path}
+                  to={item.path}
+                  className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
+                    isActive
+                      ? "bg-gorola-pine text-white"
+                      : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              );
+            })
+          )}
         </nav>
 
         {/* Dynamic Nested Content */}

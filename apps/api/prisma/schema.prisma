@@ -226,6 +226,8 @@ model StockMovement {
   quantity         Int
   stockQtyBefore   Int
   stockQtyAfter    Int
+  note             String?
+  reason           String?
   createdAt        DateTime          @default(now())
   productVariant   ProductVariant    @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
   order            Order?            @relation(fields: [orderId], references: [id], onDelete: Cascade)

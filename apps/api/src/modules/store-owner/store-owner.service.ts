@@ -2,6 +2,9 @@ import { AppError, ForbiddenError, NotFoundError, UnauthorizedError } from "@gor
 import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
 
+import { ProductVariantRepository } from "../catalog/variant.repository.js";
+import { StockMovementRepository } from "../inventory/stock-movement.repository.js";
+
 export type DashboardKpiSummary = {
   todayOrderCount: number;
   todayRevenue: number;
@@ -735,6 +738,7 @@ export class StoreOwnerService {
       unit?: string;
       lowStockThreshold?: number;
       isActive?: boolean;
+      isAvailableForBooking?: boolean;
     }
   ) {
     const product = await this.db.product.findUnique({
@@ -774,6 +778,7 @@ export class StoreOwnerService {
           ...(dto.unit ? { unit: dto.unit } : {}),
           ...(dto.lowStockThreshold !== undefined ? { lowStockThreshold: dto.lowStockThreshold } : {}),
           ...(dto.isActive !== undefined ? { isActive: dto.isActive } : {}),
+          ...(dto.isAvailableForBooking !== undefined ? { isAvailableForBooking: dto.isAvailableForBooking } : {}),
           isInStock,
           isLowStock
         }
@@ -1391,6 +1396,218 @@ export class StoreOwnerService {
       where: { id: variantId },
       data: {
         isAvailableForBooking: value
+      }
+    });
+  }
+
+  public async getStoreType(storeId: string): Promise<string> {
+    const store = await this.db.store.findUnique({
+      where: { id: storeId },
+      select: { storeType: true }
+    });
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+    return store.storeType;
+  }
+
+  private async enforceQuickCommerce(storeId: string) {
+    const storeType = await this.getStoreType(storeId);
+    if (storeType !== "QUICK_COMMERCE") {
+      throw new AppError("Operation not allowed on this store type", {
+        code: "INVALID_STORE_TYPE",
+        statusCode: 400
+      });
+    }
+  }
+
+  public async restockVariant(
+    storeId: string,
+    productId: string,
+    variantId: string,
+    addQty: number,
+    note?: string
+  ) {
+    await this.enforceQuickCommerce(storeId);
+
+    return this.db.$transaction(async (tx) => {
+      // 1. Verify product belongs to store
+      const product = await tx.product.findUnique({
+        where: { id: productId }
+      });
+      if (!product || product.storeId !== storeId) {
+        throw new ForbiddenError("Product does not belong to this store");
+      }
+
+      // 2. Increment stock using repository logic
+      const variantRepo = new ProductVariantRepository(this.db);
+      const { stockQtyBefore, stockQtyAfter } = await variantRepo.incrementStock(
+        variantId,
+        addQty,
+        storeId,
+        tx
+      );
+
+      // 3. Log stock movement
+      const movementRepo = new StockMovementRepository(this.db);
+      await movementRepo.create(
+        {
+          storeId,
+          productVariantId: variantId,
+          orderId: null,
+          type: "REFILL",
+          quantity: addQty,
+          stockQtyBefore,
+          stockQtyAfter,
+          ...(note ? { note } : {})
+        },
+        tx
+      );
+
+      // 4. Return updated variant
+      return tx.productVariant.findUniqueOrThrow({
+        where: { id: variantId }
+      });
+    });
+  }
+
+  public async adjustVariantStock(
+    storeId: string,
+    productId: string,
+    variantId: string,
+    setQty: number,
+    reason: string
+  ) {
+    await this.enforceQuickCommerce(storeId);
+
+    if (!reason || reason.trim() === "") {
+      throw new AppError("Adjustment reason is required", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    return this.db.$transaction(async (tx) => {
+      // 1. Verify product belongs to store
+      const product = await tx.product.findUnique({
+        where: { id: productId }
+      });
+      if (!product || product.storeId !== storeId) {
+        throw new ForbiddenError("Product does not belong to this store");
+      }
+
+      // 2. Set stock using repository logic
+      const variantRepo = new ProductVariantRepository(this.db);
+      const { stockQtyBefore, stockQtyAfter } = await variantRepo.setStock(
+        variantId,
+        setQty,
+        storeId,
+        tx
+      );
+
+      // 3. Log stock movement
+      const quantity = Math.abs(stockQtyAfter - stockQtyBefore);
+      const movementRepo = new StockMovementRepository(this.db);
+      await movementRepo.create(
+        {
+          storeId,
+          productVariantId: variantId,
+          orderId: null,
+          type: "ADJUSTMENT",
+          quantity,
+          stockQtyBefore,
+          stockQtyAfter,
+          reason
+        },
+        tx
+      );
+
+      // 4. Return updated variant
+      return tx.productVariant.findUniqueOrThrow({
+        where: { id: variantId }
+      });
+    });
+  }
+
+  public async updateLowStockThreshold(
+    storeId: string,
+    productId: string,
+    variantId: string,
+    threshold: number
+  ) {
+    await this.enforceQuickCommerce(storeId);
+
+    if (threshold < 0) {
+      throw new AppError("Threshold cannot be negative", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    return this.db.$transaction(async (tx) => {
+      // 1. Verify product belongs to store
+      const product = await tx.product.findUnique({
+        where: { id: productId }
+      });
+      if (!product || product.storeId !== storeId) {
+        throw new ForbiddenError("Product does not belong to this store");
+      }
+
+      const variant = await tx.productVariant.findUnique({
+        where: { id: variantId }
+      });
+      if (!variant || variant.productId !== productId) {
+        throw new NotFoundError("Product variant not found");
+      }
+
+      // 2. Update threshold & recalculate isLowStock
+      const isLowStock = variant.stockQty <= threshold;
+      return tx.productVariant.update({
+        where: { id: variantId },
+        data: {
+          lowStockThreshold: threshold,
+          isLowStock
+        }
+      });
+    });
+  }
+
+  public async getStockHistory(storeId: string, productId: string) {
+    await this.enforceQuickCommerce(storeId);
+
+    // 1. Verify product belongs to store
+    const product = await this.db.product.findUnique({
+      where: { id: productId },
+      include: { variants: true }
+    });
+    if (!product || product.storeId !== storeId) {
+      throw new ForbiddenError("Product does not belong to this store");
+    }
+
+    const variantIds = product.variants.map((v) => v.id);
+
+    // 2. Retrieve stock movements
+    return this.db.stockMovement.findMany({
+      where: {
+        productVariantId: { in: variantIds }
+      },
+      include: {
+        productVariant: {
+          select: {
+            id: true,
+            label: true,
+            unit: true,
+            product: {
+              select: {
+                id: true,
+                name: true
+              }
+            }
+          }
+        }
+      },
+      orderBy: {
+        createdAt: "desc"
       }
     });
   }

@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -7,7 +7,7 @@ import {
   Trash2
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useFieldArray, useForm } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
@@ -33,7 +33,8 @@ const rawProductFormSchema = z.object({
         stockQty: z.coerce.number().int().nonnegative("Stock quantity must be non-negative").default(0),
         unit: z.string().trim().min(1, "Unit is required"),
         lowStockThreshold: z.coerce.number().int().nonnegative().optional(),
-        isActive: z.boolean().optional().default(true)
+        isActive: z.boolean().optional().default(true),
+        isAvailableForBooking: z.boolean().optional().default(true)
       })
     )
     .min(1, "At least one variant is required")
@@ -82,6 +83,7 @@ type ProductDetailEnvelope = {
       unit: string;
       lowStockThreshold?: number | null;
       isActive?: boolean;
+      isAvailableForBooking?: boolean;
     }[];
   };
 };
@@ -93,6 +95,70 @@ export function StoreProductFormPage(): ReactElement {
   const isEditMode = !!productId;
 
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+  // 0. Fetch Store Owner Profile
+  const { data: profileData } = useQuery({
+    queryKey: ["store", "profile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE" } }>("/api/v1/store/profile");
+      return res.data.data;
+    }
+  });
+
+  const storeType = profileData?.storeType || "QUICK_COMMERCE";
+  const isBooking = storeType === "BOOKING_COMMERCE";
+  const term = isBooking ? "Service" : "Product";
+
+  // Modal states
+  const [restockVariant, setRestockVariant] = useState<{ id: string; label: string; stockQty: number } | null>(null);
+  const [adjustVariant, setAdjustVariant] = useState<{ id: string; label: string; stockQty: number } | null>(null);
+
+  // Form states for modals
+  const [restockQty, setRestockQty] = useState<string>("10");
+  const [restockNote, setRestockNote] = useState<string>("");
+  const [adjustQty, setAdjustQty] = useState<string>("");
+  const [adjustReason, setAdjustReason] = useState<string>("");
+  const [adjustReasonError, setAdjustReasonError] = useState<string>("");
+
+  // Restock Mutation
+  const restockMutation = useMutation({
+    mutationFn: async ({ variantId, addQty, note }: { variantId: string; addQty: number; note: string }) => {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put(`/api/v1/store/products/${productId}/variants/${variantId}/stock`, { addQty, note });
+    },
+    onSuccess: () => {
+      toast.success("Inventory restocked successfully");
+      setRestockVariant(null);
+      setRestockQty("10");
+      setRestockNote("");
+      queryClient.invalidateQueries({ queryKey: ["store", "products", productId] });
+    },
+    onError: (err: unknown) => {
+      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      toast.error(ax.response?.data?.error?.message || "Failed to restock variant");
+    }
+  });
+
+  // Adjust Mutation
+  const adjustMutation = useMutation({
+    mutationFn: async ({ variantId, setQty, reason }: { variantId: string; setQty: number; reason: string }) => {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put(`/api/v1/store/products/${productId}/variants/${variantId}/stock/adjust`, { setQty, reason });
+    },
+    onSuccess: () => {
+      toast.success("Stock quantity adjusted successfully");
+      setAdjustVariant(null);
+      setAdjustQty("");
+      setAdjustReason("");
+      setAdjustReasonError("");
+      queryClient.invalidateQueries({ queryKey: ["store", "products", productId] });
+    },
+    onError: (err: unknown) => {
+      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      toast.error(ax.response?.data?.error?.message || "Failed to adjust variant stock");
+    }
+  });
 
   // 1. Fetch Categories & Subcategories for Dropdown
   const { data: categoriesData, isLoading: isLoadingCats } = useQuery({
@@ -119,7 +185,7 @@ export function StoreProductFormPage(): ReactElement {
       subCategoryId: "",
       description: "",
       imageUrl: "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=300",
-      variants: [{ label: "", price: 0, stockQty: 0, unit: "kg", isActive: true }]
+      variants: [{ label: "", price: 0, stockQty: 0, unit: "kg", isActive: true, isAvailableForBooking: true }]
     },
     mode: "onSubmit"
   });
@@ -158,7 +224,8 @@ export function StoreProductFormPage(): ReactElement {
           stockQty: v.stockQty,
           unit: v.unit,
           lowStockThreshold: v.lowStockThreshold ?? undefined,
-          isActive: v.isActive ?? true
+          isActive: v.isActive ?? true,
+          isAvailableForBooking: v.isAvailableForBooking !== false
         }))
       });
     }
@@ -193,7 +260,8 @@ export function StoreProductFormPage(): ReactElement {
               stockQty: v.stockQty,
               unit: v.unit,
               lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
-              isActive: v.isActive !== false
+              isActive: v.isActive !== false,
+              isAvailableForBooking: isBooking ? (v.isActive !== false) : (v.isAvailableForBooking !== false)
             });
           });
 
@@ -207,13 +275,15 @@ export function StoreProductFormPage(): ReactElement {
               price: v.price,
               stockQty: v.stockQty,
               unit: v.unit,
-              lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold)
+              lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
+              isActive: isBooking ? (v.isActive !== false) : undefined,
+              isAvailableForBooking: isBooking ? (v.isActive !== false) : (v.isAvailableForBooking !== false)
             });
           });
 
         await Promise.all([...updateVariantPromises, ...createVariantPromises]);
 
-        toast.success("Product and variants updated successfully!");
+        toast.success(`${term} and variants updated successfully!`);
       } else {
         // Create Mode:
         await api.post("/api/v1/store/products", {
@@ -226,11 +296,13 @@ export function StoreProductFormPage(): ReactElement {
             price: v.price,
             stockQty: v.stockQty,
             unit: v.unit,
-            lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold)
+            lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
+            isActive: isBooking ? (v.isActive !== false) : undefined,
+            isAvailableForBooking: isBooking ? (v.isActive !== false) : (v.isAvailableForBooking !== false)
           }))
         });
 
-        toast.success("Product created successfully!");
+        toast.success(`${term} created successfully!`);
       }
 
       await Promise.all([
@@ -283,10 +355,10 @@ export function StoreProductFormPage(): ReactElement {
       {/* Header */}
       <div>
         <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">
-          {isEditMode ? "Edit Product" : "New Catalog Entry"}
+          {isEditMode ? `Edit ${term}` : `New ${term}`}
         </h1>
         <p className="text-sm text-gorola-slate font-dm-sans">
-          Configure product properties and individual pricing, unit, and stock metrics.
+          Configure {term.toLowerCase()} properties and individual pricing, unit, and {isBooking ? "" : "stock "}metrics.
         </p>
       </div>
 
@@ -301,12 +373,12 @@ export function StoreProductFormPage(): ReactElement {
             {/* Name */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-gorola-charcoal" htmlFor="product-name">
-                Product Name
+                {term} Name
               </label>
               <Input
                 id="product-name"
                 type="text"
-                placeholder="Fresh Organic Apples"
+                placeholder={isBooking ? "Consulting Session" : "Fresh Organic Apples"}
                 {...register("name")}
                 aria-invalid={errors.name ? "true" : undefined}
                 className="rounded-xl border-gorola-mint/20 placeholder-gorola-slate/50"
@@ -364,7 +436,7 @@ export function StoreProductFormPage(): ReactElement {
             {/* Image URL */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-gorola-charcoal" htmlFor="product-imageUrl">
-                Product Image Path / URL
+                {term} Image Path / URL
               </label>
               <Input
                 id="product-imageUrl"
@@ -389,7 +461,7 @@ export function StoreProductFormPage(): ReactElement {
             <div className="flex justify-between items-center mb-2">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/75">
-                  Product Variants
+                  {term} Variants
                 </h3>
                 <p className="text-[10px] text-gorola-slate mt-0.5 font-dm-sans">
                   Enforces unique labeling (e.g. "Pack of 3", "1kg", "500g").
@@ -397,12 +469,12 @@ export function StoreProductFormPage(): ReactElement {
               </div>
               <button
                 type="button"
-                onClick={() => append({ label: "", price: 0, stockQty: 0, unit: "kg", isActive: true })}
+                onClick={() => append({ label: "", price: 0, stockQty: 0, unit: "kg", isActive: true, isAvailableForBooking: true })}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gorola-pine/20 hover:bg-gorola-pine/5 text-gorola-pine rounded-xl text-xs font-bold"
                 id="add-variant-btn"
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add Variant
+                {isBooking ? "Add Service" : "Add Variant"}
               </button>
             </div>
 
@@ -437,21 +509,19 @@ export function StoreProductFormPage(): ReactElement {
                       <span className="text-[10px] font-extrabold uppercase text-gorola-pine">
                         Variant #{index + 1}
                       </span>
-                      {hasId ? (
-                        <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold text-gorola-slate cursor-pointer select-none flex items-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              id={`variant-active-${index}`}
-                              {...register(`variants.${index}.isActive`)}
-                              className="h-3.5 w-3.5 rounded border-gorola-mint/30 text-gorola-pine focus:ring-gorola-pine/20 cursor-pointer"
-                              aria-label="Active status"
-                            />
-                            Active status
-                          </label>
-                        </div>
-                      ) : (
-                        fields.length > 1 && (
+                      <div className="flex items-center gap-4">
+                        <label className="text-[10px] font-bold text-gorola-slate cursor-pointer select-none flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            id={`variant-active-${index}`}
+                            {...register(`variants.${index}.isActive`)}
+                            className="h-3.5 w-3.5 rounded border-gorola-mint/30 text-gorola-pine focus:ring-gorola-pine/20 cursor-pointer"
+                            aria-label="Active status"
+                            data-testid={`variant-active-toggle-${index}`}
+                          />
+                          Active status
+                        </label>
+                        {!hasId && fields.length > 1 && (
                           <button
                             type="button"
                             onClick={() => remove(index)}
@@ -461,8 +531,8 @@ export function StoreProductFormPage(): ReactElement {
                             <Trash2 className="h-3.5 w-3.5" />
                             Remove
                           </button>
-                        )
-                      )}
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -513,74 +583,155 @@ export function StoreProductFormPage(): ReactElement {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {/* Variant Price */}
-                      <div className="flex flex-col gap-1.5">
-                        <label
-                          className="text-[10px] font-bold text-gorola-charcoal"
-                          htmlFor={`variant-price-${index}`}
-                        >
-                          Price (INR)
-                        </label>
-                        <Input
-                          id={`variant-price-${index}`}
-                          type="number"
-                          step="0.01"
-                          placeholder="49.99"
-                          {...register(`variants.${index}.price`)}
-                          disabled={!isVariantActive}
-                          aria-invalid={errors.variants?.[index]?.price ? "true" : undefined}
-                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                        />
-                        {errors.variants?.[index]?.price && (
-                          <p className="text-rose-600 text-[10px] font-semibold" role="alert">
-                            {errors.variants[index].price.message}
-                          </p>
-                        )}
-                      </div>
+                    {storeType === "QUICK_COMMERCE" ? (
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        {/* Variant Price */}
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            className="text-[10px] font-bold text-gorola-charcoal"
+                            htmlFor={`variant-price-${index}`}
+                          >
+                            Price (INR)
+                          </label>
+                          <Input
+                            id={`variant-price-${index}`}
+                            type="number"
+                            step="0.01"
+                            placeholder="49.99"
+                            {...register(`variants.${index}.price`)}
+                            disabled={!isVariantActive}
+                            aria-invalid={errors.variants?.[index]?.price ? "true" : undefined}
+                            className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                          />
+                          {errors.variants?.[index]?.price && (
+                            <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                              {errors.variants[index].price.message}
+                            </p>
+                          )}
+                        </div>
 
-                      {/* Variant Stock */}
-                      <div className="flex flex-col gap-1.5">
-                        <label
-                          className="text-[10px] font-bold text-gorola-charcoal"
-                          htmlFor={`variant-stockQty-${index}`}
-                        >
-                          Stock Quantity
-                        </label>
-                        <Input
-                          id={`variant-stockQty-${index}`}
-                          type="number"
-                          placeholder="50"
-                          {...register(`variants.${index}.stockQty`)}
-                          disabled={!isVariantActive}
-                          aria-invalid={errors.variants?.[index]?.stockQty ? "true" : undefined}
-                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                        />
-                        {errors.variants?.[index]?.stockQty && (
-                          <p className="text-rose-600 text-[10px] font-semibold" role="alert">
-                            {errors.variants[index].stockQty.message}
-                          </p>
-                        )}
-                      </div>
+                        {/* Variant Stock */}
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            className="text-[10px] font-bold text-gorola-charcoal"
+                            htmlFor={`variant-stockQty-${index}`}
+                          >
+                            Stock Quantity
+                          </label>
+                          {!watchVariants?.[index]?.id ? (
+                            <Input
+                              id={`variant-stockQty-${index}`}
+                              type="number"
+                              placeholder="50"
+                              {...register(`variants.${index}.stockQty`)}
+                              disabled={!isVariantActive}
+                              aria-invalid={errors.variants?.[index]?.stockQty ? "true" : undefined}
+                              className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                            />
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <Input
+                                id={`variant-stockQty-${index}`}
+                                type="number"
+                                placeholder="50"
+                                {...register(`variants.${index}.stockQty`)}
+                                disabled={true}
+                                aria-invalid={errors.variants?.[index]?.stockQty ? "true" : undefined}
+                                className="rounded-xl border-gorola-mint/15 bg-gray-50 h-9 text-xs w-full"
+                              />
+                              {isEditMode && (
+                                <div className="flex justify-center gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const variant = watchVariants?.[index];
+                                      if (variant?.id) {
+                                        setRestockVariant({
+                                          id: variant.id,
+                                          label: variant.label || "",
+                                          stockQty: variant.stockQty || 0
+                                        });
+                                      }
+                                    }}
+                                    className="px-2.5 py-1.5 bg-gorola-pine/10 hover:bg-gorola-pine/20 text-gorola-pine rounded-lg text-[10px] font-bold transition-colors shrink-0"
+                                    data-testid={`restock-button-${index}`}
+                                  >
+                                    Restock
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const variant = watchVariants?.[index];
+                                      if (variant?.id) {
+                                        setAdjustVariant({
+                                          id: variant.id,
+                                          label: variant.label || "",
+                                          stockQty: variant.stockQty || 0
+                                        });
+                                      }
+                                    }}
+                                    className="px-2.5 py-1.5 bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-800 rounded-lg text-[10px] font-bold transition-colors shrink-0"
+                                    data-testid={`adjust-button-${index}`}
+                                  >
+                                    Adjust
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          )}
+                          {errors.variants?.[index]?.stockQty && (
+                            <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                              {errors.variants[index].stockQty.message}
+                            </p>
+                          )}
+                        </div>
 
-                      {/* Variant Low Stock Threshold */}
-                      <div className="flex flex-col gap-1.5">
-                        <label
-                          className="text-[10px] font-bold text-gorola-charcoal"
-                          htmlFor={`variant-lowStockThreshold-${index}`}
-                        >
-                          Low Stock Alert
-                        </label>
-                        <Input
-                          id={`variant-lowStockThreshold-${index}`}
-                          type="number"
-                          placeholder="5"
-                          {...register(`variants.${index}.lowStockThreshold`)}
-                          disabled={!isVariantActive}
-                          className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
-                        />
+                        {/* Variant Low Stock Threshold */}
+                        <div className="flex flex-col gap-1.5">
+                          <label
+                            className="text-[10px] font-bold text-gorola-charcoal"
+                            htmlFor={`variant-lowStockThreshold-${index}`}
+                          >
+                            Low Stock Alert
+                          </label>
+                          <Input
+                            id={`variant-lowStockThreshold-${index}`}
+                            type="number"
+                            placeholder="5"
+                            {...register(`variants.${index}.lowStockThreshold`)}
+                            disabled={!isVariantActive}
+                            className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                          />
+                        </div>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="grid gap-3 sm:grid-cols-1">
+                        {/* Variant Price */}
+                        <div className="flex flex-col gap-1.5 max-w-[200px]">
+                          <label
+                            className="text-[10px] font-bold text-gorola-charcoal"
+                            htmlFor={`variant-price-${index}`}
+                          >
+                            Price (INR)
+                          </label>
+                          <Input
+                            id={`variant-price-${index}`}
+                            type="number"
+                            step="0.01"
+                            placeholder="49.99"
+                            {...register(`variants.${index}.price`)}
+                            disabled={!isVariantActive}
+                            aria-invalid={errors.variants?.[index]?.price ? "true" : undefined}
+                            className="rounded-xl border-gorola-mint/15 bg-white h-9 text-xs"
+                          />
+                          {errors.variants?.[index]?.price && (
+                            <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                              {errors.variants[index].price.message}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -604,10 +755,163 @@ export function StoreProductFormPage(): ReactElement {
             className="rounded-xl bg-gorola-pine hover:bg-gorola-pine/90 text-white px-6 py-3 h-auto text-xs font-bold uppercase tracking-wider shadow-md shadow-gorola-pine/15"
             id="save-product-btn"
           >
-            {isSubmitting ? "Saving..." : isEditMode ? "Save Changes" : "Create Product"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Save Changes" : `Create ${term}`}
           </Button>
         </div>
       </form>
+
+      {/* Restock Modal */}
+      {restockVariant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gorola-mint/20 space-y-4 animate-in fade-in zoom-in duration-200">
+            <div>
+              <h3 className="text-base font-bold text-gorola-charcoal">Restock Variant</h3>
+              <p className="text-xs text-gorola-slate mt-1">
+                Add stock to variant <strong className="text-gorola-pine">{restockVariant.label}</strong> (Current: {restockVariant.stockQty})
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gorola-charcoal" htmlFor="restock-qty-input">Quantity to Add</label>
+                <Input
+                  id="restock-qty-input"
+                  type="number"
+                  placeholder="10"
+                  value={restockQty}
+                  onChange={(e) => setRestockQty(e.target.value)}
+                  className="rounded-xl border-gorola-mint/15 bg-white text-xs h-10"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gorola-charcoal" htmlFor="restock-note-input">Optional Note</label>
+                <Input
+                  id="restock-note-input"
+                  type="text"
+                  placeholder="e.g. Weekly delivery"
+                  value={restockNote}
+                  onChange={(e) => setRestockNote(e.target.value)}
+                  className="rounded-xl border-gorola-mint/15 bg-white text-xs h-10"
+                />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setRestockVariant(null);
+                  setRestockQty("10");
+                  setRestockNote("");
+                }}
+                className="rounded-xl border border-gorola-mint/15 text-gorola-slate px-4 py-2 h-auto text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={restockMutation.isPending || !restockQty || parseInt(restockQty) <= 0}
+                onClick={() => {
+                  restockMutation.mutate({
+                    variantId: restockVariant.id,
+                    addQty: parseInt(restockQty),
+                    note: restockNote
+                  });
+                }}
+                className="rounded-xl bg-gorola-pine hover:bg-gorola-pine/90 text-white px-4 py-2 h-auto text-xs font-bold"
+              >
+                {restockMutation.isPending ? "Restocking..." : "Confirm Restock"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Adjust Modal */}
+      {adjustVariant && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gorola-mint/20 space-y-4 animate-in fade-in zoom-in duration-200">
+            <div>
+              <h3 className="text-base font-bold text-gorola-charcoal">Adjust Stock Level</h3>
+              <p className="text-xs text-gorola-slate mt-1">
+                Manually override stock for variant <strong className="text-gorola-pine">{adjustVariant.label}</strong> (Current: {adjustVariant.stockQty})
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gorola-charcoal" htmlFor="adjust-qty-input">New Stock Level</label>
+                <Input
+                  id="adjust-qty-input"
+                  type="number"
+                  placeholder="Enter exact stock count"
+                  value={adjustQty}
+                  onChange={(e) => setAdjustQty(e.target.value)}
+                  className="rounded-xl border-gorola-mint/15 bg-white text-xs h-10"
+                />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[10px] font-bold text-gorola-charcoal" htmlFor="adjust-reason-input">Reason for Adjustment</label>
+                <Input
+                  id="adjust-reason-input"
+                  type="text"
+                  placeholder="e.g. Audit correction, damaged goods (Required)"
+                  value={adjustReason}
+                  onChange={(e) => {
+                    setAdjustReason(e.target.value);
+                    if (e.target.value.trim().length >= 3) {
+                      setAdjustReasonError("");
+                    }
+                  }}
+                  className="rounded-xl border-gorola-mint/15 bg-white text-xs h-10"
+                />
+                {adjustReasonError && (
+                  <p className="text-rose-600 text-[10px] font-semibold" role="alert">
+                    {adjustReasonError}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="ghost"
+                onClick={() => {
+                  setAdjustVariant(null);
+                  setAdjustQty("");
+                  setAdjustReason("");
+                  setAdjustReasonError("");
+                }}
+                className="rounded-xl border border-gorola-mint/15 text-gorola-slate px-4 py-2 h-auto text-xs font-bold"
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                disabled={adjustMutation.isPending || !adjustQty || parseInt(adjustQty) < 0}
+                onClick={() => {
+                  if (adjustReason.trim().length < 3) {
+                    setAdjustReasonError("A valid reason (at least 3 characters) is required for audit logs.");
+                    return;
+                  }
+                  adjustMutation.mutate({
+                    variantId: adjustVariant.id,
+                    setQty: parseInt(adjustQty),
+                    reason: adjustReason
+                  });
+                }}
+                className="rounded-xl bg-gorola-pine hover:bg-gorola-pine/90 text-white px-4 py-2 h-auto text-xs font-bold"
+              >
+                {adjustMutation.isPending ? "Adjusting..." : "Confirm Adjustment"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

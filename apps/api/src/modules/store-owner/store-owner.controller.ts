@@ -419,7 +419,8 @@ export function registerStoreOwnerRoutes(
     stockQty: z.coerce.number().int().nonnegative().optional(),
     unit: z.string().trim().min(1).optional(),
     lowStockThreshold: z.coerce.number().int().nonnegative().optional(),
-    isActive: z.boolean().optional()
+    isActive: z.boolean().optional(),
+    isAvailableForBooking: z.boolean().optional()
   });
 
   app.put("/api/v1/store/products/:id/variants/:variantId", { preHandler }, async (request, reply) => {
@@ -452,6 +453,7 @@ export function registerStoreOwnerRoutes(
       unit?: string;
       lowStockThreshold?: number;
       isActive?: boolean;
+      isAvailableForBooking?: boolean;
     } = {};
     if (parsed.data.label !== undefined) {
       variantPayload.label = parsed.data.label;
@@ -470,6 +472,9 @@ export function registerStoreOwnerRoutes(
     }
     if (parsed.data.isActive !== undefined) {
       variantPayload.isActive = parsed.data.isActive;
+    }
+    if (parsed.data.isAvailableForBooking !== undefined) {
+      variantPayload.isAvailableForBooking = parsed.data.isAvailableForBooking;
     }
 
     const variant = await storeOwnerService.updateVariant(owner.storeId, productId, variantId, variantPayload);
@@ -1269,6 +1274,192 @@ export function registerStoreOwnerRoutes(
 
       return {
         success: true,
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+  );
+
+  // PUT /api/v1/store/products/:productId/variants/:variantId/stock
+  const restockBodySchema = z.object({
+    addQty: z.number().int().positive("Quantity to add must be positive"),
+    note: z.string().optional()
+  });
+
+  const stockParamsSchema = z.object({
+    productId: z.string().min(1, "Product ID is required"),
+    variantId: z.string().min(1, "Variant ID is required")
+  });
+
+  app.put(
+    "/api/v1/store/products/:productId/variants/:variantId/stock",
+    { preHandler },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new ValidationError("User subject missing from auth context");
+      }
+
+      const owner = await storeOwnerRepository.findById(userId);
+      if (!owner) {
+        throw new ValidationError("Store owner profile not found");
+      }
+
+      const paramsParsed = stockParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+      }
+
+      const bodyParsed = restockBodySchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        throw new ValidationError("Invalid restock data", bodyParsed.error.flatten());
+      }
+
+      const updated = await storeOwnerService.restockVariant(
+        owner.storeId,
+        paramsParsed.data.productId,
+        paramsParsed.data.variantId,
+        bodyParsed.data.addQty,
+        bodyParsed.data.note
+      );
+
+      return {
+        success: true,
+        data: updated,
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+  );
+
+  // PUT /api/v1/store/products/:productId/variants/:variantId/stock/adjust
+  const adjustBodySchema = z.object({
+    setQty: z.number().int().nonnegative("Quantity cannot be negative"),
+    reason: z.string().min(1, "Adjustment reason is required")
+  });
+
+  app.put(
+    "/api/v1/store/products/:productId/variants/:variantId/stock/adjust",
+    { preHandler },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new ValidationError("User subject missing from auth context");
+      }
+
+      const owner = await storeOwnerRepository.findById(userId);
+      if (!owner) {
+        throw new ValidationError("Store owner profile not found");
+      }
+
+      const paramsParsed = stockParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+      }
+
+      const bodyParsed = adjustBodySchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        throw new ValidationError("Invalid adjustment data", bodyParsed.error.flatten());
+      }
+
+      const updated = await storeOwnerService.adjustVariantStock(
+        owner.storeId,
+        paramsParsed.data.productId,
+        paramsParsed.data.variantId,
+        bodyParsed.data.setQty,
+        bodyParsed.data.reason
+      );
+
+      return {
+        success: true,
+        data: updated,
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+  );
+
+  // PUT /api/v1/store/products/:productId/variants/:variantId/threshold
+  const thresholdBodySchema = z.object({
+    threshold: z.number().int().nonnegative("Threshold cannot be negative")
+  });
+
+  app.put(
+    "/api/v1/store/products/:productId/variants/:variantId/threshold",
+    { preHandler },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new ValidationError("User subject missing from auth context");
+      }
+
+      const owner = await storeOwnerRepository.findById(userId);
+      if (!owner) {
+        throw new ValidationError("Store owner profile not found");
+      }
+
+      const paramsParsed = stockParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+      }
+
+      const bodyParsed = thresholdBodySchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        throw new ValidationError("Invalid threshold data", bodyParsed.error.flatten());
+      }
+
+      const updated = await storeOwnerService.updateLowStockThreshold(
+        owner.storeId,
+        paramsParsed.data.productId,
+        paramsParsed.data.variantId,
+        bodyParsed.data.threshold
+      );
+
+      return {
+        success: true,
+        data: updated,
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+  );
+
+  // GET /api/v1/store/products/:productId/stock-history
+  const stockHistoryParamsSchema = z.object({
+    productId: z.string().min(1, "Product ID is required")
+  });
+
+  app.get(
+    "/api/v1/store/products/:productId/stock-history",
+    { preHandler },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new ValidationError("User subject missing from auth context");
+      }
+
+      const owner = await storeOwnerRepository.findById(userId);
+      if (!owner) {
+        throw new ValidationError("Store owner profile not found");
+      }
+
+      const paramsParsed = stockHistoryParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+      }
+
+      const history = await storeOwnerService.getStockHistory(
+        owner.storeId,
+        paramsParsed.data.productId
+      );
+
+      return {
+        success: true,
+        data: history,
         meta: {
           requestId: getRequestId(request, reply)
         }

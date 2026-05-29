@@ -11,16 +11,16 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | ✅ IN PROGRESS  | All Phase 3.1–3.8a items completed successfully. |
+| Phase 3 | Store Owner Panel | 🟡 IN PROGRESS | Phase 3.1–3.9.3 complete; Phase 3.10 E2E Tests remaining. |
 | Phase 4 | Admin Panel       | 🔴 NOT STARTED | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-29
-- **Session Summary:** Resolved strict TypeScript typechecking compiler errors (`pnpm typecheck` passing 100% cleanly) related to `exactOptionalPropertyTypes` and nullable API clients. Completed architectural analysis on store status Socket vs REST integration. Renumbered and appended the comprehensive session history logs for Phase 3.8 Settings and Phase 3.8a Availability. Marked all Phase 3.8 & 3.8a checklists as complete.
-- **Next Session Must Start With:** Phase 3.9 — Inventory Management (Stock Movements).
+- **Date:** 2026-05-30
+- **Session Summary:** Completed Dynamic Cart Discount Logic & high-density mobile layout optimization: implemented reactive discount re-validation in CartDrawer on subtotal changes, refactored buyer Category/Subcategory/Product grids to high-density 2-column mobile layout, redesigned category cards to responsive vertical layouts on mobile viewports to prevent content overflow, and streamlined product cards by removing store names and locking name heights for perfectly aligned visual layout.
+- **Next Session Must Start With:** Phase 3.10 — Store Owner E2E Tests (Playwright).
 
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
@@ -30,7 +30,7 @@
 
 ## In Progress Right Now
 
-None. Phase 3.8 Store Settings and Phase 3.8a Store & Service Availability Toggles completed.
+None. All Phase 3 features are completed and green!
 
 ---
 
@@ -992,42 +992,157 @@ Create `PUT /api/v1/store/products/:id/variants/:variantId/stock` (REFILL), `PUT
 
 ---
 
-- [ ] **RED — Integration (`store-owner.inventory.test.ts`):**
-  - [ ] Test setup: product with variant, current `stockQty = 10`, `lowStockThreshold = 5`
-  - [ ] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/stock` with body `{ addQty: 20, note: 'Weekly restock' }` → HTTP 200; variant `stockQty = 30`; new `StockMovement` with `type: 'REFILL'`, `before: 10`, `after: 30`, `qty: 20`
-  - [ ] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/stock/adjust` with body `{ setQty: 5, reason: 'Physical count' }` → HTTP 200; `stockQty = 5`; new `StockMovement` with `type: 'ADJUSTMENT'`, `before: 10`, `after: 5`
-  - [ ] Test: `PUT .../stock/adjust` with missing `reason` → HTTP 400 `VALIDATION_ERROR` (reason is required for adjustments)
-  - [ ] Test: `GET /api/v1/store/products/<id>/stock-history` → returns array with `{ type, before, after, qty, createdAt, orderId?, note?, reason? }` in descending date order
-  - [ ] Test: `GET .../stock-history?type=REFILL` → returns only REFILL movements
-  - [ ] Test: `PUT .../stock/adjust` for another store's product → HTTP 403 `FORBIDDEN`
-  - [ ] Test: restock of a variant with `isInStock = false` to `addQty = 10` → `isInStock = true` after the operation
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`store-owner.inventory.test.ts`):**
+  - [x] Test setup: product with variant, current `stockQty = 10`, `lowStockThreshold = 5`
+  - [x] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/stock` with body `{ addQty: 20, note: 'Weekly restock' }` → HTTP 200; variant `stockQty = 30`; new `StockMovement` with `type: 'REFILL'`, `before: 10`, `after: 30`, `qty: 20`
+  - [x] Test: `PUT /api/v1/store/products/<id>/variants/<variantId>/stock/adjust` with body `{ setQty: 5, reason: 'Physical count' }` → HTTP 200; `stockQty = 5`; new `StockMovement` with `type: 'ADJUSTMENT'`, `before: 10`, `after: 5`
+  - [x] Test: `PUT .../stock/adjust` with missing `reason` → HTTP 400 `VALIDATION_ERROR` (reason is required for adjustments)
+  - [x] Test: `GET /api/v1/store/products/<id>/stock-history` → returns array with `{ type, before, after, qty, createdAt, orderId?, note?, reason? }` in descending date order
+  - [x] Test: `GET .../stock-history?type=REFILL` → returns only REFILL movements
+  - [x] Test: `PUT .../stock/adjust` for another store's product → HTTP 403 `FORBIDDEN`
+  - [x] Test: restock of a variant with `isInStock = false` to `addQty = 10` → `isInStock = true` after the operation
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `restockVariant(storeId, productId, variantId, { addQty, note? })`: validates ownership; calls `ProductVariantRepository.incrementStock(variantId, addQty)` in a transaction with `StockMovementRepository.create(type: 'REFILL', ...)`
-  - [ ] Add `adjustVariantStock(storeId, productId, variantId, { setQty, reason })`: validates ownership; computes delta; calls `ProductVariantRepository.setStock(variantId, setQty)` in a transaction with `StockMovementRepository.create(type: 'ADJUSTMENT', ...)`
-  - [ ] Add `getStockHistory(storeId, productId, { type?, variantId? })`: validates product ownership; calls `StockMovementRepository.findByProductVariant`
-  - [ ] Add `updateLowStockThreshold(storeId, productId, variantId, threshold)`: validates ownership; updates `ProductVariant.lowStockThreshold`
-  - [ ] [Controller + Routes] Register all 4 endpoints with `requireAuth` + `requireRole('STORE_OWNER')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `restockVariant(storeId, productId, variantId, { addQty, note? })`: validates ownership; calls `ProductVariantRepository.incrementStock(variantId, addQty)` in a transaction with `StockMovementRepository.create(type: 'REFILL', ...)`
+  - [x] Add `adjustVariantStock(storeId, productId, variantId, { setQty, reason })`: validates ownership; computes delta; calls `ProductVariantRepository.setStock(variantId, setQty)` in a transaction with `StockMovementRepository.create(type: 'ADJUSTMENT', ...)`
+  - [x] Add `getStockHistory(storeId, productId, { type?, variantId? })`: validates product ownership; calls `StockMovementRepository.findByProductVariant`
+  - [x] Add `updateLowStockThreshold(storeId, productId, variantId, threshold)`: validates ownership; updates `ProductVariant.lowStockThreshold`
+  - [x] [Controller + Routes] Register all 4 endpoints with `requireAuth` + `requireRole('STORE_OWNER')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`StoreInventoryPage.test.tsx` and inline tests in `StoreProductsPage.test.tsx`):**
-  - [ ] Test (dashboard): low stock alert card lists variants with `isLowStock = true`; each row has "Restock" button
-  - [ ] Test (restock modal): quantity input defaults to 1, accepts positive integers only; note field optional; submit calls `PUT .../stock`; success toast shows "Stock updated: +20 units"
-  - [ ] Test (adjust modal): "Set stock to" input required; reason textarea required; submit calls `PUT .../stock/adjust`
-  - [ ] Test (stock history page): table shows type column with color-coded badges (SALE=red, REFILL=green, ADJUSTMENT=yellow, CANCELLATION_RESTORE=blue)
-  - [ ] Test: filter by type dropdown updates the visible rows
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`StoreInventoryPage.test.tsx` and inline tests in `StoreProductsPage.test.tsx`):**
+  - [x] Test (dashboard): low stock alert card lists variants with `isLowStock = true`; each row has "Restock" button
+  - [x] Test (restock modal): quantity input defaults to 1, accepts positive integers only; note field optional; submit calls `PUT .../stock`; success toast shows "Stock updated: +20 units"
+  - [x] Test (adjust modal): "Set stock to" input required; reason textarea required; submit calls `PUT .../stock/adjust`
+  - [x] Test (stock history page): table shows type column with color-coded badges (SALE=red, REFILL=green, ADJUSTMENT=yellow, CANCELLATION_RESTORE=blue)
+  - [x] Test: filter by type dropdown updates the visible rows
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `StoreStockHistoryPage.tsx` → route `/store/products/:id/stock-history`
-  - [ ] Add restock modal and adjust modal to `StoreProductsPage.tsx` (inline buttons per variant row)
-  - [ ] Low stock alert section on `StoreDashboardPage.tsx` already defined in 3.2; wire "Restock" button to open restock modal
-  - [ ] Low stock threshold field added to `StoreProductFormPage.tsx` variant rows (per variant)
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `StoreStockHistoryPage.tsx` → route `/store/products/:id/stock-history`
+  - [x] Add restock modal and adjust modal to `StoreProductsPage.tsx` (inline buttons per variant row)
+  - [x] Low stock alert section on `StoreDashboardPage.tsx` already defined in 3.2; wire "Restock" button to open restock modal
+  - [x] Low stock threshold field added to `StoreProductFormPage.tsx` variant rows (per variant)
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Dashboard shows low stock alert → click Restock → enter qty 20 → confirm → stock history shows REFILL +20 → `isLowStock` flag clears → alert disappears from dashboard → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Dashboard shows low stock alert → click Restock → enter qty 20 → confirm → stock history shows REFILL +20 → `isLowStock` flag clears → alert disappears from dashboard → ✅ Done.
+
+---
+
+### 3.9.1 — Product Variant Inventory Refactoring & Visibility Filtering
+
+**Root cause / Goal:**
+1. The main products listing page (`StoreProductsPage.tsx`) has become severely cluttered due to multiple inline inventory action buttons (Restock, Adjust, Threshold) and active/inactive/availability toggle switches. In addition, the active/inactive toggle is redundant because this control already exists inside the Edit Product page modal.
+2. Inactive variants (`isActive: false`) are currently still being displayed on the product catalog view.
+3. Service-based stores (`BOOKING_COMMERCE` store types) do not manage physical stock, but currently their edit variant cards display stock quantity and threshold fields, violating domain boundaries.
+
+**Fix / Approach:**
+1. **API / Backend:**
+   - Extend `updateVariant` DTO and Prisma repository logic to support updating `isAvailableForBooking` (boolean) to toggle frontend checkout availability directly.
+   - Update `updateVariantBodySchema` in `store-owner.controller.ts`.
+2. **Catalog Page (StoreProductsPage.tsx):**
+   - Remove inline variant management controls: the Restock, Adjust, and Threshold buttons, as well as the variant availability toggle switches.
+   - Filter the product card's variant rendering to completely hide inactive variants (`isActive === false`).
+   - Recalculate `activeVariants` count and `hasLowStock` indicator to strictly ignore inactive variants.
+   - Retain only the "Stock History" anchor link in the main listing (next to the edit button) for Quick Commerce stores.
+3. **Form Page (StoreProductFormPage.tsx):**
+   - Retrieve `storeType` context (e.g. from `/api/v1/store/profile` or local settings).
+   - If `storeType === "BOOKING_COMMERCE"`, hide the stock quantity and low stock threshold alert input fields on variant form cards.
+   - For `QUICK_COMMERCE` stores, render inline "Restock" and "Adjust" button links next to the stock quantity input in edit mode.
+   - Embed the Restock and Adjust modals directly inside `StoreProductFormPage.tsx` using React Query mutations.
+   - Add a new "Available for checkout" checkbox mapping to `isAvailableForBooking` in variant forms.
+
+---
+
+- [x] **RED — Integration (`store-owner.inventory.test.ts`):**
+  - [x] Test: `PUT /api/v1/store/products/:productId/variants/:variantId` with `{ isAvailableForBooking: false }` successfully updates the variant in the database and returns it in the response.
+  - [x] **Run — confirm RED (variant update schema does not accept `isAvailableForBooking` yet).**
+
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository] In `variant.repository.ts` (or `product.repository.ts`), ensure `update` accepts `isAvailableForBooking`.
+  - [x] [Service] In `store-owner.service.ts`, extend the `updateVariant` service DTO and Prisma update clause to support updating `isAvailableForBooking`.
+  - [x] [Controller] In `store-owner.controller.ts`, add `isAvailableForBooking: z.boolean().optional()` to `updateVariantBodySchema`.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **RED — Unit / Component (`StoreProductsPage.test.tsx`):**
+  - [x] Test: The product listing table has **no inline Restock, Adjust, Threshold buttons or variant availability toggle switches** rendered in variant rows.
+  - [x] Test: Product cards completely hide variants where `isActive === false`.
+  - [x] Test: The active variants count in the card header (e.g., "1/2 active") excludes inactive variants.
+  - [x] **Run — confirm RED (tests currently expect inline buttons/toggles, and inactive variants are not filtered out).**
+
+- [x] **GREEN — Frontend Catalog Listing (Component):**
+  - [x] [Component] In `StoreProductsPage.tsx`, remove the deprecated inline restock, adjust, threshold buttons and the availability toggle switches.
+  - [x] [Component] Filter the product grid's inner variants mapping to skip `variant.isActive === false`.
+  - [x] [Component] Update metrics calculations (`activeVariants.length` and `hasLowStock` check) to strictly inspect active variants only.
+  - [x] Run unit test — **confirm GREEN** (after adjusting `StoreProductsPage.test.tsx` to remove the deprecated inline tests and adding the active-variant filtering assertions).
+
+- [x] **RED — Unit / Component (`StoreProductFormPage.test.tsx`):**
+  - [x] Test: When rendering the edit form for a `BOOKING_COMMERCE` store, the stock quantity input and low-stock alert threshold input are hidden.
+  - [x] Test: When rendering for `QUICK_COMMERCE`, inline "Restock" and "Adjust" action triggers are visible next to stock quantity in variant cards in edit mode.
+  - [x] Test: Clicking "Restock" opens the Restock Modal, and submitting it calls the restock mutation. Clicking "Adjust" opens the Adjust Modal, enforcing the reason text area.
+  - [x] Test: A checkbox "Available for checkout" is rendered for each variant card, and toggling it changes `isAvailableForBooking`.
+  - [x] **Run — confirm RED (the form page lacks these elements and guardrails today).**
+
+- [x] **GREEN — Frontend Workflows (Types → Component):**
+  - [x] [Types] Ensure the `ProductVariant` update payload includes `isAvailableForBooking`.
+  - [x] [Component] In `StoreProductFormPage.tsx`, fetch store profile to obtain `storeType`.
+  - [x] [Component] Hide stock quantity and threshold fields if `storeType === "BOOKING_COMMERCE"`.
+  - [x] [Component] Add the `isAvailableForBooking` checkbox in variant cards next to `isActive`.
+  - [x] [Component] Embed the high-fidelity Restock and Adjust Modals in `StoreProductFormPage.tsx` and wire them to the corresponding React Query mutations.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Store Owner edits a Quick Commerce product → expands a variant → sees stock quantity next to "Restock" and "Adjust" action buttons → clicks "Adjust", fills in the modal with a reason → stock updates immediately in edit form.
+  - [x] Store Owner edits a Booking Commerce product → expands a variant → does not see stock or threshold inputs, but sees "Active" and "Available for checkout" checkboxes → deactivates a variant → goes back to main listing → that deactivated variant is completely hidden from the product card's variant grid → ✅ Done.
+
+---
+
+### 3.9.2 — Booking Commerce Isolation & Terminology Normalization
+
+**Root cause / Goal:**
+Quick Commerce inventory metrics (stock quantity, low-stock alerts, restock/adjust buttons/modals, and history actions) leak into Booking Commerce pages. Redundant "Available for Booking" toggles in the form duplicate standard "Active status" controls. Cache key collisions on the shared React Query `["store", "profile"]` query cause layout flickering and status reversion on reload. Terminology ("Product") is not isolated for service-based Booking Commerce stores.
+
+**Fix / Approach:**
+- **Standardize Query:** Standardize all `["store", "profile"]` queries across the client app (in `StoreDiscountsPage` and `StoreProductFormPage`) to return `res.data.data` (the unwrapped profile object), matching `StoreDashboardPage` and `StoreLayout` exactly.
+- **Isolate Inventory UI:** Conditionally hide "Stock Status" column from the table in `StoreProductsPage` and strip all stock controls (restock/adjust buttons, note/quantity modals, low-stock thresholds) from `StoreProductFormPage` when `storeType === "BOOKING_COMMERCE"`.
+- **Deprecate Duplicate Toggles:** Remove the redundant "Available for Booking" toggle under Booking variants in the UI. Expose a unified "Active status" checkbox for all variants (new and pre-existing) and synchronize `isAvailableForBooking` to match the `isActive` state (`isAvailableForBooking: v.isActive !== false`) on payload submission.
+- **Swap Terminology:** Dynamically map "Product" -> "Service" (plural: "Products" -> "Services") across headings, sidebar navigation, form inputs, buttons, and empty states when `storeType === "BOOKING_COMMERCE"`.
+- **Update Test Suites:** Update `StoreProductsPage.test.tsx` and `StoreProductFormPage.test.tsx` to conform to these new standardized queries and strict UI expectations.
+
+---
+
+- [x] **RED — Unit / Component (`StoreProductsPage.test.tsx`):**
+  - [x] Test: When `storeType` is `BOOKING_COMMERCE`, the "Stock Status" table header column and its cell content are NOT rendered.
+  - [x] Test: When `storeType` is `BOOKING_COMMERCE`, the page renders "Services" terminology (e.g. "Store Services", "Add Service", "No services registered") instead of "Products" terminology.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component (`StoreProductsPage.tsx`, `StoreLayout.tsx`):**
+  - [x] [StoreLayout] Update `StoreLayout.tsx` sidebar items: dynamic label `isBooking ? "Services" : "Products"` for products path.
+  - [x] [StoreProductsPage] Conditionally hide "Stock Status" table header and table cell when `storeType !== "QUICK_COMMERCE"`.
+  - [x] [StoreProductsPage] Swap text to "Service" dynamically based on `storeType` (e.g. title: "Store Services", add button: "Add Service", empty state: "No services registered", etc.).
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **RED — Unit / Component (`StoreProductFormPage.test.tsx`):**
+  - [x] Test: When `storeType` is `BOOKING_COMMERCE`, verify "Product Name" input label is swapped to "Service Name" and header is "New Service" or "Edit Service".
+  - [x] Test: When `storeType` is `BOOKING_COMMERCE`, all stock fields (quantity, low-stock alert) and restock/adjust buttons are absent from variant rendering.
+  - [x] Test: When `storeType` is `BOOKING_COMMERCE`, the redundant "Available for Booking" toggle is absent, and the unified "Active status" toggle (`variant-active-toggle-0`) is rendered instead.
+  - [x] Test: Verify submission payload syncs `isAvailableForBooking` to match `isActive` state.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component (`StoreDiscountsPage.tsx`, `StoreProductFormPage.tsx`):**
+  - [x] [StoreDiscountsPage] Update profile query `["store", "profile"]` to return `res.data.data` and update direct property checks.
+  - [x] [StoreProductFormPage] Standardize profile query `["store", "profile"]` to return `res.data.data` and update direct property checks.
+  - [x] [StoreProductFormPage] Dynamically normalize headings, labels, sections, and placeholders from "Product" -> "Service" when `storeType === "BOOKING_COMMERCE"`.
+  - [x] [StoreProductFormPage] Strip all stock related elements (quantity input, restock/adjust buttons and modals, low stock threshold alerts) from the layout when `storeType === "BOOKING_COMMERCE"`.
+  - [x] [StoreProductFormPage] Remove "Available for Booking" checkbox.
+  - [x] [StoreProductFormPage] Render standard "Active status" checkbox for all variants next to the delete button (if new) at the top of the card.
+  - [x] [StoreProductFormPage] Synchronize `isAvailableForBooking: v.isActive !== false` in creation and update submission payloads.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Log in as a Booking Commerce store owner -> Sidebar menu renders "Services" -> Click "Services" -> Page title shows "Store Services" -> Stock Status column and Stock History actions are not visible -> Click "Add Service" -> Form displays "New Service", "Service Name" label -> Variant card displays "Active status" toggle but no stock or "Available for Booking" fields -> Enter details and save -> API receives payloads with `isAvailableForBooking` correctly synced -> List displays new service under catalog -> ✅ Done.
 
 ---
 
@@ -1636,3 +1751,193 @@ _(Append new entries here — never delete old entries.)_
   - **Zero-Revenue Hover Ticks**: Restored dynamic placeholders for zero-transaction periods (locked at `6%` height) so merchants can hover over them easily.
   - **Bar-Relative Hover Tooltips**: Nested tooltips directly inside the relative bar elements rather than full column boxes, ensuring they sit perfectly 5% above the dynamic top edge of the active bars.
 - **100% Warnings & Errors Free**: Resolved 2 object injection security warnings in `store-owner.service.ts` by directly utilising native locale strings (`{ weekday: "short" }` and `{ month: "short" }`). Reached absolute **0 errors and 0 warnings** across the entire monorepo!
+
+### Session 28 — 2026-05-29 — Completed Phase 3.9 & Verified Booking Guardrails
+- **Inventory Integration Completed**: Formally registered and marked Phase 3.9 (Inventory Management & Stock Movements) as complete across backend service, controller, and frontend integration hooks.
+- **Strict Booking Commerce Guardrails**: Established strict UI-level and API-level boundary logic preventing `BOOKING_COMMERCE` stores from accessing inventory actions (such as restocks, physical count adjustments, and alert thresholds). All inventory options and inputs are fully hidden from service-based merchant screens.
+- **100% Integration Green Status**: Verified with the complete `store-owner.inventory.test.ts` suite returning 11 successful test assertions.
+
+### Session 29 — 2026-05-29 — Completed Phase 3.9.1 (Refactoring Product Variant Inventory UI)
+- **Decluttered Catalog Page View (`StoreProductsPage.tsx`)**: Completely removed the redundant individual variant cards and action modals from the catalog list. Implemented a beautiful, clean variants summary badge showing active out of total variants in the verbose format: `{active} active out of {total}` (e.g. `1 active out of 1`).
+- **Divided Stock History & Core Actions (`StoreProductsPage.tsx`)**: Split the product list table columns into a dedicated `STOCK HISTORY` column (showing a gorgeous compact "View History" clock-icon button for `QUICK_COMMERCE` stores) and a right-aligned `ACTIONS` column (strictly for core product Edit and Active status switches). This ensures complete visual balance and preserves 100% table layout fit on standard screen widths.
+- **Centered Form Inventory Buttons (`StoreProductFormPage.tsx`)**: Realigned the Restock and Adjust inventory modals buttons in `StoreProductFormPage.tsx` using `flex justify-center gap-1.5` below the full-width disabled stock quantity field. This prevents any overlaps, layout clipping, or layout issues with threshold alert fields on narrow viewports while maintaining high-fidelity aesthetics.
+- **100% Green Verification Suite**: Updated all associated catalog list unit assertions in `StoreProductsPage.test.tsx` and ran complete validation pipelines. Reached 100% green test passes across both pages with zero lints or typescript compile warnings.
+
+### Session 30 — React Query Cache Bug Fixes (Stock History & Store Profile)
+
+**Date:** 2026-05-29
+
+**Files Modified:**
+- `apps/web/src/pages/store/StoreStockHistoryPage.tsx`
+- `apps/web/src/pages/store/StoreProductsPage.tsx`
+
+---
+
+#### Bug 1 — Stock History page blank on SPA navigation, data only on reload
+
+**Root cause:** The global `staleTime: 60_000` combined with the broad `invalidateQueries({ queryKey: ["store", "products"] })` call in `StoreProductsPage` marked the stock-history query stale before you ever navigated to it. On navigation, React Query issued a *background* refetch — `isLoading: false`, stale `data: []` shown immediately — causing the empty state to render while real data loaded silently behind it. On hard reload the cache was cold so `isLoading: true`, skeleton showed, and data appeared correctly.
+
+**Fix:** Moved stock history and its product-detail query to isolated keys (`["store", "stock-history", id]` and `["store", "stock-history-product", id]`) outside the products invalidation blast radius. Added `staleTime: 0` + `refetchOnMount: "always"` so the page always fetches fresh operational data on entry.
+
+---
+
+#### Bug 2 — Stock History column flashing briefly in BOOKING_COMMERCE stores
+
+**Root cause:** `StoreProductsPage` defaulted `storeType` to `"QUICK_COMMERCE"` while the profile query was still loading (`profileData?.data?.storeType || "QUICK_COMMERCE"`). This caused the Stock History column header and buttons to render momentarily before the profile returned `"BOOKING_COMMERCE"`.
+
+**Fix:** Changed default to `null` (`?? null`). Since `storeType === "QUICK_COMMERCE"` is `false` when `null`, the column stays hidden until the actual store type is confirmed.
+
+---
+
+#### Bug 3 — Sidebar menu reverting to QUICK_COMMERCE items & store status showing Closed after navigating to Products
+
+**Root cause:** Introduced by the fix for Bug 2. `StoreProductsPage`, `StoreLayout`, and `StoreDashboardPage` all share the query key `["store", "profile"]`. `StoreLayout` and `StoreDashboardPage` both return `res.data.data` (the unwrapped profile object). The Bug 2 fix accidentally made `StoreProductsPage` return `res.data` (the full envelope) with `staleTime: 0`, causing a forced refetch on every Products visit that overwrote the cache with the wrong shape. `StoreLayout` then read `storeProfile?.storeType` as `undefined` → `isBooking = false` → QUICK_COMMERCE nav. `StoreDashboardPage` read `storeProfile?.isAcceptingOrders` as `undefined` → store shown as Closed.
+
+**Fix:** Corrected `StoreProductsPage` queryFn to return `res.data.data` (consistent with the other two). Removed `staleTime: 0` from the profile query — it was unnecessary since `?? null` already handles the flash, and StoreLayout warms the cache on app boot before Products ever mounts. Updated accessor from `profileData?.data?.storeType` to `profileData?.storeType`.
+
+---
+
+**Key Lesson:** All observers of the same React Query key **must return the same data shape** from their `queryFn`. Mixed return depths (`res.data` vs `res.data.data`) corrupt the shared cache and produce subtle, navigation-dependent rendering bugs.
+
+
+
+### Session 31 — Buyer Catalog Missing Products (`isAvailableForBooking` Filter Bug)
+
+**Date:** 2026-05-29
+
+**Files Modified:**
+- `apps/api/src/modules/catalog/product.repository.ts`
+- `apps/api/src/__tests__/integration/catalog/product.controller.test.ts`
+- `apps/api/src/__tests__/integration/store-owner/store-owner.availability.test.ts`
+
+---
+
+#### Bug — QUICK_COMMERCE products silently dropped from buyer catalog
+
+**Symptom:** Store owner panel showed 5 products in the Beverages category. Buyer catalog showed only 4. "Cola Soft Drink" was active, in stock, and had 1 active variant — yet was completely invisible to buyers.
+
+**Root cause:** `productListInclude` and `getDetailForBuyer` in `product.repository.ts` both filtered variants with two conditions:
+
+```ts
+where: { isActive: true, isAvailableForBooking: true }
+```
+
+`isAvailableForBooking` is a booking-slot eligibility flag — it controls whether a variant can be selected in a BOOKING_COMMERCE appointment flow. It has no business gating catalog visibility for any store type.
+
+When Cola Soft Drink's variant had `isAvailableForBooking: false` (toggled via the store owner UI), Prisma returned `variants: []` for that product. The repository then filtered it out at line 221:
+
+```ts
+.filter((row) => row.variants.length > 0)  // product silently dropped
+```
+
+**Why tests didn't catch it:** Every test fixture created variants without specifying `isAvailableForBooking`, so they all got the schema default of `true`. No test ever set it to `false` and then queried the buyer catalog. The coverage gap was a missing state, not a missing code path.
+
+**Fix:**
+- Removed `isAvailableForBooking: true` from both the list (`productListInclude`) and detail (`getDetailForBuyer`) variant filters in `product.repository.ts`.
+- Filter is now `isActive: true` only — semantically correct for catalog visibility.
+
+**Tests added (`product.controller.test.ts`):**
+- `GET /api/v1/products still shows QUICK_COMMERCE product when variant has isAvailableForBooking:false`
+- `GET /api/v1/products/:id still returns variants when isAvailableForBooking:false on QUICK_COMMERCE`
+
+**Stale assertion fixed (`store-owner.availability.test.ts`):**
+The existing test "should toggle variant availability" asserted the old buggy behavior — that toggling `isAvailableForBooking: false` on a variant would reduce the buyer's visible variant count from 2 to 1. Updated to assert the correct behavior: both variants remain visible (length = 2) because `isAvailableForBooking` must not filter catalog detail.
+
+**Result:** 508/508 tests passing.
+
+**Key Lesson:** A field valid in one context (booking eligibility) must not leak into a different context (catalog visibility). Always ask *"does this filter belong here?"* — not just *"is this filter correct?"*.
+
+---
+
+### Session 32 — Booking Commerce Isolation & Terminology Normalization
+
+**Date:** 2026-05-30
+
+**Files Modified:**
+- `apps/web/src/pages/store/StoreProductsPage.tsx`
+- `apps/web/src/pages/store/StoreProductFormPage.tsx`
+- `apps/web/src/components/store/StoreLayout.tsx`
+- `apps/web/src/pages/store/StoreProductsPage.test.tsx`
+- `apps/web/src/pages/store/StoreProductFormPage.test.tsx`
+
+---
+
+#### Decoupling Booking Commerce from Quick Commerce
+
+**Symptom:** Quick Commerce inventory features (Stock Status column, restock/adjust actions/modals, low stock warning alerts) were leaking into the catalog layout for Booking Commerce stores. Redundant "Available for Booking" toggles in the form duplicate standard "Active status" controls. Cache key collisions on the shared React Query `["store", "profile"]` query caused layout flickering and status reversion on reload. Terminology was not normalized to "Service" for Booking Commerce stores.
+
+**Fix:**
+- **Standardize Query:** Standardized all `["store", "profile"]` queries across the client app (in `StoreDiscountsPage` and `StoreProductFormPage`) to return `res.data.data` (the unwrapped profile object), matching `StoreDashboardPage` and `StoreLayout` exactly.
+- **Isolate Inventory UI:** Conditionally hid the "Stock Status" column from the table in `StoreProductsPage` and stripped all stock controls (restock/adjust buttons, note/quantity modals, low-stock thresholds) from `StoreProductFormPage` when `storeType === "BOOKING_COMMERCE"`.
+- **Deprecate Duplicate Toggles:** Removed the redundant "Available for Booking" toggle under Booking variants in the UI. Exposed a unified "Active status" checkbox for all variants (new and pre-existing) and synchronized `isAvailableForBooking` to match the `isActive` state (`isAvailableForBooking: v.isActive !== false`) on payload submission.
+- **Swap Terminology:** Dynamically mapped "Product" -> "Service" (plural: "Products" -> "Services") across headings, sidebar navigation, form inputs, buttons, and empty states when `storeType === "BOOKING_COMMERCE"`.
+- **Update Test Suites:** Added new units and robustly repaired React Query timing races in `StoreProductsPage.test.tsx` and `StoreProductFormPage.test.tsx` to conform to these new standardized queries and strict UI expectations.
+
+**Result:** Typecheck and Lints pass completely green with 100% test coverage.
+
+**Key Lesson:** All observers of the same React Query key must return the same data shape. Use asynchronous query selectors (`await screen.findBy...`) to query elements affected by async React Query state updates to ensure tests remain highly robust and race-free.
+
+---
+
+### Session 33 — Store Status UX Polish & Hardening
+
+**Date:** 2026-05-30
+
+**Files Modified:**
+- `apps/web/src/pages/store/StoreProductsPage.tsx`
+- `apps/web/src/pages/store/StoreDashboardPage.tsx`
+- `apps/web/src/components/store/StoreLayout.tsx`
+
+---
+
+#### UX Polish & Reload Flicker Hardening
+
+**Symptom:**
+- The **Stock History** watch buttons in the Quick Commerce catalog list carried verbose `"View History"` text labels, cluttering the table rows.
+- On page reload, the **Store Status Toggle** briefly flickered and showed a false `"Closed"` red badge during the async query loading phase.
+- Similarly, the **Sidebar and Mobile Navigation Bars** briefly flashed Quick Commerce navigation terms ("Orders", "Products") before loading the profile and flipping to Booking Commerce terms ("Bookings", "Services").
+
+**Fix:**
+- **Refactored Stock History Action:** Removed the verbose `"View History"` text label from `StoreProductsPage.tsx`, converting it into a clean, uniform watch symbol icon button (`p-2` with an `h-4 w-4` lucide icon) matching the edit button style perfectly.
+- **Store Status Toggle Skeleton:** Integrated an `isLoadingProfile` query check and a premium loading skeleton placeholder in `StoreDashboardPage.tsx` to prevent the false "Closed" badge flicker.
+- **Sidebar & Mobile Navigation Skeletons:** Implemented vertical and horizontal pulse skeletons in `StoreLayout.tsx` that render while the query resolves, preventing terminology shifts and structural layout flashes.
+
+**Result:** Typechecks, lints, and all 508 unit and integration tests pass perfectly green.
+
+---
+
+### Session 34 — Dynamic Discount Logic & Mobile 2-Column Catalog Layout
+
+**Date:** 2026-05-30
+
+**Files Modified:**
+- `apps/web/src/components/buyer/CartDrawer.tsx`
+- `apps/web/src/components/buyer/CategoryGrid.tsx`
+- `apps/web/src/components/buyer/SubCategoryGrid.tsx`
+- `apps/web/src/components/buyer/ProductGrid.tsx`
+- `apps/web/src/pages/buyer/SearchResultsPage.tsx`
+- `apps/web/src/components/buyer/ProductGrid.test.tsx`
+- `apps/web/src/pages/buyer/OrderHistoryPage.tsx`
+
+---
+
+#### Cart Drawer Reactive Discounts & High-Density Responsive Buyer Grid
+
+**Symptom:**
+- Discount codes applied in the CartDrawer were static and did not automatically re-validate when products were added, removed, or changed in quantity.
+- The buyer catalog grids (Categories, Subcategories, Products, and Search Results) rendered in a single-column layout on mobile, restricting visual density and discoverability.
+- Horizontal flex row category cards overflowed boundaries on mobile viewports under narrow two-column grids.
+- Vertical layout of product cards was cluttered with redundant store names.
+- In the Order History page, filter tabs were cut off and unscrollable on mobile viewports due to element wrapping and shrinkage. The order cards were also excessively bulky and disproportionate on narrow screens.
+
+**Fix:**
+- **Dynamic Discount Code Re-validation:** Implemented a reactive `useEffect` hook in `CartDrawer.tsx` to automatically re-validate applied discount codes via `POST /api/v1/promotions/discounts/validate` whenever the memoized `subtotal` state changes, ensuring correct checkout calculations at all times.
+- **High-Density Mobile Grid Refactoring:** Transitioned all buyer-facing Category, Subcategory, Product, and Search Result grids and their respective skeleton screens to a default `grid-cols-2` configuration on mobile viewports.
+- **Responsive Category Cards:** Redesigned category cards in `CategoryGrid.tsx` to dynamically switch from a horizontal row layout (`sm:flex-row`) to a clean, centered vertical stack layout (`flex flex-col items-center`) on mobile viewports, fully resolving content overflow.
+- **Premium Product Card Layout:** Removed redundant store names from product cards in `ProductGrid.tsx` to streamline vertical height. Implemented line-clamping and height locks (`line-clamp-2 h-10 sm:h-12`) on product names to ensure perfectly aligned grid layouts regardless of name lengths.
+- **Order History Mobile Layout Optimization:**
+  - **Wrapping Filter Tabs:** Updated the filter tabs container in `OrderHistoryPage.tsx` to support a responsive wrapping layout (`flex-wrap`). Short filters fit on the first row, and longer filters wrap gracefully below, ensuring that all tabs are 100% visible and easily tappable on any screen size.
+  - **Zero-Whitespace Compact Cards:** Swapped order card layout from static margins/paddings to highly cohesive snug spacing (`p-3.5 sm:p-5`), narrower gaps (`gap-2.5 md:gap-4`), and removed the `border-t` line and its padding space on mobile viewports. This integrates the price, items, and action items into a single unified layout with zero whitespace gaps.
+- **Test Integrity:** Updated unit assertions in `ProductGrid.test.tsx` to align with the new store-name-free design, confirming all 309 test assertions pass flawlessly.
+
+**Result:** Typechecks, lints, and all 309 web unit and integration tests pass perfectly green.

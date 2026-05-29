@@ -105,7 +105,7 @@ export function SubCategoryGrid({ categorySlug }: { categorySlug: string }): Rea
     return (
       <section aria-label="SubCategory grid" className="space-y-3">
         <p className="font-dm-sans text-sm text-gorola-slate">Loading sub-categories...</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3">
           <div className="skeleton h-28 rounded-xl" />
           <div className="skeleton h-28 rounded-xl" />
           <div className="skeleton h-28 rounded-xl" />
@@ -140,7 +140,7 @@ export function SubCategoryGrid({ categorySlug }: { categorySlug: string }): Rea
   }
 
   return (
-    <section ref={rootRef} aria-label="SubCategory grid" className="subcategory-grid grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <section ref={rootRef} aria-label="SubCategory grid" className="subcategory-grid grid gap-4 grid-cols-2 lg:grid-cols-3">
       {subCategories.map((subCategory) => (
         <button
           key={subCategory.id}

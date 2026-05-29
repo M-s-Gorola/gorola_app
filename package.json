@@ -46,7 +46,8 @@
       "@protobufjs/utf8": "^1.1.1",
       "minimatch@10>brace-expansion": "^5.0.6",
       "ws": "^8.20.1",
-      "qs": "^6.15.2"
+      "qs": "^6.15.2",
+      "axios": "^1.16.0"
     }
   },
   "_pnpm_overrides_comments": {
@@ -59,6 +60,7 @@
     "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0",
     "minimatch@10>brace-expansion": "Overridden due to moderate security vulnerability (DoS) in <5.0.6",
     "ws": "Overridden due to moderate security vulnerability (uninitialized memory leak) in <8.20.1",
-    "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.1"
+    "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.1",
+    "axios": "Overridden due to high security vulnerabilities (NO_PROXY bypass CVE-2025-62718, MitM via prototype pollution) in <1.16.0"
   }
 }
