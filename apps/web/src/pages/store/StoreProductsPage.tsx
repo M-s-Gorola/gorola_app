@@ -82,6 +82,9 @@ export function StoreProductsPage(): ReactElement {
   // Keep null while the profile is loading so store-type-gated UI (e.g. Stock History column)
   // is never shown prematurely for BOOKING_COMMERCE stores.
   const storeType = profileData?.storeType ?? null;
+  const isBooking = storeType === "BOOKING_COMMERCE";
+  const term = isBooking ? "Service" : "Product";
+  const termPlural = isBooking ? "Services" : "Products";
 
   // Modals & form states
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
@@ -147,9 +150,9 @@ export function StoreProductsPage(): ReactElement {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">Store Products</h1>
+          <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">Store {termPlural}</h1>
           <p className="text-sm text-gorola-slate font-dm-sans">
-            Manage your store catalog, track variants, stock status and pricing.
+            Manage your store catalog, track variants, {isBooking ? "" : "stock status "}and pricing.
           </p>
         </div>
         <button
@@ -158,7 +161,7 @@ export function StoreProductsPage(): ReactElement {
           id="add-product-btn"
         >
           <Plus className="h-4 w-4" />
-          Add Product
+          Add {term}
         </button>
       </div>
 
@@ -168,7 +171,7 @@ export function StoreProductsPage(): ReactElement {
           <Search className="h-5 w-5 text-gorola-slate shrink-0" />
           <input
             type="text"
-            placeholder="Search by product name or keywords..."
+            placeholder={`Search by ${term.toLowerCase()} name or keywords...`}
             value={search}
             onChange={(e) => {
               const val = e.target.value;
@@ -185,18 +188,20 @@ export function StoreProductsPage(): ReactElement {
         </div>
 
         {/* Low Stock Filter Button Toggle */}
-        <button
-          onClick={toggleLowStockFilter}
-          className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all whitespace-nowrap ${
-            showLowStockOnly
-              ? "bg-red-50 text-red-600 border-red-200 shadow-sm shadow-red-50"
-              : "bg-transparent text-gorola-slate border-gorola-mint/20 hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-          }`}
-          id="low-stock-filter-toggle"
-        >
-          <AlertTriangle className={`h-4 w-4 ${showLowStockOnly ? "animate-pulse" : ""}`} />
-          {showLowStockOnly ? "Showing Low Stock Only" : "Filter Low Stock"}
-        </button>
+        {!isBooking && (
+          <button
+            onClick={toggleLowStockFilter}
+            className={`flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl border text-xs font-bold transition-all whitespace-nowrap ${
+              showLowStockOnly
+                ? "bg-red-50 text-red-600 border-red-200 shadow-sm shadow-red-50"
+                : "bg-transparent text-gorola-slate border-gorola-mint/20 hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+            }`}
+            id="low-stock-filter-toggle"
+          >
+            <AlertTriangle className={`h-4 w-4 ${showLowStockOnly ? "animate-pulse" : ""}`} />
+            {showLowStockOnly ? "Showing Low Stock Only" : "Filter Low Stock"}
+          </button>
+        )}
       </div>
 
       {/* Main Content Area */}
@@ -237,10 +242,12 @@ export function StoreProductsPage(): ReactElement {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
-                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Product Info</th>
+                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">{term} Info</th>
                   <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Sub-category</th>
                   <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Variants</th>
-                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Stock Status</th>
+                  {storeType === "QUICK_COMMERCE" && (
+                    <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Stock Status</th>
+                  )}
                   {storeType === "QUICK_COMMERCE" && (
                     <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Stock History</th>
                   )}
@@ -282,34 +289,35 @@ export function StoreProductsPage(): ReactElement {
                           {product.variants.filter((v) => v.isActive !== false).length} active out of {product.variants.length}
                         </span>
                       </td>
-                      <td className="p-4">
-                        {hasLowStock(product) ? (
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200"
-                            data-testid={`low-stock-badge-${product.id}`}
-                          >
-                            <AlertTriangle className="h-3 w-3" />
-                            Low Stock
-                          </span>
-                        ) : (
-                          <span
-                            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200"
-                            data-testid={`in-stock-badge-${product.id}`}
-                          >
-                            In Stock
-                          </span>
-                        )}
-                      </td>
+                      {storeType === "QUICK_COMMERCE" && (
+                        <td className="p-4">
+                          {hasLowStock(product) ? (
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-100 text-amber-800 border border-amber-200"
+                              data-testid={`low-stock-badge-${product.id}`}
+                            >
+                              <AlertTriangle className="h-3 w-3" />
+                              Low Stock
+                            </span>
+                          ) : (
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-100 text-emerald-800 border border-emerald-200"
+                              data-testid={`in-stock-badge-${product.id}`}
+                            >
+                              In Stock
+                            </span>
+                          )}
+                        </td>
+                      )}
                       {storeType === "QUICK_COMMERCE" && (
                         <td className="p-4 text-left">
                           <button
                             onClick={() => navigate(getScopedPath(`/store/products/${product.id}/stock-history`, "store", isSubdomainMode))}
-                            className="p-1.5 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all inline-flex items-center gap-1.5"
+                            className="p-2 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all"
                             title="Stock History"
                             data-testid={`stock-history-${product.id}`}
                           >
-                            <History className="h-3.5 w-3.5" />
-                            <span className="text-[10px] font-bold">View History</span>
+                            <History className="h-4 w-4" />
                           </button>
                         </td>
                       )}
@@ -318,7 +326,7 @@ export function StoreProductsPage(): ReactElement {
                           <button
                             onClick={() => navigate(getScopedPath(`/store/products/${product.id}/edit`, "store", isSubdomainMode))}
                             className="p-2 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all"
-                            title="Edit Product"
+                            title={`Edit ${term}`}
                             data-testid={`edit-product-${product.id}`}
                           >
                             <Edit2 className="h-4 w-4" />
@@ -377,15 +385,15 @@ export function StoreProductsPage(): ReactElement {
           <div className="h-16 w-16 bg-gorola-mint/20 text-gorola-pine rounded-full flex items-center justify-center">
             <Plus className="h-8 w-8" />
           </div>
-          <h3 className="text-lg font-bold text-gorola-charcoal font-heading">No products registered</h3>
+          <h3 className="text-lg font-bold text-gorola-charcoal font-heading">No {termPlural.toLowerCase()} registered</h3>
           <p className="text-sm text-gorola-slate max-w-xs font-dm-sans">
-            Start expanding your catalog by registering your first product variants today.
+            Start expanding your catalog by registering your first {term.toLowerCase()} variants today.
           </p>
           <button
             onClick={() => navigate(getScopedPath("/store/products/new", "store", isSubdomainMode))}
             className="px-4 py-2.5 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl text-xs font-bold uppercase tracking-wider"
           >
-            Create Product
+            Create {term}
           </button>
         </div>
       )}

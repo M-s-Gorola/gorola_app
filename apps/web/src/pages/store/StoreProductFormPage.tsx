@@ -101,12 +101,14 @@ export function StoreProductFormPage(): ReactElement {
     queryKey: ["store", "profile"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<{ data: { storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE" } }>("/api/v1/store/profile");
-      return res.data;
+      const res = await api.get<{ success: boolean; data: { storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE" } }>("/api/v1/store/profile");
+      return res.data.data;
     }
   });
 
-  const storeType = profileData?.data?.storeType || "QUICK_COMMERCE";
+  const storeType = profileData?.storeType || "QUICK_COMMERCE";
+  const isBooking = storeType === "BOOKING_COMMERCE";
+  const term = isBooking ? "Service" : "Product";
 
   // Modal states
   const [restockVariant, setRestockVariant] = useState<{ id: string; label: string; stockQty: number } | null>(null);
@@ -259,7 +261,7 @@ export function StoreProductFormPage(): ReactElement {
               unit: v.unit,
               lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
               isActive: v.isActive !== false,
-              isAvailableForBooking: v.isAvailableForBooking !== false
+              isAvailableForBooking: isBooking ? (v.isActive !== false) : (v.isAvailableForBooking !== false)
             });
           });
 
@@ -274,13 +276,14 @@ export function StoreProductFormPage(): ReactElement {
               stockQty: v.stockQty,
               unit: v.unit,
               lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
-              isAvailableForBooking: v.isAvailableForBooking !== false
+              isActive: isBooking ? (v.isActive !== false) : undefined,
+              isAvailableForBooking: isBooking ? (v.isActive !== false) : (v.isAvailableForBooking !== false)
             });
           });
 
         await Promise.all([...updateVariantPromises, ...createVariantPromises]);
 
-        toast.success("Product and variants updated successfully!");
+        toast.success(`${term} and variants updated successfully!`);
       } else {
         // Create Mode:
         await api.post("/api/v1/store/products", {
@@ -294,11 +297,12 @@ export function StoreProductFormPage(): ReactElement {
             stockQty: v.stockQty,
             unit: v.unit,
             lowStockThreshold: (v.lowStockThreshold === undefined || v.lowStockThreshold === null || String(v.lowStockThreshold).trim() === "" || Number(v.lowStockThreshold) === 0) ? undefined : Number(v.lowStockThreshold),
-            isAvailableForBooking: v.isAvailableForBooking !== false
+            isActive: isBooking ? (v.isActive !== false) : undefined,
+            isAvailableForBooking: isBooking ? (v.isActive !== false) : (v.isAvailableForBooking !== false)
           }))
         });
 
-        toast.success("Product created successfully!");
+        toast.success(`${term} created successfully!`);
       }
 
       await Promise.all([
@@ -351,10 +355,10 @@ export function StoreProductFormPage(): ReactElement {
       {/* Header */}
       <div>
         <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">
-          {isEditMode ? "Edit Product" : "New Catalog Entry"}
+          {isEditMode ? `Edit ${term}` : `New ${term}`}
         </h1>
         <p className="text-sm text-gorola-slate font-dm-sans">
-          Configure product properties and individual pricing, unit, and stock metrics.
+          Configure {term.toLowerCase()} properties and individual pricing, unit, and {isBooking ? "" : "stock "}metrics.
         </p>
       </div>
 
@@ -369,12 +373,12 @@ export function StoreProductFormPage(): ReactElement {
             {/* Name */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-gorola-charcoal" htmlFor="product-name">
-                Product Name
+                {term} Name
               </label>
               <Input
                 id="product-name"
                 type="text"
-                placeholder="Fresh Organic Apples"
+                placeholder={isBooking ? "Consulting Session" : "Fresh Organic Apples"}
                 {...register("name")}
                 aria-invalid={errors.name ? "true" : undefined}
                 className="rounded-xl border-gorola-mint/20 placeholder-gorola-slate/50"
@@ -432,7 +436,7 @@ export function StoreProductFormPage(): ReactElement {
             {/* Image URL */}
             <div className="flex flex-col gap-2">
               <label className="text-xs font-bold text-gorola-charcoal" htmlFor="product-imageUrl">
-                Product Image Path / URL
+                {term} Image Path / URL
               </label>
               <Input
                 id="product-imageUrl"
@@ -457,7 +461,7 @@ export function StoreProductFormPage(): ReactElement {
             <div className="flex justify-between items-center mb-2">
               <div>
                 <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/75">
-                  Product Variants
+                  {term} Variants
                 </h3>
                 <p className="text-[10px] text-gorola-slate mt-0.5 font-dm-sans">
                   Enforces unique labeling (e.g. "Pack of 3", "1kg", "500g").
@@ -470,7 +474,7 @@ export function StoreProductFormPage(): ReactElement {
                 id="add-variant-btn"
               >
                 <Plus className="h-3.5 w-3.5" />
-                Add Variant
+                {isBooking ? "Add Service" : "Add Variant"}
               </button>
             </div>
 
@@ -505,21 +509,19 @@ export function StoreProductFormPage(): ReactElement {
                       <span className="text-[10px] font-extrabold uppercase text-gorola-pine">
                         Variant #{index + 1}
                       </span>
-                      {hasId ? (
-                        <div className="flex items-center gap-2">
-                          <label className="text-[10px] font-bold text-gorola-slate cursor-pointer select-none flex items-center gap-1.5">
-                            <input
-                              type="checkbox"
-                              id={`variant-active-${index}`}
-                              {...register(`variants.${index}.isActive`)}
-                              className="h-3.5 w-3.5 rounded border-gorola-mint/30 text-gorola-pine focus:ring-gorola-pine/20 cursor-pointer"
-                              aria-label="Active status"
-                            />
-                            Active status
-                          </label>
-                        </div>
-                      ) : (
-                        fields.length > 1 && (
+                      <div className="flex items-center gap-4">
+                        <label className="text-[10px] font-bold text-gorola-slate cursor-pointer select-none flex items-center gap-1.5">
+                          <input
+                            type="checkbox"
+                            id={`variant-active-${index}`}
+                            {...register(`variants.${index}.isActive`)}
+                            className="h-3.5 w-3.5 rounded border-gorola-mint/30 text-gorola-pine focus:ring-gorola-pine/20 cursor-pointer"
+                            aria-label="Active status"
+                            data-testid={`variant-active-toggle-${index}`}
+                          />
+                          Active status
+                        </label>
+                        {!hasId && fields.length > 1 && (
                           <button
                             type="button"
                             onClick={() => remove(index)}
@@ -529,8 +531,8 @@ export function StoreProductFormPage(): ReactElement {
                             <Trash2 className="h-3.5 w-3.5" />
                             Remove
                           </button>
-                        )
-                      )}
+                        )}
+                      </div>
                     </div>
 
                     <div className="grid gap-3 sm:grid-cols-2">
@@ -703,9 +705,9 @@ export function StoreProductFormPage(): ReactElement {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="grid gap-3 sm:grid-cols-1">
                         {/* Variant Price */}
-                        <div className="flex flex-col gap-1.5">
+                        <div className="flex flex-col gap-1.5 max-w-[200px]">
                           <label
                             className="text-[10px] font-bold text-gorola-charcoal"
                             htmlFor={`variant-price-${index}`}
@@ -727,23 +729,6 @@ export function StoreProductFormPage(): ReactElement {
                               {errors.variants[index].price.message}
                             </p>
                           )}
-                        </div>
-
-                        {/* Service Availability Toggle */}
-                        <div className="flex flex-col gap-1.5">
-                          <span className="text-[10px] font-bold text-gorola-charcoal">Available for Booking</span>
-                          <div className="flex items-center gap-2 h-9">
-                            <input
-                              type="checkbox"
-                              role="switch"
-                              aria-label="Available for Booking"
-                              {...register(`variants.${index}.isAvailableForBooking`)}
-                              disabled={!isVariantActive}
-                              className="h-4 w-4 rounded border-gorola-mint/30 text-gorola-pine focus:ring-gorola-pine/20 cursor-pointer"
-                              data-testid={`variant-availability-toggle-${index}`}
-                            />
-                            <span className="text-[10px] text-gorola-slate font-dm-sans">Show service to customers</span>
-                          </div>
                         </div>
                       </div>
                     )}
@@ -770,7 +755,7 @@ export function StoreProductFormPage(): ReactElement {
             className="rounded-xl bg-gorola-pine hover:bg-gorola-pine/90 text-white px-6 py-3 h-auto text-xs font-bold uppercase tracking-wider shadow-md shadow-gorola-pine/15"
             id="save-product-btn"
           >
-            {isSubmitting ? "Saving..." : isEditMode ? "Save Changes" : "Create Product"}
+            {isSubmitting ? "Saving..." : isEditMode ? "Save Changes" : `Create ${term}`}
           </Button>
         </div>
       </form>

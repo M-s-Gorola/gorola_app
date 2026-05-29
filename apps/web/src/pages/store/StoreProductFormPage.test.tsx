@@ -386,7 +386,7 @@ describe("StoreProductFormPage", () => {
     });
   });
 
-  it("renders availability toggles and hides stock fields for BOOKING_COMMERCE stores", async () => {
+  it("renders active toggle, swaps terminology, and hides stock fields for BOOKING_COMMERCE stores", async () => {
     getMock.mockImplementation((url: string) => {
       if (url === "/api/v1/store/categories") {
         return Promise.resolve({ data: { success: true, data: mockCategories } });
@@ -401,17 +401,102 @@ describe("StoreProductFormPage", () => {
 
     renderProductForm(["/store/products/new"]);
 
-    // Verify product fields render
-    expect(await screen.findByLabelText(/product name/i)).toBeInTheDocument();
+    // Verify terminology is normalized to "Service"
+    expect(await screen.findByText("New Service")).toBeInTheDocument();
+    expect(await screen.findByLabelText(/service name/i)).toBeInTheDocument();
+    expect(await screen.findByText("Add Service")).toBeInTheDocument();
+    expect(await screen.findByRole("button", { name: "Create Service" })).toBeInTheDocument();
 
     // Verify stock related fields are NOT in the document
     expect(screen.queryByLabelText(/stock quantity/i)).not.toBeInTheDocument();
     expect(screen.queryByLabelText(/low stock alert/i)).not.toBeInTheDocument();
 
-    // Verify availability toggle is rendered instead
-    const availabilityToggle = screen.getByTestId("variant-availability-toggle-0");
-    expect(availabilityToggle).toBeInTheDocument();
-    expect(availabilityToggle).toBeChecked();
+    // Verify redundant availability toggle is NOT rendered
+    expect(screen.queryByTestId("variant-availability-toggle-0")).not.toBeInTheDocument();
+
+    // Verify the standard Active toggle is rendered for the first variant card
+    const activeToggle = await screen.findByTestId("variant-active-toggle-0");
+    expect(activeToggle).toBeInTheDocument();
+    expect(activeToggle).toBeChecked();
+  });
+
+  it("submits correct payload with synced isAvailableForBooking on creation for BOOKING_COMMERCE", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/store/categories") {
+        return Promise.resolve({ data: { success: true, data: mockCategories } });
+      }
+      if (url === "/api/v1/store/profile") {
+        return Promise.resolve({
+          data: { success: true, data: { storeType: "BOOKING_COMMERCE" } }
+        });
+      }
+      return Promise.reject(new Error(`Not Found: ${url}`));
+    });
+
+    postMock.mockResolvedValueOnce({ data: { success: true } });
+
+    renderProductForm(["/store/products/new"]);
+
+    const user = userEvent.setup();
+
+    // Fill form
+    const nameInput = await screen.findByLabelText(/service name/i);
+    await user.type(nameInput, "Premium Consultancy");
+    const subcatSelect = screen.getByLabelText(/sub-category selection/i);
+    await user.selectOptions(subcatSelect, "subcat-1");
+
+    // Add another variant
+    const addVariantBtn = await screen.findByRole("button", { name: "Add Service" });
+    await user.click(addVariantBtn);
+
+    // Fill details for Variant 0
+    const labels = await screen.findAllByLabelText(/unique label/i);
+    const units = await screen.findAllByLabelText(/standard unit/i);
+    const prices = await screen.findAllByLabelText(/price/i);
+
+    expect(labels).toHaveLength(2);
+
+    await user.type(labels[0]!, "60 Min Session");
+    await user.clear(units[0]!);
+    await user.type(units[0]!, "session");
+    await user.type(prices[0]!, "1000");
+
+    // Fill details for Variant 1
+    await user.type(labels[1]!, "90 Min Session");
+    await user.clear(units[1]!);
+    await user.type(units[1]!, "session");
+    await user.type(prices[1]!, "1500");
+
+    // Variant 0: Active status toggle is checked by default (Active: true)
+    // Variant 1: Deactivate it
+    const activeToggles = await screen.findAllByTestId(/variant-active-toggle-/);
+    expect(activeToggles).toHaveLength(2);
+    await user.click(activeToggles[1]!);
+
+    const saveBtn = await screen.findByRole("button", { name: "Create Service" });
+    await user.click(saveBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/store/products", expect.objectContaining({
+        name: "Premium Consultancy",
+        variants: [
+          expect.objectContaining({
+            label: "60 Min Session",
+            unit: "session",
+            price: 1000,
+            isActive: true,
+            isAvailableForBooking: true
+          }),
+          expect.objectContaining({
+            label: "90 Min Session",
+            unit: "session",
+            price: 1500,
+            isActive: false,
+            isAvailableForBooking: false
+          })
+        ]
+      }));
+    });
   });
 
   it("allows existing variant stock to be restocked and adjusted via modals", async () => {

@@ -94,7 +94,7 @@ export function StoreDashboardPage(): ReactElement {
     };
   }, [storeId, accessToken, queryClient]);
 
-  const { data: storeProfile } = useQuery({
+  const { data: storeProfile, isLoading: isLoadingProfile } = useQuery({
     queryKey: ["store", "profile"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
@@ -254,49 +254,62 @@ export function StoreDashboardPage(): ReactElement {
       </header>
 
       {/* Store Availability Toggle Card */}
-      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm hover:shadow-md transition-all duration-300">
-        <div className="flex items-center gap-4">
-          <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors ${
-            storeProfile?.isAcceptingOrders ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
-          }`}>
-            <ShoppingBag className="h-6 w-6" />
+      {isLoadingProfile || !storeProfile ? (
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm animate-pulse">
+          <div className="flex items-center gap-4 w-full">
+            <div className="h-12 w-12 bg-gorola-mint/10 rounded-xl" />
+            <div className="space-y-2 flex-1">
+              <div className="h-5 bg-gorola-mint/10 rounded w-1/3" />
+              <div className="h-3 bg-gorola-mint/10 rounded w-2/3" />
+            </div>
           </div>
-          <div>
-            <h2 className="font-heading text-lg font-bold text-gorola-charcoal flex items-center gap-2">
-              Store Status:{" "}
-              <span className={`text-sm px-2.5 py-0.5 rounded-full font-sans font-bold ${
-                storeProfile?.isAcceptingOrders ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
-              }`}>
-                {storeProfile?.isAcceptingOrders ? "Accepting Orders" : "Closed"}
-              </span>
-            </h2>
-            <p className="text-xs text-gorola-slate font-dm-sans mt-0.5">
-              {storeProfile?.isAcceptingOrders
-                ? "Your store is active, and products/services are visible to buyers on the app."
-                : "Your store is hidden. Buyers cannot browse or book your products/services."}
-            </p>
-          </div>
+          <div className="h-6 w-11 bg-gorola-mint/10 rounded-full shrink-0" />
         </div>
+      ) : (
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="flex items-center gap-4">
+            <div className={`h-12 w-12 rounded-xl flex items-center justify-center transition-colors ${
+              storeProfile?.isAcceptingOrders ? "bg-emerald-50 text-emerald-600" : "bg-red-50 text-red-500"
+            }`}>
+              <ShoppingBag className="h-6 w-6" />
+            </div>
+            <div>
+              <h2 className="font-heading text-lg font-bold text-gorola-charcoal flex items-center gap-2">
+                Store Status:{" "}
+                <span className={`text-sm px-2.5 py-0.5 rounded-full font-sans font-bold ${
+                  storeProfile?.isAcceptingOrders ? "bg-emerald-100 text-emerald-800" : "bg-red-100 text-red-800"
+                }`}>
+                  {storeProfile?.isAcceptingOrders ? "Accepting Orders" : "Closed"}
+                </span>
+              </h2>
+              <p className="text-xs text-gorola-slate font-dm-sans mt-0.5">
+                {storeProfile?.isAcceptingOrders
+                  ? "Your store is active, and products/services are visible to buyers on the app."
+                  : "Your store is hidden. Buyers cannot browse or book your products/services."}
+              </p>
+            </div>
+          </div>
 
-        <div className="flex items-center">
-          <button
-            role="switch"
-            aria-checked={storeProfile?.isAcceptingOrders ?? false}
-            aria-label="Toggle store status"
-            disabled={isUpdating || storeProfile === undefined}
-            onClick={() => handleToggleAvailability(!storeProfile?.isAcceptingOrders)}
-            className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-              storeProfile?.isAcceptingOrders ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
-            }`}
-          >
-            <span
-              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                storeProfile?.isAcceptingOrders ? "translate-x-6" : "translate-x-1"
+          <div className="flex items-center">
+            <button
+              role="switch"
+              aria-checked={storeProfile?.isAcceptingOrders ?? false}
+              aria-label="Toggle store status"
+              disabled={isUpdating || storeProfile === undefined}
+              onClick={() => handleToggleAvailability(!storeProfile?.isAcceptingOrders)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed ${
+                storeProfile?.isAcceptingOrders ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
               }`}
-            />
-          </button>
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  storeProfile?.isAcceptingOrders ? "translate-x-6" : "translate-x-1"
+                }`}
+              />
+            </button>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* KPI Cards Grid */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">

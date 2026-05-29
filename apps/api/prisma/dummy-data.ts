@@ -328,7 +328,7 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
       },
       {
         id: "adv_2",
-        storeId: storeAId,
+        storeId: storeBId,
         title: "Medical Essentials at Your Door",
         imageUrl: "https://fastly.picsum.photos/id/55/4608/3072.jpg?hmac=ahGhylwdN52ULB37deeMZX6T_G7NiERtoPhwydMvUKQ",
         linkUrl: "/categories/medical",
