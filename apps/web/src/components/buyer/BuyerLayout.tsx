@@ -15,7 +15,7 @@ export function BuyerLayout({ children }: BuyerLayoutProps): ReactElement {
       <BuyerCartHydration />
       <BuyerNav />
       <CartDrawer />
-      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6" role="main">
+      <main className="mx-auto w-full max-w-6xl flex-1 px-2 sm:px-4 py-6" role="main">
         {children}
       </main>
       <BuyerFooter />

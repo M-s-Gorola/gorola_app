@@ -125,9 +125,9 @@ describe("ProductDetailPage", () => {
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute("src", "https://cdn.example.com/apple.jpg");
 
-    expect(screen.getByRole("button", { name: "500g" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "1kg" })).toBeInTheDocument();
-    expect(screen.getByText("Rs 120.00")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "500g" })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "1kg" })[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Rs 120.00")[0]).toBeInTheDocument();
   });
 
   it("updates displayed price when variant changes", async () => {
@@ -155,8 +155,8 @@ describe("ProductDetailPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "Apple" });
-    fireEvent.click(screen.getByRole("button", { name: "1kg" }));
-    expect(screen.getByText("Rs 220.00")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "1kg" })[0]!);
+    expect(screen.getAllByText("Rs 220.00")[0]).toBeInTheDocument();
   });
 
   it("posts selected variant and quantity when add to cart is clicked", async () => {
@@ -189,7 +189,7 @@ describe("ProductDetailPage", () => {
     await screen.findByRole("heading", { name: "Apple" });
 
     // 2. FORCE the test runner to wait until the dynamic API variants are completely bound to the UI buttons
-    expect(await screen.findByRole("button", { name: "500g" })).toBeInTheDocument();
+    expect((await screen.findAllByRole("button", { name: "500g" }))[0]).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));

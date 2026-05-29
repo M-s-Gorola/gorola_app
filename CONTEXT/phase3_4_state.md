@@ -1146,15 +1146,91 @@ Quick Commerce inventory metrics (stock quantity, low-stock alerts, restock/adju
 
 ---
 
-### 3.10 — Store Owner E2E Tests (Playwright)
+### 3.10 — Store Owner Panel & Booking Commerce E2E Verification
 
-- [ ] `tests/e2e/store-owner-journey.spec.ts`:
-  - [ ] Login → 2FA → dashboard loads with correct KPI counts
-  - [ ] Create product with 2 variants → appears in product list → visible in buyer catalog
-  - [ ] Update order status: PLACED → PREPARING → OUT_FOR_DELIVERY → DELIVERED
-  - [ ] Restock a low-stock variant → stock history shows REFILL entry → dashboard low stock alert clears
-  - [ ] Create discount code `E2EDEAL` → buyer applies it in cart → discount applied correctly
-  - [ ] Submit advertisement → appears as "Pending" → admin approves (via direct DB update in test) → appears on buyer home page
+**Goal / Scenario Matrix:**
+Verify all Store Owner dashboard workflows, catalog, inventory, and promotions features under multi-actor concurrent isolation alongside stacked booking discounts to ensure a 100% stable, green regression-free commerce platform.
+
+> [!IMPORTANT]
+> **Multi-Actor Context Isolation:**
+> Testing order state transitions requires running "Buyer" and "Store Owner" contexts concurrently within the same test. Playwright `browserContext` objects isolate state so Socket.IO status transitions update the buyer interface instantly without page reloads.
+>
+> **Admin Advertisement Bypass Gate:**
+> Since Phase 4 is not started, we implement a test backdoor route `POST /api/v1/test/advertisements/:id/approve` (restricted strictly under `process.env.NODE_ENV === "test"`) to programmatically approve ad entries, allowing storefront banner carousel verification.
+
+> [!TIP]
+> **E2E Deterministic Principles & Anti-Pattern Protections (from ISSUES GUIDE):**
+> 1. **Total State Isolation & Retry Safety:** Never use static coupon codes or duplicate titles that collide on test retries. Suffix all coupon/ad/product labels dynamically with `${testInfo.project.name}-${testInfo.retry}` or `testInfo.retry`.
+> 2. **Explicit IP Binding:** Use `127.0.0.1` explicitly instead of `localhost` inside all URL redirects and backend checks to bypass OS-level IPv6 DNS resolution lags.
+> 3. **Content-Aware Network Gates:** Never wait for a simple URL. When verifying database updates (e.g. setting store live/closed or modifying stock), use predicate validations that inspect the JSON body:
+>    `page.waitForResponse(r => r.url().includes(...) && r.request().method() === 'POST')` with item validation.
+> 4. **Radix Overlay & Focus Cooldowns:** Before triggering consecutive actions on the same dropdown, modal or drawer trigger, assert that the overlay menu is fully unmounted (`expect(page.getByRole('menu')).not.toBeVisible()`) and add a brief event-binding cooldown (300ms) to let Radix asynchronously restore focus.
+> 5. **Lead-Time Timezone Immunity:** Shift all timeslot bookings to **at least +2 days** in the future to completely bypass midnight-boundary and server/client timezone offset mismatches.
+> 6. **Production Preview Build-First:** Avoid lazy dev mode HMR lazy-compilation in CI to eliminate E2E timeouts. Pre-build artifacts (`pnpm build`) and serve preview bundles (`pnpm preview`) to minimize CPU runtime overhead.
+> 7. **Shadow Port Isolation:** Run the automated E2E API server on an isolated shadow port (`3002`) separate from dev (`3001`). Configure dynamic client proxy routing for both HTTP `/api` and WebSockets `/socket.io` with `ws: true`.
+> 8. **Failsafe Teardown & Socket Force-Disconnects:** Disable OTEL SDK telemetry (`OTEL_ENABLED: 'false'`) to prevent exit deadlocks, use forceful connection `.disconnect()` instead of graceful `.quit()`, and implement a 10s exit guillotine timeout.
+> 9. **Windows Stream Pipe Leak Prevention:** Configure `reuseExistingServer: !process.env.CI` for local test servers to prevent orphaned backend child processes (`tsx watch` -> `node`) from leaking stdin/stdout streams and hanging terminals on Windows.
+
+
+**Proposed Scope & Checklist:**
+
+- [ ] **Test-Only API Backdoor Setup (`promotion.controller.ts`):**
+  - [ ] Implement `POST /api/v1/test/advertisements/:id/approve` under `process.env.NODE_ENV === "test"` conditional guard.
+  - [ ] Register route in Fastify routes map.
+
+- [ ] **E2E-020: Merchant Authentication & 2FA Setup Flow:**
+  - [ ] Login with unconfigured store owner credentials.
+  - [ ] Access settings profile, configure 2FA, generate and verify TOTP code.
+
+- [ ] **E2E-021: Live Store Status Toggle & Real-time Buyer Visibility:**
+  - [ ] Toggle store status to Closed -> Verify storefront banner shows store is offline.
+  - [ ] Toggle store status to Open -> Verify storefront is active.
+
+- [ ] **E2E-022: Multi-Actor Quick Commerce Live Order Status Transitions:**
+  - [ ] Buyer places order (COD).
+  - [ ] Merchant immediately receives Socket.IO alert.
+  - [ ] Merchant transitions status PLACED -> PREPARING -> OUT_FOR_DELIVERY -> DELIVERED.
+  - [ ] Buyer sees status updates in real-time.
+
+- [ ] **E2E-023: Inventory Restock & Audit History Logging:**
+  - [ ] Merchant updates variant stock using Restock Modal (refills quantity, logs "REFILL").
+  - [ ] Merchant updates variant stock using Adjust Stock Modal (manual count, logs "ADJUSTMENT" with reason length check).
+  - [ ] Verify audit log entries rendered in Stock History list.
+
+- [ ] **E2E-024: Tenant-Isolated Discount Code Management:**
+  - [ ] Merchant creates coupon `LOCAL25` (25% off, min order ₹300).
+  - [ ] Buyer applies it to Store A items -> cart applies discount.
+  - [ ] Buyer adds Store B items -> verifies discount applies only to Store A subtotal.
+  - [ ] Buyer drops Store A items below ₹300 -> cart automatically re-validates and removes coupon.
+
+- [ ] **E2E-025: Booking Commerce UI Isolation & Normalization:**
+  - [ ] Log in as Booking store owner -> Verify sidebar navigation swaps "Products" to "Services".
+  - [ ] Verify stock table columns, restock/adjust buttons, and low stock thresholds are completely hidden.
+  - [ ] Verify booking list normalizes `DELIVERED` status to render as `COMPLETED`.
+
+- [ ] **E2E-026: Store Advertisements Lifecycle & Dynamic Carousel:**
+  - [ ] Merchant submits a banner promo ad -> Shows "Pending Approval".
+  - [ ] Playwright runner triggers test-only approve backdoor route.
+  - [ ] Buyer storefront home page displays the approved banner inside the promo carousel.
+
+- [ ] **E2E-027: Store Profile Settings & Password Migration:**
+  - [ ] Merchant updates store profile description, phone number, and password credentials.
+  - [ ] Logs out, and logs back in using the new password successfully.
+
+- [ ] **E2E-028: Store-Wide Offers Creation & Automatic Application:**
+  - [ ] Merchant creates store offer (15% off, min order ₹400).
+  - [ ] Buyer sees offer pill -> Cart meets ₹400 -> Offer applies automatically.
+  - [ ] Merchant deactivates offer -> Checkout stops applying offer.
+
+- [ ] **E2E-033: Stacked Booking Discount Code & Store-Wide Offer:**
+  - [ ] Buyer schedules service variant from Booking store with both active store offer and applied coupon code.
+  - [ ] Booking Checkout calculates stacked values correctly.
+  - [ ] Booking Confirmation Page renders collapsible breakdown showing individual deductions with toggle chevron.
+
+---
+
+**Verification:**
+- [ ] Run Playwright suite command: `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts tests/e2e/booking-journey.spec.ts`
 
 ---
 

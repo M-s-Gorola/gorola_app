@@ -134,52 +134,89 @@ export function ProductDetailPage(): ReactElement {
   const itemTotal = (Number(selected?.price ?? 0) * activeQuantity).toFixed(2);
 
   return (
-    <section ref={containerRef} className="grid gap-8 rounded-3xl bg-white/80 p-8 shadow-xl md:grid-cols-2">
+    <section ref={containerRef} className="grid gap-6 rounded-3xl bg-white/80 p-6 shadow-xl md:grid-cols-2 md:p-8 md:gap-8">
       <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-gorola-slate-mist/10">
         <img
           src={query.data.imageUrl}
           alt={query.data.name}
-          className="h-full w-full object-contain p-4"
+          className="h-full w-full object-cover"
           onError={(e) => {
             (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/600/600?grayscale";
           }}
         />
       </div>
-      <div className="flex flex-col space-y-4">
-        <div>
-          <h1 className="font-playfair text-4xl font-bold text-gorola-charcoal">{query.data.name}</h1>
-          <p className="mt-2 font-dm-sans text-lg font-medium text-gorola-pine">{query.data.store.name}</p>
-          <p className="font-dm-sans text-sm text-gorola-slate">{query.data.store.phone}</p>
-        </div>
-        
-        <div className="h-px w-full bg-gorola-slate-mist/30" />
-        
-        <p className="font-dm-sans text-base leading-relaxed text-gorola-charcoal/80">
-          {query.data.description}
-        </p>
+      <div className="flex flex-col justify-between space-y-6">
+        <div className="space-y-4">
+          <div>
+            <h1 className="font-playfair text-3xl sm:text-4xl font-bold text-gorola-charcoal">{query.data.name}</h1>
+            <p className="mt-2 font-dm-sans text-base sm:text-lg font-medium text-gorola-pine">{query.data.store.name}</p>
+            <p className="font-dm-sans text-xs sm:text-sm text-gorola-slate">{query.data.store.phone}</p>
+          </div>
+          
+          <div className="h-px w-full bg-gorola-slate-mist/30" />
+          
+          <p className="font-dm-sans text-sm sm:text-base leading-relaxed text-gorola-charcoal/80">
+            {query.data.description}
+          </p>
 
-        <div className="flex flex-wrap gap-2 py-2">
-          {variants.map((variant, index) => (
-            <button
-              key={variant.id}
-              type="button"
-              data-testid="variant-pill"
-              onClick={() => {
-                setSelectedVariantIndex(index);
-              }}
-              className={`rounded-full border px-4 py-1.5 font-dm-sans text-sm transition-all duration-200 ${
-                selectedVariantIndex === index
-                  ? "border-gorola-saffron bg-gorola-saffron/10 text-gorola-charcoal font-semibold"
-                  : "border-gorola-pine/20 text-gorola-slate hover:border-gorola-pine/40"
-              }`}
-            >
-              {variant.label}
-            </button>
-          ))}
+          {/* Desktop-only Variant Selector */}
+          <div className="hidden md:flex flex-wrap gap-2 py-2">
+            {variants.map((variant, index) => (
+              <button
+                key={variant.id}
+                type="button"
+                data-testid="variant-pill"
+                onClick={() => {
+                  setSelectedVariantIndex(index);
+                }}
+                className={`rounded-full border px-4 py-1.5 font-dm-sans text-sm transition-all duration-200 ${
+                  selectedVariantIndex === index
+                    ? "border-gorola-saffron bg-gorola-saffron/10 text-gorola-charcoal font-semibold"
+                    : "border-gorola-pine/20 text-gorola-slate hover:border-gorola-pine/40"
+                }`}
+              >
+                {variant.label}
+              </button>
+            ))}
+          </div>
         </div>
+ 
+        <div className="space-y-6">
+          {/* Mobile-only Variant + Price Row */}
+          <div className="flex md:hidden items-center justify-between gap-4 py-3 border-y border-gorola-slate-mist/20">
+            <div className="flex flex-wrap gap-2">
+              {variants.map((variant, index) => (
+                <button
+                  key={variant.id}
+                  type="button"
+                  data-testid="variant-pill"
+                  onClick={() => {
+                    setSelectedVariantIndex(index);
+                  }}
+                  className={`rounded-full border px-4 py-1.5 font-dm-sans text-sm transition-all duration-200 ${
+                    selectedVariantIndex === index
+                      ? "border-gorola-saffron bg-gorola-saffron/10 text-gorola-charcoal font-semibold"
+                      : "border-gorola-pine/20 text-gorola-slate hover:border-gorola-pine/40"
+                  }`}
+                >
+                  {variant.label}
+                </button>
+              ))}
+            </div>
+            <div className="text-right flex-shrink-0">
+              <p className="font-dm-sans text-2xl sm:text-3xl font-bold text-gorola-charcoal" data-testid="product-price">
+                Rs {selected?.price ?? "0.00"}
+              </p>
+              {query.data.store.storeType !== "BOOKING_COMMERCE" && activeQuantity > 1 && (
+                <p className="font-dm-sans text-xs sm:text-sm text-gorola-slate mt-0.5">
+                  (Total: Rs {itemTotal})
+                </p>
+              )}
+            </div>
+          </div>
 
-        <div className="mt-auto space-y-6 pt-4">
-          <div className="flex items-baseline gap-3">
+          {/* Desktop-only Price Block */}
+          <div className="hidden md:flex items-baseline gap-3 pt-2">
             <p className="font-dm-sans text-3xl font-bold text-gorola-charcoal" data-testid="product-price">
               Rs {selected?.price ?? "0.00"}
             </p>
@@ -189,6 +226,7 @@ export function ProductDetailPage(): ReactElement {
               </p>
             )}
           </div>
+          <div className="pt-2">
           {query.data.store.storeType === "BOOKING_COMMERCE" ? (
             <div className="flex items-center gap-4">
               <button
@@ -309,6 +347,7 @@ export function ProductDetailPage(): ReactElement {
               )}
             </div>
           )}
+          </div>
         </div>
       </div>
     </section>
