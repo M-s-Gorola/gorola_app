@@ -11,7 +11,7 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | 🟡 IN PROGRESS | Phase 3.1–3.9.2 complete; Phase 3.10 E2E Tests remaining. |
+| Phase 3 | Store Owner Panel | 🟡 IN PROGRESS | Phase 3.1–3.9.3 complete; Phase 3.10 E2E Tests remaining. |
 | Phase 4 | Admin Panel       | 🔴 NOT STARTED | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
@@ -19,7 +19,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-05-30
-- **Session Summary:** Completed Phase 3.9.2 (Booking Commerce Isolation & Terminology Normalization) and UX polish completely: standardized profile queries to return `res.data.data`, dynamically mapped product/service terminology, conditionally hid stock columns/controls from booking stores, unified variant active status control, refactored stock history button to clean icon-only design, and integrated query loading skeleton placeholders to eliminate layout and store availability status flickering on page reload. All lint, typecheck, and unit test suites are fully passing.
+- **Session Summary:** Completed Dynamic Cart Discount Logic & high-density mobile layout optimization: implemented reactive discount re-validation in CartDrawer on subtotal changes, refactored buyer Category/Subcategory/Product grids to high-density 2-column mobile layout, redesigned category cards to responsive vertical layouts on mobile viewports to prevent content overflow, and streamlined product cards by removing store names and locking name heights for perfectly aligned visual layout.
 - **Next Session Must Start With:** Phase 3.10 — Store Owner E2E Tests (Playwright).
 
 - **In Progress Right Now:** None.
@@ -1903,4 +1903,41 @@ The existing test "should toggle variant availability" asserted the old buggy be
 - **Sidebar & Mobile Navigation Skeletons:** Implemented vertical and horizontal pulse skeletons in `StoreLayout.tsx` that render while the query resolves, preventing terminology shifts and structural layout flashes.
 
 **Result:** Typechecks, lints, and all 508 unit and integration tests pass perfectly green.
-```
+
+---
+
+### Session 34 — Dynamic Discount Logic & Mobile 2-Column Catalog Layout
+
+**Date:** 2026-05-30
+
+**Files Modified:**
+- `apps/web/src/components/buyer/CartDrawer.tsx`
+- `apps/web/src/components/buyer/CategoryGrid.tsx`
+- `apps/web/src/components/buyer/SubCategoryGrid.tsx`
+- `apps/web/src/components/buyer/ProductGrid.tsx`
+- `apps/web/src/pages/buyer/SearchResultsPage.tsx`
+- `apps/web/src/components/buyer/ProductGrid.test.tsx`
+- `apps/web/src/pages/buyer/OrderHistoryPage.tsx`
+
+---
+
+#### Cart Drawer Reactive Discounts & High-Density Responsive Buyer Grid
+
+**Symptom:**
+- Discount codes applied in the CartDrawer were static and did not automatically re-validate when products were added, removed, or changed in quantity.
+- The buyer catalog grids (Categories, Subcategories, Products, and Search Results) rendered in a single-column layout on mobile, restricting visual density and discoverability.
+- Horizontal flex row category cards overflowed boundaries on mobile viewports under narrow two-column grids.
+- Vertical layout of product cards was cluttered with redundant store names.
+- In the Order History page, filter tabs were cut off and unscrollable on mobile viewports due to element wrapping and shrinkage. The order cards were also excessively bulky and disproportionate on narrow screens.
+
+**Fix:**
+- **Dynamic Discount Code Re-validation:** Implemented a reactive `useEffect` hook in `CartDrawer.tsx` to automatically re-validate applied discount codes via `POST /api/v1/promotions/discounts/validate` whenever the memoized `subtotal` state changes, ensuring correct checkout calculations at all times.
+- **High-Density Mobile Grid Refactoring:** Transitioned all buyer-facing Category, Subcategory, Product, and Search Result grids and their respective skeleton screens to a default `grid-cols-2` configuration on mobile viewports.
+- **Responsive Category Cards:** Redesigned category cards in `CategoryGrid.tsx` to dynamically switch from a horizontal row layout (`sm:flex-row`) to a clean, centered vertical stack layout (`flex flex-col items-center`) on mobile viewports, fully resolving content overflow.
+- **Premium Product Card Layout:** Removed redundant store names from product cards in `ProductGrid.tsx` to streamline vertical height. Implemented line-clamping and height locks (`line-clamp-2 h-10 sm:h-12`) on product names to ensure perfectly aligned grid layouts regardless of name lengths.
+- **Order History Mobile Layout Optimization:**
+  - **Wrapping Filter Tabs:** Updated the filter tabs container in `OrderHistoryPage.tsx` to support a responsive wrapping layout (`flex-wrap`). Short filters fit on the first row, and longer filters wrap gracefully below, ensuring that all tabs are 100% visible and easily tappable on any screen size.
+  - **Zero-Whitespace Compact Cards:** Swapped order card layout from static margins/paddings to highly cohesive snug spacing (`p-3.5 sm:p-5`), narrower gaps (`gap-2.5 md:gap-4`), and removed the `border-t` line and its padding space on mobile viewports. This integrates the price, items, and action items into a single unified layout with zero whitespace gaps.
+- **Test Integrity:** Updated unit assertions in `ProductGrid.test.tsx` to align with the new store-name-free design, confirming all 309 test assertions pass flawlessly.
+
+**Result:** Typechecks, lints, and all 309 web unit and integration tests pass perfectly green.

@@ -113,7 +113,7 @@ export function SearchResultsPage(): ReactElement {
           {results.categories.length > 0 && (
             <div className="rounded-2xl bg-white/70 px-6 py-8">
               <h2 className="font-playfair text-xl text-gorola-charcoal mb-4">Categories</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 {results.categories.map((cat) => (
                   <button
                     key={`cat-${cat.id}`}
@@ -138,7 +138,7 @@ export function SearchResultsPage(): ReactElement {
           {results.subCategories.length > 0 && (
             <div className="rounded-2xl bg-white/70 px-6 py-8">
               <h2 className="font-playfair text-xl text-gorola-charcoal mb-4">Sub-Categories</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 {results.subCategories.map((sub) => (
                   <button
                     key={`sub-${sub.id}`}

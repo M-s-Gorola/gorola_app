@@ -238,7 +238,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
           className="w-full rounded-xl border border-gorola-slate-mist bg-white px-4 py-2 font-dm-sans text-sm"
         />
         <p className="font-dm-sans text-sm text-gorola-slate">Loading products...</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{skeletonCards}</div>
+        <div className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{skeletonCards}</div>
       </section>
     );
   }
@@ -294,7 +294,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
         placeholder="Search products"
         className="w-full rounded-xl border border-gorola-slate-mist bg-white px-4 py-2 font-dm-sans text-sm"
       />
-      <div ref={gridRef} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div ref={gridRef} className="grid gap-3 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {items.map((item) => (
           <article
             key={item.id}
@@ -303,7 +303,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
             className="flex flex-col rounded-2xl border border-gorola-pine/10 bg-white p-4 shadow-sm"
           >
             <Link to={`/products/${item.productId}`} className="group block cursor-pointer">
-              <div className="mb-3 h-32 w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20">
+              <div className="mb-3 h-28 sm:h-32 w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20">
                 <img
                   src={item.imageUrl}
                   alt={item.name}
@@ -313,11 +313,10 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                   }}
                 />
               </div>
-              <p className="font-dm-sans text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors" data-testid="product-name">
+              <p className="font-dm-sans text-sm sm:text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors line-clamp-2 h-10 sm:h-12 overflow-hidden" data-testid="product-name">
                 {item.name}
               </p>
             </Link>
-            <p className="mt-1 font-dm-sans text-sm text-gorola-slate">{item.storeName}</p>
             <div className="mt-auto pt-2">
               <p className="font-dm-sans text-sm text-gorola-charcoal">Rs {item.price}</p>
               <p className="mt-1 font-dm-sans text-xs text-gorola-slate">Unit: {item.unit}</p>
