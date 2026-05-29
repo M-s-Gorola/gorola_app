@@ -79,7 +79,8 @@ const productListInclude = Prisma.validator<Prisma.ProductInclude>()({
   },
   variants: {
     where: {
-      isActive: true
+      isActive: true,
+      isAvailableForBooking: true
     },
     orderBy: {
       price: "desc"
@@ -183,6 +184,9 @@ export class ProductRepository {
     const where: Prisma.ProductWhereInput = {
       isDeleted: false,
       isActive: true,
+      store: {
+        isAcceptingOrders: true
+      },
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
       ...(input.subCategoryId !== undefined ? { subCategoryId: input.subCategoryId } : {}),
       ...(input.storeId !== undefined ? { storeId: input.storeId } : {}),
@@ -242,7 +246,10 @@ export class ProductRepository {
       where: {
         id,
         isDeleted: false,
-        isActive: true
+        isActive: true,
+        store: {
+          isAcceptingOrders: true
+        }
       },
       select: {
         id: true,
@@ -259,7 +266,8 @@ export class ProductRepository {
         },
         variants: {
           where: {
-            isActive: true
+            isActive: true,
+            isAvailableForBooking: true
           },
           orderBy: {
             price: "asc"

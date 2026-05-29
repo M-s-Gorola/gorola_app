@@ -1385,3 +1385,26 @@ Two schema changes are implemented together as a single atomic migration:
 
 ---
 
+## [DECISION-047] Store-Specific Weather Mode Delivery Window Configuration & Booking Applicability
+
+**Date:** 2026-05-29
+**Status:** Accepted
+
+**Context:**
+High-altitude environments like Mussoorie experience severe and volatile inclement weather (dense fog, heavy monsoonal rain, winter snow, and landslides), which significantly slows down logistics and endangers rider safety. A system-wide `WEATHER_MODE_ACTIVE` state flag dynamically notifies buyers on the confirmation screen of general transit delays. However, different stores have varying logistics setups (e.g. self-delivery vs. unified couriers), diverse product classes (e.g. food delivery requiring instant arrival vs. bulk grocery packages), and varying booking styles. We need to document why we support store-specific weather delay configurations, why they are kept in Booking Commerce, and how they will be used.
+
+**Decision:**
+1. **Store-Specific Configuration:** Model a store-scoped config field `weatherModeDeliveryWindow` (saved as a string like `"30-45 min"`) that store owners can directly adjust via their Store Settings page (`StoreSettingsPage.tsx`).
+2. **Honest ETAs vs Fake Timers:** In alignment with the platform's core UX principle, we explicitly avoid calculating and displaying speculative, minute-by-minute countdown clocks on the buyer's order confirmation screen. Instead, we show a highly descriptive status warning banner and a live map pin (`OrderConfirmationPage.tsx`).
+3. **Application to Booking Commerce Stores:** Retain the weather mode delay configuration inside `BOOKING_COMMERCE` store settings as well. Just like standard food/grocery delivery, booking appointments (such as home lab tests or AC technician repairs) are not purely digital services; they represent **doorstep physical field visits** requiring field technicians to travel from the central store to the buyer's home. Mountain routes and transit pathways are identical for both delivery riders and field technicians, meaning both suffer from the exact same rain, snow, or fog transit disruptions. By maintaining the weather window configuration inside booking settings, the system enables managers to calculate expected travel adjustments and dynamically notify customers about delayed arrivals for their scheduled appointments.
+
+**Rationale:**
+- **Store Autonomy:** Standardizing a single platform-wide weather delay is physically impossible. A pharmacy with internal delivery staff can manage minor rain faster than a restaurant preparing fresh, hot meals. Store-specific inputs give merchants control over their own logistics expectations.
+- **Rider/Technician Uniformity:** In Phase 5 (Rider Interface) and Phase 7 (Booking Technician Mode), both delivery couriers and field visit technicians operate under the same JWT role (`RIDER`) and travel paths. Keeping the store settings entity schema fully unified avoids redundant database models, keeps the code base DRY, and ensures all future routing/booking dispatch systems can reuse the exact same travel delay calculation logic.
+- **Managing Appointment Expectations:** Rather than displaying generic timers, the system can leverage these structured inputs to shift booked timeslots (e.g. offsetting a scheduled `"09:00 - 11:00"` appointment by the store's configured `30-45 min` weather delay buffer) and auto-notify patients/buyers of the updated on-site visit window via text notifications.
+- **Roadmap Readiness:** Storing these parameters now prepares the backend for Phase 5's automated dispatch engine to dynamically adjust target delivery slots and send precise SMS updates to buyers when `isWeatherMode` is triggered.
+
+**Tradeoffs:**
+- Requires maintaining the settings inputs on the store settings page even for service/booking stores. This is a negligible UI footprint compared to the massive structural benefit of a clean, unified store settings entity model.
+
+

@@ -235,4 +235,91 @@ describe("StoreProductsPage", () => {
       expect(getMock).toHaveBeenLastCalledWith(expect.not.stringContaining("lowStock=true"));
     });
   });
+
+  it("displays variants availability toggles and triggers mutation on toggle click, showing Hidden badge when unavailable", async () => {
+    const mockProducts = [
+      {
+        id: "prod-1",
+        name: "Premium Apples",
+        description: "Fresh red apples from Shimla",
+        imageUrl: "http://example.com/apples.png",
+        subCategoryId: "subcat-1",
+        subCategory: { id: "subcat-1", name: "Fresh Fruits" },
+        isActive: true,
+        variants: [
+          {
+            id: "var-1",
+            label: "1kg Bag",
+            price: 150,
+            stockQty: 2,
+            unit: "kg",
+            isActive: true,
+            isAvailableForBooking: true,
+            lowStockThreshold: 5
+          }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: mockProducts,
+        meta: { total: 1, page: 1, limit: 10, hasMore: false }
+      }
+    });
+
+    renderStoreProducts();
+
+    // Find the toggle button for variant availability
+    const variantToggle = await screen.findByTestId("variant-availability-toggle-var-1");
+    expect(variantToggle).toBeInTheDocument();
+    expect(variantToggle).toHaveAttribute("aria-checked", "true");
+
+    // "Hidden" badge shouldn't be in the document
+    expect(screen.queryByTestId("variant-hidden-badge-var-1")).not.toBeInTheDocument();
+
+    const user = userEvent.setup();
+
+    // Mock PUT variant availability response
+    putMock.mockResolvedValueOnce({
+      data: {
+        success: true
+      }
+    });
+
+    // Mock subsequent list refetch with isAvailableForBooking: false
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: [
+          {
+            ...mockProducts[0]!,
+            variants: [
+              {
+                ...mockProducts[0]!.variants![0],
+                isAvailableForBooking: false
+              }
+            ]
+          }
+        ],
+        meta: { total: 1, page: 1, limit: 10, hasMore: false }
+      }
+    });
+
+    // Click the toggle to disable availability
+    await user.click(variantToggle);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith(
+        "/api/v1/store/products/prod-1/variants/var-1/availability",
+        { isAvailableForBooking: false }
+      );
+    });
+
+    // "Hidden" badge should now be rendered
+    const hiddenBadge = await screen.findByTestId("variant-hidden-badge-var-1");
+    expect(hiddenBadge).toBeInTheDocument();
+    expect(hiddenBadge).toHaveTextContent("Hidden");
+  });
 });

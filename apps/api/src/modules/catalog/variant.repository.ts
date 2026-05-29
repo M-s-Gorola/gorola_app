@@ -17,6 +17,7 @@ export type UpdateProductVariantInput = Partial<{
   stockQty: number;
   unit: string;
   isActive: boolean;
+  isAvailableForBooking: boolean;
   lowStockThreshold: number;
 }>;
 

@@ -1,5 +1,6 @@
-import { AppError, ForbiddenError, NotFoundError } from "@gorola/shared";
+import { AppError, ForbiddenError, NotFoundError, UnauthorizedError } from "@gorola/shared";
 import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
+import { compare, hash } from "bcryptjs";
 
 export type DashboardKpiSummary = {
   todayOrderCount: number;
@@ -118,7 +119,11 @@ export class StoreOwnerService {
   }
 
 
-  public async getDashboard(storeId: string): Promise<DashboardKpiSummary> {
+  public async getDashboard(
+    storeId: string,
+    range = "WEEK",
+    groupBy = "DAILY"
+  ): Promise<DashboardKpiSummary> {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
     const endOfToday = new Date();
@@ -206,60 +211,145 @@ export class StoreOwnerService {
           }
         });
 
-    // 4. Weekly Revenue Trend (daily revenue for the last 7 calendar days, including today)
+    // 4. Dynamic Multi-Dimensional Revenue Trend Aggregation
     const weeklyRevenue: { date: string; revenue: number }[] = [];
-    for (let i = 6; i >= 0; i--) {
-      const d = new Date();
-      d.setDate(d.getDate() - i);
+    const now = new Date();
+    let rangeStart = new Date(now);
+    let rangeEnd = new Date(now);
 
-      const dayStart = new Date(d);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(d);
-      dayEnd.setHours(23, 59, 59, 999);
+    if (range === "TODAY") {
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "WEEK") {
+      rangeStart.setDate(now.getDate() - 6);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "MONTH") {
+      rangeStart.setDate(now.getDate() - 29);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "YEAR") {
+      rangeStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      rangeEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else { // "ALL"
+      rangeStart = new Date(2020, 0, 1, 0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    }
 
-      const sumResult = isBooking
-        ? await this.db.order.aggregate({
-            _sum: {
-              total: true
-            },
-            where: {
-              storeId,
+    const orders = await this.db.order.findMany({
+      where: {
+        storeId,
+        ...(isBooking
+          ? {
               bookingOrder: {
                 approvalStatus: {
                   in: ["APPROVED", "PENDING_APPROVAL"]
                 }
-              },
-              createdAt: {
-                gte: dayStart,
-                lte: dayEnd
               }
             }
-          })
-        : await this.db.order.aggregate({
-            _sum: {
-              total: true
-            },
-            where: {
-              storeId,
+          : {
               status: {
                 in: ["DELIVERED", "PLACED"]
-              },
-              createdAt: {
-                gte: dayStart,
-                lte: dayEnd
               }
-            }
-          });
+            }),
+        createdAt: {
+          gte: rangeStart,
+          lte: rangeEnd
+        }
+      },
+      select: {
+        total: true,
+        createdAt: true
+      }
+    });
 
-      const year = d.getFullYear();
-      const month = String(d.getMonth() + 1).padStart(2, "0");
-      const date = String(d.getDate()).padStart(2, "0");
-      const dateStr = `${year}-${month}-${date}`;
+    const resolvedGroupBy = range === "TODAY" ? "HOURLY" : groupBy;
 
-      weeklyRevenue.push({
-        date: dateStr,
-        revenue: Number(sumResult._sum.total ?? 0)
-      });
+    if (resolvedGroupBy === "HOURLY") {
+      for (let hour = 0; hour < 24; hour++) {
+        const label = `${String(hour).padStart(2, "0")}:00`;
+        const sum = orders
+          .filter((o) => new Date(o.createdAt).getHours() === hour)
+          .reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: label, revenue: sum });
+      }
+    } else if (resolvedGroupBy === "DAILY") {
+      if (range === "WEEK") {
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const date = String(d.getDate()).padStart(2, "0");
+          const dateStr = `${year}-${month}-${date}`;
+
+          const dayStart = new Date(d);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(d);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          const sum = orders
+            .filter((o) => {
+              const oct = new Date(o.createdAt);
+              return oct >= dayStart && oct <= dayEnd;
+            })
+            .reduce((acc, o) => acc + Number(o.total), 0);
+
+          weeklyRevenue.push({ date: dateStr, revenue: sum });
+        }
+      } else if (range === "MONTH") {
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+
+          const dayStart = new Date(d);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(d);
+          dayEnd.setHours(23, 59, 59, 999);
+
+          const sum = orders
+            .filter((o) => {
+              const oct = new Date(o.createdAt);
+              return oct >= dayStart && oct <= dayEnd;
+            })
+            .reduce((acc, o) => acc + Number(o.total), 0);
+
+          weeklyRevenue.push({ date: label, revenue: sum });
+        }
+      } else if (range === "YEAR" || range === "ALL") {
+        const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        for (const w of weekdays) {
+          const sum = orders
+            .filter((o) => {
+              const dayName = new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" });
+              return dayName === w;
+            })
+            .reduce((acc, o) => acc + Number(o.total), 0);
+          weeklyRevenue.push({ date: w, revenue: sum });
+        }
+      }
+    } else if (resolvedGroupBy === "MONTHLY") {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      for (const m of months) {
+        const sum = orders
+          .filter((o) => {
+            const mName = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" });
+            return mName === m;
+          })
+          .reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: m, revenue: sum });
+      }
+    } else if (resolvedGroupBy === "YEARLY") {
+      const currentYear = now.getFullYear();
+      for (let i = 4; i >= 0; i--) {
+        const targetYear = currentYear - i;
+        const sum = orders
+          .filter((o) => new Date(o.createdAt).getFullYear() === targetYear)
+          .reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: String(targetYear), revenue: sum });
+      }
     }
 
     // 5. Top 5 Products by total items sold (quantity in OrderItem) in the last 30 days
@@ -1150,6 +1240,158 @@ export class StoreOwnerService {
     return this.db.offer.update({
       where: { id: offerId },
       data: updateData
+    });
+  }
+
+  public async getSettings(storeId: string) {
+    const store = await this.db.store.findUnique({
+      where: { id: storeId }
+    });
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+
+    const owner = await this.db.storeOwner.findFirst({
+      where: { storeId }
+    });
+    if (!owner) {
+      throw new NotFoundError("Store owner not found");
+    }
+
+    let weatherModeDeliveryWindowStart = "";
+    let weatherModeDeliveryWindowEnd = "";
+    if (store.weatherModeDeliveryWindow) {
+      const match = store.weatherModeDeliveryWindow.match(/^(\d+)-(\d+)\s*min$/);
+      if (match) {
+        weatherModeDeliveryWindowStart = match[1] ?? "";
+        weatherModeDeliveryWindowEnd = match[2] ?? "";
+      }
+    }
+
+    return {
+      name: store.name,
+      description: store.description ?? "",
+      phone: store.phone ?? "",
+      address: store.address ?? "",
+      weatherModeDeliveryWindowStart,
+      weatherModeDeliveryWindowEnd,
+      email: owner.email,
+      totpEnabled: owner.totpEnabled
+    };
+  }
+
+  public async updateSettings(
+    storeId: string,
+    dto: {
+      name: string;
+      description?: string | undefined;
+      phone?: string | undefined;
+      address?: string | undefined;
+      weatherModeDeliveryWindowStart?: string | undefined;
+      weatherModeDeliveryWindowEnd?: string | undefined;
+    }
+  ) {
+    if (!dto.name || dto.name.trim() === "") {
+      throw new AppError("Store name cannot be empty", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    let weatherModeDeliveryWindow: string | null = null;
+    if (dto.weatherModeDeliveryWindowStart && dto.weatherModeDeliveryWindowEnd) {
+      weatherModeDeliveryWindow = `${dto.weatherModeDeliveryWindowStart}-${dto.weatherModeDeliveryWindowEnd} min`;
+    }
+
+    await this.db.store.update({
+      where: { id: storeId },
+      data: {
+        name: dto.name,
+        description: dto.description ?? "",
+        phone: dto.phone ?? "",
+        address: dto.address ?? "",
+        weatherModeDeliveryWindow
+      }
+    });
+  }
+
+  public async changePassword(
+    storeOwnerId: string,
+    dto: {
+      currentPassword?: string;
+      newPassword?: string;
+    }
+  ) {
+    if (!dto.currentPassword || !dto.newPassword) {
+      throw new AppError("Current password and new password are required", {
+        code: "VALIDATION_ERROR",
+        statusCode: 400
+      });
+    }
+
+    const owner = await this.db.storeOwner.findUnique({
+      where: { id: storeOwnerId }
+    });
+    if (!owner) {
+      throw new NotFoundError("Store owner not found");
+    }
+
+    const isMatch = await compare(dto.currentPassword, owner.passwordHash);
+    if (!isMatch) {
+      throw new UnauthorizedError("Invalid current password");
+    }
+
+    const newHash = await hash(dto.newPassword, 8);
+    await this.db.storeOwner.update({
+      where: { id: storeOwnerId },
+      data: {
+        passwordHash: newHash
+      }
+    });
+  }
+
+  public async setStoreAvailability(storeId: string, value: boolean) {
+    const store = await this.db.store.findUnique({
+      where: { id: storeId }
+    });
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+
+    await this.db.store.update({
+      where: { id: storeId },
+      data: {
+        isAcceptingOrders: value
+      }
+    });
+  }
+
+  public async setVariantAvailability(storeId: string, productId: string, variantId: string, value: boolean) {
+    const product = await this.db.product.findUnique({
+      where: { id: productId }
+    });
+    if (!product) {
+      throw new NotFoundError("Product not found");
+    }
+    if (product.storeId !== storeId) {
+      throw new ForbiddenError("Product does not belong to this store");
+    }
+
+    const variant = await this.db.productVariant.findUnique({
+      where: { id: variantId }
+    });
+    if (!variant) {
+      throw new NotFoundError("Product variant not found");
+    }
+    if (variant.productId !== productId) {
+      throw new ForbiddenError("Variant does not belong to this product");
+    }
+
+    await this.db.productVariant.update({
+      where: { id: variantId },
+      data: {
+        isAvailableForBooking: value
+      }
     });
   }
 }

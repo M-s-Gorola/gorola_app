@@ -381,7 +381,7 @@ interface StoreOffer {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: "Discount",
+        label: order.discount?.code ? `Discount (${order.discount.code})` : "Discount",
         amount: remainingDiscount
       });
     }

@@ -362,4 +362,134 @@ describe("StoreOwner Dashboard Integration Tests", () => {
     expect(dataB.topProducts.length).toBe(0);
     expect(dataB.lowStockItems.length).toBe(0);
   });
+
+  describe("Multi-Dimensional Analytics Granularity", () => {
+    it("should aggregate revenue dynamically based on range and groupBy parameters", async () => {
+      // 1. Setup Store, Owner, and common Buyer
+      const store = await storeRepo.create({
+        name: "Analytics Store",
+        description: "Analytics test shop",
+        phone: "+919999999905",
+        address: "Analytics Street"
+      });
+
+      const owner = await ownerRepo.create({
+        email: "owner.analytics@gorola.in",
+        passwordHash: "dummy-hash",
+        storeId: store.id
+      });
+
+      const buyer = await db.user.create({
+        data: {
+          name: "Analytics Buyer",
+          phone: "+919876543205",
+          isVerified: true
+        }
+      });
+
+      // Helper to seed orders at specific dates and times
+      const createOrder = async (date: Date, total: number) => {
+        await db.order.create({
+          data: {
+            userId: buyer.id,
+            storeId: store.id,
+            status: "DELIVERED",
+            subtotal: total - 20,
+            deliveryFee: 20,
+            total,
+            paymentMethod: "COD",
+            landmarkDescription: "Test landmark",
+            createdAt: date
+          }
+        });
+      };
+
+      const now = new Date();
+
+      // Today at 10:15 AM (Revenue = 100)
+      const dateToday10AM = new Date(now);
+      dateToday10AM.setHours(10, 15, 0, 0);
+      await createOrder(dateToday10AM, 100.0);
+
+      // Yesterday at 15:30 PM (Revenue = 200)
+      const dateYesterday3PM = new Date(now);
+      dateYesterday3PM.setDate(now.getDate() - 1);
+      dateYesterday3PM.setHours(15, 30, 0, 0);
+      await createOrder(dateYesterday3PM, 200.0);
+
+      // 10 days ago at 10:45 AM (Revenue = 300) - falls in MONTH / YEAR
+      const date10DaysAgo10AM = new Date(now);
+      date10DaysAgo10AM.setDate(now.getDate() - 10);
+      date10DaysAgo10AM.setHours(10, 45, 0, 0);
+      await createOrder(date10DaysAgo10AM, 300.0);
+
+      // 40 days ago at 15:00 PM (Revenue = 400) - falls in YEAR only
+      const date40DaysAgo3PM = new Date(now);
+      date40DaysAgo3PM.setDate(now.getDate() - 40);
+      date40DaysAgo3PM.setHours(15, 0, 0, 0);
+      await createOrder(date40DaysAgo3PM, 400.0);
+
+      const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+
+      // Scenario 1: range=WEEK, groupBy=HOURLY (Hour-of-day pattern across the week)
+      // Expect 24 buckets.
+      // Hourly bucket 10:00 should sum Today's 10 AM (100). (Yesterday was 15:00, 10 days ago is out of week).
+      // Hourly bucket 15:00 should sum Yesterday's 15:00 (200).
+      const res1 = await server.inject({
+        method: "GET",
+        url: "/api/v1/store/dashboard?range=WEEK&groupBy=HOURLY",
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(res1.statusCode).toBe(200);
+      const weeklyTrend = res1.json().data.weeklyRevenue;
+      expect(weeklyTrend.length).toBe(24);
+      
+      const hour10Item = weeklyTrend.find((item: { date: string }) => item.date === "10:00");
+      const hour15Item = weeklyTrend.find((item: { date: string }) => item.date === "15:00");
+      expect(hour10Item).toBeDefined();
+      expect(hour10Item.revenue).toBe(100.0);
+      expect(hour15Item).toBeDefined();
+      expect(hour15Item.revenue).toBe(200.0);
+
+      // Scenario 2: range=MONTH, groupBy=DAILY (Sequential daily timeline for last 30 days)
+      // Expect 30 buckets.
+      // Today should have 100, Yesterday 200, 10 days ago 300. 40 days ago is out of month.
+      const res2 = await server.inject({
+        method: "GET",
+        url: "/api/v1/store/dashboard?range=MONTH&groupBy=DAILY",
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(res2.statusCode).toBe(200);
+      const monthlyTrend = res2.json().data.weeklyRevenue;
+      expect(monthlyTrend.length).toBe(30);
+
+      const formatDate = (d: Date) => {
+        return d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+      };
+      
+      const todayLabel = formatDate(now);
+      const yesterdayLabel = formatDate(dateYesterday3PM);
+      const tenDaysAgoLabel = formatDate(date10DaysAgo10AM);
+
+      const todayItem = monthlyTrend.find((item: { date: string }) => item.date === todayLabel);
+      const yesterdayItem = monthlyTrend.find((item: { date: string }) => item.date === yesterdayLabel);
+      const tenDaysAgoItem = monthlyTrend.find((item: { date: string }) => item.date === tenDaysAgoLabel);
+
+      expect(todayItem?.revenue).toBe(100.0);
+      expect(yesterdayItem?.revenue).toBe(200.0);
+      expect(tenDaysAgoItem?.revenue).toBe(300.0);
+
+      // Scenario 3: range=YEAR, groupBy=DAILY (Day-of-week distribution across the current year)
+      // Expect 7 buckets (Mon, Tue, Wed, Thu, Fri, Sat, Sun) representing aggregate pattern of the year.
+      const res3 = await server.inject({
+        method: "GET",
+        url: "/api/v1/store/dashboard?range=YEAR&groupBy=DAILY",
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(res3.statusCode).toBe(200);
+      const yearlyDayTrend = res3.json().data.weeklyRevenue;
+      expect(yearlyDayTrend.length).toBe(7);
+    });
+  });
 });
+

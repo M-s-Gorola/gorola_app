@@ -8,11 +8,21 @@ export type CreateStoreInput = {
   address: string;
   storeType?: StoreType;
   isActive?: boolean;
+  isAcceptingOrders?: boolean;
   weatherModeDeliveryWindow?: string | null;
 };
 
 export type UpdateStoreInput = Partial<
-  Pick<Store, "name" | "description" | "phone" | "address" | "isActive" | "weatherModeDeliveryWindow">
+  Pick<
+    Store,
+    | "name"
+    | "description"
+    | "phone"
+    | "address"
+    | "isActive"
+    | "isAcceptingOrders"
+    | "weatherModeDeliveryWindow"
+  >
 >;
 
 function isPrismaError(error: unknown, code: string): boolean {
@@ -64,6 +74,7 @@ export class StoreRepository {
         address: input.address,
         storeType: input.storeType ?? "QUICK_COMMERCE",
         isActive: input.isActive ?? true,
+        isAcceptingOrders: input.isAcceptingOrders ?? true,
         weatherModeDeliveryWindow: input.weatherModeDeliveryWindow ?? null
       }
     });

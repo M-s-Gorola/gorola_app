@@ -20,6 +20,7 @@ type Variant = {
   stockQty: number;
   unit: string;
   isActive: boolean;
+  isAvailableForBooking?: boolean;
   lowStockThreshold?: number | null;
 };
 
@@ -101,6 +102,38 @@ export function StoreProductsPage(): ReactElement {
     onError: (err: unknown) => {
       const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
       const errMsg = errorResponse?.response?.data?.error?.message || "Failed to update product status";
+      toast.error(errMsg);
+    }
+  });
+
+  // 3. Toggle Variant Availability Mutation
+  const toggleVariantAvailabilityMutation = useMutation({
+    mutationFn: async ({
+      productId,
+      variantId,
+      isAvailableForBooking
+    }: {
+      productId: string;
+      variantId: string;
+      isAvailableForBooking: boolean;
+    }) => {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put(`/api/v1/store/products/${productId}/variants/${variantId}/availability`, {
+        isAvailableForBooking
+      });
+    },
+    onSuccess: () => {
+      toast.success("Variant availability updated successfully");
+    },
+    onSettled: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["store", "products"] }),
+        queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] })
+      ]);
+    },
+    onError: (err: unknown) => {
+      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
+      const errMsg = errorResponse?.response?.data?.error?.message || "Failed to update variant availability";
       toast.error(errMsg);
     }
   });
@@ -251,12 +284,59 @@ export function StoreProductsPage(): ReactElement {
                         {product.subCategory?.name || "Uncategorized"}
                       </td>
                       <td className="p-4">
-                        <div className="space-y-1">
+                        <div className="space-y-2">
                           <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-gorola-pine/10 text-gorola-pine font-dm-sans">
                             {totalVariants} {totalVariants === 1 ? "variant" : "variants"} ({activeVariants} active)
                           </span>
-                          <div className="text-[10px] text-gorola-slate font-medium">
-                            {product.variants.map((v) => `${v.label} (${formatCurrency(v.price)})`).join(", ")}
+                          <div className="flex flex-col gap-1.5 mt-1.5" data-testid={`variants-list-${product.id}`}>
+                            {product.variants.map((v) => (
+                              <div
+                                key={v.id}
+                                className="flex items-center justify-between gap-4 bg-gorola-mint/5 hover:bg-gorola-mint/10 border border-gorola-mint/10 rounded-xl p-2 transition-all"
+                                data-testid={`variant-item-${v.id}`}
+                              >
+                                <div className="flex flex-col">
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-bold text-gorola-charcoal">{v.label}</span>
+                                    {v.isAvailableForBooking === false && (
+                                      <span
+                                        className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-red-100 text-red-700 border border-red-200"
+                                        data-testid={`variant-hidden-badge-${v.id}`}
+                                      >
+                                        Hidden
+                                      </span>
+                                    )}
+                                  </div>
+                                  <span className="text-[10px] text-gorola-slate font-dm-sans">
+                                    {formatCurrency(v.price)} / {v.unit}
+                                  </span>
+                                </div>
+                                
+                                <button
+                                  role="switch"
+                                  aria-checked={v.isAvailableForBooking !== false}
+                                  aria-label={`Toggle availability for ${v.label}`}
+                                  disabled={toggleVariantAvailabilityMutation.isPending}
+                                  onClick={() => {
+                                    toggleVariantAvailabilityMutation.mutate({
+                                      productId: product.id,
+                                      variantId: v.id,
+                                      isAvailableForBooking: !(v.isAvailableForBooking !== false)
+                                    });
+                                  }}
+                                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
+                                    v.isAvailableForBooking !== false ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
+                                  }`}
+                                  data-testid={`variant-availability-toggle-${v.id}`}
+                                >
+                                  <span
+                                    className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform ${
+                                      v.isAvailableForBooking !== false ? "translate-x-3.5" : "translate-x-0.5"
+                                    }`}
+                                  />
+                                </button>
+                              </div>
+                            ))}
                           </div>
                         </div>
                       </td>

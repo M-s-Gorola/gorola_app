@@ -37,7 +37,16 @@ export function registerStoreOwnerRoutes(
     }
 
     const storeId = owner.storeId;
-    const data = await storeOwnerService.getDashboard(storeId);
+
+    const querySchema = z.object({
+      range: z.enum(["TODAY", "WEEK", "MONTH", "YEAR", "ALL"]).default("WEEK"),
+      groupBy: z.enum(["HOURLY", "DAILY", "WEEKLY", "MONTHLY", "YEARLY"]).default("DAILY")
+    });
+
+    const parsedQuery = querySchema.safeParse(request.query);
+    const { range, groupBy } = parsedQuery.success ? parsedQuery.data : { range: "WEEK" as const, groupBy: "DAILY" as const };
+
+    const data = await storeOwnerService.getDashboard(storeId, range, groupBy);
 
     return {
       success: true,
@@ -1100,6 +1109,172 @@ export function registerStoreOwnerRoutes(
       data: updated
     };
   });
+
+  // GET /api/v1/store/settings
+  app.get("/api/v1/store/settings", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const data = await storeOwnerService.getSettings(owner.storeId);
+    return {
+      success: true,
+      data,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/settings
+  const updateStoreSettingsSchema = z.object({
+    name: z.string().trim().min(1, "Store name is required"),
+    description: z.string().trim().optional(),
+    phone: z.string().trim().optional(),
+    address: z.string().trim().optional(),
+    weatherModeDeliveryWindowStart: z.string().trim().optional(),
+    weatherModeDeliveryWindowEnd: z.string().trim().optional()
+  });
+
+  app.put("/api/v1/store/settings", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = updateStoreSettingsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid settings data", parsed.error.flatten());
+    }
+
+    await storeOwnerService.updateSettings(owner.storeId, parsed.data);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/auth/store-owner/change-password
+  const changePasswordSchema = z.object({
+    currentPassword: z.string().min(1, "Current password is required"),
+    newPassword: z.string().min(1, "New password is required")
+  });
+
+  app.put("/api/v1/auth/store-owner/change-password", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const parsed = changePasswordSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid password data", parsed.error.flatten());
+    }
+
+    await storeOwnerService.changePassword(userId, parsed.data);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/availability
+  const toggleStoreAvailabilitySchema = z.object({
+    isAcceptingOrders: z.boolean()
+  });
+
+  app.put("/api/v1/store/availability", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = toggleStoreAvailabilitySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid availability data", parsed.error.flatten());
+    }
+
+    await storeOwnerService.setStoreAvailability(owner.storeId, parsed.data.isAcceptingOrders);
+
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/store/products/:productId/variants/:variantId/availability
+  const toggleVariantAvailabilitySchema = z.object({
+    isAvailableForBooking: z.boolean()
+  });
+
+  const toggleVariantParamsSchema = z.object({
+    productId: z.string().min(1, "Product ID is required"),
+    variantId: z.string().min(1, "Variant ID is required")
+  });
+
+  app.put(
+    "/api/v1/store/products/:productId/variants/:variantId/availability",
+    { preHandler },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new ValidationError("User subject missing from auth context");
+      }
+
+      const owner = await storeOwnerRepository.findById(userId);
+      if (!owner) {
+        throw new ValidationError("Store owner profile not found");
+      }
+
+      const paramsParsed = toggleVariantParamsSchema.safeParse(request.params);
+      if (!paramsParsed.success) {
+        throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+      }
+
+      const bodyParsed = toggleVariantAvailabilitySchema.safeParse(request.body);
+      if (!bodyParsed.success) {
+        throw new ValidationError("Invalid availability data", bodyParsed.error.flatten());
+      }
+
+      await storeOwnerService.setVariantAvailability(
+        owner.storeId,
+        paramsParsed.data.productId,
+        paramsParsed.data.variantId,
+        bodyParsed.data.isAvailableForBooking
+      );
+
+      return {
+        success: true,
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+  );
 }
 
 

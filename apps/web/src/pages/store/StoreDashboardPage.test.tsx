@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { InitialEntry } from "react-router-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,7 +21,8 @@ vi.mock("@/lib/api", () => ({
       }
       return getMock(url);
     }),
-    post: vi.fn()
+    post: vi.fn(),
+    put: vi.fn()
   }
 }));
 
@@ -51,7 +52,8 @@ describe("StoreDashboardPage", () => {
       data: {
         success: true,
         data: {
-          storeType: "QUICK_COMMERCE"
+          storeType: "QUICK_COMMERCE",
+          isAcceptingOrders: true
         }
       }
     });
@@ -209,7 +211,8 @@ describe("StoreDashboardPage", () => {
       data: {
         success: true,
         data: {
-          storeType: "BOOKING_COMMERCE"
+          storeType: "BOOKING_COMMERCE",
+          isAcceptingOrders: true
         }
       }
     });
@@ -249,4 +252,111 @@ describe("StoreDashboardPage", () => {
     // Verify low stock section is hidden or empty message is shown
     expect(screen.queryByText("Low Stock Alert")).not.toBeInTheDocument();
   });
+
+  it("should show the store status toggle and trigger confirmation modal on toggle off", async () => {
+    getProfileMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          storeType: "QUICK_COMMERCE",
+          isAcceptingOrders: true
+        }
+      }
+    });
+
+    const mockDashboardData = {
+      success: true,
+      data: {
+        todayOrderCount: 15,
+        todayRevenue: 1250.5,
+        pendingOrdersCount: 4,
+        weeklyRevenue: [],
+        topProducts: [],
+        lowStockItems: [],
+        activeAdvertisementsCount: 2,
+        activeOffersCount: 3
+      }
+    };
+    getMock.mockResolvedValue({ data: mockDashboardData });
+
+    renderStoreDashboard();
+
+    // Verify toggle button is visible and active
+    const toggleButton = await screen.findByRole("switch", { name: /toggle store status/i });
+    expect(toggleButton).toBeInTheDocument();
+    expect(toggleButton).toHaveAttribute("aria-checked", "true");
+
+    // Click toggle to turn off
+    fireEvent.click(toggleButton);
+
+    // Confirm modal is shown
+    expect(screen.getByText("Confirm Store Closure")).toBeInTheDocument();
+    expect(screen.getByText("Hiding your store will remove all your products from the buyer app. Are you sure?")).toBeInTheDocument();
+
+    // Verify close/cancel works
+    const cancelButton = screen.getByRole("button", { name: "Cancel" });
+    fireEvent.click(cancelButton);
+    expect(screen.queryByText("Confirm Store Closure")).not.toBeInTheDocument();
+  });
+
+  describe("Multi-Dimensional Revenue Analytics UI Controls", () => {
+    it("renders Timeframe Range and Grouping Resolution dropdowns and handles guardrail validation", async () => {
+      const mockDashboardData = {
+        success: true,
+        data: {
+          todayOrderCount: 15,
+          todayRevenue: 1250.5,
+          pendingOrdersCount: 4,
+          weeklyRevenue: [
+            { date: "2026-05-13", revenue: 400 },
+            { date: "2026-05-14", revenue: 500 }
+          ],
+          topProducts: [],
+          lowStockItems: [],
+          activeAdvertisementsCount: 2,
+          activeOffersCount: 3
+        }
+      };
+
+      getMock.mockResolvedValue({ data: mockDashboardData });
+
+      renderStoreDashboard();
+
+      // Verify dropdown selectors are present
+      const rangeSelect = await screen.findByTestId("analytics-range-select");
+      const groupBySelect = await screen.findByTestId("analytics-groupby-select");
+      expect(rangeSelect).toBeInTheDocument();
+      expect(groupBySelect).toBeInTheDocument();
+
+      // Default values: Range is "WEEK" (Last 7 Days), GroupBy is "DAILY" (Daily)
+      expect(rangeSelect).toHaveValue("WEEK");
+      expect(groupBySelect).toHaveValue("DAILY");
+
+      // Verify that changing Range to TODAY forces GroupBy to HOURLY (guardrail validation) and locks/disables other groupBy choices
+      fireEvent.change(rangeSelect, { target: { value: "TODAY" } });
+      expect(rangeSelect).toHaveValue("TODAY");
+      await waitFor(() => {
+        expect(groupBySelect).toHaveValue("HOURLY");
+      });
+
+      // Verify that when range is TODAY, other groupOptions are disabled or only HOURLY is selectable
+      // Change range to MONTH
+      fireEvent.change(rangeSelect, { target: { value: "MONTH" } });
+      await waitFor(() => {
+        expect(rangeSelect).toHaveValue("MONTH");
+      });
+      // Changing range back to MONTH keeps/restores flexibility, let's select Daily
+      fireEvent.change(groupBySelect, { target: { value: "DAILY" } });
+      await waitFor(() => {
+        expect(groupBySelect).toHaveValue("DAILY");
+      });
+
+      // Verify the query params are passed to api.get
+      await waitFor(() => {
+        expect(getMock).toHaveBeenCalledWith(expect.stringContaining("range=MONTH"));
+        expect(getMock).toHaveBeenCalledWith(expect.stringContaining("groupBy=DAILY"));
+      });
+    });
+  });
 });
+
