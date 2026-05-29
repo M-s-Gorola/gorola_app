@@ -652,6 +652,74 @@ describe("StoreOwner Products Integration Tests", () => {
     expect(movements[0]?.quantity).toBe(15);
   });
 
+  it("should successfully update variant isAvailableForBooking availability state", async () => {
+    const store = await storeRepo.create({
+      name: "Store A",
+      description: "Organic Groceries",
+      phone: "+919999999901",
+      address: "Store A Street"
+    });
+    const owner = await ownerRepo.create({
+      email: "owner@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+    const category = await db.category.create({
+      data: { name: "Fruits", slug: "fruits", icon: "apple" }
+    });
+    const subCategory = await db.subCategory.create({
+      data: { name: "Organic", slug: "organic", categoryId: category.id }
+    });
+    const product = await db.product.create({
+      data: {
+        name: "Milk",
+        description: "Fresh Cow Milk",
+        storeId: store.id,
+        categoryId: category.id,
+        subCategoryId: subCategory.id,
+        imageUrl: "http://example.com/milk.png",
+        isActive: true
+      }
+    });
+    const variant = await db.productVariant.create({
+      data: {
+        productId: product.id,
+        label: "500ml",
+        price: 35.0,
+        stockQty: 10,
+        lowStockThreshold: 5,
+        isLowStock: false,
+        isInStock: true,
+        unit: "packet",
+        isActive: true,
+        isAvailableForBooking: true
+      }
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+    const response = await server.inject({
+      method: "PUT",
+      url: `/api/v1/store/products/${product.id}/variants/${variant.id}`,
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        isAvailableForBooking: false
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.isAvailableForBooking).toBe(false);
+
+    // Verify DB variant
+    const dbVariant = await db.productVariant.findUniqueOrThrow({
+      where: { id: variant.id }
+    });
+    expect(dbVariant.isAvailableForBooking).toBe(false);
+  });
+
   it("should successfully fetch a single product by id", async () => {
     const store = await storeRepo.create({
       name: "Store A",

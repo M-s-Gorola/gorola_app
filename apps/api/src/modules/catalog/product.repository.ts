@@ -79,8 +79,11 @@ const productListInclude = Prisma.validator<Prisma.ProductInclude>()({
   },
   variants: {
     where: {
-      isActive: true,
-      isAvailableForBooking: true
+      // Only filter by isActive. isAvailableForBooking gates booking-slot eligibility
+      // for BOOKING_COMMERCE — it must NEVER filter catalog visibility for any store type.
+      // Filtering by it caused QUICK_COMMERCE products to vanish from the buyer catalog
+      // when a store owner toggled a variant's booking availability.
+      isActive: true
     },
     orderBy: {
       price: "desc"
@@ -266,8 +269,9 @@ export class ProductRepository {
         },
         variants: {
           where: {
-            isActive: true,
-            isAvailableForBooking: true
+            // Same rule: isActive only. isAvailableForBooking is booking-slot
+            // eligibility and must not filter catalog detail pages.
+            isActive: true
           },
           orderBy: {
             price: "asc"

@@ -260,13 +260,17 @@ describe("StoreOwner Availability Integration Tests", () => {
     const checkVariantInDb = await db.productVariant.findUnique({ where: { id: variant1.id } });
     expect(checkVariantInDb?.isAvailableForBooking).toBe(false);
 
-    // 3. Buyer queries product detail -> should only see variant2 (1 variant)
+    // 3. Buyer queries product detail → STILL sees BOTH variants because
+    //    isAvailableForBooking controls booking-slot eligibility, NOT catalog
+    //    visibility. The fix removed this flag from the buyer variant filter so
+    //    QUICK_COMMERCE products stay visible regardless of booking availability.
     const buyerDetailRes = await server.inject({
       method: "GET",
       url: `/api/v1/products/${product.id}`
     });
-    expect(buyerDetailRes.json().data.variants.length).toBe(1);
-    expect(buyerDetailRes.json().data.variants[0].id).toBe(variant2.id);
+    expect(buyerDetailRes.json().data.variants.length).toBe(2);
+    expect(buyerDetailRes.json().data.variants.some((v: { id: string }) => v.id === variant1.id)).toBe(true);
+    expect(buyerDetailRes.json().data.variants.some((v: { id: string }) => v.id === variant2.id)).toBe(true);
   });
 
   it("should enforce tenant isolation (403 when modifying other store's variants)", async () => {

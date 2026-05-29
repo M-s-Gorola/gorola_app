@@ -2,11 +2,11 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Edit2,
+  History,
   Plus,
-  Search
-} from "lucide-react";
+  Search} from "lucide-react";
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -57,6 +57,33 @@ export function StoreProductsPage(): ReactElement {
   const [showLowStockOnly, setShowLowStockOnly] = useState(searchParams.get("lowStock") === "true");
   const [page, setPage] = useState(1);
 
+  // Synchronize state with URL search params (e.g. from Dashboard deep-links)
+  useEffect(() => {
+    setSearch(searchParams.get("search") || "");
+    setShowLowStockOnly(searchParams.get("lowStock") === "true");
+    setPage(1);
+  }, [searchParams]);
+
+  // Store Profile Query — same cache key as StoreLayout/StoreDashboardPage.
+  // All three MUST return res.data.data (the unwrapped profile object) so they
+  // share a consistent cache shape. Returning res.data (the envelope) here
+  // corrupts the cache and makes StoreLayout show the wrong sidebar menu.
+  // Note: staleTime:0 is NOT needed here — the ?? null default below already
+  // prevents the QUICK_COMMERCE flash while loading.
+  const { data: profileData } = useQuery({
+    queryKey: ["store", "profile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      return res.data.data;
+    }
+  });
+
+  // Keep null while the profile is loading so store-type-gated UI (e.g. Stock History column)
+  // is never shown prematurely for BOOKING_COMMERCE stores.
+  const storeType = profileData?.storeType ?? null;
+
+  // Modals & form states
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
   const limit = 10;
 
@@ -106,51 +133,14 @@ export function StoreProductsPage(): ReactElement {
     }
   });
 
-  // 3. Toggle Variant Availability Mutation
-  const toggleVariantAvailabilityMutation = useMutation({
-    mutationFn: async ({
-      productId,
-      variantId,
-      isAvailableForBooking
-    }: {
-      productId: string;
-      variantId: string;
-      isAvailableForBooking: boolean;
-    }) => {
-      if (!api) throw new Error("API helper not initialized");
-      await api.put(`/api/v1/store/products/${productId}/variants/${variantId}/availability`, {
-        isAvailableForBooking
-      });
-    },
-    onSuccess: () => {
-      toast.success("Variant availability updated successfully");
-    },
-    onSettled: async () => {
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["store", "products"] }),
-        queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] })
-      ]);
-    },
-    onError: (err: unknown) => {
-      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
-      const errMsg = errorResponse?.response?.data?.error?.message || "Failed to update variant availability";
-      toast.error(errMsg);
-    }
-  });
-
   const hasLowStock = (product: Product): boolean => {
     return product.variants.some((v) => {
+      if (v.isActive === false) return false;
       const threshold = v.lowStockThreshold ?? 5;
       return v.stockQty <= threshold;
     });
   };
 
-  const formatCurrency = (val: number): string => {
-    return `₹${val.toLocaleString("en-IN", {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    })}`;
-  };
 
   return (
     <div className="space-y-6">
@@ -247,17 +237,18 @@ export function StoreProductsPage(): ReactElement {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
-                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider">Product Info</th>
-                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider">Sub-category</th>
-                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider">Variants</th>
-                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider">Stock Status</th>
+                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Product Info</th>
+                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Sub-category</th>
+                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Variants</th>
+                  <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Stock Status</th>
+                  {storeType === "QUICK_COMMERCE" && (
+                    <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-left">Stock History</th>
+                  )}
                   <th className="p-4 text-xs font-black text-gorola-charcoal uppercase tracking-wider text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {data.data.map((product) => {
-                  const totalVariants = product.variants.length;
-                  const activeVariants = product.variants.filter((v) => v.isActive).length;
                   return (
                     <tr
                       key={product.id}
@@ -284,61 +275,12 @@ export function StoreProductsPage(): ReactElement {
                         {product.subCategory?.name || "Uncategorized"}
                       </td>
                       <td className="p-4">
-                        <div className="space-y-2">
-                          <span className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-gorola-pine/10 text-gorola-pine font-dm-sans">
-                            {totalVariants} {totalVariants === 1 ? "variant" : "variants"} ({activeVariants} active)
-                          </span>
-                          <div className="flex flex-col gap-1.5 mt-1.5" data-testid={`variants-list-${product.id}`}>
-                            {product.variants.map((v) => (
-                              <div
-                                key={v.id}
-                                className="flex items-center justify-between gap-4 bg-gorola-mint/5 hover:bg-gorola-mint/10 border border-gorola-mint/10 rounded-xl p-2 transition-all"
-                                data-testid={`variant-item-${v.id}`}
-                              >
-                                <div className="flex flex-col">
-                                  <div className="flex items-center gap-1.5">
-                                    <span className="text-xs font-bold text-gorola-charcoal">{v.label}</span>
-                                    {v.isAvailableForBooking === false && (
-                                      <span
-                                        className="inline-flex px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-red-100 text-red-700 border border-red-200"
-                                        data-testid={`variant-hidden-badge-${v.id}`}
-                                      >
-                                        Hidden
-                                      </span>
-                                    )}
-                                  </div>
-                                  <span className="text-[10px] text-gorola-slate font-dm-sans">
-                                    {formatCurrency(v.price)} / {v.unit}
-                                  </span>
-                                </div>
-                                
-                                <button
-                                  role="switch"
-                                  aria-checked={v.isAvailableForBooking !== false}
-                                  aria-label={`Toggle availability for ${v.label}`}
-                                  disabled={toggleVariantAvailabilityMutation.isPending}
-                                  onClick={() => {
-                                    toggleVariantAvailabilityMutation.mutate({
-                                      productId: product.id,
-                                      variantId: v.id,
-                                      isAvailableForBooking: !(v.isAvailableForBooking !== false)
-                                    });
-                                  }}
-                                  className={`relative inline-flex h-4 w-7 items-center rounded-full transition-colors focus:outline-none disabled:opacity-50 ${
-                                    v.isAvailableForBooking !== false ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
-                                  }`}
-                                  data-testid={`variant-availability-toggle-${v.id}`}
-                                >
-                                  <span
-                                    className={`inline-block h-2.5 w-2.5 transform rounded-full bg-white transition-transform ${
-                                      v.isAvailableForBooking !== false ? "translate-x-3.5" : "translate-x-0.5"
-                                    }`}
-                                  />
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
+                        <span
+                          className="inline-flex px-2.5 py-1 rounded-full text-xs font-bold bg-gorola-pine/10 text-gorola-pine font-dm-sans"
+                          data-testid={`variants-summary-${product.id}`}
+                        >
+                          {product.variants.filter((v) => v.isActive !== false).length} active out of {product.variants.length}
+                        </span>
                       </td>
                       <td className="p-4">
                         {hasLowStock(product) ? (
@@ -358,8 +300,21 @@ export function StoreProductsPage(): ReactElement {
                           </span>
                         )}
                       </td>
+                      {storeType === "QUICK_COMMERCE" && (
+                        <td className="p-4 text-left">
+                          <button
+                            onClick={() => navigate(getScopedPath(`/store/products/${product.id}/stock-history`, "store", isSubdomainMode))}
+                            className="p-1.5 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all inline-flex items-center gap-1.5"
+                            title="Stock History"
+                            data-testid={`stock-history-${product.id}`}
+                          >
+                            <History className="h-3.5 w-3.5" />
+                            <span className="text-[10px] font-bold">View History</span>
+                          </button>
+                        </td>
+                      )}
                       <td className="p-4 text-right">
-                        <div className="inline-flex items-center gap-4">
+                        <div className="inline-flex items-center gap-3">
                           <button
                             onClick={() => navigate(getScopedPath(`/store/products/${product.id}/edit`, "store", isSubdomainMode))}
                             className="p-2 border border-gorola-mint/20 hover:border-gorola-pine/35 hover:bg-gorola-mint/10 rounded-lg text-gorola-slate hover:text-gorola-pine transition-all"

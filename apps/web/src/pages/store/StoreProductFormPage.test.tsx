@@ -58,11 +58,16 @@ describe("StoreProductFormPage", () => {
     postMock.mockReset();
     putMock.mockReset();
 
-    // Default categories endpoint response
+    // Default categories and profile endpoint responses
     getMock.mockImplementation((url: string) => {
       if (url === "/api/v1/store/categories") {
         return Promise.resolve({
           data: { success: true, data: mockCategories }
+        });
+      }
+      if (url === "/api/v1/store/profile") {
+        return Promise.resolve({
+          data: { success: true, data: { storeType: "QUICK_COMMERCE" } }
         });
       }
       return Promise.reject(new Error(`Not Found: ${url}`));
@@ -167,7 +172,8 @@ describe("StoreProductFormPage", () => {
             price: 120.5,
             stockQty: 45,
             unit: "kg",
-            lowStockThreshold: undefined
+            lowStockThreshold: undefined,
+            isAvailableForBooking: true
           }
         ]
       });
@@ -195,7 +201,8 @@ describe("StoreProductFormPage", () => {
             price: 140.0,
             stockQty: 10,
             unit: "kg",
-            lowStockThreshold: 5
+            lowStockThreshold: 5,
+            isAvailableForBooking: true
           }
         ]
       }
@@ -210,6 +217,11 @@ describe("StoreProductFormPage", () => {
       if (url === "/api/v1/store/products/prod-abc") {
         return Promise.resolve({
           data: mockProductDetail
+        });
+      }
+      if (url === "/api/v1/store/profile") {
+        return Promise.resolve({
+          data: { success: true, data: { storeType: "QUICK_COMMERCE" } }
         });
       }
       return Promise.reject(new Error(`Not Found: ${url}`));
@@ -253,7 +265,8 @@ describe("StoreProductFormPage", () => {
         stockQty: 10,
         unit: "kg",
         lowStockThreshold: 5,
-        isActive: true
+        isActive: true,
+        isAvailableForBooking: true
       });
     });
   });
@@ -275,7 +288,8 @@ describe("StoreProductFormPage", () => {
             stockQty: 20,
             unit: "packet",
             lowStockThreshold: 5,
-            isActive: true
+            isActive: true,
+            isAvailableForBooking: true
           }
         ]
       }
@@ -287,6 +301,11 @@ describe("StoreProductFormPage", () => {
       }
       if (url === "/api/v1/store/products/prod-xyz") {
         return Promise.resolve({ data: mockProductDetail });
+      }
+      if (url === "/api/v1/store/profile") {
+        return Promise.resolve({
+          data: { success: true, data: { storeType: "QUICK_COMMERCE" } }
+        });
       }
       return Promise.reject(new Error(`Not Found: ${url}`));
     });
@@ -351,7 +370,8 @@ describe("StoreProductFormPage", () => {
         stockQty: 20,
         unit: "packet",
         lowStockThreshold: 5,
-        isActive: false
+        isActive: false,
+        isAvailableForBooking: true
       });
 
       // Expect newly added variant POST call
@@ -360,7 +380,139 @@ describe("StoreProductFormPage", () => {
         price: 55,
         stockQty: 40,
         unit: "bottle",
-        lowStockThreshold: undefined
+        lowStockThreshold: undefined,
+        isAvailableForBooking: true
+      });
+    });
+  });
+
+  it("renders availability toggles and hides stock fields for BOOKING_COMMERCE stores", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/store/categories") {
+        return Promise.resolve({ data: { success: true, data: mockCategories } });
+      }
+      if (url === "/api/v1/store/profile") {
+        return Promise.resolve({
+          data: { success: true, data: { storeType: "BOOKING_COMMERCE" } }
+        });
+      }
+      return Promise.reject(new Error(`Not Found: ${url}`));
+    });
+
+    renderProductForm(["/store/products/new"]);
+
+    // Verify product fields render
+    expect(await screen.findByLabelText(/product name/i)).toBeInTheDocument();
+
+    // Verify stock related fields are NOT in the document
+    expect(screen.queryByLabelText(/stock quantity/i)).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/low stock alert/i)).not.toBeInTheDocument();
+
+    // Verify availability toggle is rendered instead
+    const availabilityToggle = screen.getByTestId("variant-availability-toggle-0");
+    expect(availabilityToggle).toBeInTheDocument();
+    expect(availabilityToggle).toBeChecked();
+  });
+
+  it("allows existing variant stock to be restocked and adjusted via modals", async () => {
+    const mockProductDetail = {
+      success: true,
+      data: {
+        id: "prod-xyz",
+        name: "Original Milk",
+        description: "Fresh milk",
+        imageUrl: "http://example.com/milk.png",
+        subCategoryId: "subcat-1",
+        variants: [
+          {
+            id: "var-1",
+            label: "500ml",
+            price: 30.0,
+            stockQty: 20,
+            unit: "packet",
+            lowStockThreshold: 5,
+            isActive: true,
+            isAvailableForBooking: true
+          }
+        ]
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/store/categories") {
+        return Promise.resolve({ data: { success: true, data: mockCategories } });
+      }
+      if (url === "/api/v1/store/products/prod-xyz") {
+        return Promise.resolve({ data: mockProductDetail });
+      }
+      if (url === "/api/v1/store/profile") {
+        return Promise.resolve({
+          data: { success: true, data: { storeType: "QUICK_COMMERCE" } }
+        });
+      }
+      return Promise.reject(new Error(`Not Found: ${url}`));
+    });
+
+    putMock.mockResolvedValue({ data: { success: true } });
+
+    renderProductForm(["/store/products/prod-xyz/edit"]);
+
+    // Wait for product edit view to load
+    expect(await screen.findByLabelText(/product name/i)).toBeInTheDocument();
+
+    const user = userEvent.setup();
+
+    // 1. Restock Flow
+    const restockBtn = screen.getByTestId("restock-button-0");
+    expect(restockBtn).toBeInTheDocument();
+    await user.click(restockBtn);
+
+    // Verify Restock modal is visible
+    expect(screen.getByText("Restock Variant")).toBeInTheDocument();
+    const restockQtyInput = screen.getByLabelText("Quantity to Add");
+    const restockNoteInput = screen.getByLabelText("Optional Note");
+    await user.clear(restockQtyInput);
+    await user.type(restockQtyInput, "15");
+    await user.type(restockNoteInput, "Fresh shipment");
+
+    const modalRestockBtn = screen.getByRole("button", { name: "Confirm Restock" });
+    await user.click(modalRestockBtn);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/products/prod-xyz/variants/var-1/stock", {
+        addQty: 15,
+        note: "Fresh shipment"
+      });
+    });
+
+    // 2. Adjust Flow
+    const adjustBtn = screen.getByTestId("adjust-button-0");
+    expect(adjustBtn).toBeInTheDocument();
+    await user.click(adjustBtn);
+
+    // Verify Adjust modal is visible
+    expect(screen.getByText("Adjust Stock Level")).toBeInTheDocument();
+    const adjustQtyInput = screen.getByLabelText("New Stock Level");
+    const adjustReasonInput = screen.getByLabelText("Reason for Adjustment");
+    
+    // First try with invalid reason
+    await user.type(adjustQtyInput, "35");
+    await user.type(adjustReasonInput, "ok"); // too short!
+    
+    const modalAdjustBtn = screen.getByRole("button", { name: "Confirm Adjustment" });
+    await user.click(modalAdjustBtn);
+    
+    // Should trigger validation error
+    expect(await screen.findByText(/a valid reason/i)).toBeInTheDocument();
+
+    // Now correct it
+    await user.type(adjustReasonInput, " correction"); // makes it longer
+    await user.click(modalAdjustBtn);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/products/prod-xyz/variants/var-1/stock/adjust", {
+        setQty: 35,
+        reason: "ok correction"
       });
     });
   });

@@ -10,6 +10,8 @@ export type CreateStockMovementInput = {
   quantity: number;
   stockQtyBefore: number;
   stockQtyAfter: number;
+  note?: string;
+  reason?: string;
 };
 
 type DbLike = PrismaClient | Prisma.TransactionClient;
@@ -107,7 +109,9 @@ export class StockMovementRepository {
         type: input.type,
         quantity: input.quantity,
         stockQtyBefore: input.stockQtyBefore,
-        stockQtyAfter: input.stockQtyAfter
+        stockQtyAfter: input.stockQtyAfter,
+        note: input.note ?? null,
+        reason: input.reason ?? null
       }
     });
   }

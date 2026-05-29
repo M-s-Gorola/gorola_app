@@ -13,6 +13,7 @@ import { StoreProductFormPage } from "@/pages/store/StoreProductFormPage";
 import { StoreProductsPage } from "@/pages/store/StoreProductsPage";
 import { StoreSettingsPage } from "@/pages/store/StoreSettingsPage";
 import { StoreSetup2FAPage } from "@/pages/store/StoreSetup2FAPage";
+import { StoreStockHistoryPage } from "@/pages/store/StoreStockHistoryPage";
 import { StoreTwoFactorPage } from "@/pages/store/StoreTwoFactorPage";
 
 import { StoreRoute } from "./guards";
@@ -88,6 +89,17 @@ export function StoreRoutes({ prefix = "" }: StoreRoutesProps): ReactElement[] {
         <StoreRoute>
           <StoreLayout>
             <StoreProductFormPage />
+          </StoreLayout>
+        </StoreRoute>
+      }
+    />,
+    <Route
+      key="store-products-stock-history"
+      path={`${prefix}/products/:id/stock-history`}
+      element={
+        <StoreRoute>
+          <StoreLayout>
+            <StoreStockHistoryPage />
           </StoreLayout>
         </StoreRoute>
       }

@@ -141,6 +141,47 @@ export class ProductVariantRepository {
     };
   }
 
+  public async setStock(
+    variantId: string,
+    setQty: number,
+    storeId: string,
+    tx: Prisma.TransactionClient,
+    options?: {
+      beforeRow?: (ProductVariant & { product: { storeId: string } }) | null | undefined;
+    }
+  ): Promise<{ stockQtyBefore: number; stockQtyAfter: number }> {
+    if (setQty < 0) {
+      throw new ValidationError("Stock quantity cannot be negative", { setQty });
+    }
+
+    const beforeRow =
+      options?.beforeRow ??
+      (await tx.productVariant.findUnique({
+        where: { id: variantId },
+        include: { product: { select: { storeId: true } } }
+      }));
+
+    if (beforeRow === null) {
+      throw new NotFoundError("Product variant not found", { id: variantId });
+    }
+    if (beforeRow.product.storeId !== storeId) {
+      throw new ForbiddenError("Product variant is not in this store", { variantId, storeId });
+    }
+
+    const updated = await tx.productVariant.update({
+      where: { id: variantId },
+      data: {
+        stockQty: setQty,
+        isInStock: setQty > 0,
+        isLowStock: setQty <= beforeRow.lowStockThreshold
+      }
+    });
+    return {
+      stockQtyBefore: beforeRow.stockQty,
+      stockQtyAfter: updated.stockQty
+    };
+  }
+
   public async findById(
     id: string,
     options?: { includeInactive?: boolean }
