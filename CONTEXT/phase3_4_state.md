@@ -2017,3 +2017,42 @@ The existing test "should toggle variant availability" asserted the old buggy be
 - **Test Integrity:** Updated unit assertions in `ProductGrid.test.tsx` to align with the new store-name-free design, confirming all 309 test assertions pass flawlessly.
 
 **Result:** Typechecks, lints, and all 309 web unit and integration tests pass perfectly green.
+
+---
+
+### Session 35 — Responsive Product Detail Page & Strict E2E/Unit Test Remediation
+
+**Date:** 2026-06-01
+
+**Files Modified:**
+- `apps/web/src/components/buyer/ProductGrid.tsx`
+- `apps/web/src/pages/buyer/ProductDetailPage.tsx`
+- `apps/web/src/pages/buyer/ProductDetailPage.test.tsx`
+- `apps/web/tests/e2e/catalog.spec.ts`
+
+---
+
+#### High-Fidelity Responsive Product Catalog & Test Pipeline Hardening
+
+**Symptom:**
+- **Product Card Action Button Spacing:** Action buttons (Add, Book, Counter) in the product cards were too close to the content above them, resulting in an inconsistent vertical alignment when product titles had varying lengths.
+- **Product Detail Image Misalignment:** The product detail page image had inner padding and `object-contain` scaling, causing it to misalign with the left edge of the text blocks below on desktop viewports.
+- **Responsive Layout Spacing & Structure:** On larger screens, the variant selector pills and the product price were grouped in a cramped horizontal row, leaving vast empty space. Conversely, on mobile viewports, having stacked variants and price fields added redundant vertical scrolling.
+- **Unit and E2E Test Failures:** The new dual-render layout structure (rendering one copy for desktop with `hidden md:flex` and another for mobile with `flex md:hidden`) introduced duplicate elements for variants, prices, and buttons into the DOM. This violated Playwright's strict-mode assertions (`E2E-003: Product Detail Page Navigation` failed with "resolved to 2 elements" or "unexpected value 'hidden'") and caused Vitest unit tests to fail with duplicate matching elements.
+- **Typechecking Errors:** When indexing queried array elements (e.g., `getAllByRole("button")[0]`), TypeScript raised strict-null checks because the result could technically be `undefined`.
+
+**Fix:**
+- **Product Grid Action Standardization:** Reorganized `ProductGrid.tsx` to wrap action triggers in a standardized flex container (`mt-auto pt-4 w-full`). This enforces a consistent 16px external margin/padding below the Unit/Price row and keeps all action buttons perfectly aligned at the bottom of the card regardless of text size.
+- **Edge-to-Edge Desktop Image Scaling:** Updated the product detail page image to use `h-full w-full object-cover` with zero padding, restoring perfect visual alignment with the starting edge of the text content.
+- **Breakpoint-Specific Responsive Restructuring:**
+  - **Mobile Storefront:** Grouped the variant selector pills (left) and the product price (right) in a single horizontal `border-y` row using `justify-between` and snug padding (`py-3`).
+  - **Desktop Storefront:** Hides the mobile row (`md:hidden`) and splits them into clean, separate blocks (`md:flex` and `md:block`)—stacking the variants below the description and surfacing a prominent right-aligned price under the quantity selector.
+- **Strict DOM Query Remediation:**
+  - **Unit Tests:** Refactored `ProductDetailPage.test.tsx` assertions to use `getAllByRole(...)[0]`, `getAllByText(...)[0]`, and `findAllByRole(...)[0]` to query and target visible elements in their active viewport container.
+  - **Type Safety:** Applied strict non-null assertions (`!`) to array index lookups (e.g., `getAllByRole("button", { name: "1kg" })[0]!`), satisfying strict compiler checks since runtime existence is guaranteed by preceding assertions.
+  - **E2E Tests:** Removed `data-testid="product-price"` from the mobile-only price paragraph in `ProductDetailPage.tsx` to ensure Playwright's global test-id selector finds exactly one price node. Updated `tests/e2e/catalog.spec.ts` to use `.filter({ visible: true })` on `[data-testid="variant-pill"]` to bypass CSS-hidden elements under specific responsive viewports.
+
+**Result:** Typechecks, lints, all 10/10 isolated unit tests, and all 8/8 catalog E2E tests are 100% green and verified.
+
+
+---
