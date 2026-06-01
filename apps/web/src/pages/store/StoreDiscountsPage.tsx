@@ -76,11 +76,11 @@ export function StoreDiscountsPage(): ReactElement {
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
       const res = await api.get<ProfileEnvelope>("/api/v1/store/profile");
-      return res.data;
+      return res.data.data;
     }
   });
 
-  const isBooking = profileResponse?.data?.storeType === "BOOKING_COMMERCE";
+  const isBooking = profileResponse?.storeType === "BOOKING_COMMERCE";
 
   // 2. Fetch Discounts Query
   const { data: discountsResponse, isLoading, isError, refetch } = useQuery({

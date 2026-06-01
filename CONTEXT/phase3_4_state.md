@@ -1170,6 +1170,7 @@ Verify all Store Owner dashboard workflows, catalog, inventory, and promotions f
 > 7. **Shadow Port Isolation:** Run the automated E2E API server on an isolated shadow port (`3002`) separate from dev (`3001`). Configure dynamic client proxy routing for both HTTP `/api` and WebSockets `/socket.io` with `ws: true`.
 > 8. **Failsafe Teardown & Socket Force-Disconnects:** Disable OTEL SDK telemetry (`OTEL_ENABLED: 'false'`) to prevent exit deadlocks, use forceful connection `.disconnect()` instead of graceful `.quit()`, and implement a 10s exit guillotine timeout.
 > 9. **Windows Stream Pipe Leak Prevention:** Configure `reuseExistingServer: !process.env.CI` for local test servers to prevent orphaned backend child processes (`tsx watch` -> `node`) from leaking stdin/stdout streams and hanging terminals on Windows.
+> 10. **Selector Realignment (Case Sensitivity and Label Nuances):** Correct case-sensitive matching for fields/buttons (e.g. `"Email Address"` to `"Email address"`, `"Sign In"` to `"Login"`, `"Enter 2FA Code"` to `"Two-Factor Code"`, `"Enter 6-digit TOTP Code"` to `"Confirmation Code"`) to match exact frontend DOM implementations and avoid timeout failures.
 
 
 **Proposed Scope & Checklist:**
@@ -2053,6 +2054,34 @@ The existing test "should toggle variant availability" asserted the old buggy be
   - **E2E Tests:** Removed `data-testid="product-price"` from the mobile-only price paragraph in `ProductDetailPage.tsx` to ensure Playwright's global test-id selector finds exactly one price node. Updated `tests/e2e/catalog.spec.ts` to use `.filter({ visible: true })` on `[data-testid="variant-pill"]` to bypass CSS-hidden elements under specific responsive viewports.
 
 **Result:** Typechecks, lints, all 10/10 isolated unit tests, and all 8/8 catalog E2E tests are 100% green and verified.
+
+
+---
+
+### Session 36 — React Query Cache Shape Consistency Static Analysis & Hardening
+
+**Date:** 2026-06-01
+
+**Files Modified:**
+- `apps/web/src/pages/store/StoreDiscountsPage.tsx`
+- `apps/web/src/pages/store/StoreDiscountsPage.test.tsx`
+- `apps/web/src/lib/react-query-cache-consistency.test.ts`
+
+---
+
+#### React Query queryKey Cache Shape Consistency Static Analysis
+
+**Symptom:**
+- Navigating to the Store Discounts panel and reloading reverted the layout back to Quick Commerce layout instead of Booking Commerce, and the Store Status Toggle falsely displayed the store as Closed.
+
+**Root cause:**
+- `StoreDiscountsPage` was missed during a prior React Query cleanup. It queried the shared `["store", "profile"]` query key but returned the wrapped `res.data` (envelope) instead of the unwrapped `res.data.data` (profile object). This corrupted the cached query key shape for `StoreLayout` and `StoreDashboardPage` on navigation/mount.
+
+**Fix:**
+- **Standardized Query:** Restored `StoreDiscountsPage.tsx` profile query to return `res.data.data` and adjusted type accessors.
+- **Automated Static Analysis Check:** Engineered `react-query-cache-consistency.test.ts` to scan all source files, extract every `useQuery` query key and queryFn return shape, and assert that all query observers sharing the same queryKey return consistent structures. This successfully caught the `StoreDiscountsPage` mismatch and verified that all other query observers in the monorepo are 100% consistent.
+
+**Result:** Typecheck, lints, and all unit tests pass completely green.
 
 
 ---

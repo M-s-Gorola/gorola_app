@@ -123,4 +123,40 @@ export function registerPromotionRoutes(
       valid: true as const
     });
   });
+
+  if (process.env.NODE_ENV === "test") {
+    app.post("/api/v1/test/advertisements/:id/approve", async (request, reply) => {
+      const params = request.params as { id: string };
+      const approvedAd = await adRepo.approve(params.id);
+      return success(request, reply, approvedAd);
+    });
+
+    app.post("/api/v1/test/store-owner/:email/reset", async (request, reply) => {
+      const params = request.params as { email: string };
+      const { hash } = await import("bcryptjs");
+      const hashedPw = await hash("Owner#123", 10);
+      await getPrismaClient().storeOwner.updateMany({
+        where: { email: params.email },
+        data: {
+          totpEnabled: false,
+          totpSecret: null,
+          passwordHash: hashedPw
+        }
+      });
+      return success(request, reply, { reset: true });
+    });
+
+    app.post("/api/v1/test/store/:id/reset-status", async (request, reply) => {
+      const params = request.params as { id: string };
+      await getPrismaClient().store.update({
+        where: { id: params.id },
+        data: {
+          isAcceptingOrders: true,
+          isAcceptingBookings: true
+        }
+      });
+      return success(request, reply, { reset: true });
+    });
+  }
 }
+

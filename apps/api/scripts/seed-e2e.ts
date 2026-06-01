@@ -5,6 +5,14 @@ const prisma = new PrismaClient();
 async function main() {
   console.info("Seeding E2E test data...");
 
+  // Reset all StoreOwner 2FA states to ensure clean test-run environment
+  await prisma.storeOwner.updateMany({
+    data: {
+      totpEnabled: false,
+      totpSecret: null,
+    },
+  });
+
   const store = await prisma.store.findFirst({
     where: { id: "store_gorola_hillside_mart" },
   });

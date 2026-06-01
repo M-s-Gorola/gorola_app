@@ -23,13 +23,14 @@ vi.mock("@/lib/api", () => ({
   }
 }));
 
-function renderStoreDiscounts(initialEntries: InitialEntry[] = ["/store/discounts"]): void {
-  const queryClient = new QueryClient({
+function renderStoreDiscounts(
+  initialEntries: InitialEntry[] = ["/store/discounts"],
+  queryClient: QueryClient = new QueryClient({
     defaultOptions: {
       queries: { retry: false }
     }
-  });
-
+  })
+): void {
   render(
     <MemoryRouter initialEntries={initialEntries}>
       <QueryClientProvider client={queryClient}>
@@ -458,6 +459,43 @@ describe("StoreDiscountsPage", () => {
 
     await waitFor(() => {
       expect(invalidateSpy).toHaveBeenCalledWith({ queryKey: ["store", "discounts"] });
+    });
+  });
+
+  it("keeps the ['store', 'profile'] cache shape unwrapped to prevent layout corruption", async () => {
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: { retry: false }
+      }
+    });
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { storeType: "BOOKING_COMMERCE" }
+          }
+        });
+      }
+      if (url.includes("/discounts")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: []
+          }
+        });
+      }
+      return Promise.reject(new Error(`Unhandled URL: ${url}`));
+    });
+
+    renderStoreDiscounts(["/store/discounts"], queryClient);
+
+    await waitFor(() => {
+      const cachedProfile = queryClient.getQueryData<{ storeType: string }>(["store", "profile"]);
+      expect(cachedProfile).toBeDefined();
+      expect(cachedProfile?.storeType).toBe("BOOKING_COMMERCE");
+      expect((cachedProfile as any).data).toBeUndefined();
     });
   });
 });

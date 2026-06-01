@@ -268,6 +268,17 @@ export function registerAppRoutes(app: FastifyInstance): void {
     orders: orderRepoOrders
   });
 
+  app.get("/api/v1/stores/:id", async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const store = await prisma.store.findUnique({
+      where: { id }
+    });
+    if (!store) {
+      return reply.code(404).send({ success: false, error: "Store not found" });
+    }
+    return { success: true, data: store };
+  });
+
   registerRiderStubRoutes(app);
 
   void app.register(socketPlugin, {

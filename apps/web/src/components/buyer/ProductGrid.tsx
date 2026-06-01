@@ -148,7 +148,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     if (items.length === 0 || gridRef.current === null) {
       return;
     }
-    if (import.meta.env.MODE === "test") {
+    if (import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as any).isE2E)) {
       return;
     }
     initGorolaGsapOnce();
@@ -309,7 +309,10 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                   alt={item.name}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                   onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/400/400?grayscale";
+                    const img = e.currentTarget as HTMLImageElement;
+                    if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
+                      img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                    }
                   }}
                 />
               </div>
