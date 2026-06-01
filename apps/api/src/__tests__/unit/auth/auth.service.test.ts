@@ -2,8 +2,15 @@ import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shar
 import { hash } from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { BuyerUserLookup } from "../../../modules/auth/auth.service.js";
 import { AuthService } from "../../../modules/auth/auth.service.js";
-import type { BuyerRefreshSuccess, OtpStoreRecord } from "../../../modules/auth/auth.types.js";
+import type {
+  BuyerRefreshSuccess,
+  OtpProvider,
+  OtpStoreRecord,
+  RedisLikeClient,
+  TokenService
+} from "../../../modules/auth/auth.types.js";
 
 type MockRedisClient = {
   del: ReturnType<typeof vi.fn>;
@@ -39,12 +46,12 @@ describe("AuthService", () => {
   const findUserById = vi.fn();
 
   const service = new AuthService({
-    ensureBuyerUser,
-    findUserById,
-    otpProvider,
+    ensureBuyerUser: ensureBuyerUser as unknown as (phone: string) => Promise<BuyerUserLookup>,
+    findUserById: findUserById as unknown as (id: string) => Promise<BuyerUserLookup | null>,
+    otpProvider: otpProvider as unknown as OtpProvider,
     otpTtlSeconds: 300,
-    redis,
-    tokenService
+    redis: redis as unknown as RedisLikeClient,
+    tokenService: tokenService as unknown as TokenService
   });
 
   beforeEach(() => {

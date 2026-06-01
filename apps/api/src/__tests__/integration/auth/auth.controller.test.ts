@@ -2,7 +2,10 @@ import { ValidationError } from "@gorola/shared";
 import type { FastifyInstance } from "fastify";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+import type { AdminAuthService } from "../../../modules/auth/admin-auth.service.js";
 import { registerAuthRoutes } from "../../../modules/auth/auth.controller.js";
+import type { AuthService } from "../../../modules/auth/auth.service.js";
+import type { StoreOwnerAuthService } from "../../../modules/auth/store-owner-auth.service.js";
 import { createServer } from "../../../server.js";
 
 type AuthServiceMock = {
@@ -26,31 +29,31 @@ type AdminAuthServiceMock = {
   verify2FA: ReturnType<typeof vi.fn>;
 };
 
-function createAuthServiceMock(): AuthServiceMock {
+function createAuthServiceMock(): AuthServiceMock & AuthService {
   return {
     logout: vi.fn(),
     refreshToken: vi.fn(),
     sendOtp: vi.fn(),
     verifyOtp: vi.fn()
-  };
+  } as unknown as AuthServiceMock & AuthService;
 }
 
-function createStoreOwnerAuthServiceMock(): StoreOwnerAuthServiceMock {
+function createStoreOwnerAuthServiceMock(): StoreOwnerAuthServiceMock & StoreOwnerAuthService {
   return {
     login: vi.fn(),
     setup2FA: vi.fn(),
     verify2FA: vi.fn(),
     refreshToken: vi.fn(),
     logout: vi.fn()
-  };
+  } as unknown as StoreOwnerAuthServiceMock & StoreOwnerAuthService;
 }
 
-function createAdminAuthServiceMock(): AdminAuthServiceMock {
+function createAdminAuthServiceMock(): AdminAuthServiceMock & AdminAuthService {
   return {
     login: vi.fn(),
     setup2FA: vi.fn(),
     verify2FA: vi.fn()
-  };
+  } as unknown as AdminAuthServiceMock & AdminAuthService;
 }
 
 describe("auth controller routes", () => {

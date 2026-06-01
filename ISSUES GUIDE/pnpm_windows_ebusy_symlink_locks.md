@@ -64,8 +64,41 @@ Add-MpPreference -ExclusionPath "C:\Users\Administrator\Desktop\GoRola"
 
 ---
 
+## 4. Downstream Side-Effects & Resolutions
+
+Switching to `node-linker=hoisted` combined with security updates (such as overriding `vitest` to `^4.1.0` to address critical UI server vulnerabilities) can trigger two secondary issues:
+
+### A. Vitest v4 Strict Type Mismatches
+*   **The Issue:** Vitest v4 enforces much stricter TypeScript types for mocked functions (`Mock<Procedure | Constructable>`). Legacy mock declarations using `ReturnType<typeof vi.fn>` are no longer assignable to specific service signatures (e.g., `OtpProvider['sendOtp']`).
+*   **The Resolution:** In your tests, cast mock functions or the mocked instances as `any` when passing them into constructor dependency blocks:
+    ```typescript
+    const service = new AuthService({
+      otpProvider: otpProvider as any,
+      redis: redis as any,
+      tokenService: tokenService as any
+    });
+    ```
+    This completely satisfies compiler checks while preserving all mock assertions.
+
+### B. Conflicting Dependency Versions (Zod 3 vs Zod 4)
+*   **The Issue:** When hoisting is enabled, duplicate packages in the tree (such as `zod 3` pulled by `@modelcontextprotocol/sdk` and `zod 4` used by `@gorola/web`) are flattened. If `@hookform/resolvers` resolves to Zod 3 instead of Zod 4, compilation of hook form resolvers fails with:
+    `The types of '_zod.version.minor' are incompatible between these types. Type '3' is not assignable to type '0'.`
+*   **The Resolution:** Enforce a single version of the package across the entire monorepo by adding an override in the root `package.json`:
+    ```json
+    "pnpm": {
+      "overrides": {
+        "zod": "^4.3.6"
+      }
+    }
+    ```
+    Run `pnpm install` afterward to rebuild the dependency tree, ensuring perfect type alignment across all packages.
+
+---
+
 ## Summary of Learnings
 
 1. **Antivirus Lockups:** `EBUSY` during `pnpm install` on Windows is almost always caused by real-time scanners briefly holding locks on new files during symlink generation.
 2. **Hoisted Linker for Windows Stability:** Using `node-linker=hoisted` in `.npmrc` is the most reliable, configuration-free way to make `pnpm` rock-solid on Windows platforms by bypassing symlinks entirely.
-3. **Always Clean Up first:** When resolving locker conflicts, always delete `node_modules` before running `pnpm install` again to avoid trying to modify locked files from a previous crashed run.
+3. **Handle Hoisted Duplicate Clashes:** When using a hoisted linker, keep an eye out for duplicate version type clashes (like Zod 3 vs Zod 4). Force a single version using `pnpm.overrides` to keep the compiler happy.
+4. **Mock Typecasting for Upgrades:** Cast Vitest mock classes to `any` when passing them into dependency injection slots to keep them robust against Vitest major version upgrades.
+
