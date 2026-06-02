@@ -30,7 +30,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // 2. Access settings profile, configure 2FA, generate and verify TOTP code
     await page.getByRole("link", { name: "Settings" }).click();
-    
+
     // Check if 2FA is currently Disabled
     await expect(page.getByText("Two-Factor Auth is currently: Disabled", { exact: false })).toBeVisible();
 
@@ -74,10 +74,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Toggle store status to Closed (Toggle accepting orders off)
     const availabilitySwitch = page.locator('button[role="switch"]');
     await expect(availabilitySwitch).toBeVisible();
-    
+
     // Switch state should currently be Checked/On
     await expect(availabilitySwitch).toHaveAttribute("aria-checked", "true");
-    
+
     // Add a small delay to ensure React hydration has finished and listeners are attached
     await page.waitForTimeout(1000);
 
@@ -162,7 +162,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
     });
-    
+
     // Log in buyer
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     await buyerPage.locator('#buyer-phone').fill('9876543210');
@@ -191,7 +191,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.getByRole("button", { name: "Proceed to Checkout" }).click();
 
     await expect(buyerPage).toHaveURL(/\/checkout/, { timeout: 15000 });
- 
+
     // Wait for addresses to load so the radio buttons are stable
     await expect(buyerPage.locator('text=/Loading addresses/i')).not.toBeVisible({ timeout: 15000 });
 
@@ -207,7 +207,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Click Continue to Review step
     await buyerPage.locator('button', { hasText: /Continue/i }).click();
- 
+
     // Click "Place Order"
     const placeOrderBtn = buyerPage.locator('button', { hasText: /Place Order/i });
     await expect(placeOrderBtn).toBeVisible();
@@ -350,7 +350,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByPlaceholder("e.g. SUMMER50").fill(code);
     await page.getByPlaceholder("e.g. 10", { exact: true }).fill("25");
     await page.getByPlaceholder("e.g. 100", { exact: true }).fill("300"); // Minimum order ₹300
-    
+
     // Choose start/end dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -388,7 +388,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       .filter({ hasText: "Premium Basmati Rice" })
       .getByRole('button', { name: /Add/i });
     await addButton.click();
-    
+
     // Open Cart Drawer
     await buyerPage.locator('[data-testid="cart-button"]').click();
     await buyerPage.locator('aside').getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
@@ -406,7 +406,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // 3. Drop below ₹300 and verify auto re-validation removes coupon
     await buyerPage.locator('aside').getByRole("button", { name: /Decrease Premium Basmati Rice quantity/i }).click();
-    
+
     // Subtotal is now ₹240 (< ₹300)
     await expect(buyerPage.locator('[data-testid="cart-subtotal"]')).toContainText("240");
     // Verify coupon is removed and shows invalid/expired message or 0 discount
@@ -431,7 +431,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // 3. Navigate to Services list and verify Stock adjust features are completely hidden
     await sidebar.getByRole("link", { name: "Services" }).click();
     await expect(page.getByRole("heading", { name: "Services" })).toBeVisible();
-    
+
     // Check that Restock/Adjust buttons, stock table columns, and low stock thresholds are hidden
     await expect(page.getByRole("button", { name: "Restock" })).not.toBeVisible();
     await expect(page.getByRole("button", { name: "Adjust" })).not.toBeVisible();
@@ -440,7 +440,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // 4. Verify bookings list and details normalizes DELIVERED status to render as COMPLETED
     await page.getByRole("link", { name: "Bookings" }).click();
     await expect(page.getByRole("heading", { name: "Bookings" })).toBeVisible();
-    
+
     // The Bookings page normalizes DELIVERED → COMPLETED in status history.
     // approvalStatus uses BookingStatus which includes "COMPLETED" directly.
     // We check for any COMPLETED text in the bookings list.
@@ -481,7 +481,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByPlaceholder("https://example.com/banner.png").fill("https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600");
     // Target URL was restored
     await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(`${STORE_SUBDOMAIN}/products`);
-    
+
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -512,7 +512,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
     await buyerPage.goto(BUYER_SUBDOMAIN, { waitUntil: "domcontentloaded" });
-    
+
     // Assert banner title is visible in the promotion carousel
     await expect(buyerPage.getByText(adTitle)).toBeVisible();
     await buyerContext.close();
@@ -593,7 +593,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByPlaceholder("e.g. 10% Off Dairy").fill(offerTitle);
     await page.getByPlaceholder("e.g. 10", { exact: true }).fill("15"); // Discount value
     await page.getByPlaceholder("e.g. 500").fill("400"); // Minimum purchase
-    
+
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -634,7 +634,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       .getByRole('button', { name: /Add/i })
       .click();
     await buyerPage.locator('[data-testid="cart-button"]').click();
-    
+
     // Increase quantity
     await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
     await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
@@ -693,7 +693,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByPlaceholder("e.g. SUMMER50").fill(couponCode);
     await page.getByPlaceholder("e.g. 10", { exact: true }).fill("10"); // 10%
     await page.getByPlaceholder("e.g. 100", { exact: true }).fill("300"); // min order ₹300
-    
+
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     const end = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -706,6 +706,31 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // B. Create Store Offer (15% off, min order ₹400)
     console.log(`Creating Store Offer: ${offerTitle}...`);
     await page.getByRole("link", { name: "Offers" }).click();
+
+    // ---------------------------------------------------------
+    // NEW: Wait for the network to fetch and render the table
+    console.log("Waiting for Offers table to load...");
+    await page.waitForTimeout(2000);
+
+    console.log("Cleaning up leftover active offers...");
+    const deactivateBtns = page.locator('[data-testid^="deactivate-offer-"]');
+
+    // Playwright evaluates .count() dynamically
+    while (await deactivateBtns.count() > 0) {
+      // Setup listener for the browser confirm dialog
+      page.once('dialog', dialog => dialog.accept());
+
+      // Click the first active deactivate button
+      await deactivateBtns.first().click();
+
+      // Wait for that specific button to disappear before moving to the next
+      await deactivateBtns.first().waitFor({ state: 'hidden', timeout: 5000 });
+
+      // Optional: slight pause to let React Query invalidate/refetch
+      await page.waitForTimeout(500);
+    }
+    // ---------------------------------------------------------
+
     // Click "Create Offer" button if visible (it is inline in the split screen layout)
     const toggleOfferBtn33 = page.getByRole("button", { name: "Create Offer" });
     if (await toggleOfferBtn33.isVisible()) {
@@ -800,7 +825,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Now confirm the booking
     console.log("Clicking Confirm Booking...");
-    await buyerPage.getByRole("button", { name: "Confirm Booking" }).click();
+    //await buyerPage.getByRole("button", { name: "Confirm Booking" }).click();
+
+    // Add { force: true } to bypass the sonner-toast notification on mobile viewports
+    await buyerPage.getByRole("button", { name: "Confirm Booking" }).click({ force: true });
 
     // 3. Verify Booking Confirmation Page breakdown is correct and collapsible
     console.log("Waiting for URL of booking confirmation page...");
