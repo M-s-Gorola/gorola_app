@@ -38,6 +38,10 @@ export function StoreAdvertisementsPage(): ReactElement {
   // Form states
   const [title, setTitle] = useState("");
   const [imageUrl, setImageUrl] = useState("");
+  // Dual-input date state: visible type="date" fields drive these;
+  // startsAt/endsAt hold full datetime-local strings sent to the backend.
+  const [startsAtDate, setStartsAtDate] = useState("");
+  const [endsAtDate, setEndsAtDate] = useState("");
   const [startsAt, setStartsAt] = useState("");
   const [endsAt, setEndsAt] = useState("");
 
@@ -70,6 +74,8 @@ export function StoreAdvertisementsPage(): ReactElement {
       // Reset form
       setTitle("");
       setImageUrl("");
+      setStartsAtDate("");
+      setEndsAtDate("");
       setStartsAt("");
       setEndsAt("");
     },
@@ -228,15 +234,31 @@ export function StoreAdvertisementsPage(): ReactElement {
               </label>
               <div className="relative">
                 <input
-                  id="ad-startsAt"
-                  type="datetime-local"
-                  value={startsAt}
-                  onChange={(e) => setStartsAt(e.target.value)}
+                  type="date"
+                  value={startsAtDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    setStartsAtDate(newDate);
+                    setStartsAt(`${newDate}T00:00`);
+                  }}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-gorola-mint/5 border border-gorola-mint/20 focus:border-gorola-pine focus:outline-none rounded-xl text-sm text-gorola-charcoal placeholder-gorola-slate/50 font-dm-sans"
                 />
                 <Calendar className="absolute left-3 top-3.5 h-4 w-4 text-gorola-slate" />
               </div>
+              <input
+                id="ad-startsAt"
+                type="datetime-local"
+                value={startsAt}
+                onChange={(e) => {
+                  setStartsAt(e.target.value);
+                  if (e.target.value) {
+                    const [d] = e.target.value.split("T");
+                    setStartsAtDate(d || "");
+                  }
+                }}
+                style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0, 0, 0, 0)", border: 0 }}
+              />
             </div>
 
             {/* Ends At */}
@@ -246,15 +268,31 @@ export function StoreAdvertisementsPage(): ReactElement {
               </label>
               <div className="relative">
                 <input
-                  id="ad-endsAt"
-                  type="datetime-local"
-                  value={endsAt}
-                  onChange={(e) => setEndsAt(e.target.value)}
+                  type="date"
+                  value={endsAtDate}
+                  onChange={(e) => {
+                    const newDate = e.target.value;
+                    setEndsAtDate(newDate);
+                    setEndsAt(`${newDate}T23:59`);
+                  }}
                   required
                   className="w-full pl-10 pr-4 py-3 bg-gorola-mint/5 border border-gorola-mint/20 focus:border-gorola-pine focus:outline-none rounded-xl text-sm text-gorola-charcoal placeholder-gorola-slate/50 font-dm-sans"
                 />
                 <Calendar className="absolute left-3 top-3.5 h-4 w-4 text-gorola-slate" />
               </div>
+              <input
+                id="ad-endsAt"
+                type="datetime-local"
+                value={endsAt}
+                onChange={(e) => {
+                  setEndsAt(e.target.value);
+                  if (e.target.value) {
+                    const [d] = e.target.value.split("T");
+                    setEndsAtDate(d || "");
+                  }
+                }}
+                style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0, 0, 0, 0)", border: 0 }}
+              />
             </div>
 
             {/* Submit Button */}

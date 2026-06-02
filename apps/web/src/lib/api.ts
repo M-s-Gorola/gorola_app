@@ -143,7 +143,9 @@ export function createApiClient(options: CreateApiClientOptions) {
 
     const refresh = options.getRefreshToken();
     if (refresh === null || refresh.length === 0) {
-      options.clearSession();
+      if (options.getAccessToken() !== null) {
+        options.clearSession();
+      }
       return Promise.reject(error);
     }
 

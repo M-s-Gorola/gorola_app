@@ -21,6 +21,26 @@ async function main() {
     throw new Error("Store not found. Please run regular seed first.");
   }
 
+  // Override prod_rice_1 name and variant details to align with E2E tests
+  await prisma.product.update({
+    where: { id: "prod_rice_1" },
+    data: { name: "Premium Basmati Rice" }
+  });
+
+  const variantRice = await prisma.productVariant.findFirst({
+    where: { productId: "prod_rice_1" }
+  });
+  if (variantRice) {
+    await prisma.productVariant.update({
+      where: { id: variantRice.id },
+      data: {
+        label: "1 kg",
+        unit: "1 kg",
+        price: 120.00
+      }
+    });
+  }
+
   // 1. Seed Discount Code
   await prisma.discount.upsert({
     where: {

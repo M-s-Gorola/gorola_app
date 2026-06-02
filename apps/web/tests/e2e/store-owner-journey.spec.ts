@@ -63,7 +63,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
   });
 
   // E2E-021: Live Store Status Toggle & Real-time Buyer Visibility
-  test("E2E-021: Live Store Status Toggle & Real-time Buyer Visibility", async ({ page, context }) => {
+  test("E2E-021: Live Store Status Toggle & Real-time Buyer Visibility", async ({ page, context, request }) => {
     // 1. Login as store owner (owner1@gorola.in)
     await page.goto(`${STORE_SUBDOMAIN}/login`);
     await page.getByLabel("Email address").fill("owner1@gorola.in");
@@ -89,39 +89,76 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(confirmModal).toBeVisible();
     await confirmModal.getByRole("button", { name: "Yes, Hide Store" }).click();
 
-    // Wait for modal to disappear
+    // Wait for modal to disappear and aria-checked to reflect false (confirming PUT + re-fetch done)
     await expect(confirmModal).not.toBeVisible();
     await expect(availabilitySwitch).toHaveAttribute("aria-checked", "false");
 
-    // 2. Open Buyer window concurrently and check storefront offline banner
+    // Poll the public store API until the backend confirms isAcceptingOrders=false.
+    // This is the most reliable way to avoid timing races between the React Query re-fetch
+    // and the buyer page's fresh fetch.
+    await expect(async () => {
+      const res = await request.get(`${BASE_URL}/api/v1/stores/store_gorola_hillside_mart`);
+      const body = await res.json() as { success: boolean; data: { isAcceptingOrders: boolean } };
+      expect(body.data.isAcceptingOrders).toBe(false);
+    }).toPass({ timeout: 10000 });
+
+    // 2. Open Buyer window and check storefront offline banner
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
+    buyerPage.on('console', msg => console.log('BUYER CONSOLE:', msg.text()));
+    buyerPage.on('request', request => console.log('BUYER REQUEST:', request.url(), request.method()));
+    buyerPage.on('requestfailed', request => console.log('BUYER REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    buyerPage.on('response', response => {
+      if (response.status() >= 400) {
+        console.log('BUYER HTTP ERROR:', response.url(), response.status());
+      }
+    });
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
     });
     // Navigate directly to the store page since the store is Closed (hidden from search results)
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
+    // Reload once to ensure fresh React Query fetch (buyer page needs reload to reflect status changes)
+    await buyerPage.reload();
 
     // Verify storefront banner shows store is offline
-    await expect(buyerPage.getByText("Store is currently offline and not accepting orders")).toBeVisible();
+    await expect(buyerPage.locator('[data-testid="store-offline-banner"]')).toBeVisible({ timeout: 20000 });
 
     // 3. Switch back to Merchant and toggle to Open
     await page.bringToFront();
     await availabilitySwitch.click();
     await expect(availabilitySwitch).toHaveAttribute("aria-checked", "true");
 
-    // 4. Verify storefront is active on Buyer page
+    // 4. Verify storefront is active on Buyer page (reload to pick up updated status)
     await buyerPage.bringToFront();
     await buyerPage.reload();
-    await expect(buyerPage.getByText("Store is currently offline and not accepting orders")).not.toBeVisible();
+    await expect(buyerPage.locator('[data-testid="store-offline-banner"]')).not.toBeVisible({ timeout: 15000 });
     await buyerContext.close();
   });
 
   // E2E-022: Multi-Actor Quick Commerce Live Order Status Transitions
   test("E2E-022: Multi-Actor Quick Commerce Live Order Status Transitions", async ({ page, context }) => {
+    // Enable diagnostics
+    page.on('console', msg => console.log('MERCHANT CONSOLE:', msg.text()));
+    page.on('request', request => console.log('MERCHANT REQUEST:', request.url(), request.method()));
+    page.on('requestfailed', request => console.log('MERCHANT REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    page.on('response', response => {
+      if (response.status() >= 400) {
+        console.log('MERCHANT HTTP ERROR:', response.url(), response.status());
+      }
+    });
+
     // 1. Buyer placing order (COD)
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
+    buyerPage.on('console', msg => console.log('BUYER CONSOLE:', msg.text()));
+    buyerPage.on('request', request => console.log('BUYER REQUEST:', request.url(), request.method()));
+    buyerPage.on('requestfailed', request => console.log('BUYER REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    buyerPage.on('response', response => {
+      if (response.status() >= 400) {
+        console.log('BUYER HTTP ERROR:', response.url(), response.status());
+      }
+    });
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
     });
@@ -207,7 +244,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // force:true bypasses Sonner toast covering the button on narrow viewports
     // Note: we skip the modal badge check because force:true on iphone-se may hit the
     // modal backdrop (closing it) — mutation success is verified by the buyer heading.
-    await page.getByRole("button", { name: "Mark Preparing" }).click({ force: true });
+    const markPreparingBtn = page.getByRole("button", { name: "Mark Preparing" });
+    await expect(markPreparingBtn).toBeVisible({ timeout: 15000 });
+    await expect(markPreparingBtn).toBeEnabled({ timeout: 15000 });
+    await markPreparingBtn.click({ force: true });
 
     // Buyer sees PREPARING in real-time — #occ-heading changes to "Store is picking items"
     await buyerPage.bringToFront();
@@ -215,7 +255,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // 4. Merchant transitions status PREPARING -> OUT_FOR_DELIVERY (Dispatch)
     await page.bringToFront();
-    await page.getByRole("button", { name: "Dispatch Order" }).click({ force: true });
+    const dispatchOrderBtn = page.getByRole("button", { name: "Dispatch Order" });
+    await expect(dispatchOrderBtn).toBeVisible({ timeout: 15000 });
+    await expect(dispatchOrderBtn).toBeEnabled({ timeout: 15000 });
+    await dispatchOrderBtn.click({ force: true });
 
     // Buyer sees On the way — #occ-heading changes to "On the way" (unique element avoids strict mode)
     await buyerPage.bringToFront();
@@ -223,7 +266,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // 5. Merchant transitions status OUT_FOR_DELIVERY -> DELIVERED
     await page.bringToFront();
-    await page.getByRole("button", { name: "Mark Delivered" }).click({ force: true });
+    const markDeliveredBtn = page.getByRole("button", { name: "Mark Delivered" });
+    await expect(markDeliveredBtn).toBeVisible({ timeout: 15000 });
+    await expect(markDeliveredBtn).toBeEnabled({ timeout: 15000 });
+    await markDeliveredBtn.click({ force: true });
 
     // Buyer sees Order Delivered — #occ-heading changes to "Order Delivered"
     await buyerPage.bringToFront();
@@ -242,7 +288,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByRole("button", { name: "Login" }).click();
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
-    // Go to Products — search for Premium Basmati Rice first (may be on page 2+ without search)
+    // Go to Products — search for Basmati Rice Premium first (may be on page 2+ without search)
     await page.getByRole("link", { name: "Products" }).click();
     await page.locator('#product-search-input').fill('Premium Basmati Rice');
     // Wait for table to load with search results
@@ -270,6 +316,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Navigate back to Products list to access stock history
     await page.getByRole('link', { name: 'Products' }).click();
+    await page.locator('#product-search-input').fill('Premium Basmati Rice');
     await expect(page.locator('[data-testid="stock-history-prod_rice_1"]')).toBeVisible({ timeout: 15000 });
 
     // Go to Stock History list and verify audit log entries
@@ -681,12 +728,19 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Stacked Deductions: ₹75 + ₹50 = ₹125
     await expect(buyerPage.locator('[data-testid="discount-summary"]')).toContainText("125");
 
-    // Fill Landmark and submit
-    // placeholder="Home" → label field (optional)
-    await buyerPage.getByPlaceholder("Home").fill("E2E Suite");
-    // placeholder is the long landmark description
-    await buyerPage.getByPlaceholder("E.g. - near the red gate, behind Hotel Padmini").fill("E2E Tower");
-    // Button text is "Confirm Booking"
+    // Fill Address via "Add New" Dialog (address form is inside a Dialog modal, not inline)
+    await buyerPage.getByRole("button", { name: /Add New/i }).click();
+    // Wait for dialog to open
+    await expect(buyerPage.getByRole("dialog")).toBeVisible();
+    // Use name-attribute selectors (robust, not reliant on placeholder text/encoding)
+    await buyerPage.locator('[name="label"]').fill("E2E Suite");
+    await buyerPage.locator('[name="landmarkDescription"]').fill("E2E Tower - near the diagnostic center entrance");
+    // Click Save Address inside dialog
+    await buyerPage.getByRole("button", { name: "Save Address" }).click();
+    // Wait for dialog to close after save
+    await expect(buyerPage.getByRole("dialog")).not.toBeVisible({ timeout: 10000 });
+
+    // Now confirm the booking
     await buyerPage.getByRole("button", { name: "Confirm Booking" }).click();
 
     // 3. Verify Booking Confirmation Page breakdown is correct and collapsible

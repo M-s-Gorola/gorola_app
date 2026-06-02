@@ -61,7 +61,7 @@ export function registerPromotionRoutes(
   app.get("/api/v1/promotions/store/:storeId/offers", getOffersPreHandler, async (request, reply) => {
     const params = request.params as { storeId: string };
     const offers = await getPrismaClient().offer.findMany({
-      where: { storeId: params.storeId },
+      where: { storeId: params.storeId, isActive: true },
       orderBy: { createdAt: "desc" }
     });
     const serializedOffers = offers.map((offer) => ({

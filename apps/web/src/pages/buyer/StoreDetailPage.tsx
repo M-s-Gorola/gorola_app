@@ -6,6 +6,14 @@ import { ProductGrid } from "@/components/buyer/ProductGrid";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 
+type Offer = {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount: number | null;
+};
+
 type StoreProfile = {
   id: string;
   name: string;
@@ -41,7 +49,30 @@ export function StoreDetailPage(): ReactElement {
     }
   });
 
-  if (storeQuery.isLoading) {
+  // Fetch active store offers so the buyer can see them on the store page
+  const offersQuery = useQuery({
+    enabled: !isBootstrapPending && id !== undefined && api !== null,
+    queryKey: ["buyer-store-offers", id],
+    queryFn: async (): Promise<Offer[]> => {
+      if (api === null || id === undefined) return [];
+      const res = await api.get<{ success: boolean; data: Offer[] }>(
+        `/api/v1/promotions/store/${id}/offers`
+      );
+      return res.data.data ?? [];
+    }
+  });
+
+  console.log("STORE DETAIL PAGE:", {
+    isBootstrapPending,
+    storeQueryIsLoading: storeQuery.isLoading,
+    storeQueryError: storeQuery.error,
+    storeQueryData: storeQuery.data,
+    offersQueryIsLoading: offersQuery.isLoading,
+    offersQueryError: offersQuery.error,
+    offersQueryData: offersQuery.data,
+  });
+
+  if (isBootstrapPending || storeQuery.isLoading) {
     return (
       <section className="space-y-6">
         <div className="h-48 rounded-3xl bg-white skeleton" />
@@ -50,6 +81,7 @@ export function StoreDetailPage(): ReactElement {
   }
 
   const store = storeQuery.data;
+  const activeOffers = offersQuery.data ?? [];
   if (!store) {
     return (
       <section className="rounded-2xl bg-white/70 p-6 text-center shadow-sm">
@@ -77,6 +109,25 @@ export function StoreDetailPage(): ReactElement {
               {store.phone && <span>📞 {store.phone}</span>}
               {store.address && <span>📍 {store.address}</span>}
             </div>
+            {/* Active Offers Pills */}
+            {activeOffers.length > 0 && (
+              <div className="flex flex-wrap gap-2 mt-1">
+                {activeOffers.map((offer) => (
+                  <span
+                    key={offer.id}
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 font-dm-sans"
+                  >
+                    🏷️ {offer.title}
+                    {offer.discountType === "PERCENTAGE"
+                      ? ` — ${offer.discountValue}% off`
+                      : ` — ₹${offer.discountValue} off`}
+                    {offer.minOrderAmount !== null && offer.minOrderAmount !== undefined && offer.minOrderAmount > 0
+                      ? ` (min ₹${offer.minOrderAmount})`
+                      : ""}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
