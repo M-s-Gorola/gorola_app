@@ -2,6 +2,8 @@ import { PrismaClient } from "@prisma/client";
 
 export async function seedDummyData(prisma: PrismaClient, storeAId: string, storeBId: string, storeCId: string, storeDId: string, storeEId: string) {
   // Wipe existing catalog data (respecting FK constraints)
+  await prisma.offer.deleteMany({});
+  await prisma.discount.deleteMany({});
   await prisma.stockMovement.deleteMany({});
   await prisma.cartItem.deleteMany({});
   await prisma.orderItem.deleteMany({});

@@ -41,6 +41,24 @@ async function main() {
     });
   }
 
+  // Override prod_test_2 name and variant details to align with E2E-033 stacked discounts
+  await prisma.product.update({
+    where: { id: "prod_test_2" },
+    data: { name: "Complete Blood Count" }
+  });
+
+  const variantCBC = await prisma.productVariant.findFirst({
+    where: { productId: "prod_test_2" }
+  });
+  if (variantCBC) {
+    await prisma.productVariant.update({
+      where: { id: variantCBC.id },
+      data: {
+        price: 500.00
+      }
+    });
+  }
+
   // 1. Seed Discount Code
   await prisma.discount.upsert({
     where: {

@@ -1347,6 +1347,66 @@ Verify all Store Owner dashboard workflows, catalog, inventory, and promotions f
 
 ---
 
+### 3.10.1 — E2E Root-Cause Fixes & Target URL Restoration
+
+**Root cause / Goal:**
+After the Session 37 selector-alignment pass, the E2E suite still failed on 4 tests. A deep static audit in Session 40 — reading every source file referenced by each test — identified 5 confirmed root causes:
+
+1. **E2E-028 & E2E-033 (Offers form):** The test uses 3 wrong strings that never match the real DOM:
+   - `getByPlaceholder("e.g. 10% Off Sitewide")` → actual in `StoreOffersPage.tsx` line 328: `"e.g. 10% Off Dairy"`
+   - `getByPlaceholder("e.g. 200")` (min order) → actual line 451: `"e.g. 500"`
+   - `getByRole("button", { name: "Create Offer" })` (submit) → actual line 520: `"Submit Offer"`
+2. **E2E-026 (Advertisement approve):** The backdoor `POST /api/v1/test/advertisements/:id/approve` calls `adRepo.approve(id)`. The `approve()` method only sets `isApproved: true`. The status badge `"Approved & Active"` renders **only** when both `isApproved && isActive` are true. If the ad was created with `isActive: false`, the badge stays on `"Pending Approval"` after approve.
+3. **E2E-024 (Timing race):** After E2E-023's restock/adjust operations, the buyer navigates to the store but the product card's Add button is not found within the timeout. The data is correct; the page just needs an explicit wait for the product grid to hydrate.
+4. **Target URL missing from Advertisement form:** The `linkUrl` field exists in the Prisma schema and is returned by the API, but was removed from the `StoreAdvertisementsPage.tsx` form UI. The E2E test line that filled it was commented out. The user has requested it be restored as a **required** field — an ad's whole purpose is to be clickable.
+
+**Fix / Approach:**
+1. Fix the 3 offer form selector mismatches in `store-owner-journey.spec.ts` (2-line fix).
+2. Update `adRepo.approve()` in `advertisement.repository.ts` to also set `isActive: true`.
+3. Add a `waitForSelector` / `waitFor` guard before the Add button click in E2E-024.
+4. Restore `linkUrl` as a **required** field across the full stack: Prisma schema (already present), backend controller validation (add `linkUrl` to Zod schema), `StoreAdvertisementsPage.tsx` form UI, the `StoreAdvertisementsPage.test.tsx` unit test, the `store-owner.ads.test.ts` integration test, and the E2E spec.
+
+---
+
+- [ ] **RED — Integration (`store-owner.ads.test.ts`):**
+  - [ ] Test: `POST /api/v1/store/advertisements` with body `{ imageUrl: 'https://...', title: 'Summer Sale', linkUrl: 'https://store.gorola.com/sale', startsAt: '<iso>', endsAt: '<iso>' }` → HTTP 201 with `{ id, isApproved: false, isActive: true, linkUrl: 'https://store.gorola.com/sale' }`.
+  - [ ] Test: `POST /api/v1/store/advertisements` with `linkUrl` omitted → HTTP 400 `VALIDATION_ERROR` (linkUrl is required).
+  - [ ] Test: `GET /api/v1/store/advertisements` → each ad in response includes `linkUrl` field.
+  - [ ] Test: `POST /api/v1/test/advertisements/:id/approve` (backdoor) → ad has both `isApproved: true` AND `isActive: true` in the database.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend (Repository → Controller):**
+  - [ ] [Repository] In `advertisement.repository.ts`, update the `approve(id)` method to set **both** `isApproved: true` AND `isActive: true` in the same `prisma.advertisement.update()` call.
+  - [ ] [Controller] In `store-owner.controller.ts`, update the Zod schema for `POST /api/v1/store/advertisements` to include `linkUrl: z.string().url("Must be a valid URL")` as a **required** field. Ensure `linkUrl` is passed to `storeOwnerService.createAd()` and persisted.
+  - [ ] [Controller] Ensure `GET /api/v1/store/advertisements` serializer includes `linkUrl` in the response object for each ad.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit (`StoreAdvertisementsPage.test.tsx`):**
+  - [ ] Test: the "Submit New Ad" form renders a `linkUrl` input field with label `"Target URL"` (or equivalent) and placeholder `"e.g. https://store.gorola.com/sale"`.
+  - [ ] Test: submitting the form without filling `linkUrl` shows a validation error — the field is required.
+  - [ ] Test: submitting the form with a valid `linkUrl` calls `POST /api/v1/store/advertisements` with `linkUrl` in the request body.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Add `linkUrl: string` (required) to the `Advertisement` TypeScript type in `StoreAdvertisementsPage.tsx`.
+  - [ ] [Component] In `StoreAdvertisementsPage.tsx`, add a `linkUrl` text input field to the submission form. Use `z.string().url()` in the client-side Zod schema. Show validation error if left empty or invalid URL.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **RED — E2E (`store-owner-journey.spec.ts` — fixes only, no new test):**
+  - [ ] Fix E2E-028 & E2E-033: change `getByPlaceholder("e.g. 10% Off Sitewide")` → `"e.g. 10% Off Dairy"`; `getByPlaceholder("e.g. 200")` → `"e.g. 500"`; `getByRole("button", { name: "Create Offer" })` → `"Submit Offer"`.
+  - [ ] Fix E2E-026: uncomment/add the `linkUrl` fill step in the advertisement creation block (now that the field exists again): `await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(\`${STORE_SUBDOMAIN}/products\`)`.
+  - [ ] Fix E2E-024: before `addButton.click()`, add `await buyerPage.waitForSelector('[data-testid="product-card"]', { timeout: 15000 })` to guard against the post-restock hydration race.
+  - [ ] Run `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts --project=chromium` — **confirm RED on these specific tests** (before implementing the backend/frontend fixes above).
+
+- [ ] **GREEN — Full suite run:**
+  - [ ] After all backend + frontend + E2E fixes above are applied, run: `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts`.
+  - [ ] **Confirm 20/20 tests GREEN across both chromium and iphone-se projects.**
+
+- [ ] **Verification chain:**
+  - [ ] Store owner submits new advertisement with a required Target URL → ad appears in list with `"Pending Approval"` badge → backdoor `approve` API called → page reloads → badge shows `"Approved & Active"` → buyer home carousel displays the ad → clicking the ad banner navigates the buyer to the Target URL → ✅ Done.
+
+---
+
 ## Phase 4 — Admin Panel Checklist
 
 ---
@@ -1738,66 +1798,6 @@ No admin audit log endpoint exists. Admin needs read-only access to all system a
   - [ ] Create a new store + owner → new store owner logs in with provided temp credentials
   - [ ] Suspend a buyer account → buyer login returns 403 → unsuspend → buyer login works
   - [ ] Audit log shows all above actions with correct actor, action, and entity ID
-
----
-
-### 3.10.1 — E2E Root-Cause Fixes & Target URL Restoration
-
-**Root cause / Goal:**
-After the Session 37 selector-alignment pass, the E2E suite still failed on 4 tests. A deep static audit in Session 40 — reading every source file referenced by each test — identified 5 confirmed root causes:
-
-1. **E2E-028 & E2E-033 (Offers form):** The test uses 3 wrong strings that never match the real DOM:
-   - `getByPlaceholder("e.g. 10% Off Sitewide")` → actual in `StoreOffersPage.tsx` line 328: `"e.g. 10% Off Dairy"`
-   - `getByPlaceholder("e.g. 200")` (min order) → actual line 451: `"e.g. 500"`
-   - `getByRole("button", { name: "Create Offer" })` (submit) → actual line 520: `"Submit Offer"`
-2. **E2E-026 (Advertisement approve):** The backdoor `POST /api/v1/test/advertisements/:id/approve` calls `adRepo.approve(id)`. The `approve()` method only sets `isApproved: true`. The status badge `"Approved & Active"` renders **only** when both `isApproved && isActive` are true. If the ad was created with `isActive: false`, the badge stays on `"Pending Approval"` after approve.
-3. **E2E-024 (Timing race):** After E2E-023's restock/adjust operations, the buyer navigates to the store but the product card's Add button is not found within the timeout. The data is correct; the page just needs an explicit wait for the product grid to hydrate.
-4. **Target URL missing from Advertisement form:** The `linkUrl` field exists in the Prisma schema and is returned by the API, but was removed from the `StoreAdvertisementsPage.tsx` form UI. The E2E test line that filled it was commented out. The user has requested it be restored as a **required** field — an ad's whole purpose is to be clickable.
-
-**Fix / Approach:**
-1. Fix the 3 offer form selector mismatches in `store-owner-journey.spec.ts` (2-line fix).
-2. Update `adRepo.approve()` in `advertisement.repository.ts` to also set `isActive: true`.
-3. Add a `waitForSelector` / `waitFor` guard before the Add button click in E2E-024.
-4. Restore `linkUrl` as a **required** field across the full stack: Prisma schema (already present), backend controller validation (add `linkUrl` to Zod schema), `StoreAdvertisementsPage.tsx` form UI, the `StoreAdvertisementsPage.test.tsx` unit test, the `store-owner.ads.test.ts` integration test, and the E2E spec.
-
----
-
-- [ ] **RED — Integration (`store-owner.ads.test.ts`):**
-  - [ ] Test: `POST /api/v1/store/advertisements` with body `{ imageUrl: 'https://...', title: 'Summer Sale', linkUrl: 'https://store.gorola.com/sale', startsAt: '<iso>', endsAt: '<iso>' }` → HTTP 201 with `{ id, isApproved: false, isActive: true, linkUrl: 'https://store.gorola.com/sale' }`.
-  - [ ] Test: `POST /api/v1/store/advertisements` with `linkUrl` omitted → HTTP 400 `VALIDATION_ERROR` (linkUrl is required).
-  - [ ] Test: `GET /api/v1/store/advertisements` → each ad in response includes `linkUrl` field.
-  - [ ] Test: `POST /api/v1/test/advertisements/:id/approve` (backdoor) → ad has both `isApproved: true` AND `isActive: true` in the database.
-  - [ ] **Run — confirm RED.**
-
-- [ ] **GREEN — Backend (Repository → Controller):**
-  - [ ] [Repository] In `advertisement.repository.ts`, update the `approve(id)` method to set **both** `isApproved: true` AND `isActive: true` in the same `prisma.advertisement.update()` call.
-  - [ ] [Controller] In `store-owner.controller.ts`, update the Zod schema for `POST /api/v1/store/advertisements` to include `linkUrl: z.string().url("Must be a valid URL")` as a **required** field. Ensure `linkUrl` is passed to `storeOwnerService.createAd()` and persisted.
-  - [ ] [Controller] Ensure `GET /api/v1/store/advertisements` serializer includes `linkUrl` in the response object for each ad.
-  - [ ] Run integration tests — **confirm GREEN**.
-
-- [ ] **RED — Unit (`StoreAdvertisementsPage.test.tsx`):**
-  - [ ] Test: the "Submit New Ad" form renders a `linkUrl` input field with label `"Target URL"` (or equivalent) and placeholder `"e.g. https://store.gorola.com/sale"`.
-  - [ ] Test: submitting the form without filling `linkUrl` shows a validation error — the field is required.
-  - [ ] Test: submitting the form with a valid `linkUrl` calls `POST /api/v1/store/advertisements` with `linkUrl` in the request body.
-  - [ ] **Run — confirm RED.**
-
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Types] Add `linkUrl: string` (required) to the `Advertisement` TypeScript type in `StoreAdvertisementsPage.tsx`.
-  - [ ] [Component] In `StoreAdvertisementsPage.tsx`, add a `linkUrl` text input field to the submission form. Use `z.string().url()` in the client-side Zod schema. Show validation error if left empty or invalid URL.
-  - [ ] Run unit tests — **confirm GREEN**.
-
-- [ ] **RED — E2E (`store-owner-journey.spec.ts` — fixes only, no new test):**
-  - [ ] Fix E2E-028 & E2E-033: change `getByPlaceholder("e.g. 10% Off Sitewide")` → `"e.g. 10% Off Dairy"`; `getByPlaceholder("e.g. 200")` → `"e.g. 500"`; `getByRole("button", { name: "Create Offer" })` → `"Submit Offer"`.
-  - [ ] Fix E2E-026: uncomment/add the `linkUrl` fill step in the advertisement creation block (now that the field exists again): `await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(\`${STORE_SUBDOMAIN}/products\`)`.
-  - [ ] Fix E2E-024: before `addButton.click()`, add `await buyerPage.waitForSelector('[data-testid="product-card"]', { timeout: 15000 })` to guard against the post-restock hydration race.
-  - [ ] Run `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts --project=chromium` — **confirm RED on these specific tests** (before implementing the backend/frontend fixes above).
-
-- [ ] **GREEN — Full suite run:**
-  - [ ] After all backend + frontend + E2E fixes above are applied, run: `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts`.
-  - [ ] **Confirm 20/20 tests GREEN across both chromium and iphone-se projects.**
-
-- [ ] **Verification chain:**
-  - [ ] Store owner submits new advertisement with a required Target URL → ad appears in list with `"Pending Approval"` badge → backdoor `approve` API called → page reloads → badge shows `"Approved & Active"` → buyer home carousel displays the ad → clicking the ad banner navigates the buyer to the Target URL → ✅ Done.
 
 ---
 

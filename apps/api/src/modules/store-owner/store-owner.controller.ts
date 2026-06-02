@@ -613,6 +613,7 @@ export function registerStoreOwnerRoutes(
   const createAdBodySchema = z.object({
     imageUrl: z.string().trim().min(1, "Image URL is required"),
     title: z.string().trim().min(1, "Title is required"),
+    linkUrl: z.string().url("Must be a valid URL").trim().min(1, "Target URL is required"),
     startsAt: z.string().trim().min(1, "startsAt is required"),
     endsAt: z.string().trim().min(1, "endsAt is required")
   });

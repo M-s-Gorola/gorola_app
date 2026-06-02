@@ -141,6 +141,7 @@ describe("StoreOwner Advertisements Integration Tests", () => {
       payload: {
         imageUrl: "https://example.com/ad-a.png",
         title: "Grocery Summer Sale",
+        linkUrl: "https://store.gorola.com/sale-a",
         startsAt,
         endsAt
       }
@@ -167,6 +168,7 @@ describe("StoreOwner Advertisements Integration Tests", () => {
       payload: {
         imageUrl: "https://example.com/ad-b.png",
         title: "Repair Discount Week",
+        linkUrl: "https://store.gorola.com/sale-b",
         startsAt,
         endsAt
       }
@@ -238,8 +240,80 @@ describe("StoreOwner Advertisements Integration Tests", () => {
       payload: {
         imageUrl: "https://example.com/ad.png",
         title: "Invalid Dates Sale",
+        linkUrl: "https://store.gorola.com/sale",
         startsAt: new Date(Date.now() + 86400000 * 2).toISOString(), // tomorrow + 2
         endsAt: new Date(Date.now() + 86400000).toISOString() // tomorrow
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().success).toBe(false);
+    expect(response.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should fail validation if linkUrl is missing", async () => {
+    const store = await storeRepo.create({
+      name: "Store",
+      description: "Quick Commerce",
+      phone: "+919999999901",
+      address: "Store Street"
+    });
+
+    const owner = await ownerRepo.create({
+      email: "owner@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/v1/store/advertisements",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        imageUrl: "https://example.com/ad.png",
+        title: "Missing Link URL",
+        startsAt: new Date().toISOString(),
+        endsAt: new Date(Date.now() + 86400000).toISOString()
+      }
+    });
+
+    expect(response.statusCode).toBe(400);
+    expect(response.json().success).toBe(false);
+    expect(response.json().error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("should fail validation if linkUrl is not a valid URL", async () => {
+    const store = await storeRepo.create({
+      name: "Store",
+      description: "Quick Commerce",
+      phone: "+919999999901",
+      address: "Store Street"
+    });
+
+    const owner = await ownerRepo.create({
+      email: "owner@gorola.in",
+      passwordHash: "dummy-hash",
+      storeId: store.id
+    });
+
+    const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/v1/store/advertisements",
+      headers: {
+        authorization: `Bearer ${token}`
+      },
+      payload: {
+        imageUrl: "https://example.com/ad.png",
+        title: "Invalid Link URL",
+        linkUrl: "not-a-valid-url",
+        startsAt: new Date().toISOString(),
+        endsAt: new Date(Date.now() + 86400000).toISOString()
       }
     });
 

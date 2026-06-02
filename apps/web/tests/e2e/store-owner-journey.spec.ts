@@ -383,6 +383,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
 
     // Add Premium Basmati Rice (1kg is ₹120, let's add 3 of them to cross the ₹300 min limit)
+    await expect(buyerPage.locator('[data-testid="product-card"]').first()).toBeVisible({ timeout: 15000 });
     const addButton = buyerPage.locator('[data-testid="product-card"]')
       .filter({ hasText: "Premium Basmati Rice" })
       .getByRole('button', { name: /Add/i });
@@ -478,8 +479,8 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Fill form details
     await page.getByPlaceholder("e.g. 50% Off Monsoon Special").fill(adTitle);
     await page.getByPlaceholder("https://example.com/banner.png").fill("https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600");
-    // Target URL was removed from advertisements database schema and layout
-    // await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(`${STORE_SUBDOMAIN}/products`);
+    // Target URL was restored
+    await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(`${STORE_SUBDOMAIN}/products`);
     
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -504,13 +505,13 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     expect(approveResponse.ok()).toBeTruthy();
 
     // Refresh Merchant page to verify Status is now "APPROVED" or "ACTIVE"
-    await page.reload();
+    await page.reload({ waitUntil: "domcontentloaded" });
     await expect(page.locator('[data-testid^="ad-row-"]').filter({ hasText: adTitle }).getByText("Approved & Active")).toBeVisible({ timeout: 10000 });
 
     // 3. Buyer storefront home page displays the approved banner inside the promo carousel
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
-    await buyerPage.goto(BUYER_SUBDOMAIN);
+    await buyerPage.goto(BUYER_SUBDOMAIN, { waitUntil: "domcontentloaded" });
     
     // Assert banner title is visible in the promotion carousel
     await expect(buyerPage.getByText(adTitle)).toBeVisible();
@@ -543,6 +544,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByLabel("New Password", { exact: true }).fill("Owner#12345");
     await page.getByLabel("Confirm New Password").fill("Owner#12345");
     await page.getByRole("button", { name: "Update Password" }).click();
+    await expect(page.getByText("Password changed successfully!")).toBeVisible();
 
     // Logout
     await page.getByRole("button", { name: "Logout" }).click();
@@ -565,6 +567,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByLabel("New Password", { exact: true }).fill("Owner#123");
     await page.getByLabel("Confirm New Password").fill("Owner#123");
     await page.getByRole("button", { name: "Update Password" }).click();
+    await expect(page.getByText("Password changed successfully!")).toBeVisible();
   });
 
   // E2E-028: Store-Wide Offers Creation & Automatic Application
@@ -587,10 +590,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       await toggleOfferBtn.click();
     }
 
-    // Fill form details (15% off, min order ₹400)
-    await page.getByPlaceholder("e.g. 10% Off Sitewide").fill(offerTitle);
-    await page.getByPlaceholder("e.g. 10").first().fill("15"); // Discount value
-    await page.getByPlaceholder("e.g. 200").fill("400"); // Minimum purchase
+    await page.getByPlaceholder("e.g. 10% Off Dairy").fill(offerTitle);
+    await page.getByPlaceholder("e.g. 10", { exact: true }).fill("15"); // Discount value
+    await page.getByPlaceholder("e.g. 500").fill("400"); // Minimum purchase
     
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -598,7 +600,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('input[type="date"]').first().fill(start);
     await page.locator('input[type="date"]').last().fill(end);
 
-    await page.getByRole("button", { name: "Create Offer" }).click();
+    await page.getByRole("button", { name: "Submit Offer" }).click();
     await expect(page.locator("tr").filter({ hasText: offerTitle })).toBeVisible();
 
     // 2. Buyer storefront meets ₹400 -> offer applies automatically
@@ -645,10 +647,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // 3. Merchant deactivates offer — uses data-testid to target icon-only button
     await page.bringToFront();
     const offerRow = page.locator("tr").filter({ hasText: offerTitle });
-    // The deactivate button is icon-only with data-testid="deactivate-offer-{id}"
-    await offerRow.locator('[data-testid^="deactivate-offer-"]').click();
     // Confirm window.confirm dialog
     page.once('dialog', dialog => dialog.accept());
+    // The deactivate button is icon-only with data-testid="deactivate-offer-{id}"
+    await offerRow.locator('[data-testid^="deactivate-offer-"]').click();
 
     // Wait for status to show Deactivated/Inactive — badge says "Deactivated"
     await expect(offerRow.getByText("Deactivated")).toBeVisible({ timeout: 10000 });
@@ -667,7 +669,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     const couponCode = `STACKCOUPON_${suffix}`;
     const offerTitle = `STACKOFFER_${suffix}`;
 
+    console.log("E2E-033 STARTing test...");
+
+    // Enable console listeners
+    page.on("console", msg => console.log(`[MERCHANT BROWSER] ${msg.text()}`));
+    page.on("pageerror", err => console.error(`[MERCHANT BROWSER ERROR] ${err.message}`));
+
     // 1. Log in as Booking store owner (owner3@gorola.in - Aarna Diagnostic)
+    console.log("1. Logging in as owner3@gorola.in...");
     await page.goto(`${STORE_SUBDOMAIN}/login`);
     await page.getByLabel("Email address").fill("owner3@gorola.in");
     await page.getByLabel("Password").fill("Owner#123");
@@ -675,9 +684,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
     // Go to Discounts
+    console.log("Navigating to Discounts page...");
     await page.getByRole("link", { name: "Discounts" }).click();
 
     // A. Create Coupon Code (10% off, min order ₹300)
+    console.log(`Creating Coupon Code: ${couponCode}...`);
     await page.getByRole("button", { name: "Create Discount Code" }).click();
     await page.getByPlaceholder("e.g. SUMMER50").fill(couponCode);
     await page.getByPlaceholder("e.g. 10", { exact: true }).fill("10"); // 10%
@@ -690,96 +701,128 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('input[type="date"]').last().fill(end);
     await page.getByRole("button", { name: "Create Discount Code" }).click();
     await expect(page.locator("tr").filter({ hasText: couponCode })).toBeVisible();
+    console.log("Coupon Code created successfully.");
 
     // B. Create Store Offer (15% off, min order ₹400)
+    console.log(`Creating Store Offer: ${offerTitle}...`);
     await page.getByRole("link", { name: "Offers" }).click();
     // Click "Create Offer" button if visible (it is inline in the split screen layout)
     const toggleOfferBtn33 = page.getByRole("button", { name: "Create Offer" });
     if (await toggleOfferBtn33.isVisible()) {
       await toggleOfferBtn33.click();
     }
-    await page.getByPlaceholder("e.g. 10% Off Sitewide").fill(offerTitle);
-    await page.getByPlaceholder("e.g. 10").first().fill("15"); // 15%
-    await page.getByPlaceholder("e.g. 200").fill("400"); // min order ₹400
+    await page.getByPlaceholder("e.g. 10% Off Dairy").fill(offerTitle);
+    await page.getByPlaceholder("e.g. 10", { exact: true }).fill("15"); // 15%
+    await page.getByPlaceholder("e.g. 500").fill("400"); // min order ₹400
     await page.locator('input[type="date"]').first().fill(start);
     await page.locator('input[type="date"]').last().fill(end);
-    await page.getByRole("button", { name: "Create Offer" }).click();
+    await page.getByRole("button", { name: "Submit Offer" }).click();
     await expect(page.locator("tr").filter({ hasText: offerTitle })).toBeVisible();
+    console.log("Store Offer created successfully.");
 
     // 2. Buyer schedules service variant from Booking store with both active store offer and applied coupon code
+    console.log("2. Creating buyer context and logging in buyer...");
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
+    buyerPage.on("console", msg => console.log(`[BUYER BROWSER] ${msg.text()}`));
+    buyerPage.on("pageerror", err => console.error(`[BUYER BROWSER ERROR] ${err.message}`));
+
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     await buyerPage.locator('#buyer-phone').fill('9876543214');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
+    console.log("Waiting for Enter OTP screen...");
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
     for (let i = 0; i < 6; i++) {
       await buyerPage.locator(`[data-testid="otp-digit-${i}"]`).fill((i + 1).toString());
       await buyerPage.waitForTimeout(100);
     }
+    console.log("Clicking Verify...");
     await buyerPage.locator('button', { hasText: /Verify/i }).click();
+    console.log("Waiting for redirection to root /...");
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
     await expect(buyerPage.locator('text=/Restoring your session/i')).not.toBeVisible();
     await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    console.log("Buyer logged in successfully.");
 
     // Go to Aarna Diagnostic (Booking Store)
+    console.log("Navigating to store Aarna Diagnostic Centre...");
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_aarna_diagnostic`);
 
     // Select service variant & schedule (Complete Blood Count is ₹500, which satisfies both min limits ₹300 and ₹400)
     // ProductGrid renders a <Link> with text "Book" for BOOKING_COMMERCE stores
-    await buyerPage.getByRole("link", { name: "Book" }).first().click();
+    console.log("Clicking Book for Complete Blood Count...");
+    await buyerPage.locator('[data-testid="product-card"]')
+      .filter({ hasText: "Complete Blood Count" })
+      .getByRole("link", { name: "Book" })
+      .click();
 
     // Select date at least +2 days in future to bypass timezones
+    console.log("Filling schedule date...");
     const scheduleDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     await buyerPage.locator('input[type="date"]').fill(scheduleDate);
-    await buyerPage.locator('select').selectOption({ index: 1 }); // Select timeslot
-    await buyerPage.getByRole("button", { name: "Proceed to Checkout" }).click();
+    console.log("Clicking timeslot button...");
+    await buyerPage.locator('button', { hasText: '06:00-09:00' }).click(); // Select timeslot
 
     // Apply Coupon Code
-    await buyerPage.getByPlaceholder("Discount code").fill(couponCode);
-    await buyerPage.getByRole("button", { name: "Apply" }).click();
+    console.log(`Filling coupon code: ${couponCode}...`);
+    const bookingMain = buyerPage.locator("main");
+    await bookingMain.getByPlaceholder("Discount code").fill(couponCode);
+    console.log("Clicking Apply coupon...");
+    await bookingMain.getByRole("button", { name: "Apply" }).click();
 
     // Booking Checkout calculations:
     // Subtotal: ₹500
     // Store Offer (15%): 15% of 500 = ₹75
     // Coupon Code (10%): 10% of 500 = ₹50
     // Stacked Deductions: ₹75 + ₹50 = ₹125
+    console.log("Asserting discount-summary contains 125...");
     await expect(buyerPage.locator('[data-testid="discount-summary"]')).toContainText("125");
 
     // Fill Address via "Add New" Dialog (address form is inside a Dialog modal, not inline)
-    await buyerPage.getByRole("button", { name: /Add New/i }).click();
+    console.log("Opening Add New address dialog...");
+    await buyerPage.locator("button", { hasText: /Add New/i }).first().click();
     // Wait for dialog to open
+    console.log("Waiting for dialog to be visible...");
     await expect(buyerPage.getByRole("dialog")).toBeVisible();
     // Use name-attribute selectors (robust, not reliant on placeholder text/encoding)
+    console.log("Filling address form...");
     await buyerPage.locator('[name="label"]').fill("E2E Suite");
     await buyerPage.locator('[name="landmarkDescription"]').fill("E2E Tower - near the diagnostic center entrance");
     // Click Save Address inside dialog
+    console.log("Clicking Save Address...");
     await buyerPage.getByRole("button", { name: "Save Address" }).click();
     // Wait for dialog to close after save
+    console.log("Waiting for dialog to close...");
     await expect(buyerPage.getByRole("dialog")).not.toBeVisible({ timeout: 10000 });
 
     // Now confirm the booking
+    console.log("Clicking Confirm Booking...");
     await buyerPage.getByRole("button", { name: "Confirm Booking" }).click();
 
     // 3. Verify Booking Confirmation Page breakdown is correct and collapsible
+    console.log("Waiting for URL of booking confirmation page...");
     await buyerPage.waitForURL(/.*\/bookings\/.*/);
 
     // Collapsible breakdown exists
+    console.log("Locating discount-toggle-chevron...");
     const discountToggle = buyerPage.locator('[data-testid="discount-toggle-chevron"]');
     await expect(discountToggle).toBeVisible();
 
     // Click toggle chevron to expand breakdown
+    console.log("Clicking discount-toggle-chevron...");
     await discountToggle.click();
 
     // Verify breakdown lists both individual deductions:
     // - STACKOFFER (15% off) = ₹75
     // - STACKCOUPON (10% off) = ₹50
+    console.log("Asserting breakdown deductions...");
     const breakdown = buyerPage.locator('[data-testid="discount-breakdown"]');
     await expect(breakdown.getByText(`Discount (${offerTitle})`)).toBeVisible();
     await expect(breakdown.getByText(couponCode)).toBeVisible();
+    console.log("E2E-033 test passed completely!");
     await buyerContext.close();
   });
 });

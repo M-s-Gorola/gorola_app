@@ -882,7 +882,7 @@ export class StoreOwnerService {
 
   public async createAd(
     storeId: string,
-    dto: { imageUrl: string; title: string; startsAt: string | Date; endsAt: string | Date }
+    dto: { imageUrl: string; title: string; linkUrl: string; startsAt: string | Date; endsAt: string | Date }
   ) {
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
@@ -899,6 +899,7 @@ export class StoreOwnerService {
         storeId,
         title: dto.title,
         imageUrl: dto.imageUrl,
+        linkUrl: dto.linkUrl,
         startsAt,
         endsAt,
         isApproved: false,

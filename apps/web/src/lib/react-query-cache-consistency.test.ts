@@ -112,6 +112,7 @@ describe("React Query Cache Shape Consistency", () => {
         if (!keyMatch) continue;
 
         const mainKey = keyMatch[1];
+        if (!mainKey) continue;
         const subKey = keyMatch[2];
         const canonicalKey = subKey ? `${mainKey}.${subKey}` : mainKey;
 
@@ -124,13 +125,15 @@ describe("React Query Cache Shape Consistency", () => {
 
         while ((returnMatch = returnRegex.exec(fullBlock)) !== null) {
           const retExpr = returnMatch[1];
-          rawReturn = retExpr;
-          if (retExpr.endsWith(".data.data")) {
-            returnShape = "res.data.data";
-            break;
-          } else if (retExpr.endsWith(".data")) {
-            returnShape = "res.data";
-            break;
+          if (retExpr) {
+            rawReturn = retExpr;
+            if (retExpr.endsWith(".data.data")) {
+              returnShape = "res.data.data";
+              break;
+            } else if (retExpr.endsWith(".data")) {
+              returnShape = "res.data";
+              break;
+            }
           }
         }
 
@@ -150,7 +153,7 @@ describe("React Query Cache Shape Consistency", () => {
       if (!groups[occ.queryKey]) {
         groups[occ.queryKey] = [];
       }
-      groups[occ.queryKey].push(occ);
+      groups[occ.queryKey]!.push(occ);
     }
 
     // Assert cache shape consistency per queryKey

@@ -60,7 +60,7 @@ export class AdvertisementRepository {
     try {
       return await this.db.advertisement.update({
         where: { id },
-        data: { isApproved: true }
+        data: { isApproved: true, isActive: true }
       });
     } catch (error: unknown) {
       if (isPrismaError(error, "P2025")) {
