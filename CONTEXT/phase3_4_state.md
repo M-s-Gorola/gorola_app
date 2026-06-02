@@ -11,17 +11,17 @@
 
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
-| Phase 3 | Store Owner Panel | 🟡 IN PROGRESS | Phase 3.1–3.9.3 complete; Phase 3.10 E2E Tests in progress — static audit complete, all selector mismatches fixed, awaiting final green run. |
+| Phase 3 | Store Owner Panel | 🟡 IN PROGRESS | Phase 3.1–3.9.3 complete; Phase 3.10.1 in progress — deep test-vs-code audit complete, 5 root causes identified, Target URL restoration + remaining selector fixes pending. |
 | Phase 4 | Admin Panel       | 🔴 NOT STARTED | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-02
-- **Session Summary:** Session 39 — Playwright E2E Suite Alignment & Stabilization. Aligned product seed data in `seed-e2e.ts` to rename `prod_rice_1` to `"Premium Basmati Rice"` (1 kg, price ₹120.00), resolving E2E-024 & E2E-028 mismatches. Added active offers rendering in `StoreDetailPage.tsx` header to resolve E2E-028 buyer-side visibility assertions. Converted `StoreAdvertisementsPage.tsx` date fields to use the dual-input pattern (`type="date"` visible + hidden `type="datetime-local"`) to support Playwright's `input[type="date"]` locator, resolving E2E-026. Refactored E2E-033's address setup script to click "Add New" and populate form labels using robust name-attribute selectors, aligning with the actual modal address flow. Saved all static audit comparisons in [test_investigation.md](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/CONTEXT/test_investigation.md).
-- **Next Session Must Start With:** Run the complete E2E test suite using `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts` to verify that all 20/20 test scenarios in `store-owner-journey.spec.ts` pass cleanly. Use the context and alignments detailed in [test_investigation.md](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/CONTEXT/test_investigation.md).
-- **In Progress Right Now:** Phase 3.10 E2E Verification & Hardening.
+- **Date:** 2026-06-03
+- **Session Summary:** Session 40 — Deep E2E Test-vs-Code Audit & Phase 3.10.1 Planning. Performed a full static investigation of all 10 tests in `store-owner-journey.spec.ts` by reading every referenced source file. Identified 5 confirmed root causes of failure (offer form placeholder mismatches, wrong submit button label, advertisement approve API not setting `isActive=true`, E2E-024 timing race). Confirmed Target URL (`linkUrl`) was removed from the advertisement form UI but is still in the DB schema — user requested it be restored as a required field. Created Phase 3.10.1 checklist and will implement all fixes in next execution step.
+- **Next Session Must Start With:** Execute Phase 3.10.1 — implement all 5 fixes (offer form placeholders, button label, ad approve API, E2E-024 wait guard, Target URL restoration across schema → controller → component → tests), then run full E2E suite.
+- **In Progress Right Now:** Phase 3.10.1 — E2E Root-Cause Fixes & Target URL Restoration.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -1741,6 +1741,66 @@ No admin audit log endpoint exists. Admin needs read-only access to all system a
 
 ---
 
+### 3.10.1 — E2E Root-Cause Fixes & Target URL Restoration
+
+**Root cause / Goal:**
+After the Session 37 selector-alignment pass, the E2E suite still failed on 4 tests. A deep static audit in Session 40 — reading every source file referenced by each test — identified 5 confirmed root causes:
+
+1. **E2E-028 & E2E-033 (Offers form):** The test uses 3 wrong strings that never match the real DOM:
+   - `getByPlaceholder("e.g. 10% Off Sitewide")` → actual in `StoreOffersPage.tsx` line 328: `"e.g. 10% Off Dairy"`
+   - `getByPlaceholder("e.g. 200")` (min order) → actual line 451: `"e.g. 500"`
+   - `getByRole("button", { name: "Create Offer" })` (submit) → actual line 520: `"Submit Offer"`
+2. **E2E-026 (Advertisement approve):** The backdoor `POST /api/v1/test/advertisements/:id/approve` calls `adRepo.approve(id)`. The `approve()` method only sets `isApproved: true`. The status badge `"Approved & Active"` renders **only** when both `isApproved && isActive` are true. If the ad was created with `isActive: false`, the badge stays on `"Pending Approval"` after approve.
+3. **E2E-024 (Timing race):** After E2E-023's restock/adjust operations, the buyer navigates to the store but the product card's Add button is not found within the timeout. The data is correct; the page just needs an explicit wait for the product grid to hydrate.
+4. **Target URL missing from Advertisement form:** The `linkUrl` field exists in the Prisma schema and is returned by the API, but was removed from the `StoreAdvertisementsPage.tsx` form UI. The E2E test line that filled it was commented out. The user has requested it be restored as a **required** field — an ad's whole purpose is to be clickable.
+
+**Fix / Approach:**
+1. Fix the 3 offer form selector mismatches in `store-owner-journey.spec.ts` (2-line fix).
+2. Update `adRepo.approve()` in `advertisement.repository.ts` to also set `isActive: true`.
+3. Add a `waitForSelector` / `waitFor` guard before the Add button click in E2E-024.
+4. Restore `linkUrl` as a **required** field across the full stack: Prisma schema (already present), backend controller validation (add `linkUrl` to Zod schema), `StoreAdvertisementsPage.tsx` form UI, the `StoreAdvertisementsPage.test.tsx` unit test, the `store-owner.ads.test.ts` integration test, and the E2E spec.
+
+---
+
+- [ ] **RED — Integration (`store-owner.ads.test.ts`):**
+  - [ ] Test: `POST /api/v1/store/advertisements` with body `{ imageUrl: 'https://...', title: 'Summer Sale', linkUrl: 'https://store.gorola.com/sale', startsAt: '<iso>', endsAt: '<iso>' }` → HTTP 201 with `{ id, isApproved: false, isActive: true, linkUrl: 'https://store.gorola.com/sale' }`.
+  - [ ] Test: `POST /api/v1/store/advertisements` with `linkUrl` omitted → HTTP 400 `VALIDATION_ERROR` (linkUrl is required).
+  - [ ] Test: `GET /api/v1/store/advertisements` → each ad in response includes `linkUrl` field.
+  - [ ] Test: `POST /api/v1/test/advertisements/:id/approve` (backdoor) → ad has both `isApproved: true` AND `isActive: true` in the database.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend (Repository → Controller):**
+  - [ ] [Repository] In `advertisement.repository.ts`, update the `approve(id)` method to set **both** `isApproved: true` AND `isActive: true` in the same `prisma.advertisement.update()` call.
+  - [ ] [Controller] In `store-owner.controller.ts`, update the Zod schema for `POST /api/v1/store/advertisements` to include `linkUrl: z.string().url("Must be a valid URL")` as a **required** field. Ensure `linkUrl` is passed to `storeOwnerService.createAd()` and persisted.
+  - [ ] [Controller] Ensure `GET /api/v1/store/advertisements` serializer includes `linkUrl` in the response object for each ad.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit (`StoreAdvertisementsPage.test.tsx`):**
+  - [ ] Test: the "Submit New Ad" form renders a `linkUrl` input field with label `"Target URL"` (or equivalent) and placeholder `"e.g. https://store.gorola.com/sale"`.
+  - [ ] Test: submitting the form without filling `linkUrl` shows a validation error — the field is required.
+  - [ ] Test: submitting the form with a valid `linkUrl` calls `POST /api/v1/store/advertisements` with `linkUrl` in the request body.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Add `linkUrl: string` (required) to the `Advertisement` TypeScript type in `StoreAdvertisementsPage.tsx`.
+  - [ ] [Component] In `StoreAdvertisementsPage.tsx`, add a `linkUrl` text input field to the submission form. Use `z.string().url()` in the client-side Zod schema. Show validation error if left empty or invalid URL.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **RED — E2E (`store-owner-journey.spec.ts` — fixes only, no new test):**
+  - [ ] Fix E2E-028 & E2E-033: change `getByPlaceholder("e.g. 10% Off Sitewide")` → `"e.g. 10% Off Dairy"`; `getByPlaceholder("e.g. 200")` → `"e.g. 500"`; `getByRole("button", { name: "Create Offer" })` → `"Submit Offer"`.
+  - [ ] Fix E2E-026: uncomment/add the `linkUrl` fill step in the advertisement creation block (now that the field exists again): `await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(\`${STORE_SUBDOMAIN}/products\`)`.
+  - [ ] Fix E2E-024: before `addButton.click()`, add `await buyerPage.waitForSelector('[data-testid="product-card"]', { timeout: 15000 })` to guard against the post-restock hydration race.
+  - [ ] Run `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts --project=chromium` — **confirm RED on these specific tests** (before implementing the backend/frontend fixes above).
+
+- [ ] **GREEN — Full suite run:**
+  - [ ] After all backend + frontend + E2E fixes above are applied, run: `pnpm exec playwright test tests/e2e/store-owner-journey.spec.ts`.
+  - [ ] **Confirm 20/20 tests GREEN across both chromium and iphone-se projects.**
+
+- [ ] **Verification chain:**
+  - [ ] Store owner submits new advertisement with a required Target URL → ad appears in list with `"Pending Approval"` badge → backdoor `approve` API called → page reloads → badge shows `"Approved & Active"` → buyer home carousel displays the ad → clicking the ad banner navigates the buyer to the Target URL → ✅ Done.
+
+---
+
 ## Session Notes (Phase 3 & 4)
 
 _(Append new entries here — never delete old entries.)_
@@ -2262,5 +2322,42 @@ All findings have been logged in the newly added [test_investigation.md](./test_
 
 #### Result
 Code adjustments complete. Ready for the next session to execute a full E2E test run to confirm 20/20 green.
+
+---
+
+### Session 40 — 2026-06-03 — Deep E2E Audit & Phase 3.10.1 Planning
+
+**Date:** 2026-06-03
+
+**Files Modified:**
+- `CONTEXT/phase3_4_state.md` [this file — Phase 3.10.1 added]
+
+---
+
+#### What We Did
+
+After the Session 39 Playwright stabilization pass, a full E2E run revealed continued retries and failures. The user asked: *"Do the investigation for the store-owner tests!"* — meaning a complete, systematic audit of every test in `store-owner-journey.spec.ts` against the real source files.
+
+**Method:** Read the entire 786-line spec file. Then opened and read every source file it touches: `StoreOffersPage.tsx`, `StoreAdvertisementsPage.tsx`, `StoreDetailPage.tsx` (buyer), `BookingConfirmationPage.tsx`, `promotion.controller.ts`, `advertisement.repository.ts`, `seed-e2e.ts`. Cross-referenced every selector, placeholder, button label, data-testid, and API response field against what the real code actually renders.
+
+**Findings (5 confirmed root causes):**
+
+1. **E2E-028 & E2E-033 — Offers form selector mismatches (3 mismatches):**
+   - Test: `getByPlaceholder("e.g. 10% Off Sitewide")` → Real: `"e.g. 10% Off Dairy"` (StoreOffersPage.tsx line 328)
+   - Test: `getByPlaceholder("e.g. 200")` for min order → Real: `"e.g. 500"` (line 451)
+   - Test: `getByRole("button", { name: "Create Offer" })` → Real: `"Submit Offer"` (line 520)
+
+2. **E2E-026 — Approve API bug:** The `adRepo.approve()` only sets `isApproved: true`. The `"Approved & Active"` badge requires BOTH `isApproved && isActive`. If `isActive` stays `false`, the badge never changes.
+
+3. **E2E-024 — Timing race:** Not a selector mismatch. After E2E-023's inventory operations, the buyer store page loads but the Add button is not yet visible within the default timeout. Needs an explicit wait.
+
+4. **Target URL (`linkUrl`) gap:** Confirmed `linkUrl` exists in Prisma schema and is returned by `GET /api/v1/promotions/advertisements`. However, it was removed from the `StoreAdvertisementsPage.tsx` form (and commented out in the E2E test). User requested it be restored as a **required** field. Phase 3.10.1 covers this full-stack.
+
+5. **Tests E2E-020 through E2E-025, E2E-027 — PASS:** Verified clean against source. No issues.
+
+**Phase 3.10.1 created:** A full TDD-formatted checklist covering all 5 root-cause fixes has been added to this document above the Session Notes section.
+
+#### Result
+Investigation complete. No code changed this session. Phase 3.10.1 is ready for execution in the next session.
 
 ---

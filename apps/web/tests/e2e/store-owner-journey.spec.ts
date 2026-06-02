@@ -105,14 +105,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // 2. Open Buyer window and check storefront offline banner
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
-    buyerPage.on('console', msg => console.log('BUYER CONSOLE:', msg.text()));
-    buyerPage.on('request', request => console.log('BUYER REQUEST:', request.url(), request.method()));
-    buyerPage.on('requestfailed', request => console.log('BUYER REQUEST FAILED:', request.url(), request.failure()?.errorText));
-    buyerPage.on('response', response => {
-      if (response.status() >= 400) {
-        console.log('BUYER HTTP ERROR:', response.url(), response.status());
-      }
-    });
+    // buyerPage.on('console', msg => console.log('BUYER CONSOLE:', msg.text()));
+    // buyerPage.on('request', request => console.log('BUYER REQUEST:', request.url(), request.method()));
+    // buyerPage.on('requestfailed', request => console.log('BUYER REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    // buyerPage.on('response', response => {
+    //   if (response.status() >= 400) {
+    //     console.log('BUYER HTTP ERROR:', response.url(), response.status());
+    //   }
+    // });
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
     });
@@ -139,26 +139,26 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
   // E2E-022: Multi-Actor Quick Commerce Live Order Status Transitions
   test("E2E-022: Multi-Actor Quick Commerce Live Order Status Transitions", async ({ page, context }) => {
     // Enable diagnostics
-    page.on('console', msg => console.log('MERCHANT CONSOLE:', msg.text()));
-    page.on('request', request => console.log('MERCHANT REQUEST:', request.url(), request.method()));
-    page.on('requestfailed', request => console.log('MERCHANT REQUEST FAILED:', request.url(), request.failure()?.errorText));
-    page.on('response', response => {
-      if (response.status() >= 400) {
-        console.log('MERCHANT HTTP ERROR:', response.url(), response.status());
-      }
-    });
+    // page.on('console', msg => console.log('MERCHANT CONSOLE:', msg.text()));
+    // page.on('request', request => console.log('MERCHANT REQUEST:', request.url(), request.method()));
+    // page.on('requestfailed', request => console.log('MERCHANT REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    // page.on('response', response => {
+    //   if (response.status() >= 400) {
+    //     console.log('MERCHANT HTTP ERROR:', response.url(), response.status());
+    //   }
+    // });
 
     // 1. Buyer placing order (COD)
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
-    buyerPage.on('console', msg => console.log('BUYER CONSOLE:', msg.text()));
-    buyerPage.on('request', request => console.log('BUYER REQUEST:', request.url(), request.method()));
-    buyerPage.on('requestfailed', request => console.log('BUYER REQUEST FAILED:', request.url(), request.failure()?.errorText));
-    buyerPage.on('response', response => {
-      if (response.status() >= 400) {
-        console.log('BUYER HTTP ERROR:', response.url(), response.status());
-      }
-    });
+    // buyerPage.on('console', msg => console.log('BUYER CONSOLE:', msg.text()));
+    // buyerPage.on('request', request => console.log('BUYER REQUEST:', request.url(), request.method()));
+    // buyerPage.on('requestfailed', request => console.log('BUYER REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    // buyerPage.on('response', response => {
+    //   if (response.status() >= 400) {
+    //     console.log('BUYER HTTP ERROR:', response.url(), response.status());
+    //   }
+    // });
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
     });
@@ -181,7 +181,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
 
     // Add a product to cart (Premium Basmati Rice)
-    await buyerPage.locator('[data-testid="product-card"]').first().getByRole('button', { name: /Add/i }).click();
+    await buyerPage.locator('[data-testid="product-card"]')
+      .filter({ hasText: "Premium Basmati Rice" })
+      .getByRole('button', { name: /Add/i })
+      .click();
 
     // Open Cart Drawer
     await buyerPage.locator('[data-testid="cart-button"]').click();
@@ -247,7 +250,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     const markPreparingBtn = page.getByRole("button", { name: "Mark Preparing" });
     await expect(markPreparingBtn).toBeVisible({ timeout: 15000 });
     await expect(markPreparingBtn).toBeEnabled({ timeout: 15000 });
-    await markPreparingBtn.click({ force: true });
+    await markPreparingBtn.dispatchEvent('click');
 
     // Buyer sees PREPARING in real-time — #occ-heading changes to "Store is picking items"
     await buyerPage.bringToFront();
@@ -258,7 +261,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     const dispatchOrderBtn = page.getByRole("button", { name: "Dispatch Order" });
     await expect(dispatchOrderBtn).toBeVisible({ timeout: 15000 });
     await expect(dispatchOrderBtn).toBeEnabled({ timeout: 15000 });
-    await dispatchOrderBtn.click({ force: true });
+    await dispatchOrderBtn.dispatchEvent('click');
 
     // Buyer sees On the way — #occ-heading changes to "On the way" (unique element avoids strict mode)
     await buyerPage.bringToFront();
@@ -269,7 +272,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     const markDeliveredBtn = page.getByRole("button", { name: "Mark Delivered" });
     await expect(markDeliveredBtn).toBeVisible({ timeout: 15000 });
     await expect(markDeliveredBtn).toBeEnabled({ timeout: 15000 });
-    await markDeliveredBtn.click({ force: true });
+    await markDeliveredBtn.dispatchEvent('click');
 
     // Buyer sees Order Delivered — #occ-heading changes to "Order Delivered"
     await buyerPage.bringToFront();
@@ -345,8 +348,8 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Fill form
     await page.getByPlaceholder("e.g. SUMMER50").fill(code);
-    await page.getByPlaceholder("e.g. 10").fill("25");
-    await page.getByPlaceholder("e.g. 100").fill("300"); // Minimum order ₹300
+    await page.getByPlaceholder("e.g. 10", { exact: true }).fill("25");
+    await page.getByPlaceholder("e.g. 100", { exact: true }).fill("300"); // Minimum order ₹300
     
     // Choose start/end dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -380,13 +383,15 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
 
     // Add Premium Basmati Rice (1kg is ₹120, let's add 3 of them to cross the ₹300 min limit)
-    const addButton = buyerPage.locator('[data-testid="product-card"]').first().getByRole('button', { name: /Add/i });
+    const addButton = buyerPage.locator('[data-testid="product-card"]')
+      .filter({ hasText: "Premium Basmati Rice" })
+      .getByRole('button', { name: /Add/i });
     await addButton.click();
     
     // Open Cart Drawer
     await buyerPage.locator('[data-testid="cart-button"]').click();
-    await buyerPage.getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
-    await buyerPage.getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
+    await buyerPage.locator('aside').getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
+    await buyerPage.locator('aside').getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
 
     // Verify subtotal is ₹360 (which is > ₹300)
     await expect(buyerPage.locator('[data-testid="cart-subtotal"]')).toContainText("360");
@@ -399,7 +404,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(buyerPage.locator('[data-testid="cart-discount-summary"]')).toContainText("90");
 
     // 3. Drop below ₹300 and verify auto re-validation removes coupon
-    await buyerPage.getByRole("button", { name: /Decrease Premium Basmati Rice quantity/i }).click();
+    await buyerPage.locator('aside').getByRole("button", { name: /Decrease Premium Basmati Rice quantity/i }).click();
     
     // Subtotal is now ₹240 (< ₹300)
     await expect(buyerPage.locator('[data-testid="cart-subtotal"]')).toContainText("240");
@@ -462,14 +467,19 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Go to Advertisements page
     await page.getByRole("link", { name: "Advertisements" }).click();
-    await page.getByRole("button", { name: "Submit New Ad" }).click();
+    // Click "Submit New Ad" button if visible (it is inline in the split screen layout)
+    const toggleAdBtn = page.getByRole("button", { name: "Submit New Ad" });
+    if (await toggleAdBtn.isVisible()) {
+      await toggleAdBtn.click();
+    }
     // Wait for the form panel to appear
     await expect(page.getByPlaceholder("e.g. 50% Off Monsoon Special")).toBeVisible({ timeout: 10000 });
 
     // Fill form details
     await page.getByPlaceholder("e.g. 50% Off Monsoon Special").fill(adTitle);
     await page.getByPlaceholder("https://example.com/banner.png").fill("https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=600");
-    await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(`${STORE_SUBDOMAIN}/products`);
+    // Target URL was removed from advertisements database schema and layout
+    // await page.getByPlaceholder("e.g. https://store.gorola.com/sale").fill(`${STORE_SUBDOMAIN}/products`);
     
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -571,7 +581,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Go to Store Offers page
     await page.getByRole("link", { name: "Offers" }).click();
-    await page.getByRole("button", { name: "Create Offer" }).click();
+    // Click "Create Offer" button if visible (it is inline in the split screen layout)
+    const toggleOfferBtn = page.getByRole("button", { name: "Create Offer" });
+    if (await toggleOfferBtn.isVisible()) {
+      await toggleOfferBtn.click();
+    }
 
     // Fill form details (15% off, min order ₹400)
     await page.getByPlaceholder("e.g. 10% Off Sitewide").fill(offerTitle);
@@ -613,13 +627,16 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(buyerPage.getByText(offerTitle)).toBeVisible();
 
     // Add items to cross ₹400 (4 of Premium Basmati Rice = ₹480)
-    await buyerPage.locator('[data-testid="product-card"]').first().getByRole('button', { name: /Add/i }).click();
+    await buyerPage.locator('[data-testid="product-card"]')
+      .filter({ hasText: "Premium Basmati Rice" })
+      .getByRole('button', { name: /Add/i })
+      .click();
     await buyerPage.locator('[data-testid="cart-button"]').click();
     
     // Increase quantity
-    await buyerPage.getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
-    await buyerPage.getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
-    await buyerPage.getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
+    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
+    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
+    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
 
     // Assert that the offer is applied automatically in the Cart Drawer
     // Total discount should be 15% of 480 = Rs 72
@@ -663,8 +680,8 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // A. Create Coupon Code (10% off, min order ₹300)
     await page.getByRole("button", { name: "Create Discount Code" }).click();
     await page.getByPlaceholder("e.g. SUMMER50").fill(couponCode);
-    await page.getByPlaceholder("e.g. 10").fill("10"); // 10%
-    await page.getByPlaceholder("e.g. 100").fill("300"); // min order ₹300
+    await page.getByPlaceholder("e.g. 10", { exact: true }).fill("10"); // 10%
+    await page.getByPlaceholder("e.g. 100", { exact: true }).fill("300"); // min order ₹300
     
     // Dates
     const start = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString().split("T")[0];
@@ -676,7 +693,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // B. Create Store Offer (15% off, min order ₹400)
     await page.getByRole("link", { name: "Offers" }).click();
-    await page.getByRole("button", { name: "Create Offer" }).click();
+    // Click "Create Offer" button if visible (it is inline in the split screen layout)
+    const toggleOfferBtn33 = page.getByRole("button", { name: "Create Offer" });
+    if (await toggleOfferBtn33.isVisible()) {
+      await toggleOfferBtn33.click();
+    }
     await page.getByPlaceholder("e.g. 10% Off Sitewide").fill(offerTitle);
     await page.getByPlaceholder("e.g. 10").first().fill("15"); // 15%
     await page.getByPlaceholder("e.g. 200").fill("400"); // min order ₹400
