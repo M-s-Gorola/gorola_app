@@ -8,6 +8,7 @@
 
 export let bootstrapPromise: Promise<void> | null = null;
 export let storeBootstrapPromise: Promise<void> | null = null;
+export let adminBootstrapPromise: Promise<void> | null = null;
 
 export function setBootstrapPromise(p: Promise<void>): void {
   bootstrapPromise = p;
@@ -15,6 +16,10 @@ export function setBootstrapPromise(p: Promise<void>): void {
 
 export function setStoreBootstrapPromise(p: Promise<void>): void {
   storeBootstrapPromise = p;
+}
+
+export function setAdminBootstrapPromise(p: Promise<void>): void {
+  adminBootstrapPromise = p;
 }
 
 /**
@@ -25,4 +30,5 @@ export function setStoreBootstrapPromise(p: Promise<void>): void {
 export function resetBootstrapState(): void {
   bootstrapPromise = null;
   storeBootstrapPromise = null;
+  adminBootstrapPromise = null;
 }

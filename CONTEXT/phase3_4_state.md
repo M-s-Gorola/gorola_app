@@ -12,16 +12,16 @@
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
 | Phase 3 | Store Owner Panel | 🟢 COMPLETE   | Phase 3.1–3.10.1 complete. All E2E tests passing green, including responsive mobile navigation and toast pointer interception fixes. |
-| Phase 4 | Admin Panel       | 🔴 NOT STARTED | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
+| Phase 4 | Admin Panel       | 🟡 IN PROGRESS | Phase 4.1 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-03
-- **Session Summary:** Session 43 — Pinned Store Layout, Persistent Branding & Duplicate Rating Prevention. Replaced the green `S` avatar with a permanently visible header Logout button and removed the redundant sidebar logout. Fixed the sidebar and header to the screen using CSS `sticky` positioning with native window scrolling. Relocated the GoRola logo and brand text to the main header beside the toggle button (moved to the extreme left), keeping them always visible in web view. Displayed the store name (styled prominently with `text-lg font-bold`) instead of the Store ID. Blocked duplicate rating submissions on the backend and synced query caches between the receipt and history pages, refactoring the history rating list to be read-only.
-- **Next Session Must Start With:** Phase 4 (Admin Panel) planning.
-- **In Progress Right Now:** None.
+- **Date:** 2026-06-04
+- **Session Summary:** Session 45 — Completed Phase 4.1 (Admin Auth, Mandatory 2FA & Cookie Isolation). Implemented frontend layout, route guards, Zustand auth store state modifications, and admin page components (Login, Two-Factor Entry, and Setup). Resolved exactOptionalPropertyTypes TypeScript incompatibilities in the backend schemas and services. Fully verified the build compiles and linters are clean.
+- **Next Session Must Start With:** Phase 4.2 (Admin Dashboard — All-Stores Overview) implementation.
+- **In Progress Right Now:** None. Phase 4.1 complete.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -29,7 +29,7 @@
 
 ## In Progress Right Now
 
-None. All Phase 3 features are completed and green!
+None. Phase 4.1 is completed!
 
 ---
 
@@ -1421,41 +1421,41 @@ Same pattern as 3.1 (store auth) but stricter: `AdminRoute` checks ADMIN role AN
 
 ---
 
-- [ ] **RED — Integration (`admin-auth.routes.test.ts`):**
-  - [ ] Test: `POST /api/v1/auth/admin/login` with correct email + password → HTTP 200 `{ requiresTwoFactor: true }`
-  - [ ] Test: `POST /api/v1/auth/admin/login` with wrong password → HTTP 401 `AUTH_FAILED`
-  - [ ] Test: `POST /api/v1/auth/admin/login` after 10 failed attempts → HTTP 429 `RATE_LIMITED`
-  - [ ] Test: `POST /api/v1/auth/admin/verify-2fa` with valid TOTP → HTTP 200 with `accessToken` and `refreshToken`
-  - [ ] Test: `POST /api/v1/auth/admin/verify-2fa` with invalid TOTP → HTTP 401 `INVALID_TOTP`
-  - [ ] Test: `POST /api/v1/auth/admin/setup-2fa` authenticated as admin → HTTP 200 `{ secret, qrUri }`
-  - [ ] **Run — confirm RED if any route is missing or wrong shape**
+- [x] **RED — Integration (`admin-auth.routes.test.ts`):**
+  - [x] Test: `POST /api/v1/auth/admin/login` with correct email + password → HTTP 200 `{ requiresTwoFactor: true }`
+  - [x] Test: `POST /api/v1/auth/admin/login` with wrong password → HTTP 401 `AUTH_FAILED`
+  - [x] Test: `POST /api/v1/auth/admin/login` after 10 failed attempts → HTTP 429 `RATE_LIMITED`
+  - [x] Test: `POST /api/v1/auth/admin/verify-2fa` with valid TOTP → HTTP 200 with `accessToken` and `refreshToken`
+  - [x] Test: `POST /api/v1/auth/admin/verify-2fa` with invalid TOTP → HTTP 401 `INVALID_TOTP`
+  - [x] Test: `POST /api/v1/auth/admin/setup-2fa` authenticated as admin → HTTP 200 `{ secret, qrUri }`
+  - [x] **Run — confirm RED if any route is missing or wrong shape**
 
-- [ ] **GREEN — Backend Verification:**
-  - [ ] Confirm `registerAdminAuthRoutes(app)` is called in `routes.ts`; if missing, add it
-  - [ ] Verify all 3 routes appear in dev route graph
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend Verification:**
+  - [x] Confirm `registerAdminAuthRoutes(app)` is called in `routes.ts`; if missing, add it
+  - [x] Verify all 3 routes appear in dev route graph
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminLoginPage.test.tsx`):**
-  - [ ] Test: renders email + password inputs with correct `id` attributes and submit button
-  - [ ] Test: on success response, `navigate` called with `/admin/2fa`
-  - [ ] Test: on 401, shows "Invalid credentials" error message
+- [x] **RED — Unit/Component (`AdminLoginPage.test.tsx`):**
+  - [x] Test: renders email + password inputs with correct `id` attributes and submit button
+  - [x] Test: on success response, `navigate` called with `/admin/2fa`
+  - [x] Test: on 401, shows "Invalid credentials" error message
 
-- [ ] **RED — Unit/Component (`AdminRoute.test.tsx`):**
-  - [ ] Test: non-ADMIN role → `<Navigate to="/admin/login" />`
-  - [ ] Test: ADMIN role with `twoFactorVerified = false` → `<Navigate to="/admin/2fa" />`
-  - [ ] Test: ADMIN role with `twoFactorVerified = true` AND `twoFactorEnabled = false` → `<Navigate to="/admin/setup-2fa" />`
-  - [ ] Test: ADMIN + `twoFactorVerified = true` + `twoFactorEnabled = true` → renders children
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminRoute.test.tsx`):**
+  - [x] Test: non-ADMIN role → `<Navigate to="/admin/login" />`
+  - [x] Test: ADMIN role with `twoFactorVerified = false` → `<Navigate to="/admin/2fa" />`
+  - [x] Test: ADMIN role with `twoFactorVerified = true` AND `twoFactorEnabled = false` → `<Navigate to="/admin/setup-2fa" />`
+  - [x] Test: ADMIN + `twoFactorVerified = true` + `twoFactorEnabled = true` → renders children
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `AdminLoginPage.tsx`, `AdminTwoFactorPage.tsx`, `AdminSetup2FAPage.tsx`
-  - [ ] Create `AdminRoute.tsx` guard with all 4 cases above
-  - [ ] Create `AdminLayout.tsx`: top nav + sidebar with links to Dashboard, Orders, Users, Stores, Categories, Feature Flags, Ads, Audit Logs
-  - [ ] Register all `/admin/*` routes in `App.tsx` wrapped in `<AdminRoute>` and `<AdminLayout>`
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `AdminLoginPage.tsx`, `AdminTwoFactorPage.tsx`, `AdminSetup2FAPage.tsx`
+  - [x] Create `AdminRoute.tsx` guard with all 4 cases above
+  - [x] Create `AdminLayout.tsx`: top nav + sidebar with links to Dashboard, Orders, Users, Stores, Categories, Feature Flags, Ads, Audit Logs
+  - [x] Register all `/admin/*` routes in `App.tsx` wrapped in `<AdminRoute>` and `<AdminLayout>`
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] `/admin/dashboard` → redirect to `/admin/login` → correct credentials → `/admin/2fa` → valid TOTP → admin dashboard loads → ✅
+- [x] **Verification chain:**
+  - [x] `/admin/dashboard` → redirect to `/admin/login` → correct credentials → `/admin/2fa` → valid TOTP → admin dashboard loads → ✅
 
 ---
 
@@ -2412,4 +2412,13 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 **Result:** Verified that E2E-023 passes 100% green on all projects (both desktop `chromium` and mobile `iphone-se`). All TypeScript checks and linters pass cleanly.
 
 ---
+
+### Session 45 — 2026-06-04 — Completed Phase 4.1 (Admin Auth, Mandatory 2FA & Cookie Isolation)
+- **Completed Phase 4.1 Checklist**: Implemented frontend layout, guard rules, Zustand session stores, and bootstrap managers to securely handle system administrator sessions.
+- **Dedicated Cookie Namespace (`adminRefreshToken`)**: Isolated admin refresh tokens into a separate namespace to prevent session collision or state hijacking between buyers, merchants, and admins.
+- **Subdomain-Aware Navigation & Layout**: Configured `AdminRoute` and the sidebar-based `AdminLayout` to be fully subdomain-aware (supporting `admin.gorola.com` and `/admin` prefix fallbacks) using `resolveSubdomain` and `getScopedPath`.
+- **Mandatory TOTP 2FA Guarding**: Configured `AdminRoute` to enforce role checking and both 2FA verification (`twoFactorVerified`) and 2FA configuration (`twoFactorEnabled`). Unconfigured accounts are routed to `/admin/setup-2fa` for TOTP onboarding before accessing the platform panel.
+- **TypeScript Exact Optional Property Fixes**: Fixed TS2375 and TS2379 compatibility errors in `auth.schema.ts` and `admin-auth.service.ts` under the strict `exactOptionalPropertyTypes: true` compiler flag by explicitly allowing `string | undefined` union types.
+- **Workspace Build & Lint Verification**: Verified all linters are green and compiled the entire workspace cleanly (`pnpm build`).
+
 
