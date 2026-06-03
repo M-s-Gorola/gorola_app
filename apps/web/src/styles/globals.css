@@ -78,6 +78,20 @@
   --color-gorola-slate-mist: var(--gorola-slate-mist);
   --font-sans: var(--font-family-dm-sans);
   --font-serif: var(--font-family-playfair);
+
+  /* Fluid Spacing Scale for Dynamic Responsive Margins/Paddings/Gaps */
+  --spacing: clamp(0.18rem, 0.4vw + 0.12rem, 0.25rem);
+
+  /* Fluid Typography Scale to scale down text gracefully on mobile */
+  --text-xs: clamp(0.6875rem, 0.4vw + 0.6rem, 0.75rem);
+  --text-sm: clamp(0.75rem, 0.6vw + 0.65rem, 0.875rem);
+  --text-base: clamp(0.875rem, 0.8vw + 0.7rem, 1rem);
+  --text-lg: clamp(1rem, 1vw + 0.8rem, 1.125rem);
+  --text-xl: clamp(1.125rem, 1.2vw + 0.85rem, 1.25rem);
+  --text-2xl: clamp(1.25rem, 1.6vw + 0.95rem, 1.5rem);
+  --text-3xl: clamp(1.4rem, 2vw + 1.1rem, 1.875rem);
+  --text-4xl: clamp(1.75rem, 2.5vw + 1.25rem, 2.25rem);
+  --text-5xl: clamp(2rem, 3.5vw + 1.5rem, 3rem);
 }
 
 @layer base {

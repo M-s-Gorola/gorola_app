@@ -8,17 +8,51 @@ import { useCartStore } from "@/store/cart.store";
 
 import { ProductDetailPage } from "./ProductDetailPage";
 
-const { getMock, postMock } = vi.hoisted(() => ({
+const { getMock, postMock, putMock, deleteMock, mockNavigate } = vi.hoisted(() => ({
   getMock: vi.fn(),
-  postMock: vi.fn()
+  postMock: vi.fn(),
+  putMock: vi.fn(),
+  deleteMock: vi.fn(),
+  mockNavigate: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
-    get: getMock,
-    post: postMock
+    get: vi.fn().mockImplementation(async (url: string, config?: unknown) => {
+      if (url.includes("/api/v1/cart")) {
+        return {
+          data: {
+            success: true,
+            data: {
+              items: useCartStore.getState().lines.map((line) => ({
+                productVariantId: line.productVariantId,
+                quantity: line.quantity,
+                productName: line.productName,
+                variantLabel: line.variantLabel,
+                unitPrice: line.unitPrice
+              })),
+              activeOffer: null,
+              activeOffers: []
+            }
+          }
+        };
+      }
+      return getMock(url, config);
+    }),
+    post: postMock,
+    put: putMock,
+    delete: deleteMock
   }
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate
+  };
+});
+
 
 function renderPage(initialPath = "/products/p1"): void {
   const queryClient = new QueryClient({
@@ -44,6 +78,7 @@ describe("ProductDetailPage", () => {
   beforeEach(() => {
     getMock.mockReset();
     postMock.mockReset();
+    mockNavigate.mockReset();
     useCartStore.getState().clear();
     useAuthStore.getState().setBuyerSession({
       accessToken: "at",
@@ -72,7 +107,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [
             { id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 },
@@ -84,14 +120,14 @@ describe("ProductDetailPage", () => {
 
     renderPage();
     expect(await screen.findByRole("heading", { name: "Apple" })).toBeInTheDocument();
-    
+
     const img = screen.getByAltText("Apple");
     expect(img).toBeInTheDocument();
     expect(img).toHaveAttribute("src", "https://cdn.example.com/apple.jpg");
 
-    expect(screen.getByRole("button", { name: "500g" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "1kg" })).toBeInTheDocument();
-    expect(screen.getByText("Rs 120.00")).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "500g" })[0]).toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "1kg" })[0]).toBeInTheDocument();
+    expect(screen.getAllByText("Rs 120.00")[0]).toBeInTheDocument();
   });
 
   it("updates displayed price when variant changes", async () => {
@@ -106,7 +142,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [
             { id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 },
@@ -118,8 +155,8 @@ describe("ProductDetailPage", () => {
 
     renderPage();
     await screen.findByRole("heading", { name: "Apple" });
-    fireEvent.click(screen.getByRole("button", { name: "1kg" }));
-    expect(screen.getByText("Rs 220.00")).toBeInTheDocument();
+    fireEvent.click(screen.getAllByRole("button", { name: "1kg" })[0]!);
+    expect(screen.getAllByText("Rs 220.00")[0]).toBeInTheDocument();
   });
 
   it("posts selected variant and quantity when add to cart is clicked", async () => {
@@ -134,7 +171,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [
             { id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 },
@@ -146,7 +184,13 @@ describe("ProductDetailPage", () => {
     postMock.mockResolvedValue({ data: { success: true } });
 
     renderPage();
+
+    // 1. Wait for the heading to appear
     await screen.findByRole("heading", { name: "Apple" });
+
+    // 2. FORCE the test runner to wait until the dynamic API variants are completely bound to the UI buttons
+    expect((await screen.findAllByRole("button", { name: "500g" }))[0]).toBeInTheDocument();
+
     fireEvent.click(screen.getByRole("button", { name: "Increase quantity" }));
     fireEvent.click(screen.getByRole("button", { name: "Add to cart" }));
 
@@ -178,7 +222,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [{ id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 2 }]
         }
@@ -223,7 +268,8 @@ describe("ProductDetailPage", () => {
           store: {
             id: "s1",
             name: "Peak Mart",
-            phone: "+919111111111"
+            phone: "+919111111111",
+            storeType: "QUICK_COMMERCE"
           },
           variants: [{ id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 0 }]
         }
@@ -248,7 +294,7 @@ describe("ProductDetailPage", () => {
           name: "Apple",
           description: "Fresh apple",
           imageUrl: "https://cdn.example.com/apple.jpg",
-          store: { id: "s1", name: "Peak Mart", phone: "+919111111111" },
+          store: { id: "s1", name: "Peak Mart", phone: "+919111111111", storeType: "QUICK_COMMERCE" },
           variants: [{ id: "v1", label: "500g", price: "120.00", unit: "g", stockQty: 5 }]
         }
       }
@@ -279,4 +325,66 @@ describe("ProductDetailPage", () => {
     // 5. Verify local quantity is reset to 1, not stuck at 3 or 0
     expect(screen.getByText("1")).toBeInTheDocument();
   });
+
+  it("renders Book Now button instead of Add to Cart for BOOKING_COMMERCE products", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "p2",
+          name: "CBC Panel",
+          description: "Complete blood count",
+          imageUrl: "https://cdn.example.com/cbc.jpg",
+          store: {
+            id: "s2",
+            name: "Aarna Diagnostic Centre",
+            phone: "+919222222222",
+            storeType: "BOOKING_COMMERCE"
+          },
+          variants: [
+            { id: "v3", label: "Fasting", price: "499.00", unit: "test", stockQty: 99 }
+          ]
+        }
+      }
+    });
+
+    renderPage("/products/p2");
+    await screen.findByRole("heading", { name: "CBC Panel" });
+
+    // Check that Add to Cart and quantity buttons are not rendered
+    expect(screen.queryByRole("button", { name: "Add to cart" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Increase quantity" })).not.toBeInTheDocument();
+  });
+
+  it("navigates to /bookings/new when Book Now is clicked", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "p2",
+          name: "CBC Panel",
+          description: "Complete blood count",
+          imageUrl: "https://cdn.example.com/cbc.jpg",
+          store: {
+            id: "s2",
+            name: "Aarna Diagnostic Centre",
+            phone: "+919222222222",
+            storeType: "BOOKING_COMMERCE"
+          },
+          variants: [
+            { id: "v3", label: "Fasting", price: "499.00", unit: "test", stockQty: 99 }
+          ]
+        }
+      }
+    });
+
+    renderPage("/products/p2");
+    await screen.findByRole("heading", { name: "CBC Panel" });
+
+    const bookNowButton = screen.getByRole("button", { name: "Book Now" });
+    fireEvent.click(bookNowButton);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/bookings/new?productId=p2&variantId=v3");
+  });
 });
+

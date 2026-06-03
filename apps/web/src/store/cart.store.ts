@@ -6,6 +6,16 @@ export type CartLine = {
   productName?: string;
   variantLabel?: string;
   unitPrice?: number;
+  storeId?: string;
+};
+
+export type ActiveOffer = {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount: number | null;
+  maxDiscount: number | null;
 };
 
 type CartState = {
@@ -14,6 +24,12 @@ type CartState = {
   discountCode: string;
   discountSavedAmount: number;
   discountError: string | null;
+  activeOffer: ActiveOffer | null;
+  activeOffers: ActiveOffer[];
+  storeId: string | null;
+  setActiveOffer: (offer: ActiveOffer | null) => void;
+  setActiveOffers: (offers: ActiveOffer[]) => void;
+  setStoreId: (storeId: string | null) => void;
   addOrMergeLine: (line: CartLine) => void;
   /** Replaces all lines (e.g. after `GET /api/v1/cart`). */
   replaceLines: (lines: CartLine[]) => void;
@@ -50,7 +66,8 @@ function mergeLine(lines: CartLine[], line: CartLine): CartLine[] {
     quantity: existing.quantity + line.quantity,
     ...(productName !== undefined ? { productName } : {}),
     ...(unitPrice !== undefined ? { unitPrice } : {}),
-    ...(variantLabel !== undefined ? { variantLabel } : {})
+    ...(variantLabel !== undefined ? { variantLabel } : {}),
+    ...(line.storeId !== undefined ? { storeId: line.storeId } : {})
   };
   return next;
 }
@@ -61,15 +78,26 @@ export const useCartStore = create<CartState>((set, get) => ({
   discountCode: "",
   discountSavedAmount: 0,
   discountError: null,
+  activeOffer: null,
+  activeOffers: [],
+  storeId: null,
+  setActiveOffer: (offer) => set({ activeOffer: offer }),
+  setActiveOffers: (offers) => set({ activeOffers: offers }),
+  setStoreId: (storeId) => set({ storeId }),
   addOrMergeLine: (line) =>
     set((s) => ({
-      lines: mergeLine(s.lines, line)
+      lines: mergeLine(s.lines, line),
+      storeId: s.storeId ?? line.storeId ?? null
     })),
   replaceLines: (lines) => set({ lines: lines.map((l) => ({ ...l })) }),
   removeLine: (productVariantId) =>
-    set((s) => ({
-      lines: s.lines.filter((l) => l.productVariantId !== productVariantId)
-    })),
+    set((s) => {
+      const nextLines = s.lines.filter((l) => l.productVariantId !== productVariantId);
+      return {
+        lines: nextLines,
+        storeId: nextLines.length === 0 ? null : s.storeId
+      };
+    }),
   setQty: (productVariantId, quantity) => {
     if (quantity <= 0) {
       get().removeLine(productVariantId);
@@ -101,7 +129,10 @@ export const useCartStore = create<CartState>((set, get) => ({
       lines: [],
       discountCode: "",
       discountError: null,
-      discountSavedAmount: 0
+      discountSavedAmount: 0,
+      activeOffer: null,
+      activeOffers: [],
+      storeId: null
     }),
   totalItemCount: () => get().lines.reduce((acc, l) => acc + l.quantity, 0)
 }));

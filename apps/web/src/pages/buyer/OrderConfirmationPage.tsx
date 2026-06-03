@@ -1,6 +1,6 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { Bike, CheckCircle2, Home, Package } from "lucide-react";
+import { Bike, CheckCircle2, Home, MessageSquare,Package, ThumbsDown, ThumbsUp } from "lucide-react";
 import {
   type ReactElement,
   useCallback,
@@ -9,7 +9,8 @@ import {
   useRef,
   useState,
 } from "react";
-import { useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
@@ -42,11 +43,14 @@ export type BuyerOrderDetail = {
     code: string | null;
   };
   id: string;
+  orderType?: string;
   items: BuyerOrderConfirmationItem[];
   landmarkDescription: string;
   addressLabel?: string | null;
   flatRoom?: string | null;
   paymentMethod: string;
+  rating: boolean | null;
+  ratingComment: string | null;
   scheduledFor?: string | null;
   status: string;
   statusHistory?: StatusHistoryItem[];
@@ -54,6 +58,7 @@ export type BuyerOrderDetail = {
     id: string;
     name: string;
     phone: string;
+    storeType?: string;
   };
   subtotal: string;
   total: string;
@@ -252,12 +257,38 @@ function StatusStepper({
 }
 
 export function OrderConfirmationPage(): ReactElement {
+  const navigate = useNavigate();
   const { id } = useParams<{ id: string }>();
   const rootRef = useRef<HTMLElement | null>(null);
   const bloomRef = useRef<HTMLDivElement | null>(null);
   const entranceDoneRef = useRef(false);
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
+  const [ratingComment, setRatingComment] = useState("");
+
+  const queryClient = useQueryClient();
+
+  const rateMutation = useMutation({
+    mutationFn: async ({ rating, comment }: { rating: boolean; comment?: string | undefined }) => {
+      const res = await api!.put(`/api/v1/orders/${id}/rate`, { 
+        rating,
+        ratingComment: comment 
+      });
+      return res.data.data;
+    },
+    onSuccess: () => {
+      toast.success("Thank you for your rating!");
+      setActiveRating(null);
+      setRatingComment("");
+      void queryClient.invalidateQueries({ queryKey: ["buyer-order-confirmation", id] });
+      void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
+    },
+    onError: () => {
+      toast.error("Failed to submit rating");
+    }
+  });
 
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
@@ -278,7 +309,92 @@ export function OrderConfirmationPage(): ReactElement {
     },
   });
 
-  const queryClient = useQueryClient();
+  const order = query.data;
+
+interface StoreOffer {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount?: number | null;
+  maxDiscount?: number | null;
+  startsAt: string;
+  endsAt: string;
+  isActive: boolean;
+}
+
+  const storeId = order?.store?.id;
+  const { data: offersResponse } = useQuery({
+    enabled: !!storeId && !isBootstrapPending,
+    queryKey: ["promotions", "store", storeId, "offers"],
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: StoreOffer[] }>(`/api/v1/promotions/store/${storeId}/offers`);
+      return res.data;
+    }
+  });
+
+  const getAppliedDiscounts = (order: BuyerOrderDetail) => {
+    const subtotal = Number(order.subtotal);
+    const deliveryFee = Number(order.deliveryFee);
+    const total = Number(order.total);
+    const discountAmount = Number((subtotal + deliveryFee - total).toFixed(2));
+    if (discountAmount <= 0) return [];
+
+    const offers = Array.isArray(offersResponse?.data) ? offersResponse.data : [];
+    const orderTime = new Date(order.createdAt || "").getTime();
+
+    // Find all offers that were active at the order's creation time
+    const matchedOffers = (offers as StoreOffer[]).filter((o) => {
+      const start = new Date(o.startsAt).getTime();
+      const end = new Date(o.endsAt).getTime();
+      return orderTime >= start && orderTime <= end;
+    });
+
+    const result: { label: string; amount: number }[] = [];
+    let remainingDiscount = discountAmount;
+
+    for (const offer of matchedOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal < minOrder) continue;
+
+      let offerDiscount = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        offerDiscount = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          offerDiscount = Math.min(offerDiscount, offer.maxDiscount);
+        }
+      } else {
+        offerDiscount = offer.discountValue;
+      }
+      offerDiscount = Number(Math.min(subtotal, offerDiscount).toFixed(2));
+
+      if (offerDiscount > 0 && remainingDiscount > 0) {
+        const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
+        if (appliedAmt > 0.05) {
+          result.push({
+            label: `Discount (${offer.title})`,
+            amount: appliedAmt
+          });
+          remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
+        }
+      }
+    }
+
+    if (remainingDiscount > 0.05) {
+      result.push({
+        label: order.discount?.code ? `Discount (${order.discount.code})` : "Discount",
+        amount: remainingDiscount
+      });
+    }
+
+    return result;
+  };
+  useEffect(() => {
+    if (order && (order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE")) {
+      navigate(`/bookings/${order.id}`, { replace: true });
+    }
+  }, [order, navigate]);
+
   const onStatusChanged = useCallback(
     (data: { orderId: string; status: string }) => {
       if (data.orderId === id) {
@@ -431,7 +547,6 @@ export function OrderConfirmationPage(): ReactElement {
       {query.isSuccess && query.data ? (
         (() => {
           const order = query.data;
-          const discountAmount = order.discount?.amount ?? "0.00";
 
           const weatherPulse =
             isWeatherMode ?
@@ -514,8 +629,39 @@ export function OrderConfirmationPage(): ReactElement {
 
               {weatherPulse}
 
-              <div className="w-full space-y-2 rounded-2xl border border-gorola-pine/10 bg-white p-5 text-left shadow-sm">
-                <h2 className="font-playfair text-lg text-gorola-charcoal">Your items</h2>
+              <div className={cn(
+                "w-full space-y-4 rounded-2xl border bg-white p-5 text-left transition-all duration-500",
+                order.status === "PLACED" ? "border-amber-200 shadow-amber-100/10 border-l-4 border-l-amber-500" :
+                order.status === "PREPARING" ? "border-indigo-200 shadow-indigo-100/10 border-l-4 border-l-indigo-500" :
+                order.status === "OUT_FOR_DELIVERY" ? "border-blue-200 shadow-blue-100/10 border-l-4 border-l-blue-500" :
+                order.status === "DELIVERED" ? "border-emerald-200 shadow-emerald-100/10 border-l-4 border-l-emerald-500" :
+                "border-red-200 shadow-red-100/10 border-l-4 border-l-red-500"
+              )}>
+                {/* Dynamic Status Alert Banner */}
+                <div className={cn("rounded-2xl p-4 transition-all duration-300", 
+                  order.status === "PLACED" ? "bg-amber-50 border border-amber-200 text-amber-800" :
+                  order.status === "PREPARING" ? "bg-indigo-50 border border-indigo-200 text-indigo-800" :
+                  order.status === "OUT_FOR_DELIVERY" ? "bg-blue-50 border border-blue-200 text-blue-800" :
+                  order.status === "DELIVERED" ? "bg-emerald-50 border border-emerald-200 text-emerald-800" :
+                  "bg-red-50 border border-red-200 text-red-800"
+                )}>
+                  <p className="font-dm-sans text-sm font-semibold">
+                    {order.status === "PLACED" ? "Your order has been placed. Waiting for the store to accept and start picking your items." :
+                     order.status === "PREPARING" ? "👨‍🍳 The store has accepted and is picking/packaging your items!" :
+                     order.status === "OUT_FOR_DELIVERY" ? "🚴 Your rider is on the way! Live tracking is active." :
+                     order.status === "DELIVERED" ? "🎉 Your order has been delivered! Hope you enjoy your purchase." :
+                     "⚠️ This order was cancelled. Any refunds will be processed soon."}
+                  </p>
+                </div>
+
+                <div className="flex justify-between items-baseline gap-2 pb-1 border-b border-gorola-pine/10 pb-2">
+                  <h2 className="font-playfair text-lg font-bold text-gorola-charcoal">Your items</h2>
+                  {order.store && (
+                    <span className="font-dm-sans text-xs text-gorola-slate">
+                      from <span className="font-semibold text-gorola-charcoal">{order.store.name}</span>
+                    </span>
+                  )}
+                </div>
                 <ul aria-label="Order items" className="space-y-2">
                   {order.items.map((line) => (
                     <li
@@ -533,12 +679,53 @@ export function OrderConfirmationPage(): ReactElement {
                   ))}
                 </ul>
 
-                <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
-                  <p data-testid="order-subtotal">Subtotal: Rs {order.subtotal}</p>
-                  <p>Delivery fee: Rs {order.deliveryFee}</p>
-                  {discountAmount !== "0.00" ? <p>Discount: -Rs {discountAmount}</p> : null}
-                  <p className="font-semibold" data-testid="order-total">Total: Rs {order.total}</p>
-                  <p>Payment: {formatPayment(order.paymentMethod)}</p>
+                <div className="space-y-1.5 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-charcoal">
+                  <div className="flex justify-between" data-testid="order-subtotal">
+                    <span className="text-gorola-slate">Subtotal:</span>
+                    <span className="font-medium">Rs {order.subtotal}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-gorola-slate">Delivery fee:</span>
+                    <span className="font-medium">Rs {order.deliveryFee}</span>
+                  </div>
+                  {(() => {
+                    const applied = getAppliedDiscounts(order);
+                    const totalAmt = applied.reduce((sum, d) => sum + d.amount, 0);
+                    if (totalAmt <= 0) return null;
+                    return (
+                      <div className="space-y-1" data-testid="discount-summary-row">
+                        <div className="flex justify-between items-center text-emerald-700">
+                          <button
+                            type="button"
+                            onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                            data-testid="discount-breakdown-toggle"
+                            aria-expanded={isDiscountExpanded}
+                            className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
+                          >
+                            <span>Discount:</span>
+                            <span className="text-[10px] transform transition-transform duration-200">
+                              {isDiscountExpanded ? "▼" : "▶"}
+                            </span>
+                          </button>
+                          <span className="font-medium">-Rs {totalAmt.toFixed(2)}</span>
+                        </div>
+                        {isDiscountExpanded && (
+                          <div className="space-y-1 pl-3 border-l border-emerald-100" data-testid="discount-breakdown-list">
+                            {applied.map((d, idx) => (
+                              <div key={idx} className="flex justify-between items-start gap-4 text-xs text-emerald-600/90 font-dm-sans italic w-full">
+                                <span className="break-words text-left flex-1">• {d.label}</span>
+                                <span className="text-right whitespace-nowrap shrink-0">-Rs {d.amount.toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+                  <div className="flex justify-between border-t border-gorola-pine/10 pt-2 font-semibold" data-testid="order-total">
+                    <span>Payment [{formatPayment(order.paymentMethod)}]:</span>
+                    <span>Rs {order.total}</span>
+                  </div>
                 </div>
 
                 <div className="space-y-1 border-t border-gorola-pine/10 pt-3 font-dm-sans text-sm text-gorola-slate">
@@ -559,6 +746,114 @@ export function OrderConfirmationPage(): ReactElement {
                   )}
                 </div>
               </div>
+
+              {/* Clean Rate Your Order Section */}
+              {order.status === "DELIVERED" && (
+                <div 
+                  data-testid="rate-order-section"
+                  className="w-full bg-white border border-gorola-pine/10 rounded-2xl p-5 text-left shadow-sm font-dm-sans space-y-4"
+                >
+                  <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Rate your order</h3>
+                  
+                  <div className="flex items-center justify-between gap-4">
+                    <div className="text-sm text-gorola-slate font-medium">
+                      {order.rating !== null ? (
+                        <div className="space-y-1">
+                          <span className="flex items-center gap-1.5 text-green-600 font-bold">
+                            <CheckCircle2 className="w-4 h-4" />
+                            Rating submitted
+                          </span>
+                          {order.ratingComment && (
+                            <p className="text-xs text-gorola-slate italic">"{order.ratingComment}"</p>
+                          )}
+                        </div>
+                      ) : (
+                        "How was your overall experience?"
+                      )}
+                    </div>
+                    
+                    {order.rating === null && (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setActiveRating(activeRating === "up" ? null : "up")}
+                          disabled={rateMutation.isPending}
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                            activeRating === "up"
+                              ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' 
+                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                          } disabled:opacity-50`}
+                          aria-label="Thumbs Up"
+                        >
+                          <ThumbsUp className="w-4 h-4" />
+                          Liked
+                        </button>
+                        <button
+                          onClick={() => setActiveRating(activeRating === "down" ? null : "down")}
+                          disabled={rateMutation.isPending}
+                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
+                            activeRating === "down"
+                              ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm' 
+                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                          } disabled:opacity-50`}
+                          aria-label="Thumbs Down"
+                        >
+                          <ThumbsDown className="w-4 h-4" />
+                          Disliked
+                        </button>
+                      </div>
+                    )}
+
+                    {order.rating !== null && (
+                      <div className="flex items-center gap-3">
+                        <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${
+                          order.rating === true 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-red-50 text-red-700 border-red-200'
+                        }`}>
+                          {order.rating === true ? (
+                            <>
+                              <ThumbsUp className="w-4 h-4" />
+                              Liked
+                            </>
+                          ) : (
+                            <>
+                              <ThumbsDown className="w-4 h-4" />
+                              Disliked
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Comment Box */}
+                  {activeRating !== null && order.rating === null && (
+                    <div className="animate-in fade-in slide-in-from-top-2 duration-300 space-y-3 pt-2">
+                      <div className="relative group/input">
+                        <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-gorola-charcoal/20 group-focus-within/input:text-gorola-charcoal/40 transition-colors" />
+                        <textarea
+                          value={ratingComment}
+                          onChange={(e) => setRatingComment(e.target.value)}
+                          placeholder="Any feedback for the store? (Optional)"
+                          className="w-full bg-white border border-gorola-charcoal/10 rounded-xl pl-10 pr-4 py-2.5 text-sm text-gorola-charcoal placeholder:text-gorola-charcoal/20 focus:outline-none focus:border-gorola-pine/30 transition-all resize-none h-20 shadow-inner"
+                        />
+                      </div>
+                      <div className="flex justify-end">
+                        <button
+                          onClick={() => rateMutation.mutate({ 
+                            rating: activeRating === "up", 
+                            comment: ratingComment || undefined
+                          })}
+                          className="px-6 py-2 bg-gorola-pine text-white text-xs font-bold rounded-full hover:bg-gorola-pine/90 transition-all shadow-md shadow-gorola-pine/10 disabled:opacity-50"
+                          disabled={rateMutation.isPending}
+                        >
+                          {rateMutation.isPending ? "Submitting..." : "Submit Feedback"}
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                 <blockquote className="w-full rounded-2xl border border-gorola-pine/10 bg-gorola-fog/80 p-4 text-left shadow-inner">

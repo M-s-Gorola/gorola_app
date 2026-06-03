@@ -76,7 +76,7 @@ export function SearchResultsPage(): ReactElement {
 
   return (
     <section className="space-y-6">
-      <div className="rounded-2xl bg-white/70 px-6 py-8 shadow-sm backdrop-blur-md">
+      <div className="rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8 shadow-sm backdrop-blur-md">
         <h1 className="font-playfair text-3xl text-gorola-charcoal mb-4">Search</h1>
         <form onSubmit={handleSearch} className="flex gap-2">
           <input
@@ -96,13 +96,13 @@ export function SearchResultsPage(): ReactElement {
       </div>
 
       {searchQuery.isLoading && (
-        <div className="rounded-2xl bg-white/70 px-6 py-8">
+        <div className="rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8">
           <p className="font-dm-sans text-sm text-gorola-slate">Searching...</p>
         </div>
       )}
 
       {queryParam && !searchQuery.isLoading && !hasResults && (
-        <div className="rounded-2xl bg-white/70 px-6 py-8 text-center">
+        <div className="rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8 text-center">
           <p className="font-dm-sans text-lg text-gorola-charcoal">No results found for "{queryParam}"</p>
           <p className="font-dm-sans text-sm text-gorola-slate mt-2">Try checking your spelling or using different keywords</p>
         </div>
@@ -111,9 +111,9 @@ export function SearchResultsPage(): ReactElement {
       {hasResults && (
         <div className="space-y-6" data-testid="search-results-grid">
           {results.categories.length > 0 && (
-            <div className="rounded-2xl bg-white/70 px-6 py-8">
+            <div className="rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8">
               <h2 className="font-playfair text-xl text-gorola-charcoal mb-4">Categories</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 {results.categories.map((cat) => (
                   <button
                     key={`cat-${cat.id}`}
@@ -136,9 +136,9 @@ export function SearchResultsPage(): ReactElement {
           )}
 
           {results.subCategories.length > 0 && (
-            <div className="rounded-2xl bg-white/70 px-6 py-8">
+            <div className="rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8">
               <h2 className="font-playfair text-xl text-gorola-charcoal mb-4">Sub-Categories</h2>
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-4">
                 {results.subCategories.map((sub) => (
                   <button
                     key={`sub-${sub.id}`}
@@ -167,7 +167,7 @@ export function SearchResultsPage(): ReactElement {
           )}
 
           {results.products.length > 0 && (
-            <div className="rounded-2xl bg-white/70 px-6 py-8">
+            <div className="rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8">
               <h2 className="font-playfair text-xl text-gorola-charcoal mb-4">Products</h2>
               <ProductGrid search={queryParam} />
             </div>

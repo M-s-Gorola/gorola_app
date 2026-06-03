@@ -1,9 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
+import { Plus } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/AddressMapPicker";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 
 type Address = {
@@ -45,6 +57,79 @@ export function BookingTimeslotPage(): ReactElement {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Address creation form state
+  const queryClient = useQueryClient();
+  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [label, setLabel] = useState("");
+  const [landmark, setLandmark] = useState("");
+  const [flatRoom, setFlatRoom] = useState("");
+  const [isDefault, setIsDefault] = useState(false);
+  const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Discount & Offers state
+  const [couponCodeInput, setCouponCodeInput] = useState("");
+  const [appliedCouponCode, setAppliedCouponCode] = useState("");
+  const [couponSavedAmount, setCouponSavedAmount] = useState(0);
+  const [couponError, setCouponError] = useState<string | null>(null);
+  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
+
+  const createMutation = useMutation({
+    mutationFn: async (body: Record<string, unknown>) => {
+      const res = await api!.post<{ success: boolean; data: { id: string } }>("/api/v1/addresses", body);
+      return res.data;
+    },
+    onSuccess: (res) => {
+      toast.success("Address added successfully");
+      setIsFormOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
+      if (res?.data?.id) {
+        setSelectedAddressId(res.data.id);
+      }
+    },
+    onError: (err) => {
+      if (isAxiosError(err)) {
+        const body = err.response?.data;
+        if (typeof body === "object" && body !== null && "error" in body) {
+          setFormError((body as { error: { message: string } }).error.message);
+          return;
+        }
+      }
+      setFormError("An unexpected error occurred. Please try again.");
+    }
+  });
+
+  const handleSaveAddress = () => {
+    setFormError(null);
+    const trimmedLabel = label.trim();
+    const trimmedLandmark = landmark.trim();
+    
+    if (trimmedLabel.length === 0) {
+      setFormError("Label is required.");
+      return;
+    }
+    if (trimmedLandmark.length < 10) {
+      setFormError("Landmark must be at least 10 characters so drivers can find you.");
+      return;
+    }
+
+    const payload: Record<string, unknown> = {
+      label: trimmedLabel,
+      landmarkDescription: trimmedLandmark,
+      isDefault,
+    };
+
+    if (flatRoom.trim().length > 0) {
+      payload.flatRoom = flatRoom.trim();
+    }
+    if (mapCoords) {
+      payload.lat = mapCoords.lat;
+      payload.lng = mapCoords.lng;
+    }
+
+    createMutation.mutate(payload);
+  };
+
   // Fetch product detail to get variants and timeslot configurations
   const productQuery = useQuery({
     queryKey: ["booking-product-detail", productId],
@@ -73,6 +158,28 @@ export function BookingTimeslotPage(): ReactElement {
   const variant = product?.variants.find((v) => v.id === variantId);
   const addresses = addressQuery.data ?? [];
 
+  type Offer = {
+    id: string;
+    title: string;
+    discountType: "PERCENTAGE" | "FLAT";
+    discountValue: number;
+    minOrderAmount: number | null;
+    maxDiscount: number | null;
+  };
+
+  // Fetch active store-wide offers
+  const offersQuery = useQuery({
+    queryKey: ["store-offers", product?.store.id],
+    queryFn: async (): Promise<Offer[]> => {
+      if (!product?.store.id) return [];
+      const res = await api!.get<{ success: boolean; data: Offer[] }>(
+        `/api/v1/promotions/store/${product.store.id}/offers`
+      );
+      return res.data.data ?? [];
+    },
+    enabled: !!product?.store.id,
+  });
+
   // Enforce fasting timeslot locks when component mounts or variant loads
   useEffect(() => {
     if (variant?.requiresFasting) {
@@ -81,6 +188,19 @@ export function BookingTimeslotPage(): ReactElement {
       setSelectedTimeslot("");
     }
   }, [variant]);
+
+  const [addressDefaultSet, setAddressDefaultSet] = useState(false);
+  useEffect(() => {
+    if (addressDefaultSet) return;
+    if (!addressQuery.isSuccess) return;
+    if (addresses.length > 0) {
+      const defaultAddr = addresses.find(a => a.isDefault);
+      if (defaultAddr) {
+        setSelectedAddressId(defaultAddr.id);
+        setAddressDefaultSet(true);
+      }
+    }
+  }, [addressDefaultSet, addresses, addressQuery.isSuccess]);
 
   if (productQuery.isLoading || addressQuery.isLoading) {
     return (
@@ -104,6 +224,67 @@ export function BookingTimeslotPage(): ReactElement {
   tomorrow.setDate(tomorrow.getDate() + bookingLeadDays);
   const minDateStr = tomorrow.toISOString().split("T")[0];
 
+  const subtotal = variant ? Number(variant.price) : 0;
+
+  const handleApplyCoupon = async () => {
+    setCouponError(null);
+    if (!couponCodeInput.trim()) return;
+
+    try {
+      const res = await api!.post<{ success: boolean; data: { amountSaved: number } }>(
+        "/api/v1/promotions/discounts/validate",
+        {
+          code: couponCodeInput.trim().toUpperCase(),
+          subtotal,
+          storeId: product?.store.id ?? "",
+        }
+      );
+      if (res.data?.success && typeof res.data.data?.amountSaved === "number") {
+        setAppliedCouponCode(couponCodeInput.trim().toUpperCase());
+        setCouponSavedAmount(res.data.data.amountSaved);
+        toast.success("Coupon applied successfully!");
+      } else {
+        setCouponError("Invalid or expired discount code");
+        setCouponSavedAmount(0);
+        setAppliedCouponCode("");
+      }
+    } catch {
+      setCouponError("Invalid or expired discount code");
+      setCouponSavedAmount(0);
+      setAppliedCouponCode("");
+    }
+  };
+
+  const storeOffers = offersQuery.data ?? [];
+  const appliedOffers: Array<{ id: string; title: string; savedAmount: number }> = [];
+  let offerSavedAmount = 0;
+  for (const offer of storeOffers) {
+    const minOrder = offer.minOrderAmount ?? 0;
+    if (subtotal >= minOrder) {
+      let saved = 0;
+      if (offer.discountType === "PERCENTAGE") {
+        saved = (subtotal * offer.discountValue) / 100;
+        if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+          saved = Math.min(saved, offer.maxDiscount);
+        }
+      } else {
+        saved = offer.discountValue;
+      }
+      const eligibleAmount = Math.max(0, Math.min(subtotal - offerSavedAmount, saved));
+      if (eligibleAmount > 0) {
+        offerSavedAmount += eligibleAmount;
+        appliedOffers.push({
+          id: offer.id,
+          title: offer.title,
+          savedAmount: eligibleAmount,
+        });
+      }
+    }
+  }
+
+  const totalDiscount = couponSavedAmount + offerSavedAmount;
+  const finalTotal = Math.max(subtotal - totalDiscount, 0);
+
   const handlePlaceBooking = async (): Promise<void> => {
     if (!selectedDate || !selectedTimeslot || !selectedAddressId) return;
     setIsSubmitting(true);
@@ -117,10 +298,11 @@ export function BookingTimeslotPage(): ReactElement {
           scheduledDate: new Date(selectedDate).toISOString(),
           timeslot: selectedTimeslot,
           addressId: selectedAddressId,
+          discountCode: appliedCouponCode || undefined,
         }
       );
       toast.success("Booking placed successfully!");
-      navigate(`/bookings/${res.data.data.orderId}`);
+      navigate(`/bookings/${res.data.data.orderId}`, { replace: true });
     } catch (err) {
       console.error(err);
       toast.error("Failed to place booking. Please try again.");
@@ -133,13 +315,154 @@ export function BookingTimeslotPage(): ReactElement {
 
   return (
     <div className="mx-auto max-w-lg space-y-6 px-4 py-8">
-      {/* Product Detail Card */}
-      <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left">
-        <h1 className="font-playfair text-2xl font-bold text-gorola-charcoal">{product.name}</h1>
-        <p className="mt-1 font-dm-sans text-sm font-semibold text-gorola-pine">{product.store.name}</p>
-        <p className="mt-2 font-dm-sans text-sm text-gorola-slate leading-relaxed">{product.description}</p>
-        <div className="mt-3 inline-flex rounded-full bg-gorola-saffron/10 px-3 py-1 font-dm-sans text-xs font-semibold text-gorola-charcoal">
-          Variant: {variant.label} — Rs {variant.price}
+      {/* Product Detail, Offers, and Receipt Card */}
+      <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
+        {/* Product Detail */}
+        <div>
+          <h1 className="font-playfair text-2xl font-bold text-gorola-charcoal">{product.name}</h1>
+          <p className="mt-1 font-dm-sans text-sm font-semibold text-gorola-pine">{product.store.name}</p>
+          <p className="mt-2 font-dm-sans text-sm text-gorola-slate leading-relaxed">{product.description}</p>
+          <div className="mt-3 inline-flex rounded-full bg-gorola-saffron/10 px-3 py-1 font-dm-sans text-xs font-semibold text-gorola-charcoal">
+            Variant: {variant.label} — Rs {variant.price}
+          </div>
+        </div>
+
+        {/* Offers & Coupon Section */}
+        <div className="border-t border-gorola-pine/10 pt-4 space-y-3">
+          {/* Render Store Offers (unlocked/locked pills) */}
+          {storeOffers.length > 0 && (
+            <div className="space-y-2">
+              {storeOffers.map((offer) => {
+                const minOrder = offer.minOrderAmount ?? 0;
+                const isLocked = subtotal < minOrder;
+                if (isLocked) {
+                  return (
+                    <div
+                      key={offer.id}
+                      data-testid={`offer-pill-${offer.id}`}
+                      className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 font-dm-sans text-xs font-semibold text-amber-800 flex flex-col gap-0.5"
+                    >
+                      <div>{offer.title}</div>
+                      {offer.minOrderAmount !== null && offer.minOrderAmount !== undefined && offer.minOrderAmount > 0 && (
+                        <div className="text-amber-700 font-normal">
+                          · Minimum purchase: Rs {offer.minOrderAmount}
+                        </div>
+                      )}
+                      {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                        <div className="text-amber-700 font-normal">
+                          · Discount up to: Rs {offer.maxDiscount}
+                        </div>
+                      )}
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div
+                      key={offer.id}
+                      data-testid={`offer-pill-${offer.id}`}
+                      className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 font-dm-sans text-xs font-semibold text-emerald-700 flex flex-col gap-0.5"
+                    >
+                      <div>✅ {offer.title}</div>
+                      {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                        <div className="text-emerald-600 font-normal">
+                          · Maximum discount: Rs {offer.maxDiscount}
+                        </div>
+                      )}
+                    </div>
+                  );
+                }
+              })}
+            </div>
+          )}
+
+          {/* Discount code input bar (moved below offers, above receipt) */}
+          <div className="space-y-1">
+            <div className="flex items-center gap-2">
+              <input
+                value={couponCodeInput}
+                onChange={(e) => setCouponCodeInput(e.target.value)}
+                placeholder="Discount code"
+                className="w-full rounded-xl border border-gorola-pine/10 bg-gorola-fog/50 px-4 py-2 font-dm-sans text-sm focus:outline-none focus:border-gorola-pine/30 transition-all"
+              />
+              <button
+                type="button"
+                onClick={handleApplyCoupon}
+                className="rounded-xl bg-gorola-charcoal px-4 py-2 font-dm-sans text-sm font-bold text-white hover:bg-gorola-charcoal/90 transition-all"
+              >
+                Apply
+              </button>
+            </div>
+            {couponError && <p className="text-[10px] font-bold text-red-500 ml-1">{couponError}</p>}
+          </div>
+        </div>
+
+        {/* Receipt Summary Content */}
+        <div className="border-t border-gorola-pine/10 pt-4 space-y-2">
+          <div className="flex justify-between">
+            <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
+            <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {subtotal.toFixed(2)}</span>
+          </div>
+
+          {totalDiscount > 0 && (
+            <div className="space-y-2">
+              <div className="flex justify-between text-gorola-pine font-bold" data-testid="discount-summary">
+                <div className="flex items-center gap-1.5 font-dm-sans text-sm">
+                  <span>Total Discount</span>
+                  <button
+                    type="button"
+                    data-testid="discount-toggle-chevron"
+                    onClick={() => setIsDiscountOpen(!isDiscountOpen)}
+                    className="text-gorola-pine hover:bg-gorola-pine/5 rounded p-0.5 transition-colors flex items-center justify-center"
+                    aria-label="Toggle discount breakdown"
+                  >
+                    <svg
+                      xmlns="http://www.w3.org/2000/svg"
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      className={`h-4 w-4 transition-transform duration-200 ${isDiscountOpen ? "rotate-180" : ""}`}
+                    >
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
+                </div>
+                <span className="font-dm-sans text-sm">-Rs {totalDiscount.toFixed(2)}</span>
+              </div>
+              {isDiscountOpen && (
+                <div className="space-y-1.5 pl-4">
+                  {appliedOffers.map((o) => (
+                    <div
+                      key={o.id}
+                      data-testid="discount-breakdown-item"
+                      className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
+                    >
+                      <span className="break-words text-left flex-1">{o.title}</span>
+                      <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
+                    </div>
+                  ))}
+                  {couponSavedAmount > 0 && (
+                    <div
+                      data-testid="discount-breakdown-item"
+                      className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
+                    >
+                      <span className="break-words text-left flex-1">{appliedCouponCode}</span>
+                      <span className="text-right whitespace-nowrap shrink-0">-Rs {couponSavedAmount.toFixed(2)}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          <div className="flex justify-between border-t border-gorola-pine/5 pt-2">
+            <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Total</span>
+            <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Rs {finalTotal.toFixed(2)}</span>
+          </div>
         </div>
       </div>
 
@@ -195,11 +518,47 @@ export function BookingTimeslotPage(): ReactElement {
 
       {/* Address Selector Section */}
       <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
-        <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Address</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Address</h3>
+          <Button
+            onClick={() => {
+              setLabel("");
+              setLandmark("");
+              setFlatRoom("");
+              setIsDefault(false);
+              setMapCoords(null);
+              setFormError(null);
+              setIsFormOpen(true);
+            }}
+            size="sm"
+            variant="outline"
+            className="rounded-full border-gorola-pine/20 text-gorola-pine hover:bg-gorola-pine/5 flex items-center gap-1 font-dm-sans text-xs h-8"
+          >
+            <Plus className="h-3.5 w-3.5" /> Add New
+          </Button>
+        </div>
+
         {addresses.length === 0 ? (
-          <p className="font-dm-sans text-sm text-gorola-slate">
-            No saved addresses found. Please save an address in your profile first.
-          </p>
+          <div className="text-center py-4 space-y-3">
+            <p className="font-dm-sans text-sm text-gorola-slate">
+              No saved addresses found.
+            </p>
+            <Button
+              onClick={() => {
+                setLabel("");
+                setLandmark("");
+                setFlatRoom("");
+                setIsDefault(false);
+                setMapCoords(null);
+                setFormError(null);
+                setIsFormOpen(true);
+              }}
+              size="sm"
+              className="rounded-full bg-gorola-pine text-white"
+            >
+              <Plus className="mr-1 h-4 w-4" /> Add your first address
+            </Button>
+          </div>
         ) : (
           <div className="space-y-3">
             {addresses.map((addr) => {
@@ -245,6 +604,85 @@ export function BookingTimeslotPage(): ReactElement {
       >
         {isSubmitting ? "Placing Booking..." : "Confirm Booking"}
       </button>
+
+      {/* Address Form Dialog */}
+      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+        <DialogContent className="max-w-md gap-6">
+          <DialogHeader>
+            <DialogTitle className="font-playfair text-xl">Add New Address</DialogTitle>
+            <DialogDescription>
+              Add a new location for your appointment.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 text-left">
+            <label className="block space-y-1">
+              <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Label (e.g., Home, Work)</span>
+              <input
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                name="label"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="Home"
+              />
+            </label>
+            
+            <label className="block space-y-1">
+              <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Flat / room (optional)</span>
+              <input
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                value={flatRoom}
+                onChange={(e) => setFlatRoom(e.target.value)}
+                placeholder="Apt 4B"
+              />
+            </label>
+
+            <label className="block space-y-1">
+              <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Landmark (required)</span>
+              <textarea
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                name="landmarkDescription"
+                value={landmark}
+                onChange={(e) => setLandmark(e.target.value)}
+                placeholder="E.g. — near the red gate, behind Hotel Padmini"
+                rows={3}
+              />
+            </label>
+
+            <label className="flex items-center gap-2 font-dm-sans text-sm text-gorola-charcoal">
+              <input
+                type="checkbox"
+                checked={isDefault}
+                onChange={(e) => setIsDefault(e.target.checked)}
+              />
+              Set as default address
+            </label>
+
+            <div className="space-y-1 pt-2">
+              <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Pinpoint location (optional)</p>
+              <div className="h-48 overflow-hidden rounded-xl border border-gorola-pine/20">
+                <AddressMapPicker
+                  center={mapCoords ?? MUSSOORIE_AREA_CENTER}
+                  onCoordinatesChange={setMapCoords}
+                />
+              </div>
+            </div>
+
+            {formError && (
+              <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={createMutation.isPending}>
+              Cancel
+            </Button>
+            <Button className="bg-gorola-pine text-white" onClick={handleSaveAddress} disabled={createMutation.isPending}>
+              {createMutation.isPending ? "Saving..." : "Save Address"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

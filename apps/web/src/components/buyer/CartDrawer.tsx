@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { lenis } from "@/lib/lenis";
 import { useAuthStore } from "@/store/auth.store";
@@ -26,8 +27,10 @@ export function CartDrawer(): ReactElement | null {
   const discountError = useCartStore((s) => s.discountError);
   const setDiscountState = useCartStore((s) => s.setDiscountState);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const storeId = useCartStore((s) => s.storeId);
 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
+  const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const upiEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_UPI_ENABLED"));
   const cardEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_CARD_ENABLED"));
 
@@ -38,6 +41,9 @@ export function CartDrawer(): ReactElement | null {
     if (isOpen) {
       document.body.style.overflow = "hidden";
       lenis?.stop();
+      if (accessToken !== null) {
+        void syncBuyerCartFromServer().catch(() => {});
+      }
     } else {
       document.body.style.overflow = "";
       lenis?.start();
@@ -46,7 +52,7 @@ export function CartDrawer(): ReactElement | null {
       document.body.style.overflow = "";
       lenis?.start();
     };
-  }, [isOpen]);
+  }, [isOpen, accessToken]);
 
   useGSAP(() => {
     if (isOpen) {
@@ -58,11 +64,94 @@ export function CartDrawer(): ReactElement | null {
     }
   }, [isOpen]);
 
+  const activeOffers = useCartStore((s) => s.activeOffers);
+
   const subtotal = useMemo(
     () => lines.reduce((acc, line) => acc + (line.unitPrice ?? 0) * line.quantity, 0),
     [lines]
   );
-  const total = Math.max(subtotal + DELIVERY_FEE - savedAmount, 0);
+
+  const lastSubtotalRef = useRef(subtotal);
+  useEffect(() => {
+    if (subtotal !== lastSubtotalRef.current) {
+      lastSubtotalRef.current = subtotal;
+      if (subtotal === 0) {
+        setDiscountState({
+          code: "",
+          error: null,
+          savedAmount: 0
+        });
+        return;
+      }
+      if (api !== null && discountCode.trim().length > 0 && storeId !== null && savedAmount > 0) {
+        const activeCode = discountCode.trim();
+        void api
+          .post("/api/v1/promotions/discounts/validate", {
+            code: activeCode,
+            subtotal,
+            storeId
+          })
+          .then((response) => {
+            const amount = response.data?.data?.amountSaved;
+            if (response.data?.success === true && typeof amount === "number") {
+              setDiscountState({
+                code: activeCode,
+                error: null,
+                savedAmount: amount
+              });
+            } else {
+              setDiscountState({
+                code: activeCode,
+                error: "Invalid or expired discount code",
+                savedAmount: 0
+              });
+            }
+          })
+          .catch(() => {
+            setDiscountState({
+              code: activeCode,
+              error: "Could not validate discount code",
+              savedAmount: 0
+            });
+          });
+      }
+    }
+  }, [subtotal, discountCode, savedAmount, storeId, setDiscountState]);
+
+  const appliedOffers = useMemo(() => {
+    let currentSaved = 0;
+    const list: Array<{ id: string; title: string; savedAmount: number }> = [];
+    for (const offer of activeOffers) {
+      const minOrder = offer.minOrderAmount ?? 0;
+      if (subtotal >= minOrder) {
+        let saved = 0;
+        if (offer.discountType === "PERCENTAGE") {
+          saved = (subtotal * offer.discountValue) / 100;
+          if (offer.maxDiscount !== null && offer.maxDiscount !== undefined) {
+            saved = Math.min(saved, offer.maxDiscount);
+          }
+        } else {
+          saved = offer.discountValue;
+        }
+        const eligibleAmount = Math.max(0, Math.min(subtotal - currentSaved, saved));
+        if (eligibleAmount > 0) {
+          currentSaved += eligibleAmount;
+          list.push({
+            id: offer.id,
+            title: offer.title,
+            savedAmount: eligibleAmount
+          });
+        }
+      }
+    }
+    return list;
+  }, [activeOffers, subtotal]);
+
+  const offerSavedAmount = useMemo(() => {
+    return appliedOffers.reduce((acc, o) => acc + o.savedAmount, 0);
+  }, [appliedOffers]);
+
+  const total = Math.max(subtotal + DELIVERY_FEE - savedAmount - offerSavedAmount, 0);
 
   return (
     <>
@@ -125,6 +214,7 @@ export function CartDrawer(): ReactElement | null {
                               });
                             }
                           });
+                          void syncBuyerCartFromServer();
                         }
                       }}
                       className="h-8 w-8 flex items-center justify-center rounded-full border border-gorola-pine/20 text-gorola-charcoal hover:bg-gorola-pine/5 transition-colors"
@@ -147,6 +237,7 @@ export function CartDrawer(): ReactElement | null {
                               quantity: next
                             });
                           });
+                          void syncBuyerCartFromServer();
                         }
                       }}
                       className="h-8 w-8 flex items-center justify-center rounded-full border border-gorola-pine/20 text-gorola-charcoal hover:bg-gorola-pine/5 transition-colors"
@@ -164,6 +255,7 @@ export function CartDrawer(): ReactElement | null {
                           void enqueueCartVariantMutation(variantId, async () => {
                             await client.delete(`/api/v1/cart/items/${variantId}`);
                           });
+                          void syncBuyerCartFromServer();
                         }
                       }}
                       className="ml-auto text-xs font-bold text-gorola-slate hover:text-red-600 transition-colors"
@@ -178,11 +270,50 @@ export function CartDrawer(): ReactElement | null {
           )}
 
           <div className="space-y-4 border-t border-gorola-pine/10 pt-6">
-            {lines.length > 0 ? (
-              <p className="rounded-xl bg-gorola-saffron/5 px-3 py-2 font-dm-sans text-xs font-semibold text-gorola-charcoal border border-gorola-saffron/10">
-                Active offers and discounts may apply at checkout
-              </p>
-            ) : null}
+            {lines.length > 0 && activeOffers.length > 0 && (
+              <div className="space-y-2">
+                {activeOffers.map((offer) => {
+                  const minOrder = offer.minOrderAmount ?? 0;
+                  const isLocked = subtotal < minOrder;
+                  if (isLocked) {
+                    return (
+                      <div
+                        key={offer.id}
+                        data-testid={`offer-pill-${offer.id}`}
+                        className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 font-dm-sans text-xs font-semibold text-amber-800 flex flex-col gap-0.5"
+                      >
+                        <div>{offer.title}</div>
+                        {offer.minOrderAmount !== null && offer.minOrderAmount !== undefined && offer.minOrderAmount > 0 && (
+                          <div className="text-amber-700 font-normal">
+                            · Minimum purchase: Rs {offer.minOrderAmount}
+                          </div>
+                        )}
+                        {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                          <div className="text-amber-700 font-normal">
+                            · Discount up to: Rs {offer.maxDiscount}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div
+                        key={offer.id}
+                        data-testid={`offer-pill-${offer.id}`}
+                        className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 font-dm-sans text-xs font-semibold text-emerald-700 flex flex-col gap-0.5"
+                      >
+                        <div>✅ {offer.title}</div>
+                        {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                          <div className="text-emerald-600 font-normal">
+                            · Maximum discount: Rs {offer.maxDiscount}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                })}
+              </div>
+            )}
             <div className="space-y-2">
               <div className="flex justify-between">
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
@@ -192,10 +323,59 @@ export function CartDrawer(): ReactElement | null {
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee</span>
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {DELIVERY_FEE.toFixed(2)}</span>
               </div>
-              {savedAmount > 0 && (
-                <div className="flex justify-between text-gorola-pine font-bold">
-                  <span className="font-dm-sans text-sm">Saved</span>
-                  <span className="font-dm-sans text-sm">-Rs {savedAmount.toFixed(2)}</span>
+              {offerSavedAmount + savedAmount > 0 && (
+                <div className="space-y-2">
+                  <div className="flex justify-between text-gorola-pine font-bold" data-testid="cart-discount-summary">
+                    <div className="flex items-center gap-1.5 font-dm-sans text-sm">
+                      <span>Total Discount</span>
+                      <button
+                        type="button"
+                        data-testid="cart-discount-toggle-chevron"
+                        onClick={() => setIsDiscountOpen(!isDiscountOpen)}
+                        className="text-gorola-pine hover:bg-gorola-pine/5 rounded p-0.5 transition-colors flex items-center justify-center"
+                        aria-label="Toggle discount breakdown"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.5"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          className={`h-4 w-4 transition-transform duration-200 ${isDiscountOpen ? "rotate-180" : ""}`}
+                        >
+                          <polyline points="6 9 12 15 18 9" />
+                        </svg>
+                      </button>
+                    </div>
+                    <span className="font-dm-sans text-sm">-Rs {(offerSavedAmount + savedAmount).toFixed(2)}</span>
+                  </div>
+                  {isDiscountOpen && (
+                    <div className="space-y-1.5 pl-4">
+                      {appliedOffers.map((o) => (
+                        <div
+                          key={o.id}
+                          data-testid="cart-discount-breakdown-item"
+                          className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
+                        >
+                          <span className="break-words text-left flex-1">{o.title}</span>
+                          <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                      {savedAmount > 0 && (
+                        <div
+                          data-testid="cart-discount-breakdown-item"
+                          className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
+                        >
+                          <span className="break-words text-left flex-1">{discountCode || "Coupon"}</span>
+                          <span className="text-right whitespace-nowrap shrink-0">-Rs {savedAmount.toFixed(2)}</span>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
               <div className="flex justify-between border-t border-gorola-pine/5 pt-2">
@@ -226,7 +406,8 @@ export function CartDrawer(): ReactElement | null {
                   void api
                     .post("/api/v1/promotions/discounts/validate", {
                       code: discountCode.trim(),
-                      subtotal
+                      subtotal,
+                      storeId: storeId ?? ""
                     })
                     .then((response) => {
                       const amount = response.data?.data?.amountSaved;

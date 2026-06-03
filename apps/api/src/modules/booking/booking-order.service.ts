@@ -10,11 +10,23 @@ export class BookingOrderService {
     private readonly orderEmitter?: { emitStatusChanged: (orderId: string, status: string) => void }
   ) {}
 
+  private computeDiscountAmount(
+    discount: { discountType: string; discountValue: Prisma.Decimal | number | string },
+    subtotal: Prisma.Decimal
+  ): Prisma.Decimal {
+    const discountValue = new Prisma.Decimal(discount.discountValue.toString());
+    if (discount.discountType === "PERCENTAGE") {
+      return subtotal.mul(discountValue).div(100).toDecimalPlaces(2);
+    }
+    return discountValue.toDecimalPlaces(2);
+  }
+
   public async placeBookingRequest(
     userId: string,
     storeId: string,
     items: Array<{ productId: string; variantId: string; quantity?: number }>,
-    bookingDetails: { scheduledDate: Date; timeslot: string; addressId: string }
+    bookingDetails: { scheduledDate: Date; timeslot: string; addressId: string },
+    discountCode?: string
   ): Promise<Order> {
     if (!items || items.length === 0) {
       throw new ValidationError("Booking order must contain at least one item.");
@@ -122,8 +134,106 @@ export class BookingOrderService {
       variantMap.set(item.variantId, variant);
     }
 
+    // --- Discount & Offer logic matching BuyerCheckoutService ---
+    let appliedDiscountAmount = new Prisma.Decimal(0);
+    let discountIdToIncrement: string | null = null;
+    let normalizedCode: string | null = null;
+
+    if (discountCode) {
+      normalizedCode = discountCode.trim().toUpperCase();
+      const discount = await this.db.discount.findUnique({
+        where: {
+          storeId_code: {
+            storeId,
+            code: normalizedCode
+          }
+        }
+      });
+
+      if (!discount || !discount.isActive) {
+        throw new ValidationError("Invalid or expired discount code", {
+          discountCode: normalizedCode
+        });
+      }
+      const now = new Date();
+      if (discount.startsAt > now || discount.endsAt < now) {
+        throw new ValidationError("Invalid or expired discount code", {
+          discountCode: normalizedCode
+        });
+      }
+      if (discount.storeId !== null && discount.storeId !== storeId) {
+        throw new ValidationError("Discount code is not valid for this store", {
+          discountCode: normalizedCode
+        });
+      }
+      if (discount.usageLimit !== null && discount.usedCount >= discount.usageLimit) {
+        throw new ValidationError("Invalid or expired discount code", {
+          discountCode: normalizedCode
+        });
+      }
+      const minOrderAmount =
+        discount.minOrderAmount === null ? null : new Prisma.Decimal(discount.minOrderAmount.toString());
+      if (minOrderAmount !== null && subtotal.lessThan(minOrderAmount)) {
+        throw new ValidationError("Discount minimum subtotal not met", {
+          discountCode: normalizedCode,
+          minOrderAmount: minOrderAmount.toString()
+        });
+      }
+      appliedDiscountAmount = Prisma.Decimal.min(
+        subtotal,
+        this.computeDiscountAmount(discount, subtotal)
+      );
+      discountIdToIncrement = discount.id;
+    }
+
+    // Fetch active store-wide offers for this store
+    const now = new Date();
+    const activeOffers = await this.db.offer.findMany({
+      where: {
+        storeId,
+        isActive: true,
+        startsAt: { lte: now },
+        endsAt: { gte: now }
+      }
+    });
+
+    let appliedOfferAmount = new Prisma.Decimal(0);
+    for (const offer of activeOffers) {
+      const minOrderAmount =
+        offer.minOrderAmount === null ? null : new Prisma.Decimal(offer.minOrderAmount.toString());
+      if (minOrderAmount === null || subtotal.greaterThanOrEqualTo(minOrderAmount)) {
+        const discountValue = new Prisma.Decimal(offer.discountValue.toString());
+        let currentOfferAmount = new Prisma.Decimal(0);
+        if (offer.discountType === "PERCENTAGE") {
+          currentOfferAmount = subtotal.mul(discountValue).div(100).toDecimalPlaces(2);
+          if (offer.maxDiscount !== null) {
+            const maxDiscount = new Prisma.Decimal(offer.maxDiscount.toString());
+            currentOfferAmount = Prisma.Decimal.min(currentOfferAmount, maxDiscount);
+          }
+        } else {
+          currentOfferAmount = discountValue.toDecimalPlaces(2);
+        }
+        currentOfferAmount = Prisma.Decimal.min(subtotal.sub(appliedOfferAmount), currentOfferAmount);
+        if (currentOfferAmount.greaterThan(0)) {
+          appliedOfferAmount = appliedOfferAmount.add(currentOfferAmount);
+        }
+      }
+    }
+
+    const total = Prisma.Decimal.max(
+      subtotal.sub(appliedDiscountAmount).sub(appliedOfferAmount),
+      new Prisma.Decimal(0)
+    );
+
     // 5. Atomic database transaction to place the booking order
     const placed = await this.db.$transaction(async (tx) => {
+      if (discountIdToIncrement !== null) {
+        await tx.discount.update({
+          where: { id: discountIdToIncrement },
+          data: { usedCount: { increment: 1 } }
+        });
+      }
+
       const order = await tx.order.create({
         data: {
           userId,
@@ -132,11 +242,12 @@ export class BookingOrderService {
           orderType: "BOOKING",
           subtotal,
           deliveryFee: new Prisma.Decimal(0),
-          total: subtotal,
+          total,
           paymentMethod: "COD",
           landmarkDescription: address.landmarkDescription,
           addressLabel: address.label,
           flatRoom: address.flatRoom,
+          appliedDiscountCode: discountIdToIncrement ? normalizedCode : null,
           items: {
             create: items.map((item) => {
               const v = variantMap.get(item.variantId)!;
@@ -340,4 +451,58 @@ export class BookingOrderService {
     this.orderEmitter?.emitStatusChanged(orderId, "CANCELLED");
     return cancelled;
   }
+
+  public async completeBooking(
+    storeId: string,
+    orderId: string,
+    ownerId: string
+  ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
+    const booking = await this.repository.findById(orderId);
+    if (!booking) {
+      throw new NotFoundError(`Booking order with ID ${orderId} not found.`);
+    }
+
+    if (booking.order.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to complete bookings for this store.");
+    }
+
+    if (booking.order.status !== "APPROVED") {
+      throw new ValidationError("Only bookings in APPROVED status can be completed.");
+    }
+
+    const completed = await this.db.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: "DELIVERED" }
+      });
+
+      await tx.bookingOrder.update({
+        where: { orderId },
+        data: {
+          approvalStatus: "COMPLETED"
+        }
+      });
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: "DELIVERED",
+          changedBy: `store-owner:${ownerId}`,
+          note: "Booking service completed"
+        }
+      });
+
+      return tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: {
+          items: true,
+          statusHistory: true
+        }
+      });
+    });
+
+    this.orderEmitter?.emitStatusChanged(orderId, "DELIVERED");
+    return completed;
+  }
 }
+

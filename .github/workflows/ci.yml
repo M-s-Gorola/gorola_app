@@ -171,6 +171,6 @@ jobs:
       # Executes the full Playwright E2E suite against a live dev server and API.
       # This validates the complete user journey from Login to Order Confirmation.
       - name: Run E2E tests
-        run: pnpm --filter @gorola/web test:e2e
+        run: pnpm --filter @gorola/web test:e2e --reporter=list
 
 

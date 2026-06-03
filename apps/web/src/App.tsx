@@ -23,7 +23,8 @@ export function App(): ReactElement {
 
   useEffect(() => {
     const { isSubdomainMode, subdomain } = resolveSubdomain(window.location.hostname);
-    if (subdomain === "store" || (!isSubdomainMode && window.location.pathname.startsWith("/store"))) {
+    const isBuyerStorePage = !isSubdomainMode && window.location.pathname.match(/^\/store\/store_/);
+    if (subdomain === "store" || (!isSubdomainMode && window.location.pathname.startsWith("/store") && !isBuyerStorePage)) {
       void bootstrapStoreOwnerAuthSession();
     } else {
       void bootstrapBuyerAuthSession();

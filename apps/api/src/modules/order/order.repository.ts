@@ -9,9 +9,19 @@ import {
 
 /** Shared include graph for reads + post-create hydrate. */
 export const orderRelationsInclude = {
-  items: { orderBy: { id: "asc" as const } },
+  items: {
+    orderBy: { id: "asc" as const },
+    include: {
+      productVariant: {
+        select: {
+          productId: true
+        }
+      }
+    }
+  },
   statusHistory: { orderBy: { changedAt: "asc" as const } },
-  store: { select: { id: true, name: true, phone: true } }
+  store: { select: { id: true, name: true, phone: true, storeType: true } },
+  bookingOrder: true
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -30,6 +40,7 @@ export type CreateOrderInput = {
   flatRoom?: string | null;
   deliveryNote?: string | null;
   scheduledFor?: Date | null;
+  appliedDiscountCode?: string | null;
   items: Array<{
     productVariantId: string;
     productName: string;
@@ -90,6 +101,7 @@ export class OrderRepository {
           flatRoom: input.flatRoom ?? null,
           deliveryNote: input.deliveryNote ?? null,
           scheduledFor: input.scheduledFor ?? null,
+          appliedDiscountCode: input.appliedDiscountCode ?? null,
           items: {
             create: input.items.map((item) => ({
               productVariantId: item.productVariantId,

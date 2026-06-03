@@ -21,15 +21,27 @@ test.describe('Home Page', () => {
     const pulseDot = page.locator('[data-testid="pulse-dot"]');
     await expect(pulseDot).toBeVisible();
 
-    // Assert category grid renders >= 3 cards (Groceries, Medical, Medical tests) each with a non-empty <img src>
+    // Assert section headers are visible
+    const instantDeliveryHeader = page.locator('h3:has-text("Instant Delivery")');
+    await expect(instantDeliveryHeader).toBeVisible();
+
+    const bookAServiceHeader = page.locator('h3:has-text("Book a Service")');
+    await expect(bookAServiceHeader).toBeVisible();
+
+    // Assert category grid renders exactly 5 cards (separated into Quick Commerce and Booking Commerce)
     const categoryCards = page.locator('[data-testid="category-card"]');
-    await expect(categoryCards).toHaveCount(3);
+    await expect(categoryCards).toHaveCount(5);
     
-    for (let i = 0; i < 3; i++) {
+    for (let i = 0; i < 5; i++) {
       const card = categoryCards.nth(i);
       const img = card.locator('img');
-      await expect(img).toBeVisible();
-      await expect(img).toHaveAttribute('src', /.+/);
+      if (await img.count() > 0) {
+        await expect(img).toBeVisible();
+        await expect(img).toHaveAttribute('src', /.+/);
+      } else {
+        const fallbackSymbol = card.locator('text=📦');
+        await expect(fallbackSymbol).toBeVisible();
+      }
     }
 
     // Assert advertisement carousel renders >= 1 slide ([data-testid="ad-slide"])

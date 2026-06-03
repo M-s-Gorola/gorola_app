@@ -6,6 +6,8 @@ import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
 import { CategoryRepository } from "../../../modules/catalog/category.repository.js";
 
 async function cleanCatalogIntegrationGraph(db: PrismaClient): Promise<void> {
+  await db.bookingOrder.deleteMany();
+  await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();

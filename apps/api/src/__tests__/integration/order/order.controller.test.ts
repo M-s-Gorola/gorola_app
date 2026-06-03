@@ -364,7 +364,7 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
       success: boolean;
     };
     expect(orderPayload.success).toBe(true);
-    expect(orderPayload.data.discount).toEqual({
+    expect(orderPayload.data.discount).toMatchObject({
       amount: "10.00",
       code: "SAVE10"
     });
@@ -442,11 +442,12 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     expect(getPayload.data.id).toBe(orderId);
     expect(getPayload.data.userId).toBe(userRow.id);
     expect(
-      (getPayload as { data: { store?: { id: string; name: string; phone: string } } }).data.store
+      (getPayload as { data: { store?: { id: string; name: string; phone: string; storeType: string } } }).data.store
     ).toEqual({
       id: store.id,
       name: "OC Store",
-      phone: "+911200000099"
+      phone: "+911200000099",
+      storeType: "QUICK_COMMERCE"
     });
 
     const persistedOrder = await db.order.findUniqueOrThrow({
@@ -475,6 +476,7 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
       }
     });
     await discountRepo.create({
+      storeId: store.id,
       code: "SAVE10",
       discountType: "FLAT",
       discountValue: 10,
@@ -515,7 +517,7 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     };
     expect(getPayload.success).toBe(true);
     expect(getPayload.data.discount.amount).toBe("10.00");
-    expect(getPayload.data.discount.code).toBeNull();
+    expect(getPayload.data.discount.code).toBe("SAVE10");
     expect(
       Number(getPayload.data.subtotal) + Number(getPayload.data.deliveryFee) - Number(getPayload.data.discount.amount)
     ).toBe(Number(getPayload.data.total));
@@ -639,4 +641,98 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     await server.close();
     delete process.env.GOROLA_TEST_OTP;
   });
+
+  it("verifies multi-offer and coupon stacking math and granular checkout response details", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    const { accessToken } = await getBuyerAccessToken(server, "+919988776099");
+
+    const addr = await db.address.create({
+      data: {
+        userId: userRow.id,
+        label: "Home",
+        landmarkDescription: "Near Clock Tower landmark area min ten"
+      }
+    });
+
+    // 1. FLAT offer of ₹20, min order ₹150
+    await db.offer.create({
+      data: {
+        storeId: store.id,
+        title: "FLAT 20 OFF",
+        description: "Flat 20 off",
+        discountType: "FLAT",
+        discountValue: "20",
+        minOrderAmount: "150",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        isActive: true
+      }
+    });
+
+    // 2. PERCENTAGE offer of 10% with maxDiscount cap of ₹15
+    await db.offer.create({
+      data: {
+        storeId: store.id,
+        title: "10% OFF max 15",
+        description: "10% off max 15",
+        discountType: "PERCENTAGE",
+        discountValue: "10",
+        minOrderAmount: null,
+        maxDiscount: "15",
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        isActive: true
+      }
+    });
+
+    // 3. Coupon code SAVE10 (FLAT ₹10)
+    await discountRepo.create({
+      code: "SAVE10",
+      discountType: "FLAT",
+      discountValue: 10,
+      endsAt: new Date(Date.now() + 60 * 60 * 1000),
+      startsAt: new Date(Date.now() - 60 * 1000),
+      storeId: store.id
+    });
+
+    await cartRepo.addItem(userRow.id, variant.id, 2);
+
+    const orderRes = await server.inject({
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      },
+      method: "POST",
+      payload: {
+        addressId: addr.id,
+        addressMode: "saved",
+        discountCode: "SAVE10",
+        paymentMethod: "COD"
+      },
+      url: "/api/v1/orders"
+    });
+
+    await server.close();
+    delete process.env.GOROLA_TEST_OTP;
+
+    expect(orderRes.statusCode).toBe(200);
+    const body = orderRes.json();
+    expect(body.success).toBe(true);
+
+    // Verify granular response details
+    expect(body.data.discount).toMatchObject({
+      amount: "45.00",
+      code: "SAVE10",
+      appliedDiscountAmount: "10.00",
+      appliedOfferAmount: "35.00"
+    });
+
+    expect(body.data.subtotal).toBe("200");
+    expect(body.data.deliveryFee).toBe("30");
+    expect(body.data.total).toBe("185");
+  });
 });
+

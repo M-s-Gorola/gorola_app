@@ -76,6 +76,23 @@ export function createApiClient(options: CreateApiClientOptions) {
     withCredentials: true
   });
 
+  let isRefreshing = false;
+  let failedQueue: Array<{
+    resolve: (token: string) => void;
+    reject: (error: unknown) => void;
+  }> = [];
+
+  const processQueue = (error: unknown, token: string | null = null) => {
+    failedQueue.forEach((promise) => {
+      if (token) {
+        promise.resolve(token);
+      } else {
+        promise.reject(error);
+      }
+    });
+    failedQueue = [];
+  };
+
   instance.interceptors.request.use((config: InternalAxiosRequestConfig) => {
     const c = config as GorolaConfig;
     if (c._gorolaRefresh === true) {
@@ -89,74 +106,104 @@ export function createApiClient(options: CreateApiClientOptions) {
     return c;
   });
 
+  async function handle401(error: AxiosError): Promise<unknown> {
+    const original = error.config as GorolaConfig | undefined;
+    if (original?._gorolaRefresh === true) {
+      options.clearSession();
+      return Promise.reject(error);
+    }
+    if (error.response?.status !== 401) {
+      return Promise.reject(error);
+    }
+    if (original === undefined) {
+      return Promise.reject(error);
+    }
+    if (original._gorolaRetry === true) {
+      options.clearSession();
+      return Promise.reject(error);
+    }
+
+    if (isRefreshing) {
+      return new Promise<string>((resolve, reject) => {
+        failedQueue.push({ resolve, reject });
+      })
+        .then((token) => {
+          const next: GorolaConfig = {
+            ...original,
+            _gorolaRetry: true
+          };
+          next.headers = next.headers || {};
+          next.headers.Authorization = `Bearer ${token}`;
+          return instance.request(next);
+        })
+        .catch((err) => {
+          return Promise.reject(err);
+        });
+    }
+
+    const refresh = options.getRefreshToken();
+    if (refresh === null || refresh.length === 0) {
+      if (options.getAccessToken() !== null) {
+        options.clearSession();
+      }
+      return Promise.reject(error);
+    }
+
+    isRefreshing = true;
+
+    const role = useAuthStore.getState().role;
+    const refreshPath = role === "STORE_OWNER"
+      ? "/api/v1/auth/store-owner/refresh"
+      : BUYER_REFRESH_PATH;
+
+    try {
+      const res = await instance.post<unknown>(refreshPath, { refreshToken: refresh }, {
+        _gorolaRefresh: true
+      } as InternalAxiosRequestConfig & { _gorolaRefresh?: true });
+      
+      let nextAccessToken = "";
+      if (role === "STORE_OWNER") {
+        const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
+        if (!body || body.success !== true || !body.data?.accessToken || !body.data?.refreshToken) {
+          throw new Error("Invalid token refresh payload");
+        }
+        options.setTokens(body.data);
+        nextAccessToken = body.data.accessToken;
+      } else {
+        const tokens = parseRefreshEnvelope(res.data);
+        options.setTokens(tokens);
+        nextAccessToken = tokens.accessToken;
+      }
+
+      isRefreshing = false;
+      processQueue(null, nextAccessToken);
+
+      const next: GorolaConfig = {
+        ...original,
+        _gorolaRetry: true
+      };
+      next.headers = next.headers || {};
+      next.headers.Authorization = `Bearer ${nextAccessToken}`;
+      return instance.request(next);
+    } catch (err) {
+      isRefreshing = false;
+      processQueue(err, null);
+      options.clearSession();
+      return Promise.reject(err);
+    }
+  }
+
   instance.interceptors.response.use(
     (r) => r,
     async (err: unknown) => {
       if (!isAxiosError(err)) {
         return Promise.reject(err);
       }
-      return handle401(err, options, instance);
+      return handle401(err);
     }
   );
 
   return instance;
-}
-
-async function handle401(
-  error: AxiosError,
-  options: CreateApiClientOptions,
-  instance: ReturnType<typeof axios.create>
-): Promise<unknown> {
-  const original = error.config as GorolaConfig | undefined;
-  if (original?._gorolaRefresh === true) {
-    options.clearSession();
-    return Promise.reject(error);
-  }
-  if (error.response?.status !== 401) {
-    return Promise.reject(error);
-  }
-  if (original === undefined) {
-    return Promise.reject(error);
-  }
-  if (original._gorolaRetry === true) {
-    options.clearSession();
-    return Promise.reject(error);
-  }
-  const refresh = options.getRefreshToken();
-  if (refresh === null || refresh.length === 0) {
-    options.clearSession();
-    return Promise.reject(error);
-  }
-
-  const role = useAuthStore.getState().role;
-  const refreshPath = role === "STORE_OWNER"
-    ? "/api/v1/auth/store-owner/refresh"
-    : BUYER_REFRESH_PATH;
-
-  try {
-    const res = await instance.post<unknown>(refreshPath, { refreshToken: refresh }, {
-      _gorolaRefresh: true
-    } as InternalAxiosRequestConfig & { _gorolaRefresh?: true });
-    
-    if (role === "STORE_OWNER") {
-      const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
-      if (!body || body.success !== true || !body.data?.accessToken || !body.data?.refreshToken) {
-        throw new Error("Invalid token refresh payload");
-      }
-      options.setTokens(body.data);
-    } else {
-      const tokens = parseRefreshEnvelope(res.data);
-      options.setTokens(tokens);
-    }
-  } catch {
-    options.clearSession();
-    return Promise.reject(error);
-  }
-  const next: GorolaConfig = {
-    ...original,
-    _gorolaRetry: true
-  };
-  return instance.request(next);
 }
 
 /**

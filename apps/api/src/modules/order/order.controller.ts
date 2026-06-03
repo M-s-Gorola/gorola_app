@@ -36,19 +36,26 @@ function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): Succ
 
 function serializeOrderResponse(
   order: OrderWithRelations,
-  discount: { amount: string; code: string | null }
+  discount: {
+    amount: string;
+    code: string | null;
+    appliedDiscountAmount?: string;
+    appliedOfferAmount?: string;
+  }
 ): Record<string, unknown> {
   return {
     createdAt: order.createdAt.toISOString(),
     deliveryFee: order.deliveryFee.toString(),
     deliveryNote: order.deliveryNote,
     id: order.id,
+    orderType: order.orderType,
     items: order.items.map((item) => ({
       id: item.id,
       orderId: item.orderId,
       price: item.price.toString(),
       productName: item.productName,
       productVariantId: item.productVariantId,
+      productId: item.productVariant?.productId ?? "",
       quantity: item.quantity,
       variantLabel: item.variantLabel
     })),
@@ -58,7 +65,12 @@ function serializeOrderResponse(
     paymentMethod: order.paymentMethod,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
     status: order.status,
-    discount,
+    discount: {
+      amount: discount.amount,
+      code: discount.code,
+      appliedDiscountAmount: discount.appliedDiscountAmount ?? discount.amount,
+      appliedOfferAmount: discount.appliedOfferAmount ?? "0.00"
+    },
     statusHistory: order.statusHistory.map((h) => ({
       changedAt: h.changedAt.toISOString(),
       changedBy: h.changedBy,
@@ -70,7 +82,8 @@ function serializeOrderResponse(
     store: {
       id: order.store.id,
       name: order.store.name,
-      phone: order.store.phone
+      phone: order.store.phone,
+      storeType: order.store.storeType
     },
     storeId: order.storeId,
     subtotal: order.subtotal.toString(),
@@ -78,7 +91,17 @@ function serializeOrderResponse(
     updatedAt: order.updatedAt.toISOString(),
     userId: order.userId,
     rating: order.rating,
-    ratingComment: order.ratingComment
+    ratingComment: order.ratingComment,
+    bookingOrder: order.bookingOrder
+      ? {
+          id: order.bookingOrder.id,
+          scheduledDate: order.bookingOrder.scheduledDate.toISOString(),
+          timeslot: order.bookingOrder.timeslot,
+          requiresFasting: order.bookingOrder.requiresFasting,
+          approvalStatus: order.bookingOrder.approvalStatus,
+          rejectionReason: order.bookingOrder.rejectionReason
+        }
+      : null
   };
 }
 
@@ -144,8 +167,12 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         request,
         reply,
         serializeOrderResponse(placed.order, {
-          amount: placed.appliedDiscountAmount,
-          code: placed.appliedDiscountCode
+          amount: (
+            Number(placed.appliedDiscountAmount) + Number(placed.appliedOfferAmount)
+          ).toFixed(2),
+          code: placed.appliedDiscountCode,
+          appliedDiscountAmount: placed.appliedDiscountAmount,
+          appliedOfferAmount: placed.appliedOfferAmount
         })
       );
 
@@ -169,7 +196,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       const orders = await deps.orders.findByUserId(buyerId);
       return success(request, reply, {
         orders: orders.map((o) =>
-          serializeOrderResponse(o, { amount: inferDiscountAmount(o), code: null })
+          serializeOrderResponse(o, { amount: inferDiscountAmount(o), code: o.appliedDiscountCode })
         )
       });
     }
@@ -193,7 +220,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         reply,
         serializeOrderResponse(order, {
           amount: inferDiscountAmount(order),
-          code: null
+          code: order.appliedDiscountCode
         })
       );
     }
@@ -269,6 +296,15 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         });
       }
 
+      if (order.rating !== null) {
+        return reply.status(400).send({
+          error: {
+            code: "BAD_REQUEST",
+            message: "Order has already been rated"
+          }
+        });
+      }
+
       const updated = await deps.orders.updateRating(
         params.id,
         body.rating ?? null,
@@ -278,7 +314,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       return success(
         request,
         reply,
-        serializeOrderResponse(updated, { amount: inferDiscountAmount(updated), code: null })
+        serializeOrderResponse(updated, { amount: inferDiscountAmount(updated), code: updated.appliedDiscountCode })
       );
     }
   );

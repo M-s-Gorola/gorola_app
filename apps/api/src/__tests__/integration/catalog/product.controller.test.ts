@@ -304,6 +304,7 @@ describe("Product controller", () => {
           id: storeOne.id,
           name: "Peak Mart",
           phone: "+919111111111",
+          storeType: "QUICK_COMMERCE",
         },
         variants: expect.arrayContaining([
           expect.objectContaining({
@@ -335,6 +336,69 @@ describe("Product controller", () => {
       isLowStock: expect.any(Boolean),
       lowStockThreshold: expect.any(Number)
     });
+  });
+
+  it("GET /api/v1/products returns storeType on each item", async () => {
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes,
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/v1/products?limit=2",
+    });
+
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.data.items[0]).toMatchObject({
+      storeType: "QUICK_COMMERCE",
+    });
+  });
+
+  // Regression test: QUICK_COMMERCE variants with isAvailableForBooking:false
+  // must NOT be hidden from the buyer catalog. isAvailableForBooking gates
+  // booking-slot eligibility only — it must never filter catalog visibility.
+  // Bug: productListInclude had `isAvailableForBooking: true` which silently
+  // dropped products whose variants were toggled to false via the store UI.
+  it("GET /api/v1/products still shows QUICK_COMMERCE product when variant has isAvailableForBooking:false", async () => {
+    const cola = await db.product.findFirstOrThrow({ where: { name: "Apple" } });
+    // Forcibly set isAvailableForBooking to false on ALL variants of this product
+    await db.productVariant.updateMany({
+      where: { productId: cola.id },
+      data: { isAvailableForBooking: false }
+    });
+
+    const server = createServer({ disableRedis: true, registerRoutes: registerAppRoutes });
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/products?storeId=${storeOne.id}&search=apple`,
+    });
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { data: { items: Array<{ name: string }> } };
+    // Product must still appear — isAvailableForBooking must not gate catalog visibility
+    expect(body.data.items.some((item) => item.name === "Apple")).toBe(true);
+  });
+
+  it("GET /api/v1/products/:id still returns variants when isAvailableForBooking:false on QUICK_COMMERCE", async () => {
+    const apple = await db.product.findFirstOrThrow({ where: { name: "Apple" } });
+    await db.productVariant.updateMany({
+      where: { productId: apple.id },
+      data: { isAvailableForBooking: false }
+    });
+
+    const server = createServer({ disableRedis: true, registerRoutes: registerAppRoutes });
+    const response = await server.inject({ method: "GET", url: `/api/v1/products/${apple.id}` });
+    await server.close();
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json() as { data: { variants: unknown[] } };
+    // Variants must still be present — isAvailableForBooking must not filter catalog detail
+    expect(body.data.variants.length).toBeGreaterThan(0);
   });
 
   it("GET /api/v1/products/:id returns 404 when product does not exist", async () => {

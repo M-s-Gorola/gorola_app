@@ -7,6 +7,7 @@ import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 
+import type { PrismaClient } from "@prisma/client";
 import { type CartWithItems, CartRepository } from "./cart.repository.js";
 
 type SuccessEnvelope<T> = {
@@ -57,6 +58,15 @@ type SerializedCartItem = {
   unitPrice: string;
 };
 
+type SerializedActiveOffer = {
+  id: string;
+  title: string;
+  discountType: "PERCENTAGE" | "FLAT";
+  discountValue: number;
+  minOrderAmount: number | null;
+  maxDiscount: number | null;
+};
+
 type SerializedBuyerCart =
   | {
       createdAt: string;
@@ -64,10 +74,16 @@ type SerializedBuyerCart =
       items: SerializedCartItem[];
       updatedAt: string;
       userId: string;
+      activeOffer?: SerializedActiveOffer | null;
+      activeOffers?: SerializedActiveOffer[];
+      storeId?: string | null;
     }
   | {
       items: [];
       userId: string;
+      activeOffer?: null;
+      activeOffers?: [];
+      storeId?: null;
     };
 
 function toIso(d: Date): string {
@@ -92,16 +108,53 @@ function serializeCartItem(
   };
 }
 
-function serializeBuyerCart(cart: CartWithItems | { items: []; userId: string }): SerializedBuyerCart {
-  if (!("id" in cart)) {
-    return { items: [], userId: cart.userId };
+async function getActiveOffersForCart(
+  db: PrismaClient,
+  cart: CartWithItems | null
+): Promise<SerializedActiveOffer[]> {
+  if (!cart || cart.items.length === 0) {
+    return [];
   }
+  const storeId = cart.items[0]?.productVariant.product.storeId;
+  if (!storeId) {
+    return [];
+  }
+  const now = new Date();
+  const offers = await db.offer.findMany({
+    where: {
+      storeId,
+      isActive: true,
+      startsAt: { lte: now },
+      endsAt: { gte: now }
+    }
+  });
+  return offers.map((offer) => ({
+    id: offer.id,
+    title: offer.title,
+    discountType: offer.discountType,
+    discountValue: Number(offer.discountValue),
+    minOrderAmount: offer.minOrderAmount === null ? null : Number(offer.minOrderAmount),
+    maxDiscount: offer.maxDiscount === null ? null : Number(offer.maxDiscount)
+  }));
+}
+
+function serializeBuyerCart(
+  cart: CartWithItems | { items: []; userId: string },
+  activeOffers: SerializedActiveOffer[] = []
+): SerializedBuyerCart {
+  if (!("id" in cart)) {
+    return { items: [], userId: cart.userId, activeOffer: null, activeOffers: [], storeId: null };
+  }
+  const storeId = cart.items[0]?.productVariant.product.storeId ?? null;
   return {
     createdAt: toIso(cart.createdAt),
     id: cart.id,
     items: cart.items.map(serializeCartItem),
     updatedAt: toIso(cart.updatedAt),
-    userId: cart.userId
+    userId: cart.userId,
+    activeOffer: activeOffers[0] ?? null,
+    activeOffers,
+    storeId
   };
 }
 
@@ -118,10 +171,11 @@ export function registerCartRoutes(
       throw new ValidationError("Buyer subject missing from auth context");
     }
     const cart = await cartRepo.findByUserId(buyerId);
+    const activeOffers = cart === null ? [] : await getActiveOffersForCart(getPrismaClient(), cart);
     return success(
       request,
       reply,
-      cart === null ? serializeBuyerCart({ items: [], userId: buyerId }) : serializeBuyerCart(cart)
+      cart === null ? serializeBuyerCart({ items: [], userId: buyerId }) : serializeBuyerCart(cart, activeOffers)
     );
   });
 
@@ -135,7 +189,8 @@ export function registerCartRoutes(
       throw new ValidationError("Buyer subject missing from auth context");
     }
     const cart = await cartRepo.addItem(buyerId, parsed.data.productVariantId, parsed.data.quantity);
-    return success(request, reply, serializeBuyerCart(cart));
+    const activeOffers = await getActiveOffersForCart(getPrismaClient(), cart);
+    return success(request, reply, serializeBuyerCart(cart, activeOffers));
   });
 
   app.put("/api/v1/cart/items/:productVariantId", { preHandler: preCheckout }, async (request, reply) => {
@@ -152,7 +207,8 @@ export function registerCartRoutes(
       throw new ValidationError("Buyer subject missing from auth context");
     }
     const cart = await cartRepo.updateQty(buyerId, params.data.productVariantId, body.data.quantity);
-    return success(request, reply, serializeBuyerCart(cart));
+    const activeOffers = await getActiveOffersForCart(getPrismaClient(), cart);
+    return success(request, reply, serializeBuyerCart(cart, activeOffers));
   });
 
   app.delete("/api/v1/cart/items/:productVariantId", { preHandler: preCheckout }, async (request, reply) => {
@@ -167,7 +223,8 @@ export function registerCartRoutes(
       throw new ValidationError("Buyer subject missing from auth context");
     }
     const cart = await cartRepo.removeItem(buyerId, params.data.productVariantId);
-    return success(request, reply, serializeBuyerCart(cart));
+    const activeOffers = await getActiveOffersForCart(getPrismaClient(), cart);
+    return success(request, reply, serializeBuyerCart(cart, activeOffers));
   });
 
   app.delete("/api/v1/cart", { preHandler: preCheckout }, async (request, reply) => {
@@ -176,6 +233,7 @@ export function registerCartRoutes(
       throw new ValidationError("Buyer subject missing from auth context");
     }
     const cart = await cartRepo.clearCart(buyerId);
-    return success(request, reply, serializeBuyerCart(cart));
+    const activeOffers = await getActiveOffersForCart(getPrismaClient(), cart);
+    return success(request, reply, serializeBuyerCart(cart, activeOffers));
   });
 }

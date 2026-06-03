@@ -6,24 +6,28 @@ GoRola is a premium quick-commerce platform for Mussoorie, India. This repositor
 
 - **Phase 1 (NFR Foundation)**: ✅ Completed.
 - **Phase 2 (Buyer Web Experience)**: ✅ Completed.
-  - Full E2E stability achieved (34/34 passing).
+  - Full E2E stability achieved.
   - Hardened full-stack quality gate.
-- **Phase 3 (Store Owner Foundation)**: 🕒 Next.
+- **Phase 7 (Booking Commerce)**: ✅ Completed.
+  - Hybrid Quick & Booking Commerce engines unified.
+  - Automated morning/afternoon appointment slots, fasting requirements, lead days, and real-time dashboard status tracking.
+- **Phase 3 & 4 (Store Owner & Admin Panel)**: 🕒 Next.
 
 ## Tech Stack
 
 - **Backend**: Fastify (Node.js), Prisma ORM, PostgreSQL 15, Redis 7, Pino (Logging)
-- **Frontend**: React 19, Vite, TypeScript, Tailwind CSS 4, GSAP/Lenis (Animations)
+- **Frontend**: React 18, Vite, TypeScript, Tailwind CSS 4, GSAP/Lenis (Animations)
 - **Tooling**: pnpm workspaces, ESLint 9, Prettier, TypeScript strict mode
-- **Testing**: Vitest (Unit & API Integration tests)
+- **Testing**: Vitest (Unit & API Integration tests), Playwright (E2E)
 
 ## Implemented API Domains (Repository Layer)
 
-- `user` & `auth` (OTP flow)
-- `store` & `store-owner`
+- `user` & `auth` (OTP flow with custom rate-limiting and device verification)
+- `store` & `store-owner` (real-time WebSocket KPIs & Order status dashboards)
 - `admin`
-- `catalog` (categories, products, variants)
-- `cart` & `order`
+- `catalog` (categories, subcategories, products, variants)
+- `cart` & `order` (Quick Commerce checkout)
+- `booking` & `BookingOrder` (appointment scheduling, lead-days picker, fasting validations)
 - `address` & `delivery` (stub)
 - `promotion` (ads, offers, discounts)
 - `feature-flag` & `audit`
@@ -45,7 +49,8 @@ GoRola_app/
 ├── railway.toml            # Railway configuration (API)
 ├── .env.example            # Environment variables template
 ├── package.json            # Root workspace scripts
-└── pnpm-workspace.yaml     # pnpm workspace definition
+├── pnpm-workspace.yaml     # pnpm workspace definition
+└── CONTEXT/                # Architecture design maps & rules specs
 ```
 
 ## Local Setup & Seeding
@@ -91,7 +96,7 @@ This command runs the **exact** same sequence as the GitHub Actions CI pipeline:
 5. **Typechecking**: Full-stack TypeScript validation.
 6. **Build**: Verifies the production bundle.
 7. **Unit/Integration Tests**: 500+ Vitest tests.
-8. **E2E Tests**: 34 Playwright user-journey flows.
+8. **E2E Tests**: 48 Playwright user-journey flows (covering quick commerce & booking engines across multiple viewports).
 
 ## Root Workspace Commands
 
@@ -114,6 +119,16 @@ pnpm build        # Build all packages
 pnpm db:local:bootstrap   # Clean and seed local development DB
 pnpm db:test:prepare      # Clean and seed test DB (used for E2E)
 ```
+
+## ⚠️ Important E2E Development Guidelines
+
+To prevent test flakiness and **accidental contamination of your development database (`gorola_dev`)**, adhere to the following rules when running E2E tests locally:
+
+1. **Stop active development servers**: Always stop any running local development servers (Vite Frontend client on port `5180` and Dev Backend API on port `3001`) before triggering E2E tests (`pnpm test:e2e` or `pnpm ci:quality`). 
+   - **Why?** Playwright is configured to reuse the existing frontend server running on port `5180` (Vite Frontend) if active. Since standard dev frontend servers proxy requests to the dev API (port `3001` connected to the `gorola_dev` database), reusing them causes Playwright to run tests against your active development database, polluting data and failing tests. Stopping the local servers forces Playwright to boot a clean Vite frontend server instance with the E2E proxy target configured to point to the isolated E2E Test Backend API (port `3002` connected to the `gorola_test` database).
+2. **Do NOT interact with the application manually during E2E runs**: Avoid clicking around the app on `localhost:5180` (the frontend) or any mapped subdomains while the test suite is running in the background. Manual UI interaction collides with automated test scripts, leading to state race conditions and test failures.
+
+For more details on E2E port mapping and proxy rules, refer to [e2e_environment_port_isolation.md](./ISSUES%20GUIDE/e2e_environment_port_isolation.md).
 
 ---
 

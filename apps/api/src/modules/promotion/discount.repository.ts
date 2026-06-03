@@ -2,7 +2,7 @@ import { NotFoundError } from "@gorola/shared";
 import { type Discount, Prisma, type PrismaClient } from "@prisma/client";
 
 export type CreateDiscountInput = {
-  storeId?: string | null;
+  storeId: string;
   code: string;
   discountType: "PERCENTAGE" | "FLAT";
   discountValue: string | number;
@@ -31,9 +31,14 @@ function toDecimal(value: string | number | null | undefined): Prisma.Decimal | 
 export class DiscountRepository {
   public constructor(private readonly db: PrismaClient) {}
 
-  public async findActiveByCode(code: string, now: Date = new Date()): Promise<Discount | null> {
+  public async findActiveByCode(
+    code: string,
+    storeId: string,
+    now: Date = new Date()
+  ): Promise<Discount | null> {
     return this.db.discount.findFirst({
       where: {
+        storeId,
         code,
         isActive: true,
         startsAt: { lte: now },
@@ -46,7 +51,7 @@ export class DiscountRepository {
     try {
       return await this.db.discount.create({
         data: {
-          storeId: input.storeId ?? null,
+          storeId: input.storeId,
           code: input.code,
           discountType: input.discountType,
           discountValue: toDecimal(input.discountValue)!,

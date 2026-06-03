@@ -10,10 +10,10 @@
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",
     "test": "pnpm -r test",
-    "test:e2e": "pnpm --filter @gorola/web test:e2e",
+    "test:e2e": "pnpm --filter @gorola/web test:e2e --reporter=list",
     "build": "pnpm -r build",
     "security:audit": "pnpm audit --audit-level=high",
-    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm db:test:prepare && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm build && pnpm test && pnpm --filter @gorola/web test:e2e",
+    "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm db:test:prepare && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm build && pnpm test && pnpm --filter @gorola/web test:e2e --reporter=list",
     "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
     "db:test:prepare": "pnpm --filter @gorola/api prisma:bootstrap:test",
     "db:local:bootstrap": "pnpm --filter @gorola/api prisma:bootstrap:local",
@@ -45,7 +45,11 @@
       "protobufjs": "^7.5.6",
       "@protobufjs/utf8": "^1.1.1",
       "minimatch@10>brace-expansion": "^5.0.6",
-      "ws": "^8.20.1"
+      "ws": "^8.20.1",
+      "qs": "^6.15.2",
+      "axios": "^1.16.0",
+      "vitest": "^4.1.0",
+      "zod": "^4.3.6"
     }
   },
   "_pnpm_overrides_comments": {
@@ -57,6 +61,10 @@
     "protobufjs": "Overridden due to high security vulnerability (DoS/recursion) in <=7.5.5 and <=8.0.1",
     "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0",
     "minimatch@10>brace-expansion": "Overridden due to moderate security vulnerability (DoS) in <5.0.6",
-    "ws": "Overridden due to moderate security vulnerability (uninitialized memory leak) in <8.20.1"
+    "ws": "Overridden due to moderate security vulnerability (uninitialized memory leak) in <8.20.1",
+    "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.1",
+    "axios": "Overridden due to high security vulnerabilities (NO_PROXY bypass CVE-2025-62718, MitM via prototype pollution) in <1.16.0",
+    "vitest": "Overridden due to critical security vulnerability (arbitrary file read/execution in Vitest UI server) in <4.1.0",
+    "zod": "Overridden to ensure single Zod version across workspace and resolve react-hook-form type mismatches in hoisted linker mode"
   }
 }

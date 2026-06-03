@@ -1190,6 +1190,221 @@ Do not introduce a new `sku` database column or run a database schema migration.
 **Alternatives Considered:**
 1. **Prisma Schema Migration (Option A)**: Add `sku String?` to `ProductVariant` and run `prisma migrate dev`. Rejected as it introduces unnecessary database complexity when variant labels are already customer-facing unique identifiers under a product.
 
+---
 
+## [DECISION-040] Variant Active/Inactive Toggle for Soft-Deletes to Prevent Label Conflicts
+
+**Date:** 2026-05-21
+**Status:** Accepted
+
+**Context:**
+Phase 3.4.1 implements deactivating (soft-deleting) active variants and adding new variants in product Edit Mode. 
+
+In relational database systems, executing a hard SQL deletion (`DELETE FROM "ProductVariant"`) is strongly prohibited once a variant is linked to historical transactions. Past buyer orders contain relation fields (`productVariantId`) pointing directly to these variants. A hard deletion would violate SQL foreign key constraints, throw database errors, or completely orphan/crash past customer invoices and analytics dashboards.
+
+Therefore, we must use a **Soft Delete** mechanism. However, if a merchant soft-deletes a variant (e.g. by setting `isDeleted: true` or completely deleting the row) and later wants to recreate it, it poses a major constraint conflict under [DECISION-039] (unique variant label constraint). Since the soft-deleted variant still exists in the database, attempting to recreate a variant with the exact same label (e.g. `"500ml"`) would trigger a `409 Conflict` duplicate label validation error.
+
+**Decision:**
+Implement an **Active/Inactive Toggle** switch in the UI for pre-existing variants instead of a hard deletion button. Toggling a variant to inactive sets `isActive: false` on the backend, which:
+1. Greys out the variant card in the merchant form, signaling that it is deactivated.
+2. Automatically filters it out from the buyer-facing product listings and storefront search.
+3. Allows the merchant to reactivate it instantly with a single toggle, preventing duplicate variant label creation conflicts and keeping the database clean.
+
+**Rationale:**
+- **Prevents Referential Integrity Violations:** Because the product or variant is never physically deleted (`DELETE`) from the database, all historical purchases, order items, invoice files, and store performance reports remain fully linked and completely safe from SQL constraint crashes.
+- **Zero Constraint Conflicts:** Avoids unique-label validation issues since the merchant simply reactivates the existing row rather than trying to insert a new row with a conflicting label.
+- **Superior User Experience:** Merchants can temporarily suspend a size or flavor (e.g., "Out of Stock" or "Seasonal") and reactivate it later with one click without re-entering standard prices, units, and details.
+- **Refined Security:** Keeps past transaction logs completely intact.
+
+**Tradeoffs:**
+- Adds toggling logic in the UI and a visual "greyed out" state, which is easily achieved with styling utilities.
+
+---
+
+## [DECISION-041] Product Price/Name Modification Auditing via OrderItem Textual Snapshots
+
+**Date:** 2026-05-21
+**Status:** Accepted
+
+**Context:**
+When a merchant modifies product properties (such as changing the product name or the image URL) or changes individual variant price points, there is a risk that past order historical displays (receipts, checkout records, user profiles) will display the updated information, breaking transaction auditing. We need to decide if updating these details requires versioned schema models or snapshot captures.
+
+**Decision:**
+Rely on **OrderItem Textual Snapshots** already built into the database schema (`schema.prisma`):
+1. **Snapshots:** The `OrderItem` table stores plain-text snapshots of transaction details (`productName` and `variantLabel`) along with the specific historical purchase `price` at checkout.
+2. **Display:** Past receipts, invoice details, and order history pages render from these static snapshot fields, guaranteeing 100% correct financial and transaction audit trails.
+3. **Links:** Historical receipt items link to the live, current product page via their relational `productVariantId` foreign key. If a buyer clicks the historical order item, they navigate to the updated product page showing the new name and image.
+
+**Rationale:**
+- **Industry Standard:** This is the gold standard for e-commerce design—receipts preserve static transactional truth, while details page navigation points to the current active catalog.
+- **Zero Database Overhead:** No extra versioning schemas or event-sourcing records are needed because the schema already has snapshot columns built into `OrderItem`.
+
+---
+
+## [DECISION-042] Universal Soft-Delete Toggles for Catalog Entities
+
+**Date:** 2026-05-21
+**Status:** Accepted
+
+**Context:**
+Following [DECISION-040], we identified that destructive hard-deletions of database records lead to critical database foreign key constraint violations and break historical transactional logs (orders, analytics). To prevent this, we use Soft Deletes. However, if a user physically deletes a record and later wants to create an identical entity (e.g. recreating a product with the same name, or a subcategory with the same name), it causes constraint conflicts with unique name validations. 
+
+**Decision:**
+Standardize on the **Active/Inactive Toggle (Soft-Delete Toggle)** pattern for all catalog-related entities across both the Store Owner Panel (products) and Admin Panel (categories, subcategories). Instead of presenting a destructive "Delete" action:
+1. **Product Level:** Product actions will feature an "Active / Inactive" toggle. Deactivating a product will set its status to inactive, greying it out in the store list and hiding it completely from the buyer storefront.
+2. **Category & Subcategory Level:** In the Admin Panel, categories and subcategories will be managed via active/inactive toggles. Deactivating a category or subcategory will hide it and its child products from storefront discovery, while maintaining pristine relationship mappings for existing past orders.
+3. **UX Behavior:** Inactive items will visually render as greyed-out (`opacity-60`) in administrative dashboards, allowing instant toggling back to active without requiring redundant object recreation.
+
+**Rationale:**
+- **Perfect consistency:** Unifies the catalog lifecycle UI/UX across products, variants, categories, and subcategories.
+- **Protects transactional integrity:** Prevents the database from throwing SQL violations due to cascade rules on active foreign keys in orders.
+- **Prevents redundant data entry:** Users can easily close/open stores or categories temporarily (e.g. seasonally) and reactivate them with one click without recreating all nested objects.
+
+**Tradeoffs:**
+- Requires implementing active/inactive styling and toggle switch states across multiple lists, which is easily managed.
+
+---
+
+## [DECISION-043] Pay-on-Service Default for Booking Commerce
+
+**Date:** 2026-05-23
+**Status:** Accepted
+
+**Context:**
+Quick Commerce orders (groceries, medicines, electronics) allow buyers to select their payment method (e.g., Credit Card, Online Payment, or Cash on Delivery) immediately at checkout. However, Booking Commerce (medical diagnostic tests, doorstep device repairs) is fundamentally different: appointments are scheduled for future timeslots and require manual merchant approval first. We need to document why the system defaults booking flows to Cash on Delivery (COD) / Pay-on-Service and maps this cleanly in UI receipts.
+
+**Decision:**
+1. Default all checkout requests under `BOOKING_COMMERCE` strictly to the `COD` database state, bypassing up-front online payment choices at checkout.
+2. Render the checkout/confirmation payment label dynamically as **"Pay on Service"** (instead of retail jargon like "COD" or "Cash on Delivery") on buyer booking receipts.
+
+**Rationale:**
+- **Avoids Refund Gateway Overhead:** Bookings are *requests* that store owners can decline (e.g., if a technician is sick or a doctor is booked). Taking payments up-front would lead to massive financial losses on non-refundable payment gateway transaction fees (2-3%) and constant customer support tickets for failed/rejected appointments.
+- **Support for Price Adjustments:** Technical repairs frequently discover secondary issues on-site (e.g., an AC service discovering a leakage that requires a replacement valve). Pay-on-service allows the final invoice to be adjusted and settled directly at the doorstep based on actual services rendered.
+- **Industry Standard for On-Demand Services:** Matches the mental model of on-demand home services (e.g., Urban Company or local field services) where payment is processed only after successful job completion.
+
+**Tradeoffs:**
+- Increased risk of buyer "no-shows" since no deposit is taken. This is mitigated by giving store owners the phone numbers of buyers to confirm beforehand and allowing them to cancel/reschedule requests easily.
+
+---
+
+## [DECISION-044] Deterministic Test Seed Pathing & Category Segregation Strategy
+
+**Date:** 2026-05-23
+**Status:** Accepted
+
+**Context:**
+With the addition of Booking Commerce (Phase 7), storefront categories are split into two sections: "Instant Delivery" and "Book a Service". Currently, this grouping is achieved in the frontend `CategoryGrid.tsx` using a hardcoded array of category slugs (`["groceries", "medical", "electronics"]`). 
+Furthermore, Playwright E2E tests for Quick Commerce are written with hardcoded catalog paths (e.g. `/categories/groceries` or `/categories/groceries/rice-atta`). We need to document the architectural justification for these implementations and detail the long-term resolution strategy.
+
+**Decision:**
+1. **Testing Stability via Hardcoded Paths:** Retain hardcoded catalog paths in the Playwright E2E tests. Because the E2E suite runs against an isolated, predictable database initialized by the global test seed (`bootstrap-test-db.cjs`), these specific paths are guaranteed to exist, ensuring fast and deterministic test runs.
+2. **Transition from Hardcoded Slugs to Dynamic Enums (Phase 4.1):** The current client-side slug filtering in `CategoryGrid.tsx` is accepted only as a temporary, quick-to-ship POC. As part of **Phase 4.1 (Admin Catalog & Category Management)**, we will deprecate the hardcoded client-side array and introduce a structural database upgrade:
+   - Add a `commerceType` enum (`QUICK_COMMERCE` | `BOOKING_COMMERCE`) on the Prisma `Category` model.
+   - Update category management APIs to serialize `commerceType`.
+   - Update the buyer frontend (`CategoryGrid.tsx`) to dynamically partition categories into "Instant Delivery" and "Book a Service" sections based on the API response, eliminating all hardcoded frontend slug lists.
+
+**Rationale:**
+- **Zero Test Churn:** Keeps current E2E tests highly performant, robust, and readable without requiring runtime API discovery overhead inside simple browser test files.
+- **Perfect Scalability:** The database-driven discriminator guarantees that when new categories are created dynamically by admins, they automatically render in the correct visual container on the storefront with zero code modifications.
+- **Decoupled Architecture:** Defers schema additions until Phase 4, when the full admin category management dashboard and control systems are engineered.
+
+**Tradeoffs:**
+- E2E tests are coupled to the seed dataset's naming convention; any changes to the default test categories will require updating the corresponding test selectors (a standard trade-off in E2E automation).
+
+---
+
+## [DECISION-045] SPA History Stack Replacement (replace: true) for Checkout Confirmation Redirects
+
+**Date:** 2026-05-26
+**Status:** Accepted
+
+**Context:**
+In both Quick Commerce and Booking Commerce checkout/scheduling flows, once a user successfully creates an order or booking, they are redirected to a final receipt/confirmation page (e.g. `/orders/:id` or `/bookings/:id`). Standard browser navigation allows users to click the browser "Back" button on this receipt page, returning them to the `/checkout` or `/bookings/new` scheduling forms. If they submit the form again, it could lead to duplicate orders, server-side stock issues, and bad user experiences.
+
+**Decision:**
+Implement a mandatory **"History Stack Replacement"** pattern for all successful transaction page redirects. Instead of pushing the confirmation route onto the history stack, the navigation callback must replace the active checkout history entry using `replace: true`:
+1. **Quick Commerce (`CheckoutPage.tsx`)**:
+   `navigate(`/orders/${orderId}`, { replace: true });`
+2. **Booking Commerce (`BookingTimeslotPage.tsx`)**:
+   `navigate(`/bookings/${res.data.data.orderId}`, { replace: true });`
+
+Additionally, confirmation pages must display a clear, high-fidelity on-screen primary button (e.g., "Track Order in History" or "Go to Bookings Dashboard") that explicitly navigates users forward into their respective history panels.
+
+**Rationale:**
+- **Eliminates Double-Orders**: It physically prevents users from backing up into the checkout/scheduling views where they could resubmit the form.
+- **Natural Back Navigation**: When the user clicks the browser back button, the browser skips the checkout entry (since it was replaced) and takes them directly to the last page they visited before checkout (e.g., the store storefront or subcategory landing page). Since their cart has been cleared on placement, this is completely safe and logical.
+- **Zero Overhead**: This is a standard single-parameter change (`{ replace: true }`) in React Router, carrying absolutely no performance, database, or DOM-rendering footprint.
+- **No Trap Behavior**: Avoids fragile browser history hacks (`popstate` blocking) which Chrome and modern browsers block as malicious patterns.
+
+**Tradeoffs:**
+- The user cannot go back to review the exact checkout form inputs they submitted. This is mitigated because the order details card on the confirmation/receipt screen already displays a fully populated summary of their selected items, prices, scheduled slots, and address landmarks.
+
+**Alternatives Considered:**
+1. **History Popstate Interception**: Intercepting back-clicks on the confirmation page and forcing a redirect. Rejected due to browser security restrictions and high fragility across different device viewports.
+2. **Checkout State Preservation**: Leaving the history alone, but checking on checkout mount if the cart is empty, and automatically redirecting the user. Rejected because it allows a confusing flash of the checkout screen before the redirect occurs.
+
+---
+
+## [DECISION-046] Store-Scoped Discount Codes & Applied Code Persistence on Orders
+
+**Date:** 2026-05-28
+**Status:** Accepted
+
+**Context:**
+The original `Discount` model was designed with a globally unique `code` field (`code String @unique`) and a nullable `storeId` (`String?`). This was intended to allow both platform-wide and store-specific discount codes. Two problems emerged from this design:
+
+1. **Tenant-isolation bug:** Because the `code` column is globally unique, two independent merchants cannot both create a coupon named `SAVE10`. This is a hard database-level conflict that has no valid business justification — two separate stores' coupon namespaces should never interfere with each other.
+2. **Discount code name is lost after order placement:** When a buyer applies a coupon code (e.g., `SAVE10`) at checkout, the code string is validated and used to compute the discount amount. However, neither the `Order` nor `BookingOrder` record saves the code name — only the final calculated totals are persisted. This means all downstream UIs (order receipt, store-owner order detail modal, booking dashboard) have no way to retrieve which code was applied. They are forced to fall back to a generic `"Discount"` label in the collapsible discount breakdown dropdown, which is a data transparency failure for both buyers and store owners.
+
+**Decision:**
+Two schema changes are implemented together as a single atomic migration:
+
+1. **Make `storeId` required on `Discount`:** Remove the nullable `String?` and promote it to a required `String`. Every discount code must belong to exactly one store. Platform-wide discount codes are out of scope for this phase and will be revisited under Phase 4 (Admin Panel) if needed.
+
+2. **Replace the global unique constraint with a per-store composite unique:** Remove `code String @unique` and add `@@unique([storeId, code])`. This means a code is unique within a store's own namespace, but Store A and Store B are completely free to each have their own `SAVE10` without conflict.
+
+3. **Add `appliedDiscountCode String?` to the `Order` model:** This field is written exactly once — at the moment the order is placed — and is never modified. It stores the normalized (uppercased, trimmed) code string that was applied. It is `null` when no coupon code was used.
+
+4. **Expose `appliedDiscountCode` through all order and booking API serializers:** All endpoints that return order or booking data (`GET /api/v1/orders/:id`, `GET /api/v1/store/orders`, `GET /api/v1/store/bookings`, `GET /api/v1/bookings/:orderId`) must include this field in their response payload.
+
+5. **Update all frontend discount breakdown functions:** The `getAppliedDiscounts` helper in `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `OrderConfirmationPage.tsx`, and `BookingConfirmationPage.tsx` must use the persisted `appliedDiscountCode` field as the label for the coupon line item in the collapsible discount dropdown instead of the `"Discount"` fallback.
+
+**Rationale:**
+- **Correct tenant isolation:** Merchant A's coupon namespace must never conflict with Merchant B's. This is a fundamental multi-tenant data isolation requirement.
+- **Data transparency:** Buyers and store owners are entitled to see the exact coupon code name that was applied to an order. Displaying `"Discount"` is a UX failure that undermines trust in the discount system.
+- **Immutable audit trail:** Persisting the code name on the order creates a permanent, immutable financial record. Even if the discount code is later deactivated or deleted (soft), the order history correctly reflects what was applied at the time of purchase.
+- **Simplifies validation logic:** With `storeId` now always required, the conditional check `if (discount.storeId !== null && discount.storeId !== storeId)` simplifies to `if (discount.storeId !== storeId)`, removing a branch that previously allowed accidental platform-wide coupon application.
+
+**Tradeoffs:**
+- Existing discount records in the database with `storeId = null` (platform-wide) must be backfilled or removed before the migration can run. This is acceptable as no production data exists in this state.
+- The `appliedDiscountCode` column adds a small amount of storage per order row, which is negligible.
+
+**Alternatives Considered:**
+1. **Keep global uniqueness, enforce store-scoping only in the service layer:** Rejected. Service-layer-only enforcement is fragile — a future developer could bypass it. The database constraint is the correct place to enforce this invariant.
+2. **Store offer-to-order links in a junction table (`OrderAppliedOffer`):** Rejected for this phase. Offers are already reconstructed retroactively via the `getAppliedDiscounts` time-based matching logic, which works correctly. Only the coupon code name — which has no equivalent retroactive mechanism — needs to be persisted.
+
+---
+
+## [DECISION-047] Store-Specific Weather Mode Delivery Window Configuration & Booking Applicability
+
+**Date:** 2026-05-29
+**Status:** Accepted
+
+**Context:**
+High-altitude environments like Mussoorie experience severe and volatile inclement weather (dense fog, heavy monsoonal rain, winter snow, and landslides), which significantly slows down logistics and endangers rider safety. A system-wide `WEATHER_MODE_ACTIVE` state flag dynamically notifies buyers on the confirmation screen of general transit delays. However, different stores have varying logistics setups (e.g. self-delivery vs. unified couriers), diverse product classes (e.g. food delivery requiring instant arrival vs. bulk grocery packages), and varying booking styles. We need to document why we support store-specific weather delay configurations, why they are kept in Booking Commerce, and how they will be used.
+
+**Decision:**
+1. **Store-Specific Configuration:** Model a store-scoped config field `weatherModeDeliveryWindow` (saved as a string like `"30-45 min"`) that store owners can directly adjust via their Store Settings page (`StoreSettingsPage.tsx`).
+2. **Honest ETAs vs Fake Timers:** In alignment with the platform's core UX principle, we explicitly avoid calculating and displaying speculative, minute-by-minute countdown clocks on the buyer's order confirmation screen. Instead, we show a highly descriptive status warning banner and a live map pin (`OrderConfirmationPage.tsx`).
+3. **Application to Booking Commerce Stores:** Retain the weather mode delay configuration inside `BOOKING_COMMERCE` store settings as well. Just like standard food/grocery delivery, booking appointments (such as home lab tests or AC technician repairs) are not purely digital services; they represent **doorstep physical field visits** requiring field technicians to travel from the central store to the buyer's home. Mountain routes and transit pathways are identical for both delivery riders and field technicians, meaning both suffer from the exact same rain, snow, or fog transit disruptions. By maintaining the weather window configuration inside booking settings, the system enables managers to calculate expected travel adjustments and dynamically notify customers about delayed arrivals for their scheduled appointments.
+
+**Rationale:**
+- **Store Autonomy:** Standardizing a single platform-wide weather delay is physically impossible. A pharmacy with internal delivery staff can manage minor rain faster than a restaurant preparing fresh, hot meals. Store-specific inputs give merchants control over their own logistics expectations.
+- **Rider/Technician Uniformity:** In Phase 5 (Rider Interface) and Phase 7 (Booking Technician Mode), both delivery couriers and field visit technicians operate under the same JWT role (`RIDER`) and travel paths. Keeping the store settings entity schema fully unified avoids redundant database models, keeps the code base DRY, and ensures all future routing/booking dispatch systems can reuse the exact same travel delay calculation logic.
+- **Managing Appointment Expectations:** Rather than displaying generic timers, the system can leverage these structured inputs to shift booked timeslots (e.g. offsetting a scheduled `"09:00 - 11:00"` appointment by the store's configured `30-45 min` weather delay buffer) and auto-notify patients/buyers of the updated on-site visit window via text notifications.
+- **Roadmap Readiness:** Storing these parameters now prepares the backend for Phase 5's automated dispatch engine to dynamically adjust target delivery slots and send precise SMS updates to buyers when `isWeatherMode` is triggered.
+
+**Tradeoffs:**
+- Requires maintaining the settings inputs on the store settings page even for service/booking stores. This is a negligible UI footprint compared to the massive structural benefit of a clean, unified store settings entity model.
 
 

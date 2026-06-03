@@ -5,9 +5,68 @@ const prisma = new PrismaClient();
 async function main() {
   console.info("Seeding E2E test data...");
 
+  // Reset all StoreOwner 2FA states to ensure clean test-run environment
+  await prisma.storeOwner.updateMany({
+    data: {
+      totpEnabled: false,
+      totpSecret: null,
+    },
+  });
+
+  const store = await prisma.store.findFirst({
+    where: { id: "store_gorola_hillside_mart" },
+  });
+
+  if (!store) {
+    throw new Error("Store not found. Please run regular seed first.");
+  }
+
+  // Override prod_rice_1 name and variant details to align with E2E tests
+  await prisma.product.update({
+    where: { id: "prod_rice_1" },
+    data: { name: "Premium Basmati Rice" }
+  });
+
+  const variantRice = await prisma.productVariant.findFirst({
+    where: { productId: "prod_rice_1" }
+  });
+  if (variantRice) {
+    await prisma.productVariant.update({
+      where: { id: variantRice.id },
+      data: {
+        label: "1 kg",
+        unit: "1 kg",
+        price: 120.00
+      }
+    });
+  }
+
+  // Override prod_test_2 name and variant details to align with E2E-033 stacked discounts
+  await prisma.product.update({
+    where: { id: "prod_test_2" },
+    data: { name: "Complete Blood Count" }
+  });
+
+  const variantCBC = await prisma.productVariant.findFirst({
+    where: { productId: "prod_test_2" }
+  });
+  if (variantCBC) {
+    await prisma.productVariant.update({
+      where: { id: variantCBC.id },
+      data: {
+        price: 500.00
+      }
+    });
+  }
+
   // 1. Seed Discount Code
   await prisma.discount.upsert({
-    where: { code: "TESTDEAL10" },
+    where: {
+      storeId_code: {
+        storeId: store.id,
+        code: "TESTDEAL10",
+      },
+    },
     update: {
       isActive: true,
       discountValue: 10,
@@ -16,6 +75,7 @@ async function main() {
       endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30), // 30 days from now
     },
     create: {
+      storeId: store.id,
       code: "TESTDEAL10",
       discountType: DiscountType.PERCENTAGE,
       discountValue: 10,
@@ -27,7 +87,7 @@ async function main() {
   });
 
   // 2. Seed test users for E2E
-  const phones = ["+919876543210", "+919876543211", "+919876543212"];
+  const phones = ["+919876543210", "+919876543211", "+919876543212", "+919876543214"];
   const users = await Promise.all(phones.map(async (phone) => {
     return prisma.user.upsert({
       where: { phone },
@@ -45,14 +105,6 @@ async function main() {
   const user12 = users[2];
 
   // 3. Seed orders for the main order test user (9876543212)
-  const store = await prisma.store.findFirst({
-    where: { id: "store_gorola_hillside_mart" },
-  });
-
-  if (!store) {
-    throw new Error("Store not found. Please run regular seed first.");
-  }
-
   const variant = await prisma.productVariant.findFirst({
     where: { productId: "prod_rice_1" },
   });

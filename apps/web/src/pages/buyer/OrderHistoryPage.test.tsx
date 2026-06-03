@@ -257,4 +257,239 @@ describe("OrderHistoryPage", () => {
     // Cleanup
     resolvePut!({ data: { data: { id: "ok" } } });
   });
+
+  it("renders scheduled slot, date, and fasting warning correctly for booking orders", async () => {
+    apiGetSpy.mockResolvedValue({
+      data: {
+        data: {
+          orders: [
+            {
+              id: "booking_order_id",
+              store: { name: "Apollo Diagnostics", storeType: "BOOKING_COMMERCE" },
+              total: "450.00",
+              status: "PENDING_APPROVAL",
+              orderType: "BOOKING",
+              createdAt: "2026-05-25T10:00:00Z",
+              items: [
+                { id: "i1", productId: "p1", productVariantId: "v1", productName: "Thyroid Profile", quantity: 1, variantLabel: "Standard" }
+              ],
+              rating: null,
+              ratingComment: null,
+              bookingOrder: {
+                id: "bo1",
+                scheduledDate: "2026-05-28T00:00:00.000Z",
+                timeslot: "12:00-15:00",
+                requiresFasting: true,
+                approvalStatus: "PENDING_APPROVAL",
+                rejectionReason: null
+              }
+            }
+          ]
+        }
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    renderComponent();
+
+    expect(await screen.findByText("Apollo Diagnostics")).toBeInTheDocument();
+    expect(screen.getByText("Scheduled: May 28, 2026")).toBeInTheDocument();
+    expect(screen.getByText("Slot: 12:00-15:00")).toBeInTheDocument();
+    expect(screen.getByText("⚠️ Fasting Required (min 8-10 hours)")).toBeInTheDocument();
+  });
+
+  it("renders correct color-coded badge for booking order approval statuses", async () => {
+    apiGetSpy.mockResolvedValue({
+      data: {
+        data: {
+          orders: [
+            {
+              id: "bo_pending",
+              store: { name: "Diagnostic Hub", storeType: "BOOKING_COMMERCE" },
+              total: "100.00",
+              status: "PENDING_APPROVAL",
+              orderType: "BOOKING",
+              createdAt: "2026-05-25T10:00:00Z",
+              items: [],
+              rating: null,
+              ratingComment: null,
+              bookingOrder: {
+                id: "bo1",
+                scheduledDate: "2026-05-28T00:00:00.000Z",
+                timeslot: "12:00-15:00",
+                requiresFasting: false,
+                approvalStatus: "PENDING_APPROVAL",
+                rejectionReason: null
+              }
+            },
+            {
+              id: "bo_approved",
+              store: { name: "Diagnostic Hub 2", storeType: "BOOKING_COMMERCE" },
+              total: "200.00",
+              status: "APPROVED",
+              orderType: "BOOKING",
+              createdAt: "2026-05-25T11:00:00Z",
+              items: [],
+              rating: null,
+              ratingComment: null,
+              bookingOrder: {
+                id: "bo2",
+                scheduledDate: "2026-05-28T00:00:00.000Z",
+                timeslot: "12:00-15:00",
+                requiresFasting: false,
+                approvalStatus: "APPROVED",
+                rejectionReason: null
+              }
+            }
+          ]
+        }
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    renderComponent();
+
+    expect(await screen.findByText("Diagnostic Hub")).toBeInTheDocument();
+    expect(screen.getByText("Pending Approval")).toBeInTheDocument();
+    expect(screen.getByText("Approved")).toBeInTheDocument();
+  });
+
+  it("filters orders correctly using All, Instant Deliveries, and Booked Services tabs", async () => {
+    const user = userEvent.setup();
+    apiGetSpy.mockResolvedValue({
+      data: {
+        data: {
+          orders: [
+            {
+              id: "retail1",
+              store: { name: "Retail Store", storeType: "QUICK_COMMERCE" },
+              total: "120.00",
+              status: "DELIVERED",
+              orderType: "QUICK",
+              createdAt: "2026-05-01T10:00:00Z",
+              items: [],
+              rating: null,
+              ratingComment: null
+            },
+            {
+              id: "booking1",
+              store: { name: "Service Centre", storeType: "BOOKING_COMMERCE" },
+              total: "450.00",
+              status: "APPROVED",
+              orderType: "BOOKING",
+              createdAt: "2026-05-01T11:00:00Z",
+              items: [],
+              rating: null,
+              ratingComment: null,
+              bookingOrder: {
+                id: "bo1",
+                scheduledDate: "2026-05-28T00:00:00.000Z",
+                timeslot: "12:00-15:00",
+                requiresFasting: false,
+                approvalStatus: "APPROVED",
+                rejectionReason: null
+              }
+            }
+          ]
+        }
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    renderComponent();
+
+    // Default "All" tab shows both
+    expect(await screen.findByText("Retail Store")).toBeInTheDocument();
+    expect(screen.getByText("Service Centre")).toBeInTheDocument();
+
+    // Click "Instant Deliveries" tab
+    const instantTab = screen.getByRole("button", { name: /Instant Deliveries/i });
+    await user.click(instantTab);
+    expect(screen.getByText("Retail Store")).toBeInTheDocument();
+    expect(screen.queryByText("Service Centre")).not.toBeInTheDocument();
+
+    // Click "Booked Services" tab
+    const bookingTab = screen.getByRole("button", { name: /Booked Services/i });
+    await user.click(bookingTab);
+    expect(screen.queryByText("Retail Store")).not.toBeInTheDocument();
+    expect(screen.getByText("Service Centre")).toBeInTheDocument();
+  });
+
+  it("replaces Reorder button with Book Again and navigates to the booking new schedule flow", async () => {
+    const user = userEvent.setup();
+    apiGetSpy.mockResolvedValue({
+      data: {
+        data: {
+          orders: [
+            {
+              id: "booking_order_id",
+              store: { name: "Apollo Diagnostics", storeType: "BOOKING_COMMERCE" },
+              total: "450.00",
+              status: "PENDING_APPROVAL",
+              orderType: "BOOKING",
+              createdAt: "2026-05-25T10:00:00Z",
+              items: [
+                { id: "i1", productId: "p1", productVariantId: "v1", productName: "Thyroid Profile", quantity: 1, variantLabel: "Standard" }
+              ],
+              rating: null,
+              ratingComment: null,
+              bookingOrder: {
+                id: "bo1",
+                scheduledDate: "2026-05-28T00:00:00.000Z",
+                timeslot: "12:00-15:00",
+                requiresFasting: false,
+                approvalStatus: "PENDING_APPROVAL",
+                rejectionReason: null
+              }
+            }
+          ]
+        }
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    renderComponent();
+
+    expect(await screen.findByText("Apollo Diagnostics")).toBeInTheDocument();
+    
+    // Should NOT have "Reorder" button, but "Book Again" button
+    expect(screen.queryByRole("button", { name: /Reorder/i })).not.toBeInTheDocument();
+    
+    const bookAgainBtn = screen.getByRole("button", { name: /Book Again/i });
+    await user.click(bookAgainBtn);
+
+    expect(mockNavigate).toHaveBeenCalledWith("/bookings/new?productId=p1&variantId=v1");
+  });
+
+  it("displays read-only rating badge and hides active buttons for already-rated orders", async () => {
+    apiGetSpy.mockResolvedValue({
+      data: {
+        data: {
+          orders: [
+            {
+              id: "order-rated",
+              store: { name: "Test Store" },
+              total: "100.00",
+              status: "DELIVERED",
+              createdAt: "2026-05-01T10:00:00Z",
+              items: [],
+              rating: true,
+              ratingComment: "Awesome honey!"
+            }
+          ]
+        }
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    renderComponent();
+
+    expect(await screen.findByText("Test Store")).toBeInTheDocument();
+
+    expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText('"Awesome honey!"')).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Thumbs Down/i })).not.toBeInTheDocument();
+  });
 });

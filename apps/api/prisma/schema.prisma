@@ -94,6 +94,7 @@ model Store {
   storeType                 StoreType       @default(QUICK_COMMERCE)
   bookingLeadDays           Int             @default(1)
   isAcceptingBookings       Boolean         @default(true)
+  isAcceptingOrders         Boolean         @default(true)
   isDeleted                 Boolean         @default(false)
   createdAt                 DateTime        @default(now())
   updatedAt                 DateTime        @updatedAt
@@ -203,6 +204,7 @@ model ProductVariant {
   isInStock  Boolean     @default(true)
   unit       String
   isActive   Boolean     @default(true)
+  isAvailableForBooking Boolean @default(true)
   allowedTimeslots String[]
   requiresFasting  Boolean     @default(false)
   createdAt  DateTime    @default(now())
@@ -224,6 +226,8 @@ model StockMovement {
   quantity         Int
   stockQtyBefore   Int
   stockQtyAfter    Int
+  note             String?
+  reason           String?
   createdAt        DateTime          @default(now())
   productVariant   ProductVariant    @relation(fields: [productVariantId], references: [id], onDelete: Restrict)
   order            Order?            @relation(fields: [orderId], references: [id], onDelete: Cascade)
@@ -276,6 +280,7 @@ model Order {
   scheduledFor        DateTime?
   rating              Boolean?
   ratingComment       String?
+  appliedDiscountCode String?
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
@@ -374,8 +379,8 @@ model Offer {
 
 model Discount {
   id             String       @id @default(cuid())
-  storeId        String?
-  code           String       @unique
+  storeId        String
+  code           String
   discountType   DiscountType
   discountValue  Decimal      @db.Decimal(10, 2)
   usageLimit     Int?
@@ -386,8 +391,9 @@ model Discount {
   isActive       Boolean      @default(true)
   createdAt      DateTime     @default(now())
   updatedAt      DateTime     @updatedAt
-  store          Store?       @relation(fields: [storeId], references: [id], onDelete: SetNull)
+  store          Store        @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
+  @@unique([storeId, code])
   @@index([storeId, isActive])
   @@index([code, isActive])
   @@index([startsAt, endsAt])

@@ -53,8 +53,24 @@ interface BookingOrderWithRelations {
     subtotal: { toString: () => string };
     deliveryFee: { toString: () => string };
     total: { toString: () => string };
+    appliedDiscountCode: string | null;
     createdAt: Date;
     updatedAt: Date;
+    landmarkDescription: string;
+    flatRoom: string | null;
+    addressLabel: string | null;
+    rating: boolean | null;
+    ratingComment: string | null;
+    store: {
+      id: string;
+      name: string;
+      phone: string;
+      storeType: string;
+    };
+    user: {
+      phone: string;
+      name: string;
+    } | null;
     items: Array<{
       id: string;
       orderId: string;
@@ -75,18 +91,42 @@ interface BookingOrderWithRelations {
   };
 }
 
+function maskPhone(phone: string): string {
+  if (!phone) return "";
+  if (phone.length <= 4) return "****";
+  return "*".repeat(phone.length - 4) + phone.slice(-4);
+}
+
 function serializeBookingOrder(booking: BookingOrderWithRelations): Record<string, unknown> {
   const order = booking.order;
   return {
     id: order.id,
     storeId: order.storeId,
     userId: order.userId,
-    status: order.status,
+    status: booking.approvalStatus,
     subtotal: order.subtotal.toString(),
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
+    discountAmount: (Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2),
+    // appliedDiscountCode is the coupon code the buyer used at checkout.
+    // Serialized here so both the buyer receipt and store booking dashboard
+    // can display itemized coupon breakdowns instead of falling back to "Discount".
+    discountCode: order.appliedDiscountCode ?? null,
+    rating: order.rating,
+    ratingComment: order.ratingComment,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),
+    landmarkDescription: order.landmarkDescription,
+    flatRoom: order.flatRoom,
+    addressLabel: order.addressLabel,
+    buyerMaskedPhone: order.user ? maskPhone(order.user.phone) : "",
+    paymentMethod: "COD",
+    store: {
+      id: order.store.id,
+      name: order.store.name,
+      phone: order.store.phone,
+      storeType: order.store.storeType
+    },
     items: order.items.map((i) => ({
       id: i.id,
       orderId: i.orderId,
@@ -138,7 +178,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
       .min(1),
     scheduledDate: z.string().datetime(),
     timeslot: z.string().min(1),
-    addressId: z.string().min(1)
+    addressId: z.string().min(1),
+    discountCode: z.string().optional()
   });
 
   const queryBookingsSchema = z.object({
@@ -180,7 +221,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
           scheduledDate,
           timeslot: body.timeslot,
           addressId: body.addressId
-        }
+        },
+        body.discountCode
       );
 
       const bookingOrderRecord = await deps.bookingService.repository.findById(placedOrder.id);
@@ -294,6 +336,40 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
         params.orderId,
         ownerId,
         body.reason
+      );
+
+      const booking = await deps.bookingService.repository.findById(params.orderId);
+      if (!booking) {
+        throw new NotFoundError("Booking order not found");
+      }
+
+      return success(request, reply, serializeBookingOrder(booking));
+    }
+  );
+
+  // PUT /api/v1/store/bookings/:orderId/complete
+  app.put(
+    "/api/v1/store/bookings/:orderId/complete",
+    { preHandler: ownerPreHandlers },
+    async (request, reply) => {
+      const ownerId = request.user?.sub;
+      if (!ownerId) {
+        throw new UnauthorizedError("Store owner subject missing");
+      }
+
+      const prisma = getPrismaClient();
+      const owner = await prisma.storeOwner.findUnique({
+        where: { id: ownerId }
+      });
+      if (!owner) {
+        throw new ForbiddenError("Store owner record not found");
+      }
+
+      const params = parseSafe(orderParamsSchema, request.params);
+      await deps.bookingService.completeBooking(
+        owner.storeId,
+        params.orderId,
+        ownerId
       );
 
       const booking = await deps.bookingService.repository.findById(params.orderId);

@@ -166,4 +166,31 @@ describe("PUT /api/v1/orders/:id/rate", () => {
 
     expect(res.statusCode).toBe(404);
   });
+
+  it("returns 400 if order has already been rated", async () => {
+    const order = await db.order.create({
+      data: {
+        deliveryFee: 10,
+        landmarkDescription: "lm",
+        storeId: store.id,
+        subtotal: 50,
+        total: 60,
+        userId: user.id,
+        status: "DELIVERED",
+        rating: true,
+        ratingComment: "Already rated"
+      }
+    });
+
+    const res = await server.inject({
+      headers: { authorization: `Bearer ${token}` },
+      method: "PUT",
+      url: `/api/v1/orders/${order.id}/rate`,
+      payload: { rating: false }
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as { error: { message: string } };
+    expect(body.error.message).toContain("Order has already been rated");
+  });
 });

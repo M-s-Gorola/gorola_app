@@ -109,6 +109,52 @@ describe("createApiClient", () => {
     await expect(client.get("/x")).rejects.toBeTruthy();
     expect(clearSession).toHaveBeenCalled();
   });
+
+  it("on concurrent 401s, deduplicates refresh and retries both requests successfully", async () => {
+    const setTokens = vi.fn();
+    const clearSession = vi.fn();
+    const client = createApiClient(
+      opts({
+        getAccessToken: () => "old-access",
+        getRefreshToken: () => "refresh-1",
+        setTokens,
+        clearSession
+      })
+    );
+    mock = new MockAdapter(client);
+
+    mock.onGet("/data-1").replyOnce(401);
+    mock.onGet("/data-1").replyOnce(200, { ok: "data-1-retry" });
+    
+    mock.onGet("/data-2").replyOnce(401);
+    mock.onGet("/data-2").replyOnce(200, { ok: "data-2-retry" });
+
+    let refreshCallCount = 0;
+    mock.onPost("/api/v1/auth/buyer/refresh").reply(() => {
+      refreshCallCount++;
+      return [200, {
+        success: true,
+        data: {
+          accessToken: "new-a",
+          refreshToken: "new-r",
+          userId: "u1",
+          phone: "+9199"
+        },
+        meta: { requestId: "r" }
+      }];
+    });
+
+    const [res1, res2] = await Promise.all([
+      client.get("/data-1"),
+      client.get("/data-2")
+    ]);
+
+    expect(res1.data).toEqual({ ok: "data-1-retry" });
+    expect(res2.data).toEqual({ ok: "data-2-retry" });
+    expect(refreshCallCount).toBe(1);
+    expect(clearSession).not.toHaveBeenCalled();
+    expect(setTokens).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("bootstrapBuyerAuthSession", () => {

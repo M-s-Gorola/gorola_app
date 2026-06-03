@@ -121,14 +121,9 @@ export class BuyerCheckoutService {
 
     if (typeof body.discountCode === "string" && body.discountCode.trim().length > 0) {
       const normalizedCode = body.discountCode.trim().toUpperCase();
-      const discount = await this.discountRepo.findActiveByCode(normalizedCode);
+      const discount = await this.discountRepo.findActiveByCode(normalizedCode, storeId);
       if (discount === null) {
         throw new ValidationError("Invalid or expired discount code", {
-          discountCode: normalizedCode
-        });
-      }
-      if (discount.storeId !== null && discount.storeId !== storeId) {
-        throw new ValidationError("Discount code is not valid for this store", {
           discountCode: normalizedCode
         });
       }
@@ -153,7 +148,44 @@ export class BuyerCheckoutService {
       discountIdToIncrement = discount.id;
     }
 
-    const total = Prisma.Decimal.max(subtotal.add(deliveryFee).sub(appliedDiscountAmount), new Prisma.Decimal(0));
+    // Fetch active store-wide offers for this store
+    const now = new Date();
+    const activeOffers = await this.db.offer.findMany({
+      where: {
+        storeId,
+        isActive: true,
+        startsAt: { lte: now },
+        endsAt: { gte: now }
+      }
+    });
+
+    let appliedOfferAmount = new Prisma.Decimal(0);
+    for (const offer of activeOffers) {
+      const minOrderAmount =
+        offer.minOrderAmount === null ? null : new Prisma.Decimal(offer.minOrderAmount.toString());
+      if (minOrderAmount === null || subtotal.greaterThanOrEqualTo(minOrderAmount)) {
+        const discountValue = new Prisma.Decimal(offer.discountValue.toString());
+        let currentOfferAmount = new Prisma.Decimal(0);
+        if (offer.discountType === "PERCENTAGE") {
+          currentOfferAmount = subtotal.mul(discountValue).div(100).toDecimalPlaces(2);
+          if (offer.maxDiscount !== null) {
+            const maxDiscount = new Prisma.Decimal(offer.maxDiscount.toString());
+            currentOfferAmount = Prisma.Decimal.min(currentOfferAmount, maxDiscount);
+          }
+        } else {
+          currentOfferAmount = discountValue.toDecimalPlaces(2);
+        }
+        currentOfferAmount = Prisma.Decimal.min(subtotal.sub(appliedOfferAmount), currentOfferAmount);
+        if (currentOfferAmount.greaterThan(0)) {
+          appliedOfferAmount = appliedOfferAmount.add(currentOfferAmount);
+        }
+      }
+    }
+
+    const total = Prisma.Decimal.max(
+      subtotal.add(deliveryFee).sub(appliedDiscountAmount).sub(appliedOfferAmount),
+      new Prisma.Decimal(0)
+    );
 
     const order = await this.orderService.placeOrderWithStock({
       changedBy: `buyer:${userId}`,
@@ -169,6 +201,7 @@ export class BuyerCheckoutService {
       landmarkDescription,
       addressLabel,
       flatRoom,
+      appliedDiscountCode,
       paymentMethod: body.paymentMethod,
       scheduledFor: null,
       storeId,
@@ -209,6 +242,7 @@ export class BuyerCheckoutService {
     return {
       appliedDiscountAmount: appliedDiscountAmount.toFixed(2),
       appliedDiscountCode,
+      appliedOfferAmount: appliedOfferAmount.toFixed(2),
       order
     };
   }

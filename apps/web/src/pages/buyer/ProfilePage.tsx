@@ -12,7 +12,6 @@ import { z } from "zod";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 import { TopographicBg } from "@/components/shared/TopographicBg";
@@ -24,7 +23,6 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export function ProfilePage(): ReactElement {
-  useGorolaMotion();
   const { name, phone, setBuyerSession, accessToken, refreshToken, userId } = useAuthStore();
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);

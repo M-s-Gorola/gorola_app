@@ -61,14 +61,14 @@ test.describe('Catalog & Search', () => {
     // Assert product name heading is visible
     await expect(page.locator('h1')).toHaveText(productName || '');
 
-    // Assert >= 1 variant pill button is visible
-    const variantPills = page.locator('[data-testid="variant-pill"]');
+    // Assert >= 1 variant pill button is visible (filter to visible-only — desktop pills are CSS-hidden on mobile)
+    const variantPills = page.locator('[data-testid="variant-pill"]').filter({ visible: true });
     await expect(variantPills.first()).toBeVisible();
 
     // Click a variant pill — assert price display updates to a non-zero value
     await variantPills.first().click({ force: true });
     await page.waitForTimeout(1000); // Give state a moment to propagate
-    const priceDisplay = page.locator('[data-testid="product-price"]');
+    const priceDisplay = page.locator('[data-testid="product-price"]').first();
     await expect(priceDisplay).toHaveText(/Rs\s*\d+/);
 
     // Assert "Add to Cart" button is visible and enabled

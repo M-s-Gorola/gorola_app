@@ -31,7 +31,7 @@ vi.mock("@/lib/api", () => ({
 
 function LocationProbe(): ReactElement {
   const loc = useLocation();
-  return <div data-testid="probe-path">{loc.pathname}</div>;
+  return <div data-testid="probe-path">{loc.pathname}{loc.search}</div>;
 }
 
 function renderLogin(initialEntries: InitialEntry[]): void {
@@ -332,6 +332,44 @@ describe("LoginPage", () => {
 
     await waitFor(() => {
       expect(screen.getByTestId("probe-path")).toHaveTextContent("/profile");
+    });
+  });
+
+  it("redirects to state.from.pathname and preserves query search parameters after successful verify", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    postMock
+      .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            accessToken: "access",
+            name: null,
+            phone: "+919876543210",
+            refreshToken: "refresh",
+            userId: "buyer-u1"
+          }
+        }
+      });
+
+    renderLogin([
+      {
+        pathname: "/login",
+        state: { from: { pathname: "/profile", search: "?productId=p2&variantId=v3" } }
+      }
+    ]);
+
+    await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+    await user.click(screen.getByRole("button", { name: /send otp/i }));
+    await screen.findByText(/Enter OTP/i);
+    for (let i = 0; i < 6; i++) {
+      const label = String(i + 1);
+      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+    }
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    await waitFor(() => {
+      expect(screen.getByTestId("probe-path")).toHaveTextContent("/profile?productId=p2&variantId=v3");
     });
   });
 

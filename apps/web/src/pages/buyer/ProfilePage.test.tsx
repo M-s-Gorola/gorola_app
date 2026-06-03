@@ -17,10 +17,6 @@ vi.mock("@/lib/api", () => ({
   }
 }));
 
-vi.mock("@/hooks/useGorolaMotion", () => ({
-  useGorolaMotion: vi.fn()
-}));
-
 // Mock sonner to avoid toast issues in tests
 vi.mock("sonner", () => ({
   toast: {

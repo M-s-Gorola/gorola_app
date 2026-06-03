@@ -163,6 +163,8 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     expect(screen.getByRole("heading", { name: /^Review$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Home");
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Near landmark text here area tenchars");
 
     await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
 
@@ -201,6 +203,11 @@ describe("CheckoutPage", () => {
     fireEvent.change(landmark, { target: { value: landmarkText } });
 
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    
+    expect(screen.getByRole("heading", { name: /^Review$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("New Location");
+    expect(screen.getByTestId("review-delivery-address")).toHaveTextContent(landmarkText);
+
     await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
 
     await waitFor(() => {
@@ -243,8 +250,13 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByLabelText(/^Home$/));
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
-    expect(screen.getByText("Discount (SAVE20): -Rs 20.00")).toBeInTheDocument();
-    expect(screen.getByText("Total: Rs 110.00")).toBeInTheDocument();
+    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("-Rs 20.00")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("discount-breakdown-toggle"));
+    expect(screen.getByTestId("checkout-coupon-discount")).toHaveTextContent("Discount (SAVE20)");
+    expect(screen.getByText("Total:")).toBeInTheDocument();
+    expect(screen.getByText(/Rs\s*110\.00/)).toBeInTheDocument();
   });
 
   it("sends active discount code in place-order payload", async () => {
@@ -294,5 +306,48 @@ describe("CheckoutPage", () => {
         })
       );
     });
+  });
+
+  it("shows active store offers in review step of CheckoutPage", async () => {
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({
+        lines: [
+          {
+            productName: "Apple",
+            quantity: 1,
+            productVariantId: "pv1",
+            unitPrice: 120,
+            variantLabel: "1kg"
+          }
+        ],
+        activeOffers: [
+          {
+            id: "o1",
+            title: "Weekend Deal",
+            discountType: "FLAT",
+            discountValue: 20,
+            minOrderAmount: null,
+            maxDiscount: null
+          }
+        ]
+      });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("-Rs 20.00")).toBeInTheDocument();
+
+    await user.click(screen.getByTestId("discount-breakdown-toggle"));
+    expect(screen.getByTestId("checkout-offer-discount")).toHaveTextContent("Store Offer (Weekend Deal)");
+    // 120 + 30 (delivery) - 20 (offer) = 130
+    expect(screen.getByText("Total:")).toBeInTheDocument();
+    expect(screen.getByText(/Rs\s*130\.00/)).toBeInTheDocument();
   });
 });

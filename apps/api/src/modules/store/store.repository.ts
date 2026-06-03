@@ -1,17 +1,28 @@
 import { NotFoundError } from "@gorola/shared";
-import type { PrismaClient, Store } from "@prisma/client";
+import type { PrismaClient, Store, StoreType } from "@prisma/client";
 
 export type CreateStoreInput = {
   name: string;
   description: string;
   phone: string;
   address: string;
+  storeType?: StoreType;
   isActive?: boolean;
+  isAcceptingOrders?: boolean;
   weatherModeDeliveryWindow?: string | null;
 };
 
 export type UpdateStoreInput = Partial<
-  Pick<Store, "name" | "description" | "phone" | "address" | "isActive" | "weatherModeDeliveryWindow">
+  Pick<
+    Store,
+    | "name"
+    | "description"
+    | "phone"
+    | "address"
+    | "isActive"
+    | "isAcceptingOrders"
+    | "weatherModeDeliveryWindow"
+  >
 >;
 
 function isPrismaError(error: unknown, code: string): boolean {
@@ -61,7 +72,9 @@ export class StoreRepository {
         description: input.description,
         phone: input.phone,
         address: input.address,
+        storeType: input.storeType ?? "QUICK_COMMERCE",
         isActive: input.isActive ?? true,
+        isAcceptingOrders: input.isAcceptingOrders ?? true,
         weatherModeDeliveryWindow: input.weatherModeDeliveryWindow ?? null
       }
     });

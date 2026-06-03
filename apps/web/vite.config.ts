@@ -7,20 +7,33 @@ import { defineConfig } from "vite";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const proxyTarget = process.env.VITE_E2E_PROXY === "true"
+  ? `http://127.0.0.1:${process.env.PORT_API || "3002"}`
+  : "http://127.0.0.1:3001";
+
+const proxyConfig = {
+  "/api": {
+    target: proxyTarget,
+    changeOrigin: true
+  },
+  "/socket.io": {
+    target: proxyTarget,
+    ws: true,
+    changeOrigin: true
+  }
+};
+
 export default defineConfig({
   plugins: [react(), tailwindcss()],
   server: {
     port: 5180,
     allowedHosts: true,
-    proxy: {
-      "/api": {
-        // Only shift the port if explicitly in E2E mode to avoid local dev "leaks"
-        target: process.env.VITE_E2E_PROXY === "true"
-          ? `http://127.0.0.1:${process.env.PORT_API || "3002"}`
-          : "http://127.0.0.1:3001",
-        changeOrigin: true
-      }
-    }
+    proxy: proxyConfig
+  },
+  preview: {
+    port: 5180,
+    allowedHosts: true,
+    proxy: proxyConfig
   },
   resolve: {
     alias: {

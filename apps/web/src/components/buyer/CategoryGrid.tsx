@@ -35,7 +35,7 @@ async function fetchCategories(): Promise<CategoryDto[]> {
 
 export function CategoryGrid(): ReactElement {
   const navigate = useNavigate();
-  const rootRef = useRef<HTMLElement | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   const categoriesQuery = useQuery({
     queryKey: ["buyer-categories"],
@@ -43,6 +43,19 @@ export function CategoryGrid(): ReactElement {
   });
 
   const categories = useMemo(() => categoriesQuery.data ?? [], [categoriesQuery.data]);
+
+  const { quickCommerceCategories, bookingCommerceCategories } = useMemo(() => {
+    const quick: CategoryDto[] = [];
+    const booking: CategoryDto[] = [];
+    for (const category of categories) {
+      if (["groceries", "medical", "electronics"].includes(category.slug)) {
+        quick.push(category);
+      } else {
+        booking.push(category);
+      }
+    }
+    return { quickCommerceCategories: quick, bookingCommerceCategories: booking };
+  }, [categories]);
 
   useEffect(() => {
     if (categories.length === 0) {
@@ -99,7 +112,7 @@ export function CategoryGrid(): ReactElement {
     return (
       <section aria-label="Category grid" className="space-y-3">
         <p className="font-dm-sans text-sm text-gorola-slate">Loading categories...</p>
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid gap-3 grid-cols-2">
           <div className="skeleton h-28 rounded-xl" />
           <div className="skeleton h-28 rounded-xl" />
         </div>
@@ -132,36 +145,77 @@ export function CategoryGrid(): ReactElement {
     );
   }
 
+  const renderCategoryCard = (category: CategoryDto) => (
+    <button
+      key={category.id}
+      type="button"
+      data-testid="category-card"
+      className={cn(
+        "category-card flex flex-col sm:flex-row items-center gap-2 sm:gap-4 rounded-2xl border border-gorola-pine/10 bg-white p-3 sm:px-5 sm:py-4 text-center sm:text-left shadow-sm transition-all duration-300 w-full min-w-0 overflow-hidden",
+        "hover:-translate-y-1 hover:shadow-md hover:border-gorola-pine/20 hover:bg-gradient-to-r hover:from-white hover:to-gorola-saffron/5"
+      )}
+      onClick={() => {
+        navigate(`/categories/${category.slug}`);
+      }}
+    >
+      {category.imageUrl ? (
+        <img 
+          src={category.imageUrl} 
+          alt={`${category.name} category`} 
+          className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl object-cover shadow-sm border border-gray-100 shrink-0"
+        />
+      ) : (
+        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-gorola-saffron/10 border border-gorola-saffron/20 shadow-sm shrink-0">
+          <span className="text-xl sm:text-2xl">📦</span>
+        </div>
+      )}
+      <div className="min-w-0 w-full">
+        <p className="font-dm-sans text-sm sm:text-lg font-bold text-gorola-charcoal leading-tight truncate sm:leading-snug">{category.name}</p>
+        <p className="mt-0.5 font-dm-sans text-[10px] sm:text-xs font-medium text-gorola-slate flex items-center justify-center sm:justify-start gap-1">
+          <span className="inline-block w-1.5 h-1.5 rounded-full bg-gorola-pine/60 shrink-0"></span>
+          <span className="truncate">
+            {category.productCount} {category.slug === "repairs" || category.slug === "medical-tests" ? "Services" : "Products"}
+          </span>
+        </p>
+      </div>
+    </button>
+  );
+
   return (
-    <section ref={rootRef} aria-label="Category grid" className="category-grid grid gap-4 sm:grid-cols-2">
-      {categories.map((category) => (
-        <button
-          key={category.id}
-          type="button"
-          data-testid="category-card"
-          className={cn(
-            "category-card rounded-2xl border border-gorola-pine/10 bg-white px-4 py-5 text-left shadow-sm transition",
-            "hover:-translate-y-1 hover:shadow-md"
-          )}
-          onClick={() => {
-            navigate(`/categories/${category.slug}`);
-          }}
-        >
-          {category.imageUrl ? (
-            <img 
-              src={category.imageUrl} 
-              alt={`${category.name} category`} 
-              className="h-12 w-12 rounded-lg object-cover"
-            />
-          ) : (
-            <div className="flex h-12 w-12 items-center justify-center rounded-lg bg-gorola-saffron/20">
-              <span className="text-xl">📦</span>
+    <div ref={rootRef} className="space-y-10">
+      {quickCommerceCategories.length > 0 && (
+        <section aria-label="Instant Delivery categories" className="space-y-4">
+          <div className="flex items-center gap-3 border-b border-gorola-pine/10 pb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gorola-saffron/10 text-xl shadow-inner">
+              ⚡
             </div>
-          )}
-          <p className="mt-2 font-dm-sans text-lg font-semibold text-gorola-charcoal">{category.name}</p>
-          <p className="mt-1 font-dm-sans text-sm text-gorola-slate">{category.productCount} products</p>
-        </button>
-      ))}
-    </section>
+            <div>
+              <h3 className="font-playfair text-xl font-bold text-gorola-charcoal">Instant Delivery</h3>
+              <p className="font-dm-sans text-xs text-gorola-slate">Everyday essentials delivered to your doorstep in minutes</p>
+            </div>
+          </div>
+          <div className="category-grid grid gap-4 grid-cols-2 lg:grid-cols-3">
+            {quickCommerceCategories.map(renderCategoryCard)}
+          </div>
+        </section>
+      )}
+
+      {bookingCommerceCategories.length > 0 && (
+        <section aria-label="Book a Service categories" className="space-y-4">
+          <div className="flex items-center gap-3 border-b border-gorola-pine/10 pb-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gorola-pine/10 text-xl shadow-inner">
+              📅
+            </div>
+            <div>
+              <h3 className="font-playfair text-xl font-bold text-gorola-charcoal">Book a Service</h3>
+              <p className="font-dm-sans text-xs text-gorola-slate">Expert doorstep repairs and diagnostic medical tests scheduled at your convenience</p>
+            </div>
+          </div>
+          <div className="category-grid grid gap-4 grid-cols-2 lg:grid-cols-3">
+            {bookingCommerceCategories.map(renderCategoryCard)}
+          </div>
+        </section>
+      )}
+    </div>
   );
 }

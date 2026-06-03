@@ -5,6 +5,7 @@ import { type ChangeEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { initGorolaGsapOnce } from "@/lib/gsap";
 import { useAuthStore } from "@/store/auth.store";
@@ -24,6 +25,7 @@ type ProductListItem = {
   imageUrl: string;
   storeId: string;
   storeName: string;
+  storeType?: string;
   categoryId: string;
   highestPricedVariantId: string;
   price: string;
@@ -146,7 +148,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     if (items.length === 0 || gridRef.current === null) {
       return;
     }
-    if (import.meta.env.MODE === "test") {
+    if (import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).isE2E)) {
       return;
     }
     initGorolaGsapOnce();
@@ -197,6 +199,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
         quantity
       });
     });
+    void syncBuyerCartFromServer();
   }
 
   function syncQtyChange(productVariantId: string, quantity: number): void {
@@ -206,12 +209,13 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     void enqueueCartVariantMutation(productVariantId, async () => {
       if (quantity <= 0) {
         await api!.delete(`/api/v1/cart/items/${productVariantId}`);
-        return;
+      } else {
+        await api!.put(`/api/v1/cart/items/${productVariantId}`, {
+          quantity
+        });
       }
-      await api!.put(`/api/v1/cart/items/${productVariantId}`, {
-        quantity
-      });
     });
+    void syncBuyerCartFromServer();
   }
 
   if (query.isLoading) {
@@ -234,7 +238,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
           className="w-full rounded-xl border border-gorola-slate-mist bg-white px-4 py-2 font-dm-sans text-sm"
         />
         <p className="font-dm-sans text-sm text-gorola-slate">Loading products...</p>
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{skeletonCards}</div>
+        <div className="grid gap-x-3 gap-y-5 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">{skeletonCards}</div>
       </section>
     );
   }
@@ -290,7 +294,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
         placeholder="Search products"
         className="w-full rounded-xl border border-gorola-slate-mist bg-white px-4 py-2 font-dm-sans text-sm"
       />
-      <div ref={gridRef} className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      <div ref={gridRef} className="grid gap-x-3 gap-y-5 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
         {items.map((item) => (
           <article
             key={item.id}
@@ -299,33 +303,51 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
             className="flex flex-col rounded-2xl border border-gorola-pine/10 bg-white p-4 shadow-sm"
           >
             <Link to={`/products/${item.productId}`} className="group block cursor-pointer">
-              <div className="mb-3 h-32 w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20">
+              <div className="mb-3 h-28 sm:h-32 w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20">
                 <img
                   src={item.imageUrl}
                   alt={item.name}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
                   onError={(e) => {
-                    (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/400/400?grayscale";
+                    const img = e.currentTarget as HTMLImageElement;
+                    if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
+                      img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                    }
                   }}
                 />
               </div>
-              <p className="font-dm-sans text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors" data-testid="product-name">
+              <p className="font-dm-sans text-sm sm:text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors line-clamp-2 overflow-hidden" data-testid="product-name">
                 {item.name}
               </p>
             </Link>
-            <p className="mt-1 font-dm-sans text-sm text-gorola-slate">{item.storeName}</p>
-            <div className="mt-auto pt-2">
-              <p className="font-dm-sans text-sm text-gorola-charcoal">Rs {item.price}</p>
-              <p className="mt-1 font-dm-sans text-xs text-gorola-slate">Unit: {item.unit}</p>
+            <div className="mt-2 flex items-center justify-between font-dm-sans text-xs sm:text-sm">
+              <span className="text-gorola-slate">Unit: {item.unit}</span>
+              <span className="font-bold text-gorola-charcoal">Rs {item.price}</span>
             </div>
             {(() => {
+              if (item.storeType === "BOOKING_COMMERCE") {
+                return (
+                  <div className="mt-auto pt-4 w-full">
+                    <Link
+                      to={`/bookings/new?productId=${item.productId}&variantId=${item.highestPricedVariantId}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                      }}
+                      className="w-full text-center rounded-full bg-gorola-saffron px-4 py-2 text-sm font-semibold text-gorola-charcoal block"
+                    >
+                      Book
+                    </Link>
+                  </div>
+                );
+              }
+ 
               const line = lines.find(
                 (candidate) => candidate.productVariantId === item.highestPricedVariantId
               );
               const quantity = line?.quantity ?? 0;
               if (quantity > 0) {
                 return (
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-auto pt-4 w-full flex items-center justify-center gap-3">
                     <button
                       type="button"
                       aria-label={`Decrease ${item.name} quantity`}
@@ -335,7 +357,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                         setQty(item.highestPricedVariantId, next);
                         syncQtyChange(item.highestPricedVariantId, next);
                       }}
-                      className="h-8 w-8 rounded-full border border-gorola-pine/20 text-sm font-semibold text-gorola-charcoal"
+                      className="h-8 w-8 rounded-full border border-gorola-pine/20 text-sm font-semibold text-gorola-charcoal flex items-center justify-center hover:bg-gorola-slate-mist/10"
                     >
                       -
                     </button>
@@ -351,33 +373,36 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
                         setQty(item.highestPricedVariantId, next);
                         syncQtyChange(item.highestPricedVariantId, next);
                       }}
-                      className="h-8 w-8 rounded-full border border-gorola-pine/20 text-sm font-semibold text-gorola-charcoal"
+                      className="h-8 w-8 rounded-full border border-gorola-pine/20 text-sm font-semibold text-gorola-charcoal flex items-center justify-center hover:bg-gorola-slate-mist/10"
                     >
                       +
                     </button>
                   </div>
                 );
               }
-
+ 
               return (
-                <button
-                  type="button"
-                  aria-label={`Add ${item.name} to cart`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    addOrMergeLine({
-                      productVariantId: item.highestPricedVariantId,
-                      quantity: 1,
-                      productName: item.name,
-                      unitPrice: Number(item.price),
-                      variantLabel: item.unit
-                    });
-                    syncAddCartItem(item.highestPricedVariantId, 1);
-                  }}
-                  className="mt-3 rounded-full bg-gorola-saffron px-4 py-2 text-sm font-semibold text-gorola-charcoal"
-                >
-                  Add
-                </button>
+                <div className="mt-auto pt-4 w-full">
+                  <button
+                    type="button"
+                    aria-label={`Add ${item.name} to cart`}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      addOrMergeLine({
+                        productVariantId: item.highestPricedVariantId,
+                        quantity: 1,
+                        productName: item.name,
+                        unitPrice: Number(item.price),
+                        variantLabel: item.unit,
+                        storeId: item.storeId
+                      });
+                      syncAddCartItem(item.highestPricedVariantId, 1);
+                    }}
+                    className="w-full rounded-full bg-gorola-saffron px-4 py-2 text-sm font-semibold text-gorola-charcoal text-center"
+                  >
+                    Add
+                  </button>
+                </div>
               );
             })()}
           </article>

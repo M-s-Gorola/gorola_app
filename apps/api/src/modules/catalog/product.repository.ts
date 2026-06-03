@@ -30,6 +30,7 @@ export type ProductListItem = {
   imageUrl: string;
   storeId: string;
   storeName: string;
+  storeType: string;
   categoryId: string;
   highestPricedVariantId: string;
   price: string;
@@ -52,6 +53,7 @@ export type ProductDetailResult = {
     id: string;
     name: string;
     phone: string;
+    storeType: string;
   };
   variants: Array<{
     id: string;
@@ -62,6 +64,8 @@ export type ProductDetailResult = {
     isInStock: boolean;
     isLowStock: boolean;
     lowStockThreshold: number;
+    requiresFasting: boolean;
+    allowedTimeslots: string[];
   }>;
 };
 
@@ -69,11 +73,16 @@ const productListInclude = Prisma.validator<Prisma.ProductInclude>()({
   store: {
     select: {
       id: true,
-      name: true
+      name: true,
+      storeType: true
     }
   },
   variants: {
     where: {
+      // Only filter by isActive. isAvailableForBooking gates booking-slot eligibility
+      // for BOOKING_COMMERCE — it must NEVER filter catalog visibility for any store type.
+      // Filtering by it caused QUICK_COMMERCE products to vanish from the buyer catalog
+      // when a store owner toggled a variant's booking availability.
       isActive: true
     },
     orderBy: {
@@ -178,6 +187,9 @@ export class ProductRepository {
     const where: Prisma.ProductWhereInput = {
       isDeleted: false,
       isActive: true,
+      store: {
+        isAcceptingOrders: true
+      },
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),
       ...(input.subCategoryId !== undefined ? { subCategoryId: input.subCategoryId } : {}),
       ...(input.storeId !== undefined ? { storeId: input.storeId } : {}),
@@ -217,6 +229,7 @@ export class ProductRepository {
         imageUrl: row.imageUrl,
         storeId: row.store.id,
         storeName: row.store.name,
+        storeType: row.store.storeType,
         categoryId: row.categoryId,
         highestPricedVariantId: row.variants[0]!.id,
         price: row.variants[0]!.price.toFixed(2),
@@ -236,7 +249,10 @@ export class ProductRepository {
       where: {
         id,
         isDeleted: false,
-        isActive: true
+        isActive: true,
+        store: {
+          isAcceptingOrders: true
+        }
       },
       select: {
         id: true,
@@ -247,11 +263,14 @@ export class ProductRepository {
           select: {
             id: true,
             name: true,
-            phone: true
+            phone: true,
+            storeType: true
           }
         },
         variants: {
           where: {
+            // Same rule: isActive only. isAvailableForBooking is booking-slot
+            // eligibility and must not filter catalog detail pages.
             isActive: true
           },
           orderBy: {
@@ -265,7 +284,9 @@ export class ProductRepository {
             stockQty: true,
             isInStock: true,
             isLowStock: true,
-            lowStockThreshold: true
+            lowStockThreshold: true,
+            requiresFasting: true,
+            allowedTimeslots: true
           }
         }
       }
@@ -283,7 +304,8 @@ export class ProductRepository {
       store: {
         id: product.store.id,
         name: product.store.name,
-        phone: product.store.phone
+        phone: product.store.phone,
+        storeType: product.store.storeType
       },
       variants: product.variants.map((variant) => ({
         id: variant.id,
@@ -293,7 +315,9 @@ export class ProductRepository {
         stockQty: variant.stockQty,
         isInStock: variant.isInStock,
         isLowStock: variant.isLowStock,
-        lowStockThreshold: variant.lowStockThreshold
+        lowStockThreshold: variant.lowStockThreshold,
+        requiresFasting: variant.requiresFasting,
+        allowedTimeslots: variant.allowedTimeslots
       }))
     };
   }

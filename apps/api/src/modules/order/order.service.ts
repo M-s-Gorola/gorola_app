@@ -152,6 +152,21 @@ export class OrderService {
       throw new ConflictError("Order cannot be cancelled after delivery", { orderId });
     }
 
+    if (current.orderType === "BOOKING") {
+      return this.db.$transaction(async (tx) => {
+        await this.orders.updateStatus(orderId, "CANCELLED", changedBy, note, tx);
+
+        if (this.emitter) {
+          void this.emitter.emitStatusChanged(orderId, "CANCELLED");
+        }
+
+        return tx.order.findUniqueOrThrow({
+          where: { id: orderId },
+          include: orderRelationsInclude
+        });
+      });
+    }
+
     return this.db.$transaction(
       async (tx) => {
         const variantIds = current.items.map((i) => i.productVariantId);

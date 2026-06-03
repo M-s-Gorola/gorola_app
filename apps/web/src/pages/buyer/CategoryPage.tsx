@@ -12,7 +12,7 @@ export function CategoryPage(): ReactElement {
   const heading = slug !== undefined ? toTitleCase(slug) : "Category";
 
   return (
-    <section className="space-y-4 rounded-2xl bg-white/70 px-6 py-8">
+    <section className="space-y-4 rounded-2xl bg-white/70 p-3 sm:p-6 md:p-8">
       <h1 className="font-playfair text-3xl text-gorola-charcoal">{heading}</h1>
       {slug !== undefined ? <SubCategoryGrid categorySlug={slug} /> : null}
     </section>

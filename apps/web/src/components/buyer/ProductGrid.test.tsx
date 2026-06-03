@@ -22,7 +22,27 @@ const { deleteMock, getMock, postMock, putMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => ({
   api: {
     delete: deleteMock,
-    get: getMock,
+    get: vi.fn().mockImplementation(async (url: string, config?: unknown) => {
+      if (url.includes("/api/v1/cart")) {
+        return {
+          data: {
+            success: true,
+            data: {
+              items: useCartStore.getState().lines.map(line => ({
+                productVariantId: line.productVariantId,
+                quantity: line.quantity,
+                productName: line.productName,
+                variantLabel: line.variantLabel,
+                unitPrice: line.unitPrice
+              })),
+              activeOffer: null,
+              activeOffers: []
+            }
+          }
+        };
+      }
+      return getMock(url, config);
+    }),
     post: postMock,
     put: putMock
   }
@@ -46,12 +66,12 @@ class MockIntersectionObserver implements IntersectionObserver {
     };
   }
 
-  public disconnect(): void {}
-  public observe(): void {}
+  public disconnect(): void { }
+  public observe(): void { }
   public takeRecords(): IntersectionObserverEntry[] {
     return [];
   }
-  public unobserve(): void {}
+  public unobserve(): void { }
 }
 
 function renderGrid(props: { categoryId?: string; storeId?: string } = {}): void {
@@ -126,7 +146,6 @@ describe("ProductGrid", () => {
     });
     renderGrid({ categoryId: "c1" });
     expect(await screen.findByText("Apple")).toBeInTheDocument();
-    expect(screen.getByText("Peak Mart")).toBeInTheDocument();
     expect(screen.getByText("Rs 220.00")).toBeInTheDocument();
 
     const img = screen.getByAltText("Apple");
@@ -477,4 +496,40 @@ describe("ProductGrid", () => {
     // In MemoryRouter, we can check if the current location is still '/' (or whatever it was).
     // However, the test above is enough if we just want to prove it currently FAILS (because no link exists).
   });
+
+  it("renders Book link instead of Add button for BOOKING_COMMERCE products", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          items: [
+            {
+              id: "p1",
+              productId: "prod-123",
+              name: "AC Service",
+              highestPricedVariantId: "v1",
+              storeId: "s1",
+              storeName: "GoRola Repairs",
+              categoryId: "c1",
+              imageUrl: "https://x",
+              price: "799.00",
+              unit: "service",
+              storeType: "BOOKING_COMMERCE"
+            }
+          ],
+          nextCursor: null
+        }
+      }
+    });
+
+    renderGrid();
+
+    const bookLink = await screen.findByRole("link", { name: /book/i });
+    expect(bookLink).toBeInTheDocument();
+    expect(bookLink).toHaveAttribute(
+      "href",
+      "/bookings/new?productId=prod-123&variantId=v1"
+    );
+  });
 });
+
