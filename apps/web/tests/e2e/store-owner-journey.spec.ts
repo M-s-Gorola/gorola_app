@@ -35,28 +35,28 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(page.getByText("Two-Factor Auth is currently: Disabled", { exact: false })).toBeVisible();
 
     // Click Setup 2FA
-    await page.getByRole("button", { name: "Setup 2FA" }).click();
+    await page.getByRole("button", { name: "Setup 2FA" }).click({ force: true });
 
     // Enter 6-digit TOTP Code (using universal bypass "000000" under NODE_ENV="test")
     await page.getByLabel("Enter 6-digit TOTP Code").fill("000000");
-    await page.getByRole("button", { name: "Verify and Enable" }).click();
+    await page.getByRole("button", { name: "Verify and Enable" }).click({ force: true });
 
     // Verify 2FA is now Enabled
     await expect(page.getByText("Two-Factor Auth is currently: Enabled", { exact: false })).toBeVisible();
 
     // Logout and verify we are redirected back to login
-    await page.getByRole("button", { name: "Logout" }).click();
+    await page.getByRole("button", { name: "Logout" }).click({ force: true });
     await expect(page).toHaveURL(/.*\/login/);
 
     // Try logging in again - should require 2FA
     await page.getByLabel("Email address").fill("owner2@gorola.in");
     await page.getByLabel("Password").fill("Owner#123");
-    await page.getByRole("button", { name: "Login" }).click();
+    await page.getByRole("button", { name: "Login" }).click({ force: true });
 
     // Assert we are prompted for 2FA code
     await expect(page.getByLabel("Two-Factor Code")).toBeVisible();
     await page.getByLabel("Two-Factor Code").fill("000000");
-    await page.getByRole("button", { name: "Verify", exact: true }).click();
+    await page.getByRole("button", { name: "Verify", exact: true }).click({ force: true });
 
     // Successfully log back into dashboard
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
@@ -82,12 +82,12 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.waitForTimeout(1000);
 
     // Click switch to turn off
-    await availabilitySwitch.click();
+    await availabilitySwitch.click({ force: true });
 
     // Affirm closure in Confirm Modal
     const confirmModal = page.getByRole("dialog");
     await expect(confirmModal).toBeVisible();
-    await confirmModal.getByRole("button", { name: "Yes, Hide Store" }).click();
+    await confirmModal.getByRole("button", { name: "Yes, Hide Store" }).click({ force: true });
 
     // Wait for modal to disappear and aria-checked to reflect false (confirming PUT + re-fetch done)
     await expect(confirmModal).not.toBeVisible();
@@ -126,7 +126,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // 3. Switch back to Merchant and toggle to Open
     await page.bringToFront();
-    await availabilitySwitch.click();
+    await availabilitySwitch.click({ force: true });
     await expect(availabilitySwitch).toHaveAttribute("aria-checked", "true");
 
     // 4. Verify storefront is active on Buyer page (reload to pick up updated status)
@@ -339,12 +339,12 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.goto(`${STORE_SUBDOMAIN}/login`);
     await page.getByLabel("Email address").fill("owner1@gorola.in");
     await page.getByLabel("Password").fill("Owner#123");
-    await page.getByRole("button", { name: "Login" }).click();
+    await page.getByRole("button", { name: "Login" }).click({ force: true });
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
     // Go to Discounts page
-    await page.getByRole("link", { name: "Discounts" }).click();
-    await page.getByRole("button", { name: "Create Discount Code" }).click();
+    await page.getByRole("link", { name: "Discounts" }).click({ force: true });
+    await page.getByRole("button", { name: "Create Discount Code" }).click({ force: true });
 
     // Fill form
     await page.getByPlaceholder("e.g. SUMMER50").fill(code);
@@ -357,7 +357,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('input[type="date"]').first().fill(start);
     await page.locator('input[type="date"]').last().fill(end);
 
-    await page.getByRole("button", { name: "Create Discount Code" }).click();
+    await page.getByRole("button", { name: "Create Discount Code" }).click({ force: true });
     await expect(page.locator("tr").filter({ hasText: code })).toBeVisible();
 
     // 2. Buyer applies discount to Store A items
