@@ -1,0 +1,567 @@
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  Clock,
+  Layers,
+  Settings,
+  ShoppingBag,
+  TrendingUp,
+  Users} from "lucide-react";
+import type { ReactElement } from "react";
+import { useState } from "react";
+import { toast } from "sonner";
+
+import { api } from "@/lib/api";
+
+type PerStoreBreakdownItem = {
+  storeId: string;
+  storeName: string;
+  ordersToday: number;
+  revenueToday: number;
+  pendingOrdersCount: number;
+};
+
+type WeeklyRevenueItem = {
+  date: string;
+  revenue: number;
+};
+
+type FeatureFlagItem = {
+  key: string;
+  value: boolean;
+};
+
+type AdminDashboardData = {
+  totalOrdersToday: number;
+  totalRevenueToday: number;
+  perStoreBreakdown: PerStoreBreakdownItem[];
+  weeklyRevenue: WeeklyRevenueItem[];
+  lowStockAlertCount: number;
+  totalActiveBuyers: number;
+  totalProducts: number;
+  pendingAdApprovalsCount: number;
+  featureFlags: FeatureFlagItem[];
+};
+
+type AdminDashboardEnvelope = {
+  success: boolean;
+  data: AdminDashboardData;
+};
+
+export function AdminDashboardPage(): ReactElement {
+  const queryClient = useQueryClient();
+
+  const [confirmingFlag, setConfirmingFlag] = useState<{ key: string; value: boolean } | null>(null);
+  const [isUpdatingFlag, setIsUpdatingFlag] = useState(false);
+
+  const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
+  const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+
+  const { data: dashboard, isLoading, error } = useQuery<AdminDashboardData>({
+    queryKey: ["admin", "dashboard", range, groupBy],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<AdminDashboardEnvelope>(`/api/v1/admin/dashboard?range=${range}&groupBy=${groupBy}`);
+      return res.data.data;
+    },
+    staleTime: 30000,
+    placeholderData: (prev) => prev
+  });
+
+  const toggleFlagMutation = useMutation({
+    mutationFn: async ({ key, value }: { key: string; value: boolean }) => {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put(`/api/v1/admin/feature-flags/${key}`, { value });
+    },
+    onSuccess: (_, variables) => {
+      toast.success(`Feature flag '${variables.key}' updated successfully.`);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
+    },
+    onError: (err) => {
+      console.error("Failed to toggle feature flag", err);
+      toast.error("Failed to update feature flag.");
+    },
+    onSettled: () => {
+      setIsUpdatingFlag(false);
+      setConfirmingFlag(null);
+    }
+  });
+
+  const handleToggleFlag = (key: string, currentValue: boolean) => {
+    setConfirmingFlag({ key, value: !currentValue });
+  };
+
+  const confirmToggleFlag = () => {
+    if (!confirmingFlag) return;
+    setIsUpdatingFlag(true);
+    toggleFlagMutation.mutate(confirmingFlag);
+  };
+
+  const formatCurrency = (val: number): string => {
+    return `₹${val.toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    })}`;
+  };
+
+  const formatDateLabel = (dateStr: string): string => {
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
+      try {
+        const date = new Date(dateStr);
+        const formatted = date.toLocaleDateString("en-IN", { weekday: "short", day: "numeric" });
+        return formatted === "Invalid Date" ? dateStr : formatted;
+      } catch {
+        return dateStr;
+      }
+    }
+    return dateStr;
+  };
+
+  if (isLoading && !dashboard) {
+    return (
+      <div className="space-y-8 animate-pulse">
+        {/* KPI Skeleton Grid */}
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+          {[1, 2, 3, 4, 5].map((idx) => (
+            <div
+              key={idx}
+              data-testid={idx === 1 ? "kpi-skeleton-orders" : idx === 2 ? "kpi-skeleton-revenue" : undefined}
+              className="h-32 bg-white rounded-2xl border border-gorola-charcoal/5 p-6 space-y-4 shadow-sm"
+            >
+              <div className="h-4 w-24 bg-gorola-charcoal/10 rounded" />
+              <div className="h-8 w-16 bg-gorola-charcoal/10 rounded" />
+            </div>
+          ))}
+        </div>
+
+        {/* Chart Skeleton */}
+        <div
+          data-testid="chart-skeleton"
+          className="bg-white rounded-2xl border border-gorola-charcoal/5 p-6 space-y-4 shadow-sm"
+        >
+          <div className="h-6 w-48 bg-gorola-charcoal/10 rounded" />
+          <div className="h-64 w-full bg-gorola-charcoal/5 rounded-xl" />
+        </div>
+      </div>
+    );
+  }
+
+  if (error || !dashboard) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
+        <div className="h-16 w-16 bg-red-50 text-red-500 rounded-full flex items-center justify-center">
+          <AlertTriangle className="h-8 w-8" />
+        </div>
+        <h2 className="text-xl font-bold text-gorola-charcoal">Failed to load dashboard</h2>
+        <p className="text-sm text-gorola-slate max-w-xs">
+          Please check your connection or try refreshing the dashboard again.
+        </p>
+      </div>
+    );
+  }
+
+  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1);
+
+  const formatYAxisLabel = (val: number): string => {
+    if (val >= 1000) {
+      return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+    }
+    return `₹${Math.round(val)}`;
+  };
+
+  const gapClass = dashboard.weeklyRevenue.length > 20
+    ? "gap-1 sm:gap-1.5"
+    : dashboard.weeklyRevenue.length > 10
+    ? "gap-2"
+    : "gap-4";
+
+  const barMaxWidthClass = dashboard.weeklyRevenue.length > 20
+    ? "max-w-[8px] sm:max-w-[12px]"
+    : dashboard.weeklyRevenue.length > 10
+    ? "max-w-[16px]"
+    : "max-w-[40px]";
+
+  const shouldShowLabel = (idx: number, total: number): boolean => {
+    if (total <= 10) return true;
+    if (total <= 15) return idx % 2 === 0;
+    if (total <= 24) return idx % 4 === 0 || idx === total - 1;
+    return idx % 5 === 0 || idx === total - 1;
+  };
+
+  const chartTitle =
+    range === "TODAY" ? "Hourly Revenue Today"
+    : range === "WEEK" ? "Weekly System Revenue Trend"
+    : range === "MONTH" ? "Monthly System Revenue Trend"
+    : range === "YEAR" ? "Yearly System Revenue Trend"
+    : "All-Time System Revenue Trend";
+
+  return (
+    <div className="space-y-8">
+      {/* Page Header */}
+      <header>
+        <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">System Dashboard</h1>
+        <p className="text-sm text-gorola-slate font-dm-sans">
+          Real-time aggregated view of system activity and controls across all stores.
+        </p>
+      </header>
+
+      {/* KPI Cards Grid */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+        {/* Total Orders Today */}
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
+              Orders Today
+            </span>
+            <div className="h-8 w-8 bg-gorola-pine/10 rounded-xl flex items-center justify-center text-gorola-pine">
+              <ShoppingBag className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 data-testid="total-orders-today" className="text-2xl font-black text-gorola-charcoal">
+              {dashboard.totalOrdersToday}
+            </h3>
+            <p className="text-xs text-gorola-slate mt-1">Orders placed today</p>
+          </div>
+        </div>
+
+        {/* Total Revenue Today */}
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
+              Total Revenue
+            </span>
+            <div className="h-8 w-8 bg-green-100 rounded-xl flex items-center justify-center text-green-700">
+              <TrendingUp className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 data-testid="total-revenue-today" className="text-2xl font-black text-gorola-charcoal">
+              {formatCurrency(dashboard.totalRevenueToday)}
+            </h3>
+            <p className="text-xs text-gorola-slate mt-1">Aggregated store earnings</p>
+          </div>
+        </div>
+
+        {/* Active Buyers */}
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
+              Active Buyers
+            </span>
+            <div className="h-8 w-8 bg-blue-100 rounded-xl flex items-center justify-center text-blue-700">
+              <Users className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 data-testid="active-buyers" className="text-2xl font-black text-gorola-charcoal">
+              {dashboard.totalActiveBuyers}
+            </h3>
+            <p className="text-xs text-gorola-slate mt-1">Verified user profiles</p>
+          </div>
+        </div>
+
+        {/* Total Products */}
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
+              Total Products
+            </span>
+            <div className="h-8 w-8 bg-amber-100 rounded-xl flex items-center justify-center text-amber-700">
+              <Layers className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 data-testid="total-products" className="text-2xl font-black text-gorola-charcoal">
+              {dashboard.totalProducts}
+            </h3>
+            <p className="text-xs text-gorola-slate mt-1">Active catalog items</p>
+          </div>
+        </div>
+
+        {/* Pending Approvals */}
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
+              Pending Ads
+            </span>
+            <div className="h-8 w-8 bg-red-100 rounded-xl flex items-center justify-center text-red-700">
+              <Clock className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 data-testid="pending-approvals" className="text-2xl font-black text-gorola-charcoal">
+              {dashboard.pendingAdApprovalsCount}
+            </h3>
+            <p className="text-xs text-gorola-slate mt-1">Ads awaiting review</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Main Section Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Revenue Trend Chart */}
+        <div className="lg:col-span-2 bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden">
+          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
+              {chartTitle}
+            </h2>
+
+            {/* Range + GroupBy controls — identical to store dashboard */}
+            <div className="flex items-center gap-3">
+              {/* Range Select */}
+              <div className="relative">
+                <select
+                  data-testid="analytics-range-select"
+                  value={range}
+                  onChange={(e) => {
+                    const nextRange = e.target.value as "TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL";
+                    setRange(nextRange);
+                    if (nextRange === "TODAY") {
+                      setGroupBy("HOURLY");
+                    } else if (nextRange === "WEEK" || nextRange === "MONTH") {
+                      setGroupBy("DAILY");
+                    } else if (nextRange === "YEAR") {
+                      setGroupBy("MONTHLY");
+                    } else {
+                      setGroupBy("YEARLY");
+                    }
+                  }}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                >
+                  <option value="TODAY">Today</option>
+                  <option value="WEEK">Last 7 Days</option>
+                  <option value="MONTH">Last 30 Days</option>
+                  <option value="YEAR">Current Year</option>
+                  <option value="ALL">All Time</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              </div>
+
+              {/* GroupBy Select */}
+              <div className="relative">
+                <select
+                  data-testid="analytics-groupby-select"
+                  value={groupBy}
+                  onChange={(e) => setGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
+                  disabled={range === "TODAY"}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {range === "TODAY" ? (
+                    <option value="HOURLY">Hourly</option>
+                  ) : (
+                    <>
+                      <option value="HOURLY">Hourly (Pattern)</option>
+                      <option value="DAILY">Daily</option>
+                      <option value="MONTHLY" disabled={range === "WEEK" || range === "MONTH"}>Monthly</option>
+                      <option value="YEARLY" disabled={range !== "ALL"}>Yearly</option>
+                    </>
+                  )}
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Bar Chart */}
+          <div className="flex-1 min-h-[260px] w-full flex items-stretch select-none mt-4">
+            {/* Y-Axis scale */}
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 text-right min-w-[50px] border-r border-gorola-charcoal/5">
+              <span>{formatYAxisLabel(maxRevenue)}</span>
+              <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
+              <span>{formatYAxisLabel(0)}</span>
+            </div>
+
+            {/* Bars container */}
+            <div className="flex-1 h-full relative ml-3">
+              <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
+                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
+                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
+                <div className="w-full border-b border-gorola-charcoal/10" />
+              </div>
+
+              <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${gapClass} pr-4 z-10`}>
+                {dashboard.weeklyRevenue.map((item, index) => {
+                  const heightPct = maxRevenue > 0 && item.revenue > 0 ? (item.revenue / maxRevenue) * 94 + 6 : 6;
+                  const isLatest = index === dashboard.weeklyRevenue.length - 1;
+                  return (
+                    <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
+                      <div
+                        style={{ height: `${heightPct}%` }}
+                        className={`relative w-full ${barMaxWidthClass} rounded-t-sm transition-all duration-300 group-hover:opacity-90 ${
+                          isLatest
+                            ? "bg-gorola-saffron shadow-lg shadow-gorola-saffron/10"
+                            : "bg-gorola-pine"
+                        }`}
+                      >
+                        <div className="opacity-0 group-hover:opacity-100 absolute bottom-[105%] left-1/2 -translate-x-1/2 bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-20 pointer-events-none shadow-md whitespace-nowrap">
+                          {formatDateLabel(item.date)} • {formatCurrency(item.revenue)}
+                        </div>
+                      </div>
+                      <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-slate/60 font-semibold whitespace-nowrap mt-1 ${
+                        shouldShowLabel(index, dashboard.weeklyRevenue.length) ? "" : "invisible"
+                      }`}>
+                        {formatDateLabel(item.date)}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Feature Flags Panel */}
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center gap-3 mb-6">
+              <div className="h-8 w-8 rounded-lg bg-gorola-mint/10 flex items-center justify-center text-gorola-pine">
+                <Settings className="h-4 w-4" />
+              </div>
+              <div>
+                <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Feature Flags</h2>
+                <p className="text-xs text-gorola-slate font-dm-sans">Toggle system-wide feature flags.</p>
+              </div>
+            </div>
+
+            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
+              {dashboard.featureFlags.map((flag) => (
+                <div
+                  key={flag.key}
+                  className="flex items-center justify-between p-3.5 rounded-xl border border-gorola-charcoal/5 bg-gorola-mint/5 hover:bg-gorola-mint/10 transition-colors"
+                >
+                  <div className="min-w-0 flex-1 pr-2">
+                    <span className="text-xs font-bold text-gorola-charcoal block truncate">
+                      {flag.key}
+                    </span>
+                    <span className="text-[10px] text-gorola-slate block truncate">
+                      {flag.key === "WEATHER_MODE_ACTIVE"
+                        ? "Restricts deliveries and adjusts pricing parameters."
+                        : "Toggle feature operations."}
+                    </span>
+                  </div>
+
+                  <button
+                    role="switch"
+                    aria-checked={flag.value}
+                    aria-label={`Toggle flag ${flag.key}`}
+                    onClick={() => handleToggleFlag(flag.key, flag.value)}
+                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
+                      flag.value ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
+                        flag.value ? "translate-x-5" : "translate-x-0.5"
+                      }`}
+                    />
+                  </button>
+                </div>
+              ))}
+
+              {dashboard.featureFlags.length === 0 && (
+                <p className="text-sm text-gorola-slate/60 italic text-center py-6">
+                  No feature flags currently seeded in database.
+                </p>
+              )}
+            </div>
+          </div>
+          <div className="mt-4 border-t border-gorola-charcoal/5 pt-3">
+            <span className="text-[10px] text-gorola-slate font-dm-sans block text-center">
+              * Note: Flag changes will propagate to Redis cache within 60s.
+            </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Stores performance breakdown table */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm">
+        <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-4">
+          Per-Store Performance Breakdown
+        </h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-left border-collapse">
+            <thead>
+              <tr className="border-b border-gorola-charcoal/5">
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Store</th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Orders Today</th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Pending Orders</th>
+                <th className="pb-3 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Revenue Today</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gorola-charcoal/[0.03]">
+              {dashboard.perStoreBreakdown.map((item) => (
+                <tr key={item.storeId} className="hover:bg-gorola-mint/5 transition-colors">
+                  <td className="py-4 font-semibold text-gorola-charcoal text-sm">
+                    {item.storeName}
+                  </td>
+                  <td className="py-4 text-center">
+                    <span className="text-xs font-bold text-gorola-charcoal bg-gorola-mint/30 px-2.5 py-1 rounded-lg">
+                      {item.ordersToday}
+                    </span>
+                  </td>
+                  <td className="py-4 text-center">
+                    <span className={`text-xs font-bold px-2.5 py-1 rounded-lg ${
+                      item.pendingOrdersCount > 0 ? "bg-amber-100 text-amber-800" : "bg-gorola-mint/10 text-gorola-slate"
+                    }`}>
+                      {item.pendingOrdersCount}
+                    </span>
+                  </td>
+                  <td className="py-4 text-right">
+                    <span className="text-xs font-bold text-gorola-pine bg-gorola-pine/10 px-3 py-1.5 rounded-full">
+                      {formatCurrency(item.revenueToday)}
+                    </span>
+                  </td>
+                </tr>
+              ))}
+              {dashboard.perStoreBreakdown.length === 0 && (
+                <tr>
+                  <td colSpan={4} className="text-sm text-gorola-slate/60 italic text-center py-8">
+                    No active stores found.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Confirmation Modal */}
+      {confirmingFlag && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
+          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-red-500" />
+              Confirm Feature Flag Update
+            </h3>
+            <p className="text-sm text-gorola-slate font-dm-sans mt-3">
+              Are you sure you want to toggle the feature flag <strong>{confirmingFlag.key}</strong> to{" "}
+              <strong>{confirmingFlag.value ? "ON" : "OFF"}</strong>?
+              {confirmingFlag.key === "WEATHER_MODE_ACTIVE" && (
+                <span className="block mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 p-2 rounded-lg font-sans">
+                  <strong>⚠️ Warning:</strong> Activating Weather Mode has high system impact, restricting rider delivery zones and altering pricing modifiers immediately.
+                </span>
+              )}
+            </p>
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                disabled={isUpdatingFlag}
+                onClick={() => setConfirmingFlag(null)}
+                className="px-4 py-2 border border-gorola-charcoal/10 hover:bg-gorola-charcoal/5 rounded-xl font-bold text-sm text-gorola-slate transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                disabled={isUpdatingFlag}
+                onClick={confirmToggleFlag}
+                className="px-4 py-2 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl font-bold text-sm shadow-sm transition-colors"
+              >
+                {isUpdatingFlag ? "Updating..." : "Confirm Update"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

@@ -1,3 +1,4 @@
+import { useQuery } from "@tanstack/react-query";
 import { Menu } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { useState } from "react";
@@ -36,6 +37,17 @@ export function AdminLayout({ children }: AdminLayoutProps): ReactElement {
     }, 0);
   };
 
+  const { data: dashboard } = useQuery({
+    queryKey: ["admin", "dashboard"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: { pendingAdApprovalsCount: number } }>("/api/v1/admin/dashboard");
+      return res.data.data;
+    },
+    staleTime: 30000,
+    enabled: useAuthStore.getState().role === "ADMIN" && !!useAuthStore.getState().accessToken
+  });
+
   const navItems = [
     { label: "Dashboard", path: getScopedPath("/admin/dashboard", "admin", isSubdomainMode) },
     { label: "Orders", path: getScopedPath("/admin/orders", "admin", isSubdomainMode) },
@@ -43,7 +55,15 @@ export function AdminLayout({ children }: AdminLayoutProps): ReactElement {
     { label: "Stores", path: getScopedPath("/admin/stores", "admin", isSubdomainMode) },
     { label: "Categories", path: getScopedPath("/admin/categories", "admin", isSubdomainMode) },
     { label: "Feature Flags", path: getScopedPath("/admin/feature-flags", "admin", isSubdomainMode) },
-    { label: "Advertisements", path: getScopedPath("/admin/ads", "admin", isSubdomainMode) },
+    {
+      label: "Advertisements",
+      path: getScopedPath("/admin/ads", "admin", isSubdomainMode),
+      badge: dashboard?.pendingAdApprovalsCount && dashboard.pendingAdApprovalsCount > 0 ? (
+        <span data-testid="pending-ads-badge" className="ml-auto bg-red-500 text-white text-[10px] font-bold px-2 py-0.5 rounded-full shrink-0">
+          {dashboard.pendingAdApprovalsCount}
+        </span>
+      ) : null
+    },
     { label: "Audit Logs", path: getScopedPath("/admin/audit-logs", "admin", isSubdomainMode) }
   ];
 
@@ -57,22 +77,23 @@ export function AdminLayout({ children }: AdminLayoutProps): ReactElement {
       >
         <div className="h-16 border-b border-gorola-mint/15 shrink-0" />
         <nav className="flex-1 space-y-1 px-2 lg:px-4 py-6 overflow-y-auto">
-          {navItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`flex items-center px-3 lg:px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
-                  isActive
-                    ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
-                    : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
+           {navItems.map((item) => {
+             const isActive = location.pathname.startsWith(item.path);
+             return (
+               <Link
+                 key={item.path}
+                 to={item.path}
+                 className={`flex items-center w-full px-3 lg:px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                   isActive
+                     ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
+                     : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+                 }`}
+               >
+                 <span className="truncate">{item.label}</span>
+                 {"badge" in item && item.badge}
+               </Link>
+             );
+           })}
         </nav>
       </aside>
 
@@ -108,24 +129,25 @@ export function AdminLayout({ children }: AdminLayoutProps): ReactElement {
         </header>
 
         {/* Mobile Sub-Navigation Bar */}
-        <nav className="flex md:hidden bg-white border-b border-gorola-mint/15 px-4 py-2 overflow-x-auto gap-2 scrollbar-none sticky top-16 z-20 w-full shrink-0">
-          {navItems.map((item) => {
-            const isActive = location.pathname.startsWith(item.path);
-            return (
-              <Link
-                key={item.path}
-                to={item.path}
-                className={`px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
-                  isActive
-                    ? "bg-gorola-pine text-white"
-                    : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-                }`}
-              >
-                {item.label}
-              </Link>
-            );
-          })}
-        </nav>
+         <nav className="flex md:hidden bg-white border-b border-gorola-mint/15 px-4 py-2 overflow-x-auto gap-2 scrollbar-none sticky top-16 z-20 w-full shrink-0">
+           {navItems.map((item) => {
+             const isActive = location.pathname.startsWith(item.path);
+             return (
+               <Link
+                 key={item.path}
+                 to={item.path}
+                 className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg whitespace-nowrap transition-colors ${
+                   isActive
+                     ? "bg-gorola-pine text-white"
+                     : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+                 }`}
+               >
+                 <span>{item.label}</span>
+                 {"badge" in item && item.badge}
+               </Link>
+             );
+           })}
+         </nav>
 
         {/* Dynamic Nested Content */}
         <main className="flex-1 p-6 md:p-8 lg:p-10">

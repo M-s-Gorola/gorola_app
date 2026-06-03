@@ -9,6 +9,7 @@ import { getPrismaClient } from "./lib/prisma.js";
 import { socketPlugin } from "./lib/socket.js";
 import { registerBuyerAddressRoutes } from "./modules/address/address.controller.js";
 import { AddressRepository } from "./modules/address/address.repository.js";
+import { registerAdminRoutes } from "./modules/admin/admin.controller.js";
 import { AdminRepository } from "./modules/admin/admin.repository.js";
 import { AdminAuthService } from "./modules/auth/admin-auth.service.js";
 import { registerAuthRoutes } from "./modules/auth/auth.controller.js";
@@ -294,6 +295,10 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenVerifier: tokenService,
     orderService: buyerOrderSvc,
     orders: orderRepoOrders
+  });
+
+  registerAdminRoutes(app, {
+    tokenVerifier: tokenService
   });
 
   app.get("/api/v1/stores/:id", async (request, reply) => {

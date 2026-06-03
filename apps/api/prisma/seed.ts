@@ -2,6 +2,9 @@ import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
 import { seedDummyData } from "./dummy-data";
 
+const ADMIN_EMAIL = "admin@gorola.in";
+const ADMIN_PASSWORD = "AdminGorola#123";
+
 const prisma = new PrismaClient();
 
 async function main(): Promise<void> {
@@ -128,6 +131,20 @@ async function main(): Promise<void> {
     }
   });
 
+  // ── System Admin Account ──────────────────────────────────────────────────
+  // Created once. If the row already exists it is left untouched.
+  // On first login the admin is redirected to /admin/setup-2fa for TOTP setup.
+  const adminPwHash = await hash(ADMIN_PASSWORD, 12);
+  await prisma.admin.upsert({
+    where: { email: ADMIN_EMAIL },
+    update: {},
+    create: {
+      email: ADMIN_EMAIL,
+      passwordHash: adminPwHash
+      // totpSecret left null — triggers mandatory /admin/setup-2fa on first login
+    }
+  });
+
   // Import and run dummy data seeder
   await seedDummyData(prisma, storeA.id, storeB.id, storeC.id, storeD.id, storeE.id);
 
@@ -192,7 +209,8 @@ async function main(): Promise<void> {
   });
 
   console.info("Seed completed", {
-    stores: [storeA.name, storeB.name, storeC.name, storeD.name, storeE.name]
+    stores: [storeA.name, storeB.name, storeC.name, storeD.name, storeE.name],
+    admin: ADMIN_EMAIL
   });
 }
 

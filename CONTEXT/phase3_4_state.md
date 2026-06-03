@@ -19,9 +19,9 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-04
-- **Session Summary:** Session 45 — Completed Phase 4.1 (Admin Auth, Mandatory 2FA & Cookie Isolation). Implemented frontend layout, route guards, Zustand auth store state modifications, and admin page components (Login, Two-Factor Entry, and Setup). Resolved exactOptionalPropertyTypes TypeScript incompatibilities in the backend schemas and services. Fully verified the build compiles and linters are clean.
-- **Next Session Must Start With:** Phase 4.2 (Admin Dashboard — All-Stores Overview) implementation.
-- **In Progress Right Now:** None. Phase 4.1 complete.
+- **Session Summary:** Session 46 — Completed Phase 4.2 (Admin Dashboard — All-Stores Overview). Created `AdminService` with in-memory N+1-free store breakdown aggregation, `AdminController` exposing `GET /api/v1/admin/dashboard`, and the full `AdminDashboardPage` UI (KPI cards, weekly revenue chart, per-store table, feature flag controls with Weather Mode confirmation modal, and pending-ad sidebar notification badge). All integration tests (4/4), unit tests (4/4), `pnpm typecheck`, and `pnpm lint` are green.
+- **Next Session Must Start With:** Phase 4.3 (All-Orders View) implementation.
+- **In Progress Right Now:** None. Phase 4.2 complete.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -1469,30 +1469,30 @@ Create `GET /api/v1/admin/dashboard` in a new `admin.controller.ts`. Aggregates 
 
 ---
 
-- [ ] **RED — Integration (`admin.dashboard.test.ts`):**
-  - [ ] Test: `GET /api/v1/admin/dashboard` with ADMIN JWT → HTTP 200 with shape `{ totalOrdersToday, totalRevenueToday, perStoreBreakdown: [{ storeId, storeName, ordersToday, revenueToday, pendingOrdersCount }], weeklyRevenue: [{ date, revenue }], lowStockAlertCount, totalActiveBuyers, totalProducts, pendingAdApprovalsCount, featureFlags: [{ key, value }] }`
-  - [ ] Test: `GET /api/v1/admin/dashboard` with STORE_OWNER JWT → HTTP 403 `FORBIDDEN`
-  - [ ] Test: `GET /api/v1/admin/dashboard` with no JWT → HTTP 401
-  - [ ] Test: `pendingAdApprovalsCount` = count of ads with `isApproved: false` and `isActive: true` across all stores
-  - [ ] **Run — confirm RED (404)**
+- [x] **RED — Integration (`admin.dashboard.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/dashboard` with ADMIN JWT → HTTP 200 with shape `{ totalOrdersToday, totalRevenueToday, perStoreBreakdown: [{ storeId, storeName, ordersToday, revenueToday, pendingOrdersCount }], weeklyRevenue: [{ date, revenue }], lowStockAlertCount, totalActiveBuyers, totalProducts, pendingAdApprovalsCount, featureFlags: [{ key, value }] }`
+  - [x] Test: `GET /api/v1/admin/dashboard` with STORE_OWNER JWT → HTTP 403 `FORBIDDEN`
+  - [x] Test: `GET /api/v1/admin/dashboard` with no JWT → HTTP 401
+  - [x] Test: `pendingAdApprovalsCount` = count of ads with `isApproved: false` and `isActive: true` across all stores
+  - [x] **Run — confirm RED (404)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Create `apps/api/src/modules/admin/admin.service.ts` with `getDashboard()` aggregating all stores
-  - [ ] [Controller] Create `apps/api/src/modules/admin/admin.controller.ts` with `GET /api/v1/admin/dashboard`
-  - [ ] [Routes] Create `registerAdminRoutes(app)` in `routes.ts` with `requireAuth` + `requireRole('ADMIN')` for all admin endpoints
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Create `apps/api/src/modules/admin/admin.service.ts` with `getDashboard()` aggregating all stores
+  - [x] [Controller] Create `apps/api/src/modules/admin/admin.controller.ts` with `GET /api/v1/admin/dashboard`
+  - [x] [Routes] Create `registerAdminRoutes(app)` in `routes.ts` with `requireAuth` + `requireRole('ADMIN')` for all admin endpoints
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminDashboardPage.test.tsx`):**
-  - [ ] Test: renders KPI cards: "Total Orders Today", "Total Revenue Today", "Active Buyers", "Total Products", "Pending Approvals" badge
-  - [ ] Test: per-store breakdown table with columns "Store", "Orders Today", "Revenue Today", "Pending"
-  - [ ] Test: pending approvals count > 0 shows red badge on "Advertisements" sidebar link
-  - [ ] Test: weather mode feature flag shows current on/off status with a quick-toggle button (confirmation modal first)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminDashboardPage.test.tsx`):**
+  - [x] Test: renders KPI cards: "Total Orders Today", "Total Revenue Today", "Active Buyers", "Total Products", "Pending Approvals" badge
+  - [x] Test: per-store breakdown table with columns "Store", "Orders Today", "Revenue Today", "Pending"
+  - [x] Test: pending approvals count > 0 shows red badge on "Advertisements" sidebar link
+  - [x] Test: weather mode feature flag shows current on/off status with a quick-toggle button (confirmation modal first)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminDashboardPage.tsx`; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminDashboardPage.tsx`; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin logs in → dashboard shows real data across all stores → pending ad count badge visible → ✅
+- [x] **Verification chain:**
+  - [x] Admin logs in → dashboard shows real data across all stores → pending ad count badge visible → ✅
 
 ---
 
@@ -2421,4 +2421,28 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 - **TypeScript Exact Optional Property Fixes**: Fixed TS2375 and TS2379 compatibility errors in `auth.schema.ts` and `admin-auth.service.ts` under the strict `exactOptionalPropertyTypes: true` compiler flag by explicitly allowing `string | undefined` union types.
 - **Workspace Build & Lint Verification**: Verified all linters are green and compiled the entire workspace cleanly (`pnpm build`).
 
+---
+
+### Session 46 — 2026-06-04 — Completed Phase 4.2 (Admin Dashboard & All-Stores Overview)
+- **Completed Phase 4.2 Checklist**: Fully implemented and verified the platform-wide Administrator Dashboard.
+- **Backend Analytics Aggregation**: Created `AdminService` and `AdminController` to aggregate orders, revenues, active buyers, product counts, and pending ads across both Quick Commerce and Booking Commerce stores.
+- **Avoided N+1 Query Anti-Pattern**: Optimized store performance breakdown query, fetching orders for all active stores in a single database request and grouping them in-memory.
+- **Vibrant Admin Dashboard UI**: Designed and built the responsive `AdminDashboardPage` utilizing GoRola's premium HSL colors, micro-animations, dynamic SVG chart bars, and store-performance tables.
+- **Interactive Weather Mode Controls**: Added feature flag controls with a safety confirmation modal to prevent accidental activation of high-impact system toggles (e.g. `WEATHER_MODE_ACTIVE`).
+- **Sidebar Notification Badges**: Extended the admin sidebar and mobile navigation lists to query and render notification badges next to the "Advertisements" section when there are pending advertisement approvals.
+- **100% Passing Tests & Checks**: Verified with Vitest unit tests, integration tests, `pnpm typecheck`, and ESLint checking.
+
+
+
+---
+
+### Session 47 - 2026-06-04 - Admin Dashboard Chart Range/Granularity Filter (Phase 4.2 Polish)
+- **Multi-Dimensional Chart Filters on Admin Dashboard**: Extended the Platform Revenue Trend chart on AdminDashboardPage with the same range and granularity controls that exist on the Store Partner dashboard. Admins can now switch between **Today / Last 7 Days / Last 30 Days / Current Year / All Time** (range) and **Hourly / Daily / Monthly / Yearly** (groupBy) granularity levels.
+- **Backend AdminService Refactored**: getDashboard() now accepts 
+ange and groupBy parameters. Replaced the hardcoded 7-day loop with the exact same multi-dimensional in-memory aggregation logic from store-owner.service.ts, supporting all 5 - 4 range/groupBy combinations cleanly.
+- **Controller Updated**: admin.controller.ts reads ?range= and ?groupBy= query params and forwards them to the service. Default values: WEEK / DAILY.
+- **Guardrail Logic Preserved**: Selecting `TODAY` auto-locks groupBy to `HOURLY`; `WEEK`/`MONTH` default to `DAILY`; `YEAR` defaults to `MONTHLY`; `ALL` defaults to `YEARLY` - matching store dashboard guardrails exactly.
+- **Adaptive Bar Sizing**: Chart bars automatically adapt gap spacing and max-width depending on the number of data points (7 for week, 24 for hourly, 30 for month, etc.) using the same `gapClass`, `barMaxWidthClass`, and `shouldShowLabel` helpers.
+- **Admin Seed in seed.ts**: Integrated admin account creation (admin@gorola.in / AdminGorola#123) directly into the main prisma:seed command - no separate seed script needed. Uses idempotent upsert; 	otpSecret is left null to force TOTP setup on first login.
+- **Verification**: Integration tests (4/4 passing), unit tests (4/4 passing), pnpm lint clean, pnpm typecheck clean.
 
