@@ -135,7 +135,47 @@ export function registerPromotionRoutes(
       const params = request.params as { email: string };
       const { hash } = await import("bcryptjs");
       const hashedPw = await hash("Owner#123", 10);
-      await getPrismaClient().storeOwner.updateMany({
+      
+      const prisma = getPrismaClient();
+
+      // Find the store owner to get their storeId
+      const owner = await prisma.storeOwner.findFirst({
+        where: { email: params.email }
+      });
+
+      if (owner) {
+        // Clear all offers for this store
+        await prisma.offer.deleteMany({
+          where: { storeId: owner.storeId }
+        });
+
+        // Clear all discounts for this store (except standard seeded TESTDEAL10)
+        await prisma.discount.deleteMany({
+          where: {
+            storeId: owner.storeId,
+            NOT: {
+              code: "TESTDEAL10"
+            }
+          }
+        });
+
+        // Clear all dynamic advertisements for this store
+        await prisma.advertisement.deleteMany({
+          where: {
+            storeId: owner.storeId,
+            NOT: {
+              id: {
+                in: ["adv_1", "adv_2", "adv_3"]
+              }
+            }
+          }
+        });
+      }
+
+      // Clear all cart items to prevent cart leakage between tests/retries
+      await prisma.cartItem.deleteMany({});
+
+      await prisma.storeOwner.updateMany({
         where: { email: params.email },
         data: {
           totpEnabled: false,

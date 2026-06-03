@@ -104,7 +104,7 @@ export function ProductDetailPage(): ReactElement {
   }, [query.data, selectedVariantIndex]);
 
   useEffect(() => {
-    if (containerRef.current === null || query.data === undefined || import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as any).isE2E)) {
+    if (containerRef.current === null || query.data === undefined || import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).isE2E)) {
       return;
     }
     const ctx = gsap.context(() => {

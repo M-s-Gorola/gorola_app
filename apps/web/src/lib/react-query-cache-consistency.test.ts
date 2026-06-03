@@ -107,6 +107,7 @@ describe("React Query Cache Shape Consistency", () => {
 
         // Parse queryKey from the block
         // Matches queryKey: [ 'a', 'b', ... ] or queryKey: ["a", "b", ...]
+        // eslint-disable-next-line security/detect-unsafe-regex
         const keyRegex = /queryKey:\s*\[\s*(?:"|')([^"']+)(?:"|')\s*(?:,\s*(?:"|')([^"']+)(?:"|'))?/;
         const keyMatch = keyRegex.exec(fullBlock);
         if (!keyMatch) continue;
@@ -118,7 +119,7 @@ describe("React Query Cache Shape Consistency", () => {
 
         // Extract return statements inside the useQuery block
         // Find the return statement inside queryFn
-        const returnRegex = /return\s+([a-zA-Z0-9_\.\?\!\[\]\(\)]+)/g;
+        const returnRegex = /return\s+([a-zA-Z0-9_.?!\][()]+)/g;
         let returnMatch;
         let returnShape: "res.data.data" | "res.data" | "other" = "other";
         let rawReturn = "none";

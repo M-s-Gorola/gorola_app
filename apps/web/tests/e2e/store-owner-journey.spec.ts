@@ -423,13 +423,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByRole("button", { name: "Login" }).click();
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
-    // 2. Verify sidebar navigation swaps "Products" to "Services"
-    const sidebar = page.locator("aside");
-    await expect(sidebar.getByRole("link", { name: "Services" })).toBeVisible();
-    await expect(sidebar.getByRole("link", { name: "Products" })).not.toBeVisible();
+    // 2. Verify navigation swaps "Products" to "Services"
+    const servicesLink = page.getByRole("link", { name: "Services" }).filter({ visible: true });
+    const productsLink = page.getByRole("link", { name: "Products" }).filter({ visible: true });
+    await expect(servicesLink).toBeVisible();
+    await expect(productsLink).not.toBeVisible();
 
     // 3. Navigate to Services list and verify Stock adjust features are completely hidden
-    await sidebar.getByRole("link", { name: "Services" }).click();
+    await servicesLink.click();
     await expect(page.getByRole("heading", { name: "Services" })).toBeVisible();
 
     // Check that Restock/Adjust buttons, stock table columns, and low stock thresholds are hidden
@@ -669,14 +670,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     const couponCode = `STACKCOUPON_${suffix}`;
     const offerTitle = `STACKOFFER_${suffix}`;
 
-    console.log("E2E-033 STARTing test...");
-
-    // Enable console listeners
-    page.on("console", msg => console.log(`[MERCHANT BROWSER] ${msg.text()}`));
-    page.on("pageerror", err => console.error(`[MERCHANT BROWSER ERROR] ${err.message}`));
-
     // 1. Log in as Booking store owner (owner3@gorola.in - Aarna Diagnostic)
-    console.log("1. Logging in as owner3@gorola.in...");
     await page.goto(`${STORE_SUBDOMAIN}/login`);
     await page.getByLabel("Email address").fill("owner3@gorola.in");
     await page.getByLabel("Password").fill("Owner#123");
@@ -684,11 +678,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
     // Go to Discounts
-    console.log("Navigating to Discounts page...");
     await page.getByRole("link", { name: "Discounts" }).click();
 
     // A. Create Coupon Code (10% off, min order ₹300)
-    console.log(`Creating Coupon Code: ${couponCode}...`);
     await page.getByRole("button", { name: "Create Discount Code" }).click();
     await page.getByPlaceholder("e.g. SUMMER50").fill(couponCode);
     await page.getByPlaceholder("e.g. 10", { exact: true }).fill("10"); // 10%
@@ -701,18 +693,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('input[type="date"]').last().fill(end);
     await page.getByRole("button", { name: "Create Discount Code" }).click();
     await expect(page.locator("tr").filter({ hasText: couponCode })).toBeVisible();
-    console.log("Coupon Code created successfully.");
 
     // B. Create Store Offer (15% off, min order ₹400)
-    console.log(`Creating Store Offer: ${offerTitle}...`);
     await page.getByRole("link", { name: "Offers" }).click();
 
     // ---------------------------------------------------------
     // NEW: Wait for the network to fetch and render the table
-    console.log("Waiting for Offers table to load...");
     await page.waitForTimeout(2000);
 
-    console.log("Cleaning up leftover active offers...");
     const deactivateBtns = page.locator('[data-testid^="deactivate-offer-"]');
 
     // Playwright evaluates .count() dynamically
@@ -743,14 +731,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('input[type="date"]').last().fill(end);
     await page.getByRole("button", { name: "Submit Offer" }).click();
     await expect(page.locator("tr").filter({ hasText: offerTitle })).toBeVisible();
-    console.log("Store Offer created successfully.");
 
     // 2. Buyer schedules service variant from Booking store with both active store offer and applied coupon code
-    console.log("2. Creating buyer context and logging in buyer...");
     const buyerContext = await context.browser()!.newContext();
     const buyerPage = await buyerContext.newPage();
-    buyerPage.on("console", msg => console.log(`[BUYER BROWSER] ${msg.text()}`));
-    buyerPage.on("pageerror", err => console.error(`[BUYER BROWSER ERROR] ${err.message}`));
 
     await buyerPage.addInitScript(() => {
       (window as any).isE2E = true;
@@ -758,44 +742,34 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     await buyerPage.locator('#buyer-phone').fill('9876543214');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
-    console.log("Waiting for Enter OTP screen...");
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
     for (let i = 0; i < 6; i++) {
       await buyerPage.locator(`[data-testid="otp-digit-${i}"]`).fill((i + 1).toString());
       await buyerPage.waitForTimeout(100);
     }
-    console.log("Clicking Verify...");
     await buyerPage.locator('button', { hasText: /Verify/i }).click();
-    console.log("Waiting for redirection to root /...");
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
     await expect(buyerPage.locator('text=/Restoring your session/i')).not.toBeVisible();
     await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
-    console.log("Buyer logged in successfully.");
 
     // Go to Aarna Diagnostic (Booking Store)
-    console.log("Navigating to store Aarna Diagnostic Centre...");
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_aarna_diagnostic`);
 
     // Select service variant & schedule (Complete Blood Count is ₹500, which satisfies both min limits ₹300 and ₹400)
     // ProductGrid renders a <Link> with text "Book" for BOOKING_COMMERCE stores
-    console.log("Clicking Book for Complete Blood Count...");
     await buyerPage.locator('[data-testid="product-card"]')
       .filter({ hasText: "Complete Blood Count" })
       .getByRole("link", { name: "Book" })
       .click();
 
     // Select date at least +2 days in future to bypass timezones
-    console.log("Filling schedule date...");
     const scheduleDate = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
     await buyerPage.locator('input[type="date"]').fill(scheduleDate);
-    console.log("Clicking timeslot button...");
     await buyerPage.locator('button', { hasText: '06:00-09:00' }).click(); // Select timeslot
 
     // Apply Coupon Code
-    console.log(`Filling coupon code: ${couponCode}...`);
     const bookingMain = buyerPage.locator("main");
     await bookingMain.getByPlaceholder("Discount code").fill(couponCode);
-    console.log("Clicking Apply coupon...");
     await bookingMain.getByRole("button", { name: "Apply" }).click();
 
     // Booking Checkout calculations:
@@ -803,54 +777,53 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Store Offer (15%): 15% of 500 = ₹75
     // Coupon Code (10%): 10% of 500 = ₹50
     // Stacked Deductions: ₹75 + ₹50 = ₹125
-    console.log("Asserting discount-summary contains 125...");
     await expect(buyerPage.locator('[data-testid="discount-summary"]')).toContainText("125");
 
     // Fill Address via "Add New" Dialog (address form is inside a Dialog modal, not inline)
-    console.log("Opening Add New address dialog...");
     await buyerPage.locator("button", { hasText: /Add New/i }).first().click();
     // Wait for dialog to open
-    console.log("Waiting for dialog to be visible...");
     await expect(buyerPage.getByRole("dialog")).toBeVisible();
     // Use name-attribute selectors (robust, not reliant on placeholder text/encoding)
-    console.log("Filling address form...");
     await buyerPage.locator('[name="label"]').fill("E2E Suite");
     await buyerPage.locator('[name="landmarkDescription"]').fill("E2E Tower - near the diagnostic center entrance");
     // Click Save Address inside dialog
-    console.log("Clicking Save Address...");
     await buyerPage.getByRole("button", { name: "Save Address" }).click();
     // Wait for dialog to close after save
-    console.log("Waiting for dialog to close...");
     await expect(buyerPage.getByRole("dialog")).not.toBeVisible({ timeout: 10000 });
 
     // Now confirm the booking
-    console.log("Clicking Confirm Booking...");
-    //await buyerPage.getByRole("button", { name: "Confirm Booking" }).click();
-
-    // Add { force: true } to bypass the sonner-toast notification on mobile viewports
-    await buyerPage.getByRole("button", { name: "Confirm Booking" }).click({ force: true });
+    // Dismiss/hide any toast notifications so they don't block the click on mobile viewports
+    await buyerPage.evaluate(() => {
+      const toasts = document.querySelectorAll('[data-sonner-toaster]');
+      toasts.forEach(t => (t as HTMLElement).style.display = 'none');
+    });
+    await buyerPage.getByRole("button", { name: "Confirm Booking" }).click();
 
     // 3. Verify Booking Confirmation Page breakdown is correct and collapsible
-    console.log("Waiting for URL of booking confirmation page...");
     await buyerPage.waitForURL(/.*\/bookings\/.*/);
 
     // Collapsible breakdown exists
-    console.log("Locating discount-toggle-chevron...");
     const discountToggle = buyerPage.locator('[data-testid="discount-toggle-chevron"]');
     await expect(discountToggle).toBeVisible();
 
+    // Wait for the GSAP entrance bloom and slide animation to finish completely (approx 2.5s)
+    await buyerPage.waitForTimeout(2500);
+
     // Click toggle chevron to expand breakdown
-    console.log("Clicking discount-toggle-chevron...");
     await discountToggle.click();
 
     // Verify breakdown lists both individual deductions:
     // - STACKOFFER (15% off) = ₹75
     // - STACKCOUPON (10% off) = ₹50
-    console.log("Asserting breakdown deductions...");
     const breakdown = buyerPage.locator('[data-testid="discount-breakdown"]');
+
+    // Retry click if breakdown did not open (e.g. if the animation was still shifting elements)
+    if (!(await breakdown.isVisible())) {
+      await discountToggle.click({ force: true });
+    }
+
     await expect(breakdown.getByText(`Discount (${offerTitle})`)).toBeVisible();
     await expect(breakdown.getByText(couponCode)).toBeVisible();
-    console.log("E2E-033 test passed completely!");
     await buyerContext.close();
   });
 });

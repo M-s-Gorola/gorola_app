@@ -1,6 +1,5 @@
 import type { ReactElement } from "react";
-import { Route } from "react-router-dom";
-import { Link, useLocation } from "react-router-dom";
+import { Link, Route, useLocation } from "react-router-dom";
 
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
 import { BookingConfirmationPage } from "@/pages/buyer/BookingConfirmationPage";
@@ -15,8 +14,8 @@ import { ProductDetailPage } from "@/pages/buyer/ProductDetailPage";
 import { ProfilePage } from "@/pages/buyer/ProfilePage";
 import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
 import { SearchResultsPage } from "@/pages/buyer/SearchResultsPage";
-import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
 import { StoreDetailPage } from "@/pages/buyer/StoreDetailPage";
+import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
 
 import { ProtectedRoute } from "./guards";
 

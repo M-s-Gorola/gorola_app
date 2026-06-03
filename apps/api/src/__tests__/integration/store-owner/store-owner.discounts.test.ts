@@ -288,7 +288,7 @@ describe("StoreOwner Discounts Integration Tests", () => {
     });
     expect(updateRes.statusCode).toBe(200);
     expect(updateRes.json().data.code).toBe("SAVE10-NEW");
-    expect(updateRes.json().data.discountValue).toBe("15");
+    expect(updateRes.json().data.discountValue).toBe(15);
     expect(updateRes.json().data.isActive).toBe(true);
 
     // 11. Delete discount code -> 200

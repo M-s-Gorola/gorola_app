@@ -148,7 +148,7 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
     if (items.length === 0 || gridRef.current === null) {
       return;
     }
-    if (import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as any).isE2E)) {
+    if (import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).isE2E)) {
       return;
     }
     initGorolaGsapOnce();

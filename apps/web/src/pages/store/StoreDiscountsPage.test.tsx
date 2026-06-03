@@ -495,7 +495,7 @@ describe("StoreDiscountsPage", () => {
       const cachedProfile = queryClient.getQueryData<{ storeType: string }>(["store", "profile"]);
       expect(cachedProfile).toBeDefined();
       expect(cachedProfile?.storeType).toBe("BOOKING_COMMERCE");
-      expect((cachedProfile as any).data).toBeUndefined();
+      expect((cachedProfile as unknown as Record<string, unknown>).data).toBeUndefined();
     });
   });
 });
