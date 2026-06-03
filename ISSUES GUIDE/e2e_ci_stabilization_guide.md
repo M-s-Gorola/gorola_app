@@ -54,6 +54,29 @@ By building the code first, you eliminate the "Compilation" task from the execut
 - [ ] **Wait for Health**: Always use a dedicated health-check URL (e.g., `/api/health`) to signal that the server is ready.
 - [ ] **Extended Timeouts**: Set longer timeouts (e.g., 60s-120s) in CI to account for slower virtualized hardware.
 - [ ] **Deterministic Workers**: Use `workers: 1` in CI if your tests share a single stateful resource (like a database) to avoid race conditions.
+- [ ] **Reporter Alignment**: Standardize on `--reporter=list` or `--reporter=github` for CI runs to print failure tracebacks directly in stdout.
+
+---
+
+## 5. CI Log Visibility & Reporter Selection
+
+Running E2E test suites inside CI/CD virtual environments presents challenges with log visibility and failure diagnostic efficiency:
+
+### A. The Hidden Failure Trap
+By default, Playwright uses the `html` or `line` reporter.
+* **In Local Development:** The HTML reporter opens a browser window showcasing step-by-step failures, screenshots, and trace logs.
+* **In CI Run Logs:** These graphical pages are saved as local artifact folders on the runner disk. If a test fails, developers are forced to manually download a zip archive from the CI system's job page, unzip it, and open the HTML report just to see a basic selector failure, introducing massive debugging delays.
+
+### B. Verbose vs. Swallowed Logs
+* Progress reporters (like `dot` or `line`) compile output into a single line or print minimal dots. While clean, they swallow error context, stack traces, and console logs unless the process fails completely.
+* High-verbosity progress outputs can flood the log buffer on large suites, making logs hard to search.
+
+### C. Best Practice: Standardizing `--reporter=list`
+To ensure immediate diagnostic feedback, explicitly supply `--reporter=list` (or `--reporter=github` for GHA annotation integrations) in:
+1. **CI workflows (`ci.yml`)**: Under test execution runner steps.
+2. **Project scripts (`package.json`)**: Within quality control commands like `test:e2e` or `ci:quality` to guarantee developers get consistent terminal tracing.
+
+This prints the start of each test case and immediately dumps detailed stack traces, expected vs. received DOM mismatches, and console output to the terminal stdout on any failure.
 
 ## Summary
-The secret to stable CI E2E tests is **Isolation and Pre-computation**. By validating your **real production code** rather than your development source, you eliminate the unpredictable performance of developer tooling and ensure a high-fidelity signal.
+The secret to stable CI E2E tests is **Isolation, Pre-computation, and Visibility**. By validating your **real production code** rather than your development source, and ensuring that any failures print their traces directly to the job log, you minimize resource overhead and maximize developer velocity.

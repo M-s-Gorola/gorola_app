@@ -82,6 +82,7 @@ describe("StoreAdvertisementsPage", () => {
         id: "ad-1",
         title: "Summer Sale Grocery",
         imageUrl: "https://example.com/grocery-sale.png",
+        linkUrl: "https://store.gorola.com/grocery-sale",
         startsAt: "2026-06-01T00:00:00.000Z",
         endsAt: "2026-06-10T00:00:00.000Z",
         isApproved: false,
@@ -91,6 +92,7 @@ describe("StoreAdvertisementsPage", () => {
         id: "ad-2",
         title: "Approved Premium Repairs",
         imageUrl: "https://example.com/repair-sale.png",
+        linkUrl: "https://store.gorola.com/repair-sale",
         startsAt: "2026-06-11T00:00:00.000Z",
         endsAt: "2026-06-20T00:00:00.000Z",
         isApproved: true,
@@ -169,12 +171,14 @@ describe("StoreAdvertisementsPage", () => {
     // Fill form
     const titleInput = await screen.findByLabelText(/ad title/i);
     const imageInput = screen.getByLabelText(/image url/i);
+    const targetUrlInput = screen.getByLabelText(/target url/i);
     const startsInput = screen.getByLabelText(/starts at/i);
     const endsInput = screen.getByLabelText(/ends at/i);
     const submitBtn = screen.getByRole("button", { name: /submit for approval/i });
 
     await user.type(titleInput, "Mega Monsoon Offer");
     await user.type(imageInput, "https://example.com/monsoon.png");
+    await user.type(targetUrlInput, "https://store.gorola.com/sale");
     await user.type(startsInput, "2026-07-01T00:00");
     await user.type(endsInput, "2026-07-15T00:00");
 
@@ -185,6 +189,7 @@ describe("StoreAdvertisementsPage", () => {
           id: "ad-new",
           title: "Mega Monsoon Offer",
           imageUrl: "https://example.com/monsoon.png",
+          linkUrl: "https://store.gorola.com/sale",
           startsAt: "2026-07-01T00:00:00.000Z",
           endsAt: "2026-07-15T00:00:00.000Z",
           isApproved: false,
@@ -200,7 +205,8 @@ describe("StoreAdvertisementsPage", () => {
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith("/api/v1/store/advertisements", expect.objectContaining({
         title: "Mega Monsoon Offer",
-        imageUrl: "https://example.com/monsoon.png"
+        imageUrl: "https://example.com/monsoon.png",
+        linkUrl: "https://store.gorola.com/sale"
       }));
     });
 

@@ -144,6 +144,7 @@ export function BookingConfirmationPage(): ReactElement {
       setActiveRating(null);
       setRatingComment("");
       void queryClient.invalidateQueries({ queryKey: ["booking-order-confirmation", id] });
+      void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
     },
     onError: () => {
       toast.error("Failed to submit rating");

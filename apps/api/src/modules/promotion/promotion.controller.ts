@@ -61,7 +61,7 @@ export function registerPromotionRoutes(
   app.get("/api/v1/promotions/store/:storeId/offers", getOffersPreHandler, async (request, reply) => {
     const params = request.params as { storeId: string };
     const offers = await getPrismaClient().offer.findMany({
-      where: { storeId: params.storeId },
+      where: { storeId: params.storeId, isActive: true },
       orderBy: { createdAt: "desc" }
     });
     const serializedOffers = offers.map((offer) => ({
@@ -123,4 +123,80 @@ export function registerPromotionRoutes(
       valid: true as const
     });
   });
+
+  if (process.env.NODE_ENV === "test") {
+    app.post("/api/v1/test/advertisements/:id/approve", async (request, reply) => {
+      const params = request.params as { id: string };
+      const approvedAd = await adRepo.approve(params.id);
+      return success(request, reply, approvedAd);
+    });
+
+    app.post("/api/v1/test/store-owner/:email/reset", async (request, reply) => {
+      const params = request.params as { email: string };
+      const { hash } = await import("bcryptjs");
+      const hashedPw = await hash("Owner#123", 10);
+      
+      const prisma = getPrismaClient();
+
+      // Find the store owner to get their storeId
+      const owner = await prisma.storeOwner.findFirst({
+        where: { email: params.email }
+      });
+
+      if (owner) {
+        // Clear all offers for this store
+        await prisma.offer.deleteMany({
+          where: { storeId: owner.storeId }
+        });
+
+        // Clear all discounts for this store (except standard seeded TESTDEAL10)
+        await prisma.discount.deleteMany({
+          where: {
+            storeId: owner.storeId,
+            NOT: {
+              code: "TESTDEAL10"
+            }
+          }
+        });
+
+        // Clear all dynamic advertisements for this store
+        await prisma.advertisement.deleteMany({
+          where: {
+            storeId: owner.storeId,
+            NOT: {
+              id: {
+                in: ["adv_1", "adv_2", "adv_3"]
+              }
+            }
+          }
+        });
+      }
+
+      // Clear all cart items to prevent cart leakage between tests/retries
+      await prisma.cartItem.deleteMany({});
+
+      await prisma.storeOwner.updateMany({
+        where: { email: params.email },
+        data: {
+          totpEnabled: false,
+          totpSecret: null,
+          passwordHash: hashedPw
+        }
+      });
+      return success(request, reply, { reset: true });
+    });
+
+    app.post("/api/v1/test/store/:id/reset-status", async (request, reply) => {
+      const params = request.params as { id: string };
+      await getPrismaClient().store.update({
+        where: { id: params.id },
+        data: {
+          isAcceptingOrders: true,
+          isAcceptingBookings: true
+        }
+      });
+      return success(request, reply, { reset: true });
+    });
+  }
 }
+

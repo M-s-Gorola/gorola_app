@@ -613,6 +613,7 @@ export function registerStoreOwnerRoutes(
   const createAdBodySchema = z.object({
     imageUrl: z.string().trim().min(1, "Image URL is required"),
     title: z.string().trim().min(1, "Title is required"),
+    linkUrl: z.string().url("Must be a valid URL").trim().min(1, "Target URL is required"),
     startsAt: z.string().trim().min(1, "startsAt is required"),
     endsAt: z.string().trim().min(1, "endsAt is required")
   });
@@ -795,6 +796,7 @@ export function registerStoreOwnerRoutes(
     discountType: z.enum(["PERCENTAGE", "FLAT"]),
     discountValue: z.coerce.number().positive("Discount value must be positive"),
     maxUsageCount: z.coerce.number().int().positive().optional(),
+    minOrderAmount: z.coerce.number().nonnegative().optional(),
     startsAt: z.string().trim().min(1, "startsAt is required"),
     endsAt: z.string().trim().min(1, "endsAt is required")
   });
@@ -822,6 +824,7 @@ export function registerStoreOwnerRoutes(
         discountValue: Number(d.discountValue),
         usedCount: d.usedCount,
         maxUsageCount: d.usageLimit,
+        minOrderAmount: d.minOrderAmount ? Number(d.minOrderAmount) : null,
         isActive: d.isActive,
         startsAt: d.startsAt.toISOString(),
         endsAt: d.endsAt.toISOString()
@@ -861,6 +864,7 @@ export function registerStoreOwnerRoutes(
         discountValue: Number(discount.discountValue),
         usedCount: discount.usedCount,
         maxUsageCount: discount.usageLimit,
+        minOrderAmount: discount.minOrderAmount ? Number(discount.minOrderAmount) : null,
         isActive: discount.isActive,
         startsAt: discount.startsAt.toISOString(),
         endsAt: discount.endsAt.toISOString()
@@ -978,6 +982,7 @@ export function registerStoreOwnerRoutes(
       discountType?: "PERCENTAGE" | "FLAT";
       discountValue?: number;
       maxUsageCount?: number;
+      minOrderAmount?: number | null;
       startsAt?: string;
       endsAt?: string;
       isActive?: boolean;
@@ -1011,6 +1016,7 @@ export function registerStoreOwnerRoutes(
       discountType?: "PERCENTAGE" | "FLAT";
       discountValue?: number;
       maxUsageCount?: number;
+      minOrderAmount?: number | null;
       startsAt?: Date;
       endsAt?: Date;
       isActive?: boolean;
@@ -1020,6 +1026,7 @@ export function registerStoreOwnerRoutes(
     if (body.discountType !== undefined) updateData.discountType = body.discountType;
     if (body.discountValue !== undefined) updateData.discountValue = body.discountValue;
     if (body.maxUsageCount !== undefined) updateData.maxUsageCount = body.maxUsageCount;
+    if (body.minOrderAmount !== undefined) updateData.minOrderAmount = body.minOrderAmount;
     if (startsAt !== undefined) updateData.startsAt = startsAt;
     if (endsAt !== undefined) updateData.endsAt = endsAt;
     if (body.isActive !== undefined) updateData.isActive = body.isActive;
@@ -1028,7 +1035,18 @@ export function registerStoreOwnerRoutes(
 
     return {
       success: true,
-      data: updated
+      data: {
+        id: updated.id,
+        code: updated.code,
+        discountType: updated.discountType,
+        discountValue: Number(updated.discountValue),
+        usedCount: updated.usedCount,
+        maxUsageCount: updated.usageLimit,
+        minOrderAmount: updated.minOrderAmount ? Number(updated.minOrderAmount) : null,
+        isActive: updated.isActive,
+        startsAt: updated.startsAt.toISOString(),
+        endsAt: updated.endsAt.toISOString()
+      }
     };
   });
 

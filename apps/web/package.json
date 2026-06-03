@@ -10,7 +10,7 @@
     "typecheck": "tsc --noEmit -p tsconfig.json",
     "lint": "eslint \"src/**/*.{ts,tsx}\"",
     "test": "vitest run --config vitest.config.ts",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test --reporter=list"
   },
   "dependencies": {
     "@gorola/shared": "workspace:*",

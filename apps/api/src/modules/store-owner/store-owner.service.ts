@@ -882,7 +882,7 @@ export class StoreOwnerService {
 
   public async createAd(
     storeId: string,
-    dto: { imageUrl: string; title: string; startsAt: string | Date; endsAt: string | Date }
+    dto: { imageUrl: string; title: string; linkUrl: string; startsAt: string | Date; endsAt: string | Date }
   ) {
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
@@ -899,6 +899,7 @@ export class StoreOwnerService {
         storeId,
         title: dto.title,
         imageUrl: dto.imageUrl,
+        linkUrl: dto.linkUrl,
         startsAt,
         endsAt,
         isApproved: false,
@@ -1025,6 +1026,7 @@ export class StoreOwnerService {
       discountType: "PERCENTAGE" | "FLAT";
       discountValue: number;
       maxUsageCount?: number | undefined;
+      minOrderAmount?: number | undefined;
       startsAt: string | Date;
       endsAt: string | Date;
     }
@@ -1073,6 +1075,7 @@ export class StoreOwnerService {
         discountType: dto.discountType,
         discountValue: dto.discountValue,
         usageLimit: dto.maxUsageCount ?? null,
+        minOrderAmount: dto.minOrderAmount ?? null,
         startsAt,
         endsAt,
         isActive: true
@@ -1143,6 +1146,7 @@ export class StoreOwnerService {
       discountType?: "PERCENTAGE" | "FLAT";
       discountValue?: number;
       maxUsageCount?: number | null;
+      minOrderAmount?: number | null;
       startsAt?: Date | undefined;
       endsAt?: Date | undefined;
       isActive?: boolean;
@@ -1187,6 +1191,7 @@ export class StoreOwnerService {
     if (dto.discountType !== undefined) updateData.discountType = dto.discountType;
     if (dto.discountValue !== undefined) updateData.discountValue = new Prisma.Decimal(dto.discountValue.toString());
     if (dto.maxUsageCount !== undefined) updateData.usageLimit = dto.maxUsageCount;
+    if (dto.minOrderAmount !== undefined) updateData.minOrderAmount = dto.minOrderAmount ? new Prisma.Decimal(dto.minOrderAmount.toString()) : null;
     if (dto.startsAt !== undefined) updateData.startsAt = dto.startsAt;
     if (dto.endsAt !== undefined) updateData.endsAt = dto.endsAt;
     if (dto.isActive !== undefined) updateData.isActive = dto.isActive;

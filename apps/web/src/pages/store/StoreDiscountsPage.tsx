@@ -22,6 +22,7 @@ type Discount = {
   discountValue: number;
   usedCount: number;
   maxUsageCount?: number | null;
+  minOrderAmount?: number | null;
   startsAt: string;
   endsAt: string;
   isActive: boolean;
@@ -58,6 +59,7 @@ export function StoreDiscountsPage(): ReactElement {
   const [discountType, setDiscountType] = useState<"PERCENTAGE" | "FLAT">("PERCENTAGE");
   const [discountValue, setDiscountValue] = useState("");
   const [maxUsageCount, setMaxUsageCount] = useState("");
+  const [minOrderAmount, setMinOrderAmount] = useState("");
   
   // Date states (only dates are editable in the UI)
   const [startsAtDate, setStartsAtDate] = useState(() => getDefaultDateTimeString(0, "00:00").split("T")[0]);
@@ -76,11 +78,11 @@ export function StoreDiscountsPage(): ReactElement {
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
       const res = await api.get<ProfileEnvelope>("/api/v1/store/profile");
-      return res.data;
+      return res.data.data;
     }
   });
 
-  const isBooking = profileResponse?.data?.storeType === "BOOKING_COMMERCE";
+  const isBooking = profileResponse?.storeType === "BOOKING_COMMERCE";
 
   // 2. Fetch Discounts Query
   const { data: discountsResponse, isLoading, isError, refetch } = useQuery({
@@ -98,6 +100,7 @@ export function StoreDiscountsPage(): ReactElement {
     setDiscountType("PERCENTAGE");
     setDiscountValue("");
     setMaxUsageCount("");
+    setMinOrderAmount("");
     setIsActive(true);
     
     const defaultStarts = getDefaultDateTimeString(0, "00:00");
@@ -117,6 +120,7 @@ export function StoreDiscountsPage(): ReactElement {
       discountType: "PERCENTAGE" | "FLAT";
       discountValue: number;
       maxUsageCount?: number;
+      minOrderAmount?: number;
       startsAt: string;
       endsAt: string;
     }) => {
@@ -151,6 +155,7 @@ export function StoreDiscountsPage(): ReactElement {
       discountType: "PERCENTAGE" | "FLAT";
       discountValue: number;
       maxUsageCount?: number;
+      minOrderAmount?: number | null;
       startsAt: string;
       endsAt: string;
       isActive: boolean;
@@ -205,6 +210,7 @@ export function StoreDiscountsPage(): ReactElement {
     setDiscountType(discount.discountType);
     setDiscountValue(discount.discountValue.toString());
     setMaxUsageCount(discount.maxUsageCount ? discount.maxUsageCount.toString() : "");
+    setMinOrderAmount(discount.minOrderAmount ? discount.minOrderAmount.toString() : "");
     setIsActive(discount.isActive);
     
     const [sDate] = discount.startsAt.split("T");
@@ -251,7 +257,8 @@ export function StoreDiscountsPage(): ReactElement {
         startsAt,
         endsAt,
         isActive,
-        ...(maxUsageCount ? { maxUsageCount: parseInt(maxUsageCount, 10) } : {})
+        ...(maxUsageCount ? { maxUsageCount: parseInt(maxUsageCount, 10) } : {}),
+        minOrderAmount: minOrderAmount ? parseFloat(minOrderAmount) : null
       });
     } else {
       createDiscountMutation.mutate({
@@ -260,7 +267,8 @@ export function StoreDiscountsPage(): ReactElement {
         discountValue: value,
         startsAt,
         endsAt,
-        ...(maxUsageCount ? { maxUsageCount: parseInt(maxUsageCount, 10) } : {})
+        ...(maxUsageCount ? { maxUsageCount: parseInt(maxUsageCount, 10) } : {}),
+        ...(minOrderAmount ? { minOrderAmount: parseFloat(minOrderAmount) } : {})
       });
     }
   };
@@ -392,9 +400,24 @@ export function StoreDiscountsPage(): ReactElement {
               <input
                 id="discount-maxUsage"
                 type="number"
-                placeholder="e.g. 100"
+                placeholder="e.g. 50"
                 value={maxUsageCount}
                 onChange={(e) => setMaxUsageCount(e.target.value)}
+                className="w-full px-4 py-3 bg-gorola-mint/5 border border-gorola-mint/20 focus:border-gorola-pine focus:outline-none rounded-xl text-sm text-gorola-charcoal placeholder-gorola-slate/50 font-dm-sans"
+              />
+            </div>
+
+            {/* Optional Min Order Amount */}
+            <div className="space-y-1">
+              <label htmlFor="discount-minOrder" className="text-xs font-bold text-gorola-slate uppercase tracking-wider">
+                Min Order Amount (Optional)
+              </label>
+              <input
+                id="discount-minOrder"
+                type="number"
+                placeholder="e.g. 100"
+                value={minOrderAmount}
+                onChange={(e) => setMinOrderAmount(e.target.value)}
                 className="w-full px-4 py-3 bg-gorola-mint/5 border border-gorola-mint/20 focus:border-gorola-pine focus:outline-none rounded-xl text-sm text-gorola-charcoal placeholder-gorola-slate/50 font-dm-sans"
               />
             </div>
@@ -580,7 +603,12 @@ export function StoreDiscountsPage(): ReactElement {
                           className={`border-b border-gorola-mint/10 last:border-0 hover:bg-gorola-mint/5 transition-colors duration-150 ${(!discount.isActive || isExpired) ? "opacity-60" : ""}`}
                         >
                           <td className="p-4 font-heading text-sm font-black text-gorola-pine tracking-wider uppercase">
-                            {discount.code}
+                            <div>{discount.code}</div>
+                            {discount.minOrderAmount !== undefined && discount.minOrderAmount !== null && (
+                              <div className="text-[10px] font-bold text-gorola-slate normal-case mt-0.5 font-dm-sans select-none">
+                                Min Order: ₹{Number(discount.minOrderAmount).toFixed(2)}
+                              </div>
+                            )}
                           </td>
                           <td className="p-4 font-dm-sans text-xs text-gorola-slate">
                             {discount.discountType}

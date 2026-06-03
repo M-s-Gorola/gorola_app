@@ -104,7 +104,7 @@ export function ProductDetailPage(): ReactElement {
   }, [query.data, selectedVariantIndex]);
 
   useEffect(() => {
-    if (containerRef.current === null || query.data === undefined || import.meta.env.MODE === "test") {
+    if (containerRef.current === null || query.data === undefined || import.meta.env.MODE === "test" || (typeof window !== "undefined" && (window as unknown as Record<string, unknown>).isE2E)) {
       return;
     }
     const ctx = gsap.context(() => {
@@ -141,7 +141,10 @@ export function ProductDetailPage(): ReactElement {
           alt={query.data.name}
           className="h-full w-full object-cover"
           onError={(e) => {
-            (e.currentTarget as HTMLImageElement).src = "https://picsum.photos/600/600?grayscale";
+            const img = e.currentTarget as HTMLImageElement;
+            if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
+              img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            }
           }}
         />
       </div>

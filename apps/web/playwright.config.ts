@@ -68,7 +68,7 @@ export default defineConfig({
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
       env: {
-        VITE_API_BASE_URL: 'http://127.0.0.1:3002',
+        VITE_API_BASE_URL: '',
         PORT_API: '3002',
         VITE_E2E_PROXY: 'true',
       }

@@ -11,3 +11,9 @@ playwright-report/
 blob-report/
 playwright-report/
 .code-review-graph/
+.gemini/
+.vscode/
+.mcp.json
+AGENTS.md
+GEMINI.md
+

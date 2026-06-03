@@ -177,7 +177,7 @@ Shift all E2E date selections to **at least 2 days in the future** (`+2 days`). 
 
 ---
 
-## 6. Case Study: WebSocket Query Invalidation Settlement
+## 7. Case Study: WebSocket Query Invalidation Settlement
 ### The Problem
 When a real-time event (like a booking status change) is received via Socket.IO, updating the local React state immediately (e.g. `status = "CANCELLED"`) is highly responsive. However, doing so *without* updating secondary backend properties (like the `rejectionReason`) leaves the client in a partially sync-locked state, causing E2E tests to fail when verifying that the rejection reason is displayed alongside the status.
 
@@ -188,7 +188,52 @@ When a status changed socket event is received, perform a two-pronged sync actio
 
 ---
 
-## 7. Summary Cheat Sheet for Developers
+## 8. Case Study: Sonner Toast Pointer Interception & Hover-to-Pause Deadlock
+### The Problem
+During mobile viewport testing (such as `iphone-se`), viewports are compact, and interactive elements (like a `"Confirm Booking"` submit button) frequently share coordinates with or sit directly underneath the viewport area designated for toast notifications (e.g. the `"Address added successfully"` toast). 
+When Playwright initiates a click event on the target button while a toast is active:
+1. **Pointer Overlap:** The click or mouse movement places the virtual mouse pointer over the toast notification.
+2. **Sonner Hover-to-Pause Feature:** Toast libraries like Sonner automatically pause their auto-dismiss timers when a hover state is detected to ensure users have enough time to read the toast.
+3. **Deadlock State:** Playwright's mouse hover pauses the toast's dismissal timer indefinitely. Because the pointer remains on the toast, it never fades away, permanently blocking subsequent click events or element inspection on any buttons positioned beneath it. The test hangs and eventually times out after 2 minutes.
+
+### The Solution
+While `{ force: true }` clicks can bypass simple layout overlaps, they do not resolve the Sonner hover-to-pause deadlock if the toast continues to render and intercept pointer events. The most bulletproof approach is to programmatically hide or remove the toaster element from the DOM prior to performing critical clicks:
+
+```typescript
+// Programmatically hide the Sonner toaster container using style injection
+await page.evaluate(() => {
+  const toaster = document.querySelector('[data-sonner-toaster]') as HTMLElement;
+  if (toaster) {
+    toaster.style.display = 'none';
+  }
+});
+```
+This instantly clears the viewport of any active or queued toasts, unblocking the target click coordinates and eliminating the flakiness entirely.
+
+---
+
+## 9. Case Study: Responsive Navigation Scoping & Viewport-Agnostic Locators
+
+### The Problem
+Responsive web designs dynamically hide and show entire structural layout containers (like desktop sidebars or mobile bottom-nav bars) using media query classes (e.g. `hidden md:flex` and `flex md:hidden`).
+If an E2E test scripts navigation transitions by scoping elements inside a container that gets hidden on specific viewports:
+```typescript
+// Fails on mobile viewports because the 'aside' sidebar is hidden (display: none)
+await page.locator('aside').getByRole('link', { name: 'Services' }).click();
+```
+Playwright will fail the test with a `TimeoutError` stating that the locator resolves to an invisible element.
+
+### The Solution
+Instead of hard-scoping links to viewport-specific layouts, write viewport-agnostic locators. Target the element globally by its role and name, and filter for visual visibility:
+```typescript
+// Matches the visible link regardless of whether it's rendered inside the aside sidebar or mobile bottom-nav
+await page.getByRole("link", { name: "Services" }).filter({ visible: true }).click();
+```
+This guarantees that tests remain layout-agnostic and execute flawlessly across all desktop, tablet, and mobile viewports.
+
+---
+
+## 10. Summary Cheat Sheet for Developers
 
 | Symptom | Probable Cause | Corrective Action |
 | :--- | :--- | :--- |
@@ -198,4 +243,4 @@ When a status changed socket event is received, perform a two-pronged sync actio
 | `INVALID_BOOKING_DATE` failure on midnight/timezone boundary | Server and browser date mismatch on `+1 day` boundaries. | Shift the E2E date selection to **at least +2 days** in the future to ensure safety. |
 | Stale details (like rejection reason) missing after WebSocket status update | The socket event only pushed the basic status string without secondary DB fields. | Concurrently update local status query data optimistically, and trigger `queryClient.invalidateQueries` to fetch the complete updated record. |
 | `locator.click: Timeout` on multi-viewport navigation links | The first matched element is hidden in the current viewport (e.g. desktop sidebar is hidden on mobile). | Use `.filter({ visible: true }).first()` to dynamically target the active visible element in the current viewport. |
-
+| Click event blocked/deadlocked by toast notifications | Sonner's "hover to pause" feature deadlocks the auto-dismiss timer when Playwright's mouse pointer hovers over a toast. | Programmatically hide the toaster element: `await page.evaluate(() => { (document.querySelector('[data-sonner-toaster]') as HTMLElement).style.display = 'none'; })`. |
