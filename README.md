@@ -120,6 +120,16 @@ pnpm db:local:bootstrap   # Clean and seed local development DB
 pnpm db:test:prepare      # Clean and seed test DB (used for E2E)
 ```
 
+## ⚠️ Important E2E Development Guidelines
+
+To prevent test flakiness and **accidental contamination of your development database (`gorola_dev`)**, adhere to the following rules when running E2E tests locally:
+
+1. **Stop active development servers**: Always stop any running local development servers (Vite Frontend client on port `5180` and Dev Backend API on port `3001`) before triggering E2E tests (`pnpm test:e2e` or `pnpm ci:quality`). 
+   - **Why?** Playwright is configured to reuse the existing frontend server running on port `5180` (Vite Frontend) if active. Since standard dev frontend servers proxy requests to the dev API (port `3001` connected to the `gorola_dev` database), reusing them causes Playwright to run tests against your active development database, polluting data and failing tests. Stopping the local servers forces Playwright to boot a clean Vite frontend server instance with the E2E proxy target configured to point to the isolated E2E Test Backend API (port `3002` connected to the `gorola_test` database).
+2. **Do NOT interact with the application manually during E2E runs**: Avoid clicking around the app on `localhost:5180` (the frontend) or any mapped subdomains while the test suite is running in the background. Manual UI interaction collides with automated test scripts, leading to state race conditions and test failures.
+
+For more details on E2E port mapping and proxy rules, refer to [e2e_environment_port_isolation.md](./ISSUES%20GUIDE/e2e_environment_port_isolation.md).
+
 ---
 
 GoRola - Mussoorie, delivered.

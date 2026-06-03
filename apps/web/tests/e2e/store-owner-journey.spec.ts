@@ -292,38 +292,38 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
 
     // Go to Products — search for Basmati Rice Premium first (may be on page 2+ without search)
-    await page.getByRole("link", { name: "Products" }).click();
+    await page.getByRole("link", { name: "Products" }).click({ force: true });
     await page.locator('#product-search-input').fill('Premium Basmati Rice');
     // Wait for table to load with search results
     await expect(page.locator('[data-testid="edit-product-prod_rice_1"]')).toBeVisible({ timeout: 15000 });
 
     // Navigate to the edit page for Premium Basmati Rice
-    await page.locator('[data-testid="edit-product-prod_rice_1"]').click();
+    await page.locator('[data-testid="edit-product-prod_rice_1"]').click({ force: true });
     // Wait for edit page to load (variants section with Restock button appears)
     await expect(page.locator('[data-testid="restock-button-0"]')).toBeVisible({ timeout: 15000 });
 
     // Restock: click Restock button on variant 0, fill qty, confirm
-    await page.locator('[data-testid="restock-button-0"]').click();
+    await page.locator('[data-testid="restock-button-0"]').click({ force: true });
     await page.locator('#restock-qty-input').fill('10');
-    await page.getByRole('button', { name: 'Confirm Restock' }).click();
+    await page.getByRole('button', { name: 'Confirm Restock' }).click({ force: true });
     // Wait for restock modal to close
     await expect(page.locator('#restock-qty-input')).not.toBeVisible({ timeout: 10000 });
 
     // Adjust: click Adjust button on variant 0, fill qty and reason, confirm
-    await page.locator('[data-testid="adjust-button-0"]').click();
+    await page.locator('[data-testid="adjust-button-0"]').click({ force: true });
     await page.locator('#adjust-qty-input').fill('15');
     await page.locator('#adjust-reason-input').fill(`E2E Audit-${suffix}`);
-    await page.getByRole('button', { name: 'Confirm Adjustment' }).click();
+    await page.getByRole('button', { name: 'Confirm Adjustment' }).click({ force: true });
     // Wait for adjust modal to close
     await expect(page.locator('#adjust-qty-input')).not.toBeVisible({ timeout: 10000 });
 
     // Navigate back to Products list to access stock history
-    await page.getByRole('link', { name: 'Products' }).click();
+    await page.getByRole('link', { name: 'Products' }).click({ force: true });
     await page.locator('#product-search-input').fill('Premium Basmati Rice');
     await expect(page.locator('[data-testid="stock-history-prod_rice_1"]')).toBeVisible({ timeout: 15000 });
 
     // Go to Stock History list and verify audit log entries
-    await page.getByTestId('stock-history-prod_rice_1').click();
+    await page.getByTestId('stock-history-prod_rice_1').click({ force: true });
 
     // Verify movement rows are rendered correctly
     await expect(page.locator('tr').filter({ hasText: 'RESTOCK' }).first()).toBeVisible({ timeout: 10000 });

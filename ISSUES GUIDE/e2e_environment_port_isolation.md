@@ -138,6 +138,57 @@ Always guard the port-shifting logic behind an explicit E2E flag (e.g., `VITE_E2
 * **Manual Development**: Always defaults to port `3001` (Safe, manual verification).
 * **Automated E2E Tests**: The test runner explicitly injects the `VITE_E2E_PROXY: 'true'` flag, automatically routing all requests and WebSockets to the shadow backend (`3002`).
 
+### ⚠️ **The Vite Dev Server Reuse Loop-hole (Crucial Local Trap)**
+
+Before examining the issue, make sure you understand the difference between the ports:
+* **Port `5180` (Frontend)**: Runs the Vite/React frontend client application.
+* **Port `3001` (Dev Backend)**: Runs the Fastify API backend connected to the **development database (`gorola_dev`)**.
+* **Port `3002` (Test/E2E Backend)**: Runs the shadow Fastify API backend connected to the **test database (`gorola_test`)**.
+
+When running tests locally, Playwright's config is set to:
+```typescript
+reuseExistingServer: !process.env.CI
+```
+This means if you already have a standard local development server running on port `5180` (started via `pnpm dev` for manual feature coding), Playwright will **reuse** that active server process instead of spinning up a new one.
+
+Here is the exact step-by-step breakdown of why the E2E tests connect to the **development** database instead of the **test** database under this scenario:
+
+#### **Step 1: The Vite Server's Proxy Target is Cached in Memory**
+In `vite.config.ts`, the target URL for proxying `/api` requests is decided at the moment the Vite dev server starts up:
+```typescript
+const proxyTarget = process.env.VITE_E2E_PROXY === "true"
+  ? `http://127.0.0.1:${process.env.PORT_API || "3002"}`
+  : "http://127.0.0.1:3001";
+```
+
+#### **Step 2: Standard Dev Mode (Without E2E Env Vars)**
+When you manually run your development server (e.g. via `pnpm dev`), it is booted **without** the `VITE_E2E_PROXY="true"` environment variable. Therefore, Vite resolves `proxyTarget` to `http://127.0.0.1:3001` (your development backend API, which connects to the `gorola_dev` database).
+
+#### **Step 3: The Playwright Reuse Trap**
+When you run `pnpm test:e2e`, Playwright checks if port `5180` is in use:
+* Since `reuseExistingServer: true` is active for local development, Playwright sees your running dev server on `5180` and **reuses it** (does not launch a new one).
+* Meanwhile, Playwright **does** launch the test API server on port `3002` (which is connected to the test database `gorola_test`).
+
+#### **Step 4: The Request Flow Under Reuse**
+When the Playwright browser tests execute:
+1. The browser opens a page on `http://127.0.0.1:5180` (the reused frontend).
+2. The frontend client code makes a relative request to `/api/v1/...`.
+3. The browser sends this request to the running Vite server on port `5180`.
+4. Since that Vite server was started during your manual dev command, it **still has its proxy target set in memory to `http://127.0.0.1:3001`** (the dev API).
+5. Vite proxies the request to `3001`.
+6. **Outcome**: If your dev API server is running on `3001`, the tests communicate directly with it, reading and writing to your **development database (`gorola_dev`)** instead of the test database (`3002`). If the dev API is not running, all requests fail with `504 Gateway Timeout` or `ECONNREFUSED`.
+
+> [!WARNING]
+> **To prevent database pollution and test failures**: Always stop any running local development server (`pnpm dev`) before running `pnpm test:e2e` or `pnpm ci:quality`. This forces Playwright to launch a clean Vite server instance on port `5180` with `VITE_E2E_PROXY: 'true'` injected, which correctly routes `/api` requests to the test API on port `3002`.
+
+### 🚫 **Do Not Play with the App During E2E Testing**
+
+Do not manually open, click, or interact with the web application in your browser (at `localhost:5180` or any mapped subdomains) while the E2E test suite is running in the background. 
+
+- If you interact with the frontend, your actions will generate database queries and websocket events that collide with the automated tests.
+- This creates severe state races, pollutes the test database (`gorola_test`), and triggers unexpected flakiness or timeouts in the active test runner.
+- Let the automated Playwright runner perform its actions in isolation. If you need to manually inspect the state, wait for the test run to finish.
+
 ---
 
 ## 6. Project-Agnostic Setup Checklist

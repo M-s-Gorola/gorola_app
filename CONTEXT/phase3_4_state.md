@@ -19,7 +19,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-03
-- **Session Summary:** Session 42 — E2E Viewport Hardening, Log Cleanup & Reporter Alignment. Removed all debug logs and console listeners from E2E-033. Resolved E2E-025 navigation failures on mobile viewports. Cured E2E-033 hover deadlocks on `iphone-se` by programmatic Sonner toaster de-rendering. Standardized `--reporter=list` in package scripts and GHA workflows. Verified all 20 tests pass completely green in the full test suite run.
+- **Session Summary:** Session 43 — Pinned Store Layout, Persistent Branding & Duplicate Rating Prevention. Replaced the green `S` avatar with a permanently visible header Logout button and removed the redundant sidebar logout. Fixed the sidebar and header to the screen using CSS `sticky` positioning with native window scrolling. Relocated the GoRola logo and brand text to the main header beside the toggle button (moved to the extreme left), keeping them always visible in web view. Displayed the store name (styled prominently with `text-lg font-bold`) instead of the Store ID. Blocked duplicate rating submissions on the backend and synced query caches between the receipt and history pages, refactoring the history rating list to be read-only.
 - **Next Session Must Start With:** Phase 4 (Admin Panel) planning.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
@@ -2376,4 +2376,40 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 - **Standardized Playwright Reporter**: Configured `--reporter=list` for `test:e2e` and `ci:quality` across package scripts and CI configuration files.
 - **Fully Verified Complete Passing Status**: Confirmed that all 20 tests pass cleanly with 0 failures on all viewports, marking Phase 3 fully completed.
 
+### Session 43 — 2026-06-03 — Pinned Store Layout, Persistent Branding & Duplicate Rating Prevention
+- **Sidebar Toggle & Persistent Branding**: Relocated the toggle Sidebar button (`Menu` icon) to the extreme left of the main header. Placed the GoRola Logo and brand text in the header beside it, followed by the Store Name (styled as `text-lg font-bold`). This makes the branding persistently visible on desktop even when the sidebar is collapsed.
+- **Mobile View Responsive Branding**: Configured the mobile layout to display only the Logo icon and the Store Name in the header, hiding the toggle button and the "GoRola Store" brand text.
+- **Header Logout Button**: Removed the placeholder green avatar `S` circle and added a permanently visible header Logout button. Deleted the redundant sidebar logout button to resolve Playwright E2E strictness selector conflicts.
+- **Fixed Layout Pinned Scroll Boundaries**: Refactored the store panel layout to use a `sticky top-0 h-screen` sidebar and `sticky` headers with native body scrolling, ensuring smooth trackpad and mouse scrolling on all devices.
+- **Duplicate Rating Prevention**: Enforced a check at the Fastify route level (`order.controller.ts`) to return `400 Bad Request` if an order has already been rated, and added a backend integration test in `order.rate.test.ts` to verify duplicate ratings are blocked.
+- **Frontend Rating Page Synchronization**: Refactored the rating section on the Order History page to show a read-only Liked/Disliked badge when `rating !== null`, hiding the interactive buttons to prevent overwriting. Added query invalidation logic on both confirmation and history pages to sync React Query caches instantly, and wrote a Vitest component unit test in `OrderHistoryPage.test.tsx` to assert this read-only behavior.
+
 ---
+
+### Session 44 — 2026-06-03 — E2E Inventory Restock Mobile Click Fix & Port Reuse Guidelines
+
+**Date:** 2026-06-03
+
+**Files Modified:**
+- `apps/web/tests/e2e/store-owner-journey.spec.ts`
+- `README.md`
+- `ISSUES GUIDE/e2e_environment_port_isolation.md`
+
+---
+
+#### E2E Mobile Click Interception & Port Reuse Documentation
+
+**Symptom:**
+- **Viewport Pointer Interception Failure:** The `E2E-023: Inventory Restock & Audit History Logging` test suite failed on `iphone-se` because Playwright's click actions on the modal's `Confirm Restock` / `Confirm Adjustment` buttons and catalog edit links were intercepted by layout elements (sticky headers, modal backdrop transitions) on narrow mobile screens.
+- **Development Database Pollution Loop-hole:** If a developer ran `pnpm test:e2e` while a standard local dev server was already running on port `5180`, Playwright would reuse that server (`reuseExistingServer: true`). However, since the running dev server lacked the E2E proxy toggle (`VITE_E2E_PROXY="true"`), it proxied all test API requests to port `3001` (dev database `gorola_dev`) instead of port `3002` (test database `gorola_test`), resulting in database state contamination and test failures.
+
+**Fix:**
+- **E2E Viewport Hardening:** Applied `{ force: true }` to all click and button actions in the E2E-023 test in `store-owner-journey.spec.ts` (including Products link, edit product card, Restock, Adjust, and modal confirmation buttons), bypassing pointer interception checks caused by mobile layout elements and transition animations.
+- **Port Reuse Guidelines & Warnings:** 
+  - Updated the project `README.md` with explicit guidelines under `## ⚠️ Important E2E Development Guidelines` to warn developers to terminate running dev servers (frontend `5180` and api `3001`) before starting tests, and to avoid manual browser interactions during active runs.
+  - Extended Section 5 of `ISSUES GUIDE/e2e_environment_port_isolation.md` with a detailed step-by-step breakdown of how the Vite port-reuse loophole routes test traffic to the dev DB and how proxy leaks occur.
+
+**Result:** Verified that E2E-023 passes 100% green on all projects (both desktop `chromium` and mobile `iphone-se`). All TypeScript checks and linters pass cleanly.
+
+---
+

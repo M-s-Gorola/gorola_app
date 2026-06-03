@@ -172,10 +172,14 @@ export function OrderHistoryPage() {
       });
       return res.data.data;
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       toast.success("Thank you for your rating!");
       setActiveRating(null);
-      queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
+      void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
+      if (variables?.orderId) {
+        void queryClient.invalidateQueries({ queryKey: ["buyer-order-confirmation", variables.orderId] });
+        void queryClient.invalidateQueries({ queryKey: ["booking-order-confirmation", variables.orderId] });
+      }
     },
     onError: () => {
       toast.error("Failed to submit rating");
@@ -384,34 +388,54 @@ export function OrderHistoryPage() {
                       )}
                     </div>
                     
-                    <div className="flex items-center gap-3">
-                      <button
-                        onClick={() => setActiveRating(activeRating === `${order.id}:up` ? null : `${order.id}:up`)}
-                        disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                          order.rating === true || activeRating === `${order.id}:up`
-                            ? 'bg-green-100 text-green-700 border border-green-200' 
-                            : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                        } disabled:opacity-50`}
-                        aria-label="Thumbs Up"
-                      >
-                        <ThumbsUp className="w-3.5 h-3.5" />
-                        {order.rating === true ? "Liked" : ""}
-                      </button>
-                      <button
-                        onClick={() => setActiveRating(activeRating === `${order.id}:down` ? null : `${order.id}:down`)}
-                        disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
-                        className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                          order.rating === false || activeRating === `${order.id}:down`
-                            ? 'bg-red-100 text-red-700 border border-red-200' 
-                            : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                        } disabled:opacity-50`}
-                        aria-label="Thumbs Down"
-                      >
-                        <ThumbsDown className="w-3.5 h-3.5" />
-                        {order.rating === false ? "Disliked" : ""}
-                      </button>
-                    </div>
+                    {order.rating !== null ? (
+                      <div className="flex items-center gap-3">
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border ${
+                          order.rating === true 
+                            ? 'bg-green-50 text-green-700 border-green-200' 
+                            : 'bg-red-50 text-red-700 border-red-200'
+                        }`}>
+                          {order.rating === true ? (
+                            <>
+                              <ThumbsUp className="w-3.5 h-3.5" />
+                              Liked
+                            </>
+                          ) : (
+                            <>
+                              <ThumbsDown className="w-3.5 h-3.5" />
+                              Disliked
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <button
+                          onClick={() => setActiveRating(activeRating === `${order.id}:up` ? null : `${order.id}:up`)}
+                          disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                            activeRating === `${order.id}:up`
+                              ? 'bg-green-100 text-green-700 border border-green-200' 
+                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                          } disabled:opacity-50`}
+                          aria-label="Thumbs Up"
+                        >
+                          <ThumbsUp className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => setActiveRating(activeRating === `${order.id}:down` ? null : `${order.id}:down`)}
+                          disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                            activeRating === `${order.id}:down`
+                              ? 'bg-red-100 text-red-700 border border-red-200' 
+                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                          } disabled:opacity-50`}
+                          aria-label="Thumbs Down"
+                        >
+                          <ThumbsDown className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
                   </div>
 
                   {/* Comment Box */}

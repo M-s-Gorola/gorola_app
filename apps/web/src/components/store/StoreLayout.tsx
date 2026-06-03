@@ -4,6 +4,7 @@ import type { ReactElement, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 
+import { GorolaMountainMark } from "@/components/shared/GorolaMountainMark";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
@@ -47,7 +48,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
     queryKey: ["store", "profile"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<{ success: boolean; data: { storeType: string } }>("/api/v1/store/profile");
+      const res = await api.get<{ success: boolean; data: { storeType: string; name: string } }>("/api/v1/store/profile");
       return res.data.data;
     },
     enabled: !!storeId
@@ -80,16 +81,12 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
     <div className="flex min-h-screen bg-gorola-mint/5">
       {/* Sidebar Navigation */}
       <aside
-        className={`hidden md:flex flex-col bg-white border-r border-gorola-mint/15 shadow-sm transition-all duration-300 ease-in-out ${
-          isSidebarOpen ? "w-64" : "w-0 overflow-hidden border-r-0"
+        className={`hidden md:flex flex-col bg-white border-r border-gorola-mint/15 shadow-sm transition-all duration-300 ease-in-out sticky top-0 h-screen shrink-0 ${
+          isSidebarOpen ? "w-48 lg:w-64" : "w-0 overflow-hidden border-r-0"
         }`}
       >
-        <div className="flex h-16 items-center px-6 border-b border-gorola-mint/15 shrink-0">
-          <Link className="flex items-center gap-2" to={getScopedPath("/store/dashboard", "store", isSubdomainMode)}>
-            <span className="font-heading text-xl font-bold text-gorola-charcoal">GoRola <span className="text-gorola-pine">Store</span></span>
-          </Link>
-        </div>
-        <nav className="flex-1 space-y-1 px-4 py-6 overflow-y-auto">
+        <div className="h-16 border-b border-gorola-mint/15 shrink-0" />
+        <nav className="flex-1 space-y-1 px-2 lg:px-4 py-6 overflow-y-auto">
           {storeProfile === undefined ? (
             <div className="space-y-3 animate-pulse">
               {[1, 2, 3, 4, 5, 6].map((i) => (
@@ -103,7 +100,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
                 <Link
                   key={item.path}
                   to={item.path}
-                  className={`flex items-center px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
+                  className={`flex items-center px-3 lg:px-4 py-3 text-sm font-medium rounded-xl transition-all duration-200 ${
                     isActive
                       ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
                       : "text-muted-foreground hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
@@ -115,42 +112,42 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
             })
           )}
         </nav>
-        <div className="p-4 border-t border-gorola-mint/15 shrink-0">
-          <Button className="w-full justify-start gap-2 rounded-xl" onClick={handleLogout} variant="ghost">
-            Logout
-          </Button>
-        </div>
+
       </aside>
 
       {/* Main Content Pane */}
-      <div className="flex flex-1 flex-col overflow-hidden">
+      <div className="flex flex-1 flex-col min-w-0">
         {/* Header */}
-        <header className="flex h-16 items-center justify-between bg-white px-6 border-b border-gorola-mint/15 shadow-sm">
+        <header className="flex h-16 items-center justify-between bg-white px-6 border-b border-gorola-mint/15 shadow-sm sticky top-0 z-30 w-full shrink-0">
           <div className="flex items-center gap-3">
             <Button
               variant="ghost"
               size="icon"
               onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-              className="hidden md:flex text-gorola-slate hover:text-gorola-pine hover:bg-gorola-mint/10 rounded-xl h-9 w-9 items-center justify-center transition-colors"
+              className="hidden md:flex text-gorola-slate hover:text-gorola-pine hover:bg-gorola-mint/10 rounded-xl h-9 w-9 items-center justify-center transition-colors shrink-0"
               title={isSidebarOpen ? "Collapse Sidebar" : "Expand Sidebar"}
               aria-label="Toggle Sidebar"
             >
               <Menu className="h-5 w-5" />
             </Button>
-            <span className="text-sm font-semibold text-gorola-slate">Store ID: {storeId ?? "Unknown"}</span>
+            <Link className="flex items-center gap-2 shrink-0" to={getScopedPath("/store/dashboard", "store", isSubdomainMode)}>
+              <GorolaMountainMark color="var(--gorola-pine)" secondaryColor="var(--gorola-charcoal)" />
+              <span className="font-heading text-xl font-bold text-gorola-charcoal hidden md:inline">GoRola <span className="text-gorola-pine">Store</span></span>
+            </Link>
+            <span className="hidden md:inline text-gorola-mint/30 font-light">|</span>
+            <span className="text-lg font-bold text-gorola-charcoal truncate">
+              {storeProfile?.name ?? "Store"}
+            </span>
           </div>
           <div className="flex items-center gap-4">
-            <Button className="md:hidden" onClick={handleLogout} variant="ghost" size="sm">
+            <Button onClick={handleLogout} variant="ghost" size="sm" className="text-gorola-slate hover:text-red-600 hover:bg-red-50 rounded-xl transition-colors font-semibold">
               Logout
             </Button>
-            <div className="h-8 w-8 rounded-full bg-gorola-mint flex items-center justify-center font-bold text-gorola-charcoal text-sm">
-              S
-            </div>
           </div>
         </header>
 
         {/* Mobile Sub-Navigation Bar */}
-        <nav className="flex md:hidden bg-white border-b border-gorola-mint/15 px-4 py-2 overflow-x-auto gap-2 scrollbar-none">
+        <nav className="flex md:hidden bg-white border-b border-gorola-mint/15 px-4 py-2 overflow-x-auto gap-2 scrollbar-none sticky top-16 z-20 w-full shrink-0">
           {storeProfile === undefined ? (
             <div className="flex gap-2 animate-pulse w-full">
               {[1, 2, 3, 4].map((i) => (
@@ -178,7 +175,7 @@ export function StoreLayout({ children }: StoreLayoutProps): ReactElement {
         </nav>
 
         {/* Dynamic Nested Content */}
-        <main className="flex-1 overflow-y-auto p-6 md:p-10">
+        <main className="flex-1 p-6 md:p-8 lg:p-10">
           <div className="mx-auto max-w-5xl">
             {children}
           </div>

@@ -296,6 +296,15 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         });
       }
 
+      if (order.rating !== null) {
+        return reply.status(400).send({
+          error: {
+            code: "BAD_REQUEST",
+            message: "Order has already been rated"
+          }
+        });
+      }
+
       const updated = await deps.orders.updateRating(
         params.id,
         body.rating ?? null,

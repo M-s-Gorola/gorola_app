@@ -460,4 +460,36 @@ describe("OrderHistoryPage", () => {
 
     expect(mockNavigate).toHaveBeenCalledWith("/bookings/new?productId=p1&variantId=v1");
   });
+
+  it("displays read-only rating badge and hides active buttons for already-rated orders", async () => {
+    apiGetSpy.mockResolvedValue({
+      data: {
+        data: {
+          orders: [
+            {
+              id: "order-rated",
+              store: { name: "Test Store" },
+              total: "100.00",
+              status: "DELIVERED",
+              createdAt: "2026-05-01T10:00:00Z",
+              items: [],
+              rating: true,
+              ratingComment: "Awesome honey!"
+            }
+          ]
+        }
+      }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    } as any);
+
+    renderComponent();
+
+    expect(await screen.findByText("Test Store")).toBeInTheDocument();
+
+    expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText('"Awesome honey!"')).toBeInTheDocument();
+
+    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Thumbs Down/i })).not.toBeInTheDocument();
+  });
 });
