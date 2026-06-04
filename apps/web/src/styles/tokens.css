@@ -1,8 +1,8 @@
 /* GoRola design tokens (hex). Consumed by @theme in globals.css and raw var() anywhere. */
 :root {
-  --gorola-pine: #1d3d2f;
-  --gorola-pine-dark: #162e23;
-  --gorola-pine-light: #2d5a40;
+  --gorola-pine: #1a3644;
+  --gorola-pine-dark: #0f222c;
+  --gorola-pine-light: #2d5165;
   --gorola-saffron: #e8833a;
   --gorola-fog: #f4f1ec;
   --gorola-charcoal: #1c1c1e;

@@ -8,10 +8,12 @@
 
 /* Keyframes (design system — Phase 2.2) */
 @keyframes etaPulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.6;
   }
@@ -22,6 +24,7 @@
     transform: scale(1);
     opacity: 0.7;
   }
+
   100% {
     transform: scale(1.4);
     opacity: 0;
@@ -32,6 +35,7 @@
   0% {
     box-shadow: 0 0 0 0 color-mix(in srgb, var(--gorola-pine) 35%, transparent);
   }
+
   100% {
     box-shadow: 0 0 0 8px color-mix(in srgb, var(--gorola-pine) 0%, transparent);
   }
@@ -42,6 +46,7 @@
     opacity: 0;
     transform: translate3d(0, 12px, 0);
   }
+
   to {
     opacity: 1;
     transform: translate3d(0, 0, 0);
@@ -52,6 +57,7 @@
   0% {
     transform: translate3d(0, 0, 0);
   }
+
   100% {
     transform: translate3d(4px, -3px, 0);
   }
@@ -61,6 +67,7 @@
   0% {
     background-position: -200% 0;
   }
+
   100% {
     background-position: 200% 0;
   }
@@ -98,7 +105,7 @@
   body {
     @apply m-0 min-h-dvh font-sans antialiased bg-background text-foreground transition-colors duration-500 ease-in-out;
   }
-  
+
   /* Remove aggressive global outline to prevent production focus ring artifacts */
   * {
     @apply border-border;
@@ -118,9 +125,11 @@
   .font-playfair {
     font-family: var(--font-family-playfair);
   }
+
   .font-dm-sans {
     font-family: var(--font-family-dm-sans);
   }
+
   .font-devanagari {
     font-family: var(--font-family-devanagari);
   }
@@ -138,12 +147,10 @@
   }
 
   .skeleton {
-    background: linear-gradient(
-      100deg,
-      var(--color-gorola-slate-mist) 0%,
-      color-mix(in srgb, #fff 70%, var(--color-gorola-slate-mist)) 45%,
-      var(--color-gorola-slate-mist) 90%
-    );
+    background: linear-gradient(100deg,
+        var(--color-gorola-slate-mist) 0%,
+        color-mix(in srgb, #fff 70%, var(--color-gorola-slate-mist)) 45%,
+        var(--color-gorola-slate-mist) 90%);
     background-size: 200% 100%;
     animation: shimmer 1.2s ease-in-out infinite;
   }
@@ -343,4 +350,40 @@ body.weather-mode {
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/* Brand Gradient Background replacing the green brand color */
+.bg-gorola-pine {
+  background: linear-gradient(89deg, #FEBB56 0%, #FFFFFF 34%, #FFFFFF 67%, #AAD3FF 100%) !important;
+}
+
+/* Brand Navbar Gradient Background specifically requested */
+.bg-gorola-pine\/95 {
+  background: linear-gradient(89deg, #E6F2FF 0%, #FFFFFF 18%, #FFFFFF 32%, #FFDFAE 50%, #FFFFFF 68%, #FFFFFF 82%, #E6F2FF 100%) !important;
+}
+
+/* Base formatting for brand gradient backgrounds */
+.bg-gorola-pine,
+.bg-gorola-pine\/95 {
+  color: var(--gorola-charcoal) !important;
+  border-color: color-mix(in srgb, var(--gorola-slate) 20%, transparent) !important;
+
+  &,
+  & * {
+    color: var(--gorola-charcoal) !important;
+    border-color: color-mix(in srgb, var(--gorola-slate) 20%, transparent) !important;
+  }
+}
+
+/* Hover effects for buttons/cards using the brand gradient */
+button.bg-gorola-pine,
+a.bg-gorola-pine,
+[role="button"].bg-gorola-pine {
+  transition: all 0.2s ease-in-out !important;
+
+  &:hover {
+    opacity: 0.92 !important;
+    transform: translateY(-1px) !important;
+    box-shadow: 0 4px 12px rgba(170, 211, 255, 0.45) !important;
+  }
 }

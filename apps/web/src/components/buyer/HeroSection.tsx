@@ -99,7 +99,7 @@ export function HeroSection(): ReactElement {
         "relative flex min-h-[40vh] items-center overflow-hidden rounded-3xl px-6 py-12 transition-colors duration-500 sm:px-10",
         isWeatherMode
           ? "bg-gorola-slate text-gorola-fog"
-          : "bg-gorola-pine text-gorola-fog"
+          : "bg-gorola-pine text-gorola-charcoal"
       )}
     >
       <TopographicBg opacity={isWeatherMode ? 0.1 : 0.07} />
@@ -107,7 +107,10 @@ export function HeroSection(): ReactElement {
 
       <div className="relative z-10 flex max-w-none flex-col gap-6">
         <div className="flex flex-col gap-2">
-          <p className="hero-greeting font-dm-sans text-sm font-medium tracking-wide text-gorola-fog/70 sm:text-base">
+          <p className={cn(
+            "hero-greeting font-dm-sans text-sm font-medium tracking-wide sm:text-base",
+            isWeatherMode ? "text-gorola-fog/70" : "text-gorola-charcoal/70"
+          )}>
             {isWeatherMode ? (
               <span className="inline-flex items-center gap-2">
                 <span role="img" aria-label="Cloud with sun">⛅</span> Weather Mode active
@@ -116,7 +119,10 @@ export function HeroSection(): ReactElement {
               `${greeting}, ${displayName}`
             )}
           </p>
-          <h1 className="hero-subheading font-playfair text-4xl leading-[1.1] tracking-tight sm:text-5xl md:text-[52px] lg:text-6xl text-white">
+          <h1 className={cn(
+            "hero-subheading font-playfair text-4xl leading-[1.1] tracking-tight sm:text-5xl md:text-[52px] lg:text-6xl",
+            isWeatherMode ? "text-white" : "text-gorola-charcoal"
+          )}>
             {isWeatherMode ? messages.weatherHeading : messages.normalHeading}
           </h1>
         </div>
@@ -132,7 +138,10 @@ export function HeroSection(): ReactElement {
 
           <div
             className={cn(
-              "hero-eta flex items-center gap-2 rounded-full bg-white/10 px-4 py-2 text-[11px] font-medium text-gorola-fog transition-colors sm:inline-flex sm:w-fit sm:gap-3 sm:text-sm",
+              "hero-eta flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-medium transition-colors sm:inline-flex sm:w-fit sm:gap-3 sm:text-sm",
+              isWeatherMode 
+                ? "bg-white/10 text-gorola-fog" 
+                : "bg-gorola-charcoal/10 text-gorola-charcoal",
               "w-full"
             )}
             role="status"
@@ -140,11 +149,11 @@ export function HeroSection(): ReactElement {
           >
             <div className="flex shrink-0 items-center gap-2">
               <span className="hero-pulse h-2 w-2 rounded-full bg-gorola-amber" data-testid="pulse-dot" />
-              <span className="font-bold text-white">
+              <span className={cn("font-bold", isWeatherMode ? "text-white" : "text-gorola-charcoal")}>
                 {isWeatherMode ? "45-55 mins" : "25-35 mins"}
               </span>
             </div>
-            <div className="w-px self-stretch bg-white/20" aria-hidden />
+            <div className={cn("w-px self-stretch", isWeatherMode ? "bg-white/20" : "bg-gorola-charcoal/20")} aria-hidden />
             <span className="opacity-80 whitespace-normal leading-tight">
               {isWeatherMode ? messages.weatherETA : messages.normalETA}
             </span>
