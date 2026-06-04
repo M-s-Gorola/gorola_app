@@ -37,9 +37,10 @@ describe("Admin Stores API Integration Tests", () => {
   });
 
   beforeEach(async () => {
-    // Clear relevant records
+    // Clear relevant records — order matters (FK constraints)
     await db.orderItem.deleteMany();
     await db.order.deleteMany();
+    await db.user.deleteMany();       // must come after orders (FK: order.userId)
     await db.productVariant.deleteMany();
     await db.product.deleteMany();
     await db.storeOwner.deleteMany();
