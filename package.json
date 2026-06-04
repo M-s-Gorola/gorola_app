@@ -49,7 +49,9 @@
       "qs": "^6.15.2",
       "axios": "^1.16.0",
       "vitest": "^4.1.0",
-      "zod": "^4.3.6"
+      "zod": "^4.3.6",
+      "react-router": "^7.15.0",
+      "react-router-dom": "^7.15.0"
     }
   },
   "_pnpm_overrides_comments": {
@@ -65,6 +67,8 @@
     "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.1",
     "axios": "Overridden due to high security vulnerabilities (NO_PROXY bypass CVE-2025-62718, MitM via prototype pollution) in <1.16.0",
     "vitest": "Overridden due to critical security vulnerability (arbitrary file read/execution in Vitest UI server) in <4.1.0",
-    "zod": "Overridden to ensure single Zod version across workspace and resolve react-hook-form type mismatches in hoisted linker mode"
+    "zod": "Overridden to ensure single Zod version across workspace and resolve react-hook-form type mismatches in hoisted linker mode",
+    "react-router": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0",
+    "react-router-dom": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0"
   }
 }
