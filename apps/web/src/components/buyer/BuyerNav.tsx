@@ -18,6 +18,8 @@ import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { useWeatherStore } from "@/store/weather.store";
 
+import goRolaTextImg from "../shared/GoRola_text_without_bg-Photoroom.png";
+
 export function BuyerNav(): ReactElement {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
@@ -63,14 +65,22 @@ export function BuyerNav(): ReactElement {
       <div className="mx-auto flex w-full max-w-6xl items-center gap-4">
         {/* Left: Logo & Location */}
         <div className="flex shrink-0 items-center gap-3">
-          <Link to="/" className="flex items-center gap-2 text-gorola-fog">
+          <Link to="/" className={cn("flex items-center gap-2", isWeatherMode ? "text-gorola-fog" : "text-gorola-charcoal")}>
             <span aria-label="GoRola mountain logo">
-              <GorolaMountainMark />
+              <GorolaMountainMark color={isWeatherMode ? "var(--gorola-fog)" : "var(--gorola-charcoal)"} secondaryColor="var(--gorola-saffron)" />
             </span>
-            <span className="font-playfair text-xl tracking-wide hidden sm:block">GoRola</span>
+            <img
+              src={goRolaTextImg}
+              alt="GoRola"
+              className="object-contain hidden sm:block"
+              style={{ height: "32px", width: "auto" }}
+            />
           </Link>
 
-          <div className="hidden sm:flex items-center gap-1 rounded-lg bg-white/10 px-3 py-1.5 text-sm text-gorola-fog">
+          <div className={cn(
+            "hidden sm:flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm",
+            isWeatherMode ? "bg-white/10 text-gorola-fog" : "bg-gorola-charcoal/10 text-gorola-charcoal"
+          )}>
             <MapPin size={14} className="text-gorola-saffron" />
             <span>Kulri, Mussoorie</span>
           </div>
@@ -80,14 +90,19 @@ export function BuyerNav(): ReactElement {
           onSubmit={handleSearchSubmit}
           className="relative flex flex-1 items-center"
         >
-          <Search size={15} className="pointer-events-none absolute left-3 text-white/60" />
+          <Search size={15} className={cn("pointer-events-none absolute left-3", isWeatherMode ? "text-white/60" : "text-gorola-charcoal/60")} />
           <input
             value={search}
             onChange={(event) => {
               setSearch(event.target.value);
             }}
             placeholder="Search products"
-            className="w-full rounded-xl border border-white/20 bg-white/10 py-2 pl-9 pr-3 text-sm text-gorola-fog outline-none transition-all placeholder:text-white/60 focus:bg-white/15 focus:border-white/30"
+            className={cn(
+              "w-full rounded-xl border py-2 pl-9 pr-3 text-sm outline-none transition-all",
+              isWeatherMode
+                ? "border-white/20 bg-white/10 text-gorola-fog placeholder:text-white/60 focus:bg-white/15 focus:border-white/30"
+                : "border-gorola-charcoal/20 bg-white/60 text-gorola-charcoal placeholder:text-gorola-charcoal/60 focus:bg-white focus:border-gorola-charcoal/40"
+            )}
           />
         </form>
 
@@ -118,7 +133,10 @@ export function BuyerNav(): ReactElement {
                 <button
                   type="button"
                   aria-label="Profile"
-                  className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-offset-0 ring-[3px] ring-gorola-saffron"
+                  className={cn(
+                    "inline-flex items-center justify-center rounded-full border p-2.5 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-offset-0 ring-[3px] ring-gorola-saffron",
+                    isWeatherMode ? "border-white/30 text-gorola-fog" : "border-gorola-charcoal/30 text-gorola-charcoal"
+                  )}
                 >
                   <UserRound size={18} />
                 </button>
@@ -126,24 +144,29 @@ export function BuyerNav(): ReactElement {
               <DropdownMenuContent
                 align="end"
                 className={cn(
-                  "w-56 text-gorola-fog border-white/10 transition-colors duration-300",
-                  isWeatherMode ? "bg-gorola-slate" : "bg-gorola-pine"
+                  "w-56 border transition-colors duration-300",
+                  isWeatherMode
+                    ? "bg-gorola-slate text-gorola-fog border-white/10"
+                    : "bg-white text-gorola-charcoal border-gorola-charcoal/10"
                 )}
               >
-                <DropdownMenuLabel className="font-playfair text-lg text-white">
+                <DropdownMenuLabel className={cn("font-playfair text-lg", isWeatherMode ? "text-white" : "text-gorola-charcoal")}>
                   {buyerLabel}
                 </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuSeparator className={isWeatherMode ? "bg-white/10" : "bg-gorola-charcoal/10"} />
                 <DropdownMenuItem
                   asChild
-                  className="cursor-pointer focus:bg-white/10 focus:text-gorola-fog"
+                  className={cn(
+                    "cursor-pointer focus:bg-white/10",
+                    isWeatherMode ? "focus:text-gorola-fog" : "focus:bg-gorola-charcoal/5 focus:text-gorola-charcoal"
+                  )}
                 >
                   <Link to="/profile" className="flex items-center gap-2 w-full">
                     <UserRound size={16} />
                     <span>Profile</span>
                   </Link>
                 </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-white/10" />
+                <DropdownMenuSeparator className={isWeatherMode ? "bg-white/10" : "bg-gorola-charcoal/10"} />
                 <DropdownMenuItem
                   onClick={() => {
                     void logoutBuyer();
@@ -159,7 +182,10 @@ export function BuyerNav(): ReactElement {
             <Link
               to="/login"
               aria-label="Login"
-              className="inline-flex items-center justify-center rounded-full border border-white/30 p-2.5 text-gorola-fog transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-offset-0 ring-[3px] ring-gorola-saffron"
+              className={cn(
+                "inline-flex items-center justify-center rounded-full border p-2.5 transition-all hover:scale-105 active:scale-95 focus:outline-none focus:ring-offset-0 ring-[3px] ring-gorola-saffron",
+                isWeatherMode ? "border-white/30 text-gorola-fog" : "border-gorola-charcoal/30 text-gorola-charcoal"
+              )}
             >
               <UserRound size={18} />
             </Link>
