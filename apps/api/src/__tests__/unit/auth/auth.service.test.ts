@@ -62,12 +62,14 @@ describe("AuthService", () => {
     ensureBuyerUser.mockResolvedValue({
       id: "user_test_1",
       name: "",
-      phone: "+919876543210"
+      phone: "+919876543210",
+      isActive: true
     });
     findUserById.mockResolvedValue({
       id: "user_test_1",
       name: "Latest Name",
-      phone: "+919876543210"
+      phone: "+919876543210",
+      isActive: true
     });
   });
 
@@ -234,7 +236,8 @@ describe("AuthService", () => {
       findUserById.mockResolvedValueOnce({
         id: "user_1",
         name: "Fresh Name From DB",
-        phone: "+919999999999"
+        phone: "+919999999999",
+        isActive: true
       });
       tokenService.issueTokens.mockResolvedValueOnce({
         accessToken: "new-access",

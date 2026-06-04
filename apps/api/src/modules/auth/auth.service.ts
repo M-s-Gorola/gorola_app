@@ -1,4 +1,4 @@
-import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { AppError, RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
 import { compare, hash } from "bcryptjs";
 
 import type {
@@ -19,6 +19,7 @@ export type BuyerUserLookup = {
   id: string;
   name: string;
   phone: string;
+  isActive: boolean;
 };
 
 export type AuthServiceDependencies = {
@@ -116,6 +117,9 @@ export class AuthService {
     }
 
     const user = await this.deps.ensureBuyerUser(input.phone);
+    if (!user.isActive) {
+      throw new AppError("Account suspended", { code: "ACCOUNT_SUSPENDED", statusCode: 403 });
+    }
     const tokens = await this.deps.tokenService.issueTokens({
       name: user.name.trim().length === 0 ? null : user.name,
       phone: user.phone,
@@ -136,7 +140,7 @@ export class AuthService {
     await this.deps.tokenService.revokeRefreshToken(input.refreshToken);
 
     const user = await this.deps.findUserById(payload.userId);
-    if (user === null) {
+    if (user === null || !user.isActive) {
       throw new UnauthorizedError("User session no longer valid.");
     }
 

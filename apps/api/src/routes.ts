@@ -114,7 +114,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
       return {
         id: row.id,
         name: row.name,
-        phone: row.phone
+        phone: row.phone,
+        isActive: row.isActive
       };
     },
     findUserById: async (id) => {
@@ -123,7 +124,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
       return {
         id: row.id,
         name: row.name,
-        phone: row.phone
+        phone: row.phone,
+        isActive: row.isActive
       };
     },
     otpProvider: createNoopOtpProvider(),

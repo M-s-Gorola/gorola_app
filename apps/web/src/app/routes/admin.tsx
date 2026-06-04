@@ -7,6 +7,7 @@ import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
 import { AdminSetup2FAPage } from "@/pages/admin/AdminSetup2FAPage";
 import { AdminTwoFactorPage } from "@/pages/admin/AdminTwoFactorPage";
+import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
 
 import { AdminRoute } from "./guards";
 
@@ -65,7 +66,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Users" />
+            <AdminUsersPage />
           </AdminLayout>
         </AdminRoute>
       }

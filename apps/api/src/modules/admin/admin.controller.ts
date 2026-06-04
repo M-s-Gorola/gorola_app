@@ -138,4 +138,82 @@ export function registerAdminRoutes(
       .header("Content-Disposition", 'attachment; filename="orders-export.csv"')
       .send(csv);
   });
+
+  const getUsersQuerySchema = z.object({
+    phone: z.string().optional()
+  });
+
+  app.get("/api/v1/admin/users", { preHandler }, async (request, reply) => {
+    const parsed = getUsersQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const result = await adminService.getUsers(parsed.data);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/users/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const user = await adminService.getUserDetail(id);
+    return {
+      success: true,
+      data: user,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/users/:id/suspend", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.suspendUser(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: {
+        id: result.id,
+        isActive: result.isActive
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/users/:id/unsuspend", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.unsuspendUser(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: {
+        id: result.id,
+        isActive: result.isActive
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }

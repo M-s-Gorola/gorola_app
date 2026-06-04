@@ -445,4 +445,139 @@ export class AdminService {
 
     return csvContent;
   }
+
+  public async getUsers(filters: { phone?: string | undefined }) {
+    const { phone } = filters;
+    const where: Prisma.UserWhereInput = {
+      isDeleted: false,
+      ...(phone ? { phone: { contains: phone } } : {})
+    };
+
+    const users = await this.db.user.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        orders: {
+          select: {
+            total: true
+          }
+        }
+      }
+    });
+
+    return users.map((u) => {
+      const orderCount = u.orders.length;
+      const totalSpent = u.orders.reduce((sum, o) => sum + Number(o.total), 0);
+      return {
+        id: u.id,
+        maskedPhone: maskPhone(u.phone),
+        name: u.name,
+        orderCount,
+        totalSpent,
+        createdAt: u.createdAt.toISOString(),
+        isActive: u.isActive
+      };
+    });
+  }
+
+  public async getUserDetail(userId: string) {
+    const user = await this.db.user.findFirst({
+      where: { id: userId, isDeleted: false },
+      include: {
+        orders: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            store: { select: { name: true } }
+          }
+        },
+        addresses: {
+          where: { isDeleted: false }
+        }
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    return {
+      id: user.id,
+      name: user.name,
+      maskedPhone: maskPhone(user.phone),
+      isActive: user.isActive,
+      createdAt: user.createdAt.toISOString(),
+      orders: user.orders.map((o) => ({
+        id: o.id,
+        storeName: o.store.name,
+        total: Number(o.total),
+        status: o.status,
+        createdAt: o.createdAt.toISOString()
+      })),
+      addresses: user.addresses.map((a) => ({
+        id: a.id,
+        flatRoom: a.flatRoom,
+        landmarkDescription: a.landmarkDescription
+      }))
+    };
+  }
+
+  public async suspendUser(userId: string, adminId: string, ip: string, userAgent: string) {
+    const user = await this.db.user.findFirst({
+      where: { id: userId, isDeleted: false }
+    });
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: { isActive: false }
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_USER_SUSPEND",
+        entityType: "User",
+        entityId: userId,
+        oldValue: { isActive: user.isActive },
+        newValue: { isActive: false },
+        ip,
+        userAgent
+      }
+    });
+
+    return updated;
+  }
+
+  public async unsuspendUser(userId: string, adminId: string, ip: string, userAgent: string) {
+    const user = await this.db.user.findFirst({
+      where: { id: userId, isDeleted: false }
+    });
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: { isActive: true }
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_USER_UNSUSPEND",
+        entityType: "User",
+        entityId: userId,
+        oldValue: { isActive: user.isActive },
+        newValue: { isActive: true },
+        ip,
+        userAgent
+      }
+    });
+
+    return updated;
+  }
 }
