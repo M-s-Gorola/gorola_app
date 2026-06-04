@@ -42,6 +42,7 @@ describe("Admin Stores API Integration Tests", () => {
     await db.cart.deleteMany();
     await db.orderItem.deleteMany();
     await db.order.deleteMany();
+    await db.address.deleteMany();    // must come before user (FK: Address_userId_fkey)
     await db.user.deleteMany();       // must come after orders (FK: order.userId)
     await db.productVariant.deleteMany();
     await db.product.deleteMany();
