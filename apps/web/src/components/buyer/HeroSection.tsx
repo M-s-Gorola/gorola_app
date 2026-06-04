@@ -99,7 +99,7 @@ export function HeroSection(): ReactElement {
         "relative flex min-h-[40vh] items-center overflow-hidden rounded-3xl px-6 py-12 transition-colors duration-500 sm:px-10",
         isWeatherMode
           ? "bg-gorola-slate text-gorola-fog"
-          : "bg-gorola-pine text-gorola-charcoal"
+          : "bg-gorola-hero-gradient text-gorola-charcoal"
       )}
     >
       <TopographicBg opacity={isWeatherMode ? 0.1 : 0.07} />

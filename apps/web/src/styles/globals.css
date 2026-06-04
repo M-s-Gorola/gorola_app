@@ -352,8 +352,9 @@ body.weather-mode {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* Brand Gradient Background replacing the green brand color */
-.bg-gorola-pine {
+/* Brand Gradient Background for Hero and Footer */
+.bg-gorola-hero-gradient,
+.bg-gorola-footer-gradient {
   background: linear-gradient(89deg, #FEBB56 0%, #FFFFFF 34%, #FFFFFF 67%, #AAD3FF 100%) !important;
 }
 
@@ -363,8 +364,9 @@ body.weather-mode {
 }
 
 /* Base formatting for brand gradient backgrounds */
-.bg-gorola-pine,
-.bg-gorola-pine\/95 {
+.bg-gorola-pine\/95,
+.bg-gorola-hero-gradient,
+.bg-gorola-footer-gradient {
   color: var(--gorola-charcoal) !important;
   border-color: color-mix(in srgb, var(--gorola-slate) 20%, transparent) !important;
 
@@ -376,9 +378,9 @@ body.weather-mode {
 }
 
 /* Hover effects for buttons/cards using the brand gradient */
-button.bg-gorola-pine,
-a.bg-gorola-pine,
-[role="button"].bg-gorola-pine {
+button.bg-gorola-hero-gradient,
+a.bg-gorola-hero-gradient,
+[role="button"].bg-gorola-hero-gradient {
   transition: all 0.2s ease-in-out !important;
 
   &:hover {
