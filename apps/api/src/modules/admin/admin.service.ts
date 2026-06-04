@@ -1,5 +1,6 @@
-import { NotFoundError } from "@gorola/shared";
+import { ConflictError, NotFoundError } from "@gorola/shared";
 import { type OrderStatus, type PaymentMethod, Prisma, type PrismaClient } from "@prisma/client";
+import { hash } from "bcryptjs";
 
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
@@ -573,6 +574,205 @@ export class AdminService {
         entityId: userId,
         oldValue: { isActive: user.isActive },
         newValue: { isActive: true },
+        ip,
+        userAgent
+      }
+    });
+
+    return updated;
+  }
+
+  public async createStore(
+    dto: {
+      storeName: string;
+      description: string;
+      phone: string;
+      landmarkAddress: string;
+      storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+      ownerEmail: string;
+      ownerTempPassword: string;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const existingOwner = await this.db.storeOwner.findFirst({
+      where: { email: dto.ownerEmail, isDeleted: false }
+    });
+    if (existingOwner) {
+      throw new ConflictError("Store owner with this email already exists", { field: "ownerEmail" });
+    }
+
+    const passwordHash = await hash(dto.ownerTempPassword, 8);
+
+    return this.db.$transaction(async (tx) => {
+      const store = await tx.store.create({
+        data: {
+          name: dto.storeName,
+          description: dto.description,
+          phone: dto.phone,
+          address: dto.landmarkAddress,
+          storeType: dto.storeType,
+          isActive: true
+        }
+      });
+
+      const owner = await tx.storeOwner.create({
+        data: {
+          email: dto.ownerEmail,
+          passwordHash,
+          storeId: store.id
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_STORE_CREATE",
+          entityType: "Store",
+          entityId: store.id,
+          oldValue: Prisma.DbNull,
+          newValue: {
+            name: store.name,
+            storeType: store.storeType,
+            ownerEmail: owner.email
+          },
+          ip,
+          userAgent
+        }
+      });
+
+      return {
+        storeId: store.id,
+        storeType: store.storeType,
+        ownerId: owner.id
+      };
+    });
+  }
+
+  public async getStores() {
+    const stores = await this.db.store.findMany({
+      where: { isDeleted: false },
+      orderBy: { createdAt: "desc" },
+      include: {
+        owners: {
+          where: { isDeleted: false },
+          select: { email: true }
+        },
+        _count: {
+          select: {
+            orders: true,
+            products: { where: { isDeleted: false } }
+          }
+        }
+      }
+    });
+
+    const orders = await this.db.order.findMany({
+      where: {
+        status: { not: "CANCELLED" },
+        store: { isDeleted: false }
+      },
+      select: {
+        storeId: true,
+        total: true
+      }
+    });
+
+    const revenueByStore = new Map<string, number>();
+    for (const order of orders) {
+      const current = revenueByStore.get(order.storeId) ?? 0;
+      revenueByStore.set(order.storeId, current + Number(order.total));
+    }
+
+    return stores.map((s) => {
+      const firstOwner = s.owners[0];
+      const ownerEmail = firstOwner ? firstOwner.email : "";
+      const revenue = revenueByStore.get(s.id) ?? 0;
+
+      return {
+        id: s.id,
+        name: s.name,
+        storeType: s.storeType,
+        ownerEmail,
+        orderCount: s._count.orders,
+        revenue,
+        productCount: s._count.products,
+        isActive: s.isActive
+      };
+    });
+  }
+
+  public async getStoreDetail(storeId: string) {
+    const store = await this.db.store.findFirst({
+      where: { id: storeId, isDeleted: false },
+      include: {
+        owners: {
+          where: { isDeleted: false },
+          select: { id: true, email: true, createdAt: true }
+        },
+        _count: {
+          select: {
+            products: { where: { isDeleted: false } },
+            orders: true
+          }
+        }
+      }
+    });
+
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+
+    const orders = await this.db.order.findMany({
+      where: { storeId, status: { not: "CANCELLED" } },
+      select: { total: true }
+    });
+    const revenue = orders.reduce((sum, o) => sum + Number(o.total), 0);
+
+    return {
+      id: store.id,
+      name: store.name,
+      description: store.description,
+      phone: store.phone,
+      address: store.address,
+      storeType: store.storeType,
+      isActive: store.isActive,
+      createdAt: store.createdAt.toISOString(),
+      revenue,
+      productCount: store._count.products,
+      orderCount: store._count.orders,
+      owners: store.owners.map((o) => ({
+        id: o.id,
+        email: o.email,
+        createdAt: o.createdAt.toISOString()
+      }))
+    };
+  }
+
+  public async updateStoreStatus(storeId: string, isActive: boolean, adminId: string, ip: string, userAgent: string) {
+    const store = await this.db.store.findFirst({
+      where: { id: storeId, isDeleted: false }
+    });
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+
+    const updated = await this.db.store.update({
+      where: { id: storeId },
+      data: { isActive }
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: isActive ? "ADMIN_STORE_ACTIVATE" : "ADMIN_STORE_DEACTIVATE",
+        entityType: "Store",
+        entityId: storeId,
+        oldValue: { isActive: store.isActive },
+        newValue: { isActive },
         ip,
         userAgent
       }

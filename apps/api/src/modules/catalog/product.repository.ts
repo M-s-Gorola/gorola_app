@@ -188,6 +188,8 @@ export class ProductRepository {
       isDeleted: false,
       isActive: true,
       store: {
+        isDeleted: false,
+        isActive: true,
         isAcceptingOrders: true
       },
       ...(input.categoryId !== undefined ? { categoryId: input.categoryId } : {}),

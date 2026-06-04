@@ -150,8 +150,8 @@ export function AdminLayout({ children }: AdminLayoutProps): ReactElement {
          </nav>
 
         {/* Dynamic Nested Content */}
-        <main className="flex-1 p-6 md:p-8 lg:p-10">
-          <div className="mx-auto max-w-5xl">
+        <main className="flex-1 min-w-0 p-6 md:p-8 lg:p-10">
+          <div className="mx-auto max-w-5xl w-full">
             {children}
           </div>
         </main>

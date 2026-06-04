@@ -12,16 +12,16 @@
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
 | Phase 3 | Store Owner Panel | 🟢 COMPLETE   | Phase 3.1–3.10.1 complete. All E2E tests passing green, including responsive mobile navigation and toast pointer interception fixes. |
-| Phase 4 | Admin Panel       | 🟡 IN PROGRESS | Phase 4.1, 4.2, 4.3, and 4.4 complete; Store Management (Phase 4.5) planned. |
+| Phase 4 | Admin Panel       | 🟡 IN PROGRESS | Phase 4.1, 4.2, 4.3, 4.4, and 4.5 complete; Category Management (Phase 4.6) planned. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-06-04
-- **Session Summary:** Session 49 — Completed Phase 4.4 (User Management — Buyers) in the Admin Panel. Implemented user details slide-over drawers, debounced search by contact number, and suspend/unsuspend controls with modal confirmations. Mapped routes and verified all backend tests (100% green), frontend Vitest component tests, and mono-repo typechecks/builds are passing.
-- **Next Session Must Start With:** Phase 4.5 (Store Management) implementation.
-- **In Progress Right Now:** None. Phase 4.4 complete.
+- **Session Summary:** Session 50 — Completed Phase 4.5 (Store Management) in the Admin Panel. Implemented store provisioning dialog form, validation of commerce type (Quick/Booking), metrics dashboard details page, and soft-delete active/inactive status toggles with invalidation updates. Verified all backend integration tests (100% green), frontend Vitest component tests, lint rules, and builds are passing.
+- **Next Session Must Start With:** Phase 4.6 (Category Management) implementation.
+- **In Progress Right Now:** None. Phase 4.5 complete.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -1584,39 +1584,39 @@ Admin needs to create new stores (with an auto-created store owner account), vie
 
 ---
 
-- [ ] **RED — Integration (`admin.stores.test.ts`):**
-  - [ ] Test: `POST /api/v1/admin/stores` with body `{ storeName: 'New Store', description: '...', phone: '+919000000000', landmarkAddress: '...', storeType: 'QUICK_COMMERCE', ownerEmail: 'owner@test.com', ownerTempPassword: 'TempPass123!' }` → HTTP 201 with `{ storeId, storeType: 'QUICK_COMMERCE', ownerId }`; both `Store` and `StoreOwner` rows created in DB atomically; `store.storeType = 'QUICK_COMMERCE'` confirmed in DB
-  - [ ] Test: `POST /api/v1/admin/stores` with body containing `storeType: 'BOOKING_COMMERCE'` → HTTP 201; `store.storeType = 'BOOKING_COMMERCE'` in DB
-  - [ ] Test: `POST /api/v1/admin/stores` with `storeType` omitted → HTTP 400 `VALIDATION_ERROR` (storeType is required — no guessing)
-  - [ ] Test: `POST /api/v1/admin/stores` with `storeType: 'INVALID_TYPE'` → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: `POST /api/v1/admin/stores` with duplicate `ownerEmail` → HTTP 409 `CONFLICT`
-  - [ ] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, isActive }`
-  - [ ] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail including `storeType` field
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: false }` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: true }` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
-  - [ ] Test: all store create and active/inactive status toggle actions create `AuditLog` entries
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.stores.test.ts`):**
+  - [x] Test: `POST /api/v1/admin/stores` with body `{ storeName: 'New Store', description: '...', phone: '+919000000000', landmarkAddress: '...', storeType: 'QUICK_COMMERCE', ownerEmail: 'owner@test.com', ownerTempPassword: 'TempPass123!' }` → HTTP 201 with `{ storeId, storeType: 'QUICK_COMMERCE', ownerId }`; both `Store` and `StoreOwner` rows created in DB atomically; `store.storeType = 'QUICK_COMMERCE'` confirmed in DB
+  - [x] Test: `POST /api/v1/admin/stores` with body containing `storeType: 'BOOKING_COMMERCE'` → HTTP 201; `store.storeType = 'BOOKING_COMMERCE'` in DB
+  - [x] Test: `POST /api/v1/admin/stores` with `storeType` omitted → HTTP 400 `VALIDATION_ERROR` (storeType is required — no guessing)
+  - [x] Test: `POST /api/v1/admin/stores` with `storeType: 'INVALID_TYPE'` → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: `POST /api/v1/admin/stores` with duplicate `ownerEmail` → HTTP 409 `CONFLICT`
+  - [x] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, isActive }`
+  - [x] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail including `storeType` field
+  - [x] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: false }` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
+  - [x] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: true }` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
+  - [x] Test: all store create and active/inactive status toggle actions create `AuditLog` entries
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
+- [x] **GREEN — Backend:**
   - [x] [Schema] Confirm `storeType StoreType @default(QUICK_COMMERCE)` exists on `Store` model and `enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE }` exists in `schema.prisma`. **This is added in Phase 7.1.** If working on Phase 4.5 before Phase 7.1: add the enum and field now with a migration named `add_store_type`. Do not wait for Phase 7.
-  - [ ] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `updateStoreStatus(storeId, isActive: boolean, adminId)`.
-  - [ ] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/status` with `requireAuth` + `requireRole('ADMIN')`
-  - [ ] Run integration tests — **confirm GREEN**
+  - [x] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `updateStoreStatus(storeId, isActive: boolean, adminId)`.
+  - [x] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/status` with `requireAuth` + `requireRole('ADMIN')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminStoresPage.test.tsx`):**
-  - [ ] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Active" columns
-  - [ ] Test: "Add Store" form has a required `storeType` radio group with two options: "Quick Commerce (groceries, medicines, electronics)" and "Booking Commerce (tests, repairs)"; submitting without selecting one shows validation error "Store type is required"
-  - [ ] Test: submitting a valid form with `storeType: 'BOOKING_COMMERCE'` calls `POST /api/v1/admin/stores` with `{ storeType: 'BOOKING_COMMERCE', ... }` in the request body
-  - [ ] Test: the store type badge in the table shows "Quick" in pine-green and "Booking" in amber so admins can distinguish at a glance
-  - [ ] Test: clicking store row navigates to `/admin/stores/:id`
-  - [ ] Test: store detail page shows `storeType` prominently so admins know which order flow applies
-  - [ ] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/stores/:id/status` mutation, triggers query invalidation, and greys out the row (`opacity-60 bg-gray-50/50 border-gray-200 grayscale-[25%] transition-all`)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminStoresPage.test.tsx`):**
+  - [x] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Active" columns
+  - [x] Test: "Add Store" form has a required `storeType` radio group with two options: "Quick Commerce (groceries, medicines, electronics)" and "Booking Commerce (tests, repairs)"; submitting without selecting one shows validation error "Store type is required"
+  - [x] Test: submitting a valid form with `storeType: 'BOOKING_COMMERCE'` calls `POST /api/v1/admin/stores` with `{ storeType: 'BOOKING_COMMERCE', ... }` in the request body
+  - [x] Test: the store type badge in the table shows "Quick" in pine-green and "Booking" in amber so admins can distinguish at a glance
+  - [x] Test: clicking store row navigates to `/admin/stores/:id`
+  - [x] Test: store detail page shows `storeType` prominently so admins know which order flow applies
+  - [x] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/stores/:id/status` mutation, triggers query invalidation, and greys out the row (`opacity-60 bg-gray-50/50 border-gray-200 grayscale-[25%] transition-all`)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` and `isActive` fields. Add `storeType` and `isActive` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` and `isActive` fields. Add `storeType` and `isActive` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin toggles store to inactive → row is instantly greyed out on list → buyer catalog shows 0 products from that store → admin toggles back to active → products reappear → ✅
+- [x] **Verification chain:**
+  - [x] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin toggles store to inactive → row is instantly greyed out on list → buyer catalog shows 0 products from that store → admin toggles back to active → products reappear → ✅
 
 ---
 

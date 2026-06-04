@@ -73,7 +73,11 @@ export class CategoryRepository {
       where: {
         categoryId: { in: categoryIds },
         isActive: true,
-        isDeleted: false
+        isDeleted: false,
+        store: {
+          isActive: true,
+          isDeleted: false
+        }
       },
       _count: {
         _all: true

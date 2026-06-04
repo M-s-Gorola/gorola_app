@@ -216,4 +216,92 @@ export function registerAdminRoutes(
       }
     };
   });
+
+  const createStoreBodySchema = z.object({
+    storeName: z.string().min(1, "Store name is required"),
+    description: z.string().default(""),
+    phone: z.string().min(1, "Phone is required"),
+    landmarkAddress: z.string().min(1, "Address is required"),
+    storeType: z.enum(["QUICK_COMMERCE", "BOOKING_COMMERCE"]),
+    ownerEmail: z.string().email("Invalid owner email"),
+    ownerTempPassword: z.string().min(8, "Temp password must be at least 8 characters")
+  });
+
+  const updateStoreStatusBodySchema = z.object({
+    isActive: z.boolean()
+  });
+
+  app.post("/api/v1/admin/stores", { preHandler }, async (request, reply) => {
+    const parsed = createStoreBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid store creation data", parsed.error.flatten());
+    }
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.createStore(parsed.data, adminId, ip, userAgent);
+    reply.status(201);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/stores", { preHandler }, async (request, reply) => {
+    const result = await adminService.getStores();
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/stores/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const result = await adminService.getStoreDetail(id);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/stores/:id/status", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateStoreStatusBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid store status data", parsed.error.flatten());
+    }
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.updateStoreStatus(id, parsed.data.isActive, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: {
+        id: result.id,
+        isActive: result.isActive
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
