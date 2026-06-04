@@ -1,4 +1,14 @@
-import { type PrismaClient } from "@prisma/client";
+import { NotFoundError } from "@gorola/shared";
+import { type OrderStatus, type PaymentMethod, Prisma, type PrismaClient } from "@prisma/client";
+
+import { OrderRepository } from "../order/order.repository.js";
+import { OrderService } from "../order/order.service.js";
+
+function maskPhone(phone: string): string {
+  if (!phone) return "";
+  if (phone.length <= 4) return "****";
+  return "*".repeat(phone.length - 4) + phone.slice(-4);
+}
 
 export type AdminDashboardData = {
   totalOrdersToday: number;
@@ -230,5 +240,209 @@ export class AdminService {
       pendingAdApprovalsCount,
       featureFlags: flags
     };
+  }
+
+  public async getOrders(filters: {
+    storeId?: string | undefined;
+    status?: OrderStatus | undefined;
+    paymentMethod?: PaymentMethod | undefined;
+    startsAt?: string | undefined;
+    endsAt?: string | undefined;
+    cursor?: string | undefined;
+    limit?: number | undefined;
+  }) {
+    const limit = filters.limit ?? 50;
+    const { storeId, status, paymentMethod, startsAt, endsAt, cursor } = filters;
+
+    const where: Prisma.OrderWhereInput = {
+      ...(storeId ? { storeId } : {}),
+      ...(status ? { status } : {}),
+      ...(paymentMethod ? { paymentMethod } : {}),
+      ...(startsAt || endsAt ? {
+        createdAt: {
+          ...(startsAt ? { gte: new Date(startsAt) } : {}),
+          ...(endsAt ? { lte: new Date(endsAt) } : {})
+        }
+      } : {})
+    };
+
+    const orders = await this.db.order.findMany({
+      where,
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [
+        { createdAt: "desc" },
+        { id: "desc" }
+      ],
+      include: {
+        store: { select: { id: true, name: true } },
+        user: { select: { phone: true } },
+        items: true
+      }
+    });
+
+    const hasMore = orders.length > limit;
+    const pageItems = hasMore ? orders.slice(0, limit) : orders;
+
+    const mapped = pageItems.map((o) => {
+      const itemsCount = o.items.reduce((sum, item) => sum + item.quantity, 0);
+      return {
+        id: o.id,
+        buyerMaskedPhone: maskPhone(o.user?.phone ?? ""),
+        storeName: o.store.name,
+        itemsCount,
+        total: Number(o.total),
+        status: o.status,
+        createdAt: o.createdAt.toISOString(),
+        paymentMethod: o.paymentMethod
+      };
+    });
+
+    const nextCursor = hasMore && pageItems.length > 0 ? pageItems[pageItems.length - 1]!.id : null;
+
+    const stores = await this.db.store.findMany({
+      where: { isDeleted: false },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" }
+    });
+
+    return {
+      items: mapped,
+      nextCursor,
+      stores
+    };
+  }
+
+  public async forceUpdateOrderStatus(
+    orderId: string,
+    status: OrderStatus,
+    auditNote: string,
+    adminId: string,
+    ip: string,
+    userAgent: string,
+    deps: {
+      orderService: OrderService;
+      ordersRepo: OrderRepository;
+    }
+  ) {
+    const order = await this.db.order.findUnique({
+      where: { id: orderId }
+    });
+    if (!order) {
+      throw new NotFoundError("Order not found");
+    }
+
+    if (status === "CANCELLED") {
+      const updated = await deps.orderService.cancelOrderWithStockRestore(orderId, "ADMIN", auditNote);
+      await this.db.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_FORCE_STATUS_UPDATE",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { status: order.status },
+          newValue: { status: "CANCELLED", note: auditNote },
+          ip,
+          userAgent
+        }
+      });
+      return updated;
+    }
+
+    return this.db.$transaction(async (tx) => {
+      const updated = await deps.ordersRepo.updateStatus(orderId, status, "ADMIN", auditNote, tx);
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_FORCE_STATUS_UPDATE",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { status: order.status },
+          newValue: { status, note: auditNote },
+          ip,
+          userAgent
+        }
+      });
+      return updated;
+    });
+  }
+
+  public async getOrderDetail(orderId: string) {
+    const order = await this.db.order.findUnique({
+      where: { id: orderId },
+      include: {
+        store: { select: { id: true, name: true, phone: true, storeType: true } },
+        user: { select: { phone: true, name: true } },
+        items: true,
+        statusHistory: { orderBy: { changedAt: "asc" } }
+      }
+    });
+    if (!order) {
+      throw new NotFoundError("Order not found");
+    }
+
+    return {
+      ...order,
+      buyerMaskedPhone: maskPhone(order.user?.phone ?? ""),
+      total: Number(order.total),
+      subtotal: Number(order.subtotal),
+      deliveryFee: Number(order.deliveryFee)
+    };
+  }
+
+  public async exportOrdersCsv(filters: {
+    storeId?: string | undefined;
+    status?: OrderStatus | undefined;
+    paymentMethod?: PaymentMethod | undefined;
+    startsAt?: string | undefined;
+    endsAt?: string | undefined;
+  }): Promise<string> {
+    const { storeId, status, paymentMethod, startsAt, endsAt } = filters;
+
+    const where: Prisma.OrderWhereInput = {
+      ...(storeId ? { storeId } : {}),
+      ...(status ? { status } : {}),
+      ...(paymentMethod ? { paymentMethod } : {}),
+      ...(startsAt || endsAt ? {
+        createdAt: {
+          ...(startsAt ? { gte: new Date(startsAt) } : {}),
+          ...(endsAt ? { lte: new Date(endsAt) } : {})
+        }
+      } : {})
+    };
+
+    const orders = await this.db.order.findMany({
+      where,
+      orderBy: { createdAt: "desc" },
+      include: {
+        store: { select: { name: true } },
+        user: { select: { phone: true } },
+        items: true
+      }
+    });
+
+    const headers = ["Order ID", "Date", "Store", "Buyer Phone", "Items Count", "Total (INR)", "Status", "Payment Method"];
+    const rows = orders.map((o) => {
+      const itemsCount = o.items.reduce((sum, item) => sum + item.quantity, 0);
+      return [
+        o.id,
+        o.createdAt.toISOString(),
+        o.store.name,
+        maskPhone(o.user?.phone ?? ""),
+        itemsCount,
+        Number(o.total).toFixed(2),
+        o.status,
+        o.paymentMethod
+      ];
+    });
+
+    const csvContent = [
+      headers.map(h => `"${h}"`).join(","),
+      ...rows.map(r => r.map(val => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    return csvContent;
   }
 }

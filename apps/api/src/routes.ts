@@ -298,7 +298,9 @@ export function registerAppRoutes(app: FastifyInstance): void {
   });
 
   registerAdminRoutes(app, {
-    tokenVerifier: tokenService
+    tokenVerifier: tokenService,
+    orderService: buyerOrderSvc,
+    orders: orderRepoOrders
   });
 
   app.get("/api/v1/stores/:id", async (request, reply) => {

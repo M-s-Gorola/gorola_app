@@ -377,7 +377,8 @@ describe("StoreOwner Inventory (Stock Movements) Integration Tests", () => {
           type: "INITIAL",
           quantity: 10,
           stockQtyBefore: 0,
-          stockQtyAfter: 10
+          stockQtyAfter: 10,
+          createdAt: new Date(Date.now() - 10000)
         }
       });
       await db.stockMovement.create({
@@ -387,7 +388,8 @@ describe("StoreOwner Inventory (Stock Movements) Integration Tests", () => {
           quantity: 5,
           stockQtyBefore: 10,
           stockQtyAfter: 15,
-          note: "Midweek refill"
+          note: "Midweek refill",
+          createdAt: new Date()
         }
       });
 
