@@ -48,6 +48,10 @@ export class SearchRepository {
         where: {
           isActive: true,
           isDeleted: false,
+          store: {
+            isActive: true,
+            isDeleted: false
+          },
           name: { contains: query, mode: "insensitive" }
         },
         take: limit,

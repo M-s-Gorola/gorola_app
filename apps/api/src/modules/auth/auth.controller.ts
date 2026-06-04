@@ -17,7 +17,7 @@ import type { StoreOwnerAuthService } from "./store-owner-auth.service.js";
 type AuthControllerDeps = {
   authService: Pick<AuthService, "logout" | "refreshToken" | "sendOtp" | "verifyOtp">;
   storeOwnerAuthService: Pick<StoreOwnerAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
-  adminAuthService: Pick<AdminAuthService, "login" | "setup2FA" | "verify2FA">;
+  adminAuthService: Pick<AdminAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
 };
 
 type SuccessEnvelope<T> = {
@@ -104,9 +104,11 @@ function resolveRefreshToken(
   const cookieToken =
     cookies && cookieName === "storeOwnerRefreshToken"
       ? cookies["storeOwnerRefreshToken"]
-      : cookies
-        ? cookies["refreshToken"]
-        : undefined;
+      : cookies && cookieName === "adminRefreshToken"
+        ? cookies["adminRefreshToken"]
+        : cookies
+          ? cookies["refreshToken"]
+          : undefined;
   if (typeof cookieToken === "string" && cookieToken.length > 0) {
     return { refreshToken: cookieToken };
   }
@@ -194,12 +196,15 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
       request.body as {
         email: string;
         password: string;
-        totpCode: string;
+        totpCode?: string;
       }
     );
-    const tokens = await deps.adminAuthService.login(payload);
-    reply.setCookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
-    return success(request, reply, tokens);
+    const result = await deps.adminAuthService.login(payload);
+    if ("requiresTwoFactor" in result) {
+      return success(request, reply, result);
+    }
+    reply.setCookie("adminRefreshToken", result.refreshToken, refreshCookieOptions());
+    return success(request, reply, result);
   });
 
   app.post("/api/v1/auth/admin/setup-2fa", async (request, reply) => {
@@ -212,5 +217,19 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
     const payload = parseVerify2FAInput(request.body as { email: string; code: string });
     await deps.adminAuthService.verify2FA(payload);
     return success(request, reply, { verified: true });
+  });
+
+  app.post("/api/v1/auth/admin/refresh", async (request, reply) => {
+    const payload = parseRefreshTokenInput(resolveRefreshToken(request, request.body, "adminRefreshToken"));
+    const tokens = await deps.adminAuthService.refreshToken(payload);
+    reply.setCookie("adminRefreshToken", tokens.refreshToken, refreshCookieOptions());
+    return success(request, reply, tokens);
+  });
+
+  app.post("/api/v1/auth/admin/logout", async (request, reply) => {
+    const payload = parseLogoutInput(resolveRefreshToken(request, request.body, "adminRefreshToken"));
+    await deps.adminAuthService.logout(payload);
+    reply.clearCookie("adminRefreshToken", refreshCookieClearOptions());
+    return success(request, reply, { loggedOut: true });
   });
 }

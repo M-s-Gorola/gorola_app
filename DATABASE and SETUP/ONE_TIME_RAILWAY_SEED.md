@@ -40,14 +40,38 @@ Optional: mirror the same `DATABASE_URL` / `DIRECT_URL` in the monorepo root **`
 
 ## Commands (run from monorepo root)
 
-### 1. Main Catalog Seed
+### 1. Troubleshooting Migration Conflicts (Schema Changes vs. Existing Data)
+
+If `pnpm --filter @gorola/api exec prisma migrate deploy` fails with database error code `23502` (e.g., `column "storeId" of relation "Discount" contains null values` because a new required column is being added to a table containing legacy data), choose one of the following recovery options:
+
+* **Option A: Clear only the conflicting table (Preserves other data)**:
+  Truncate the problematic table to clean out the legacy rows:
+  - **Bash / Linux / macOS:**
+    ```bash
+    echo 'TRUNCATE TABLE "Discount" CASCADE;' | pnpm --filter @gorola/api exec prisma db execute --stdin
+    ```
+  - **PowerShell (Windows):**
+    ```powershell
+    "TRUNCATE TABLE `"Discount`" CASCADE;" | pnpm --filter @gorola/api exec prisma db execute --stdin
+    ```
+
+* **Option B: Reset the entire database (Wipes all tables)**:
+  If this is a staging/testing database where data loss is acceptable, wipe the database and re-apply all migrations from scratch:
+  ```bash
+  pnpm --filter @gorola/api exec prisma migrate reset
+  ```
+  *(Note: This command automatically triggers the default seed script `prisma/seed.ts` on success, so you do **not** need to manually run the **Main Catalog Seed** command in Step 2. You only need to run Step 3 if you wish to add the specialized medical tests).*
+
+Once cleared (using Option A), run the migration command below.
+
+### 2. Main Catalog Seed
 Runs `apps/api/prisma/seed.ts` (Stores, Categories, and a small sample of products).
 ```bash
 pnpm --filter @gorola/api exec prisma migrate deploy
 pnpm --filter @gorola/api prisma:seed
 ```
 
-### 2. Specialized Medical Tests Seed
+### 3. Specialized Medical Tests Seed
 Runs `apps/api/prisma/seed-medical-tests.ts` (Adds the 75+ diagnostic tests for manual verification).
 ```bash
 pnpm --filter @gorola/api exec tsx prisma/seed-medical-tests.ts

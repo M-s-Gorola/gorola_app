@@ -1,6 +1,13 @@
 import axios, { type AxiosError, type InternalAxiosRequestConfig, isAxiosError, type RawAxiosRequestHeaders } from "axios";
 
-import { bootstrapPromise, setBootstrapPromise, setStoreBootstrapPromise, storeBootstrapPromise } from "@/lib/bootstrap-state";
+import {
+  adminBootstrapPromise,
+  bootstrapPromise,
+  setAdminBootstrapPromise,
+  setBootstrapPromise,
+  setStoreBootstrapPromise,
+  storeBootstrapPromise
+} from "@/lib/bootstrap-state";
 import { type AuthTokens, useAuthStore } from "@/store/auth.store";
 
 const BUYER_REFRESH_PATH = "/api/v1/auth/buyer/refresh";
@@ -154,7 +161,9 @@ export function createApiClient(options: CreateApiClientOptions) {
     const role = useAuthStore.getState().role;
     const refreshPath = role === "STORE_OWNER"
       ? "/api/v1/auth/store-owner/refresh"
-      : BUYER_REFRESH_PATH;
+      : role === "ADMIN"
+        ? "/api/v1/auth/admin/refresh"
+        : BUYER_REFRESH_PATH;
 
     try {
       const res = await instance.post<unknown>(refreshPath, { refreshToken: refresh }, {
@@ -162,7 +171,7 @@ export function createApiClient(options: CreateApiClientOptions) {
       } as InternalAxiosRequestConfig & { _gorolaRefresh?: true });
       
       let nextAccessToken = "";
-      if (role === "STORE_OWNER") {
+      if (role === "STORE_OWNER" || role === "ADMIN") {
         const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
         if (!body || body.success !== true || !body.data?.accessToken || !body.data?.refreshToken) {
           throw new Error("Invalid token refresh payload");
@@ -305,6 +314,54 @@ export async function bootstrapStoreOwnerAuthSession(): Promise<void> {
   setStoreBootstrapPromise(p);
   return p;
 }
+
+/**
+ * Startup auth bootstrap for admin: try cookie-backed refresh once so reload keeps admin session.
+ */
+export async function bootstrapAdminAuthSession(): Promise<void> {
+  if (adminBootstrapPromise) {
+    return adminBootstrapPromise;
+  }
+
+  const p = (async () => {
+    if (api === null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    if (useAuthStore.getState().accessToken !== null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    useAuthStore.getState().setBootstrapPending(true);
+    try {
+      const res = await api.post<unknown>("/api/v1/auth/admin/refresh", {});
+      const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
+      if (body?.success === true && body.data?.accessToken && body.data?.refreshToken) {
+        // Decode JWT payload
+        const tokenPart = body.data.accessToken.split(".")[1];
+        if (tokenPart) {
+          const payload = JSON.parse(atob(tokenPart)) as {
+            sub: string;
+            role: "ADMIN";
+          };
+          useAuthStore.getState().setAdminSession({
+            accessToken: body.data.accessToken,
+            refreshToken: body.data.refreshToken,
+            userId: payload.sub,
+            twoFactorVerified: true
+          });
+        }
+      }
+    } catch {
+      // No valid refresh cookie/token on startup
+    } finally {
+      useAuthStore.getState().setBootstrapPending(false);
+    }
+  })();
+  setAdminBootstrapPromise(p);
+  return p;
+}
+
 
 /**
  * Fetches a boolean feature flag value.

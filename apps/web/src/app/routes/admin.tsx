@@ -1,24 +1,23 @@
 import type { ReactElement } from "react";
-import { Route } from "react-router-dom";
-import { Link } from "react-router-dom";
+import { Navigate, Route } from "react-router-dom";
 
+import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
+import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
+import { AdminSetup2FAPage } from "@/pages/admin/AdminSetup2FAPage";
+import { AdminStoreDetailPage } from "@/pages/admin/AdminStoreDetailPage";
+import { AdminStoresPage } from "@/pages/admin/AdminStoresPage";
+import { AdminTwoFactorPage } from "@/pages/admin/AdminTwoFactorPage";
+import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
 
 import { AdminRoute } from "./guards";
 
-function PlaceholderPage({ title, prefix }: { title: string; prefix: string }): ReactElement {
-  const backTo = prefix ? `${prefix}` : "/";
-
+function PlaceholderPage({ title }: { title: string }): ReactElement {
   return (
     <section className="space-y-3">
       <h1 className="text-2xl font-semibold text-gorola-charcoal">{title}</h1>
       <p className="font-dm-sans text-sm text-gorola-slate">This page is not ready yet.</p>
-      <Link
-        to={backTo}
-        className="inline-flex rounded-full border border-gorola-pine/20 px-3 py-2 text-sm font-semibold text-gorola-pine hover:bg-gorola-pine/5"
-      >
-        Back to Home
-      </Link>
     </section>
   );
 }
@@ -29,17 +28,114 @@ interface AdminRoutesProps {
 
 export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
   return [
-    <Route
-      key="admin-login"
-      path={prefix ? `${prefix}/login` : "/"}
-      element={<AdminLoginPage />}
-    />,
+    <Route key="admin-login" path={`${prefix}/login`} element={<AdminLoginPage />} />,
+    <Route key="admin-2fa" path={`${prefix}/2fa`} element={<AdminTwoFactorPage />} />,
+    <Route key="admin-setup-2fa" path={`${prefix}/setup-2fa`} element={<AdminSetup2FAPage />} />,
     <Route
       key="admin-root"
-      path={prefix || "/dashboard"}
+      path={prefix || "/"}
       element={
         <AdminRoute>
-          <PlaceholderPage title="Admin Dashboard" prefix={prefix} />
+          <Navigate to={prefix ? `${prefix}/dashboard` : "/dashboard"} replace />
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-dashboard"
+      path={`${prefix}/dashboard`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminDashboardPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-orders"
+      path={`${prefix}/orders`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminOrdersPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-users"
+      path={`${prefix}/users`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminUsersPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-stores"
+      path={`${prefix}/stores`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminStoresPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-store-detail"
+      path={`${prefix}/stores/:id`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminStoreDetailPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-categories"
+      path={`${prefix}/categories`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <PlaceholderPage title="Categories" />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-feature-flags"
+      path={`${prefix}/feature-flags`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <PlaceholderPage title="Feature Flags" />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-advertisements"
+      path={`${prefix}/ads`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <PlaceholderPage title="Advertisements" />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-audit-logs"
+      path={`${prefix}/audit-logs`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <PlaceholderPage title="Audit Logs" />
+          </AdminLayout>
         </AdminRoute>
       }
     />

@@ -63,4 +63,11 @@ export class AdminRepository {
       throw error;
     }
   }
+
+  public async updateTotpSecret(id: string, secret: string): Promise<Admin> {
+    return this.db.admin.update({
+      where: { id },
+      data: { totpSecret: secret }
+    });
+  }
 }

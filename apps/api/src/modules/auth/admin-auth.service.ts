@@ -1,8 +1,9 @@
-import { NotFoundError, RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { NotFoundError, RateLimitError, UnauthorizedError } from "@gorola/shared";
 import { compare } from "bcryptjs";
 
 export type AdminAuthServiceDependencies = {
   redis: {
+    del: (key: string) => Promise<unknown>;
     get: (key: string) => Promise<string | null>;
     set: (key: string, value: string, mode: "EX", ttlSeconds: number) => Promise<unknown>;
   };
@@ -31,6 +32,27 @@ export type AdminAuthServiceDependencies = {
 export class AdminAuthService {
   public constructor(private readonly deps: AdminAuthServiceDependencies) {}
 
+  public async refreshToken(input: { refreshToken: string }): Promise<{ accessToken: string; refreshToken: string }> {
+    const key = `rt:admin:${input.refreshToken}`;
+    const raw = await this.deps.redis.get(key);
+    if (!raw) {
+      throw new UnauthorizedError("Session has expired or is invalid.");
+    }
+    const session = JSON.parse(raw) as { role: "ADMIN"; userId: string };
+
+    await this.deps.redis.del(key);
+
+    return this.deps.tokenService.issueTokens({
+      role: "ADMIN",
+      sub: session.userId
+    });
+  }
+
+  public async logout(input: { refreshToken: string }): Promise<void> {
+    const key = `rt:admin:${input.refreshToken}`;
+    await this.deps.redis.del(key);
+  }
+
   private getLoginRateLimitKey(email: string): string {
     return `auth:admin:login:${email.toLowerCase()}`;
   }
@@ -58,8 +80,8 @@ export class AdminAuthService {
   public async login(input: {
     email: string;
     password: string;
-    totpCode?: string;
-  }): Promise<{ accessToken: string; refreshToken: string }> {
+    totpCode?: string | undefined;
+  }): Promise<{ accessToken: string; refreshToken: string } | { requiresTwoFactor: true }> {
     const now = Date.now();
     const rateLimit = await this.readLoginRateLimit(input.email);
     if (rateLimit) {
@@ -92,11 +114,12 @@ export class AdminAuthService {
       throw failedAuthError;
     }
 
-    if (!input.totpCode) {
-      throw new ValidationError("TOTP code is required");
-    }
     if (!admin.totpSecret) {
       throw new UnauthorizedError("Admin 2FA is not configured");
+    }
+
+    if (!input.totpCode) {
+      return { requiresTwoFactor: true };
     }
 
     const validTotp = this.deps.totpProvider.verify({

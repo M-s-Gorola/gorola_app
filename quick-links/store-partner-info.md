@@ -44,6 +44,27 @@ You can log in to any of the following seeded store owner profiles:
 
 ---
 
-## ⚙️ Administrative Portal (Reference)
+## ⚙️ System Admin Account
 
-* *Note: The full admin panels and permissions are managed in the subsequent phases. You can document the default admin credentials and portals in this section once they are fully implemented.*
+The admin account is created by `prisma/seed.ts` (same command as the main catalog seed — no separate step needed).
+
+| Field | Value |
+|---|---|
+| **Email** | `admin@gorola.in` |
+| **Password** | `AdminGorola#123` |
+| **Role** | `ADMIN` — full platform access |
+
+### First-Login Flow (Mandatory TOTP 2FA Setup)
+
+Because `totpSecret` is left `null` on seed, the **very first login** forces 2FA onboarding:
+
+1. Go to **`/admin/login`** (or `http://localhost:5180?_subdomain=admin` on local dev)
+2. Enter `admin@gorola.in` / `AdminGorola#123` → click **Login**
+3. You are automatically redirected to **`/admin/setup-2fa`**
+4. Scan the QR code with **Google Authenticator**, **Authy**, or any TOTP app
+5. Enter the 6-digit code to confirm setup
+6. You are redirected to **`/admin/2fa`** — enter the TOTP code to complete login
+7. Every subsequent login requires the TOTP code (2FA cannot be skipped)
+
+> [!IMPORTANT]
+> The TOTP secret is stored in the database after setup. If you reset the `Admin` row (e.g. on a fresh seed), you **must** re-scan the QR code — your old authenticator entry will no longer work.

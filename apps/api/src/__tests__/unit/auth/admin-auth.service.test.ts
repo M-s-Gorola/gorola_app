@@ -1,4 +1,4 @@
-import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { RateLimitError, UnauthorizedError } from "@gorola/shared";
 import { hash } from "bcryptjs";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -13,6 +13,7 @@ type Admin = {
 
 describe("AdminAuthService", () => {
   const redis = {
+    del: vi.fn(),
     get: vi.fn(),
     set: vi.fn()
   };
@@ -117,7 +118,7 @@ describe("AdminAuthService", () => {
       ).rejects.toBeInstanceOf(RateLimitError);
     });
 
-    it("should require totp code always", async () => {
+    it("should require totp code always by returning requiresTwoFactor", async () => {
       const passwordHash = await hash("Admin#123", 8);
       adminRepository.findByEmail.mockResolvedValueOnce({
         email: "admin@gorola.in",
@@ -127,12 +128,11 @@ describe("AdminAuthService", () => {
       } satisfies Admin);
       redis.get.mockResolvedValueOnce(null);
 
-      await expect(
-        service.login({
-          email: "admin@gorola.in",
-          password: "Admin#123"
-        })
-      ).rejects.toBeInstanceOf(ValidationError);
+      const result = await service.login({
+        email: "admin@gorola.in",
+        password: "Admin#123"
+      });
+      expect(result).toEqual({ requiresTwoFactor: true });
     });
 
     it("should throw UnauthorizedError for wrong totp code", async () => {
@@ -198,6 +198,46 @@ describe("AdminAuthService", () => {
         code: "123456",
         secret: "admin-secret"
       });
+    });
+  });
+
+  describe("refreshToken", () => {
+    it("should issue new tokens and delete old refresh token if valid", async () => {
+      redis.get.mockResolvedValueOnce(
+        JSON.stringify({ role: "ADMIN", userId: "admin-1" })
+      );
+      tokenService.issueTokens.mockResolvedValueOnce({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      });
+
+      const result = await service.refreshToken({ refreshToken: "old-refresh" });
+
+      expect(redis.get).toHaveBeenCalledWith("rt:admin:old-refresh");
+      expect(redis.del).toHaveBeenCalledWith("rt:admin:old-refresh");
+      expect(tokenService.issueTokens).toHaveBeenCalledWith({
+        role: "ADMIN",
+        sub: "admin-1"
+      });
+      expect(result).toEqual({
+        accessToken: "new-access",
+        refreshToken: "new-refresh"
+      });
+    });
+
+    it("should throw UnauthorizedError if refresh token not found in redis", async () => {
+      redis.get.mockResolvedValueOnce(null);
+
+      await expect(
+        service.refreshToken({ refreshToken: "missing-refresh" })
+      ).rejects.toThrow(UnauthorizedError);
+    });
+  });
+
+  describe("logout", () => {
+    it("should delete refresh token from redis", async () => {
+      await service.logout({ refreshToken: "token-to-revoke" });
+      expect(redis.del).toHaveBeenCalledWith("rt:admin:token-to-revoke");
     });
   });
 });
