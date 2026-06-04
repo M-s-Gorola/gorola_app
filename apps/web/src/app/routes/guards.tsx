@@ -50,6 +50,8 @@ export function AdminRoute({ children }: GuardProps): ReactElement {
   const accessToken = useAuthStore((s) => s.accessToken);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
   const role = useAuthStore((s) => s.role);
+  const twoFactorVerified = useAuthStore((s) => s.twoFactorVerified);
+  const twoFactorEnabled = useAuthStore((s) => s.twoFactorEnabled);
   const location = useLocation();
 
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
@@ -57,11 +59,14 @@ export function AdminRoute({ children }: GuardProps): ReactElement {
   if (isBootstrapPending) {
     return <p className="font-dm-sans text-sm text-gorola-slate">Restoring your session...</p>;
   }
-  if (!hasSession(accessToken)) {
+  if (!hasSession(accessToken) || role !== "ADMIN") {
     return <Navigate to={getScopedPath("/admin/login", "admin", isSubdomainMode)} replace state={{ from: location }} />;
   }
-  if (role !== "ADMIN") {
-    return <Navigate to={getScopedPath("/", "buyer", isSubdomainMode)} replace />;
+  if (twoFactorVerified !== true) {
+    return <Navigate to={getScopedPath("/admin/2fa", "admin", isSubdomainMode)} replace state={{ from: location }} />;
+  }
+  if (twoFactorEnabled === false) {
+    return <Navigate to={getScopedPath("/admin/setup-2fa", "admin", isSubdomainMode)} replace state={{ from: location }} />;
   }
   return <>{children}</>;
 }

@@ -34,7 +34,7 @@ const ownerLoginSchema = z.object({
 const adminLoginSchema = z.object({
   email: z.string().email("Invalid email"),
   password: z.string().min(1, "Password is required"),
-  totpCode: z.string().regex(/^\d{6}$/, "TOTP must be 6 digits")
+  totpCode: z.string().regex(/^\d{6}$/, "TOTP must be 6 digits").optional()
 });
 
 const setup2FASchema = z.object({
@@ -93,8 +93,8 @@ export function parseStoreOwnerLoginInput(input: {
 export function parseAdminLoginInput(input: {
   email: string;
   password: string;
-  totpCode: string;
-}): { email: string; password: string; totpCode: string } {
+  totpCode?: string;
+}): { email: string; password: string; totpCode?: string | undefined } {
   const parsed = adminLoginSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError("Invalid admin login payload", parsed.error.flatten());

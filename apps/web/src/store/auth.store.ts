@@ -23,6 +23,12 @@ export type StoreOwnerSession = AuthTokens & {
   storeId: string;
 };
 
+export type AdminSession = AuthTokens & {
+  userId: string;
+  twoFactorVerified: boolean;
+  twoFactorEnabled?: boolean;
+};
+
 type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
@@ -34,9 +40,11 @@ type AuthState = {
   phone: string | null;
   storeId: string | null;
   twoFactorVerified: boolean | null;
+  twoFactorEnabled: boolean | null;
   setTokens: (tokens: AuthTokens) => void;
   setBuyerSession: (session: BuyerSession) => void;
   setStoreOwnerSession: (session: StoreOwnerSession) => void;
+  setAdminSession: (session: AdminSession) => void;
   setRole: (role: UserRole | null) => void;
   setBootstrapPending: (pending: boolean) => void;
   clearSession: () => void;
@@ -52,6 +60,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   userId: null,
   storeId: null,
   twoFactorVerified: null,
+  twoFactorEnabled: null,
   clearSession: () => {
     useCartStore.getState().clear();
     queryClient.clear();
@@ -66,7 +75,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       role: null,
       userId: null,
       storeId: null,
-      twoFactorVerified: null
+      twoFactorVerified: null,
+      twoFactorEnabled: null
     });
   },
   setBuyerSession: (session) =>
@@ -78,7 +88,8 @@ export const useAuthStore = create<AuthState>((set) => ({
       role: "BUYER",
       userId: session.userId,
       storeId: null,
-      twoFactorVerified: null
+      twoFactorVerified: null,
+      twoFactorEnabled: null
     }),
   setStoreOwnerSession: (session) =>
     set({
@@ -89,7 +100,20 @@ export const useAuthStore = create<AuthState>((set) => ({
       role: "STORE_OWNER",
       userId: session.userId,
       storeId: session.storeId,
-      twoFactorVerified: true
+      twoFactorVerified: true,
+      twoFactorEnabled: true
+    }),
+  setAdminSession: (session) =>
+    set({
+      accessToken: session.accessToken,
+      name: null,
+      phone: null,
+      refreshToken: session.refreshToken,
+      role: "ADMIN",
+      userId: session.userId,
+      storeId: null,
+      twoFactorVerified: session.twoFactorVerified,
+      twoFactorEnabled: session.twoFactorEnabled ?? true
     }),
   setRole: (role) => set({ role }),
   setBootstrapPending: (pending) => set({ isBootstrapPending: pending }),

@@ -190,7 +190,7 @@ describe("BuyerNav", () => {
         <BuyerNav />
       </MemoryRouter>
     );
-    const branding = screen.getByText(/GoRola/i);
+    const branding = screen.getByAltText("GoRola");
     const locationPill = screen.getByText(/Kulri, Mussoorie/i).closest("div");
 
     expect(branding).toHaveClass("hidden", "sm:block");

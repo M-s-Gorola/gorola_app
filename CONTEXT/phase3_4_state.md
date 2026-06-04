@@ -12,16 +12,16 @@
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
 | Phase 3 | Store Owner Panel | 🟢 COMPLETE   | Phase 3.1–3.10.1 complete. All E2E tests passing green, including responsive mobile navigation and toast pointer interception fixes. |
-| Phase 4 | Admin Panel       | 🔴 NOT STARTED | Start after Phase 3 complete; Category/Subcategory soft-delete toggles planned per [DECISION-042] |
+| Phase 4 | Admin Panel       | 🟡 IN PROGRESS | Phase 4.1, 4.2, 4.3, 4.4, and 4.5 complete; Category Management (Phase 4.6) planned. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-03
-- **Session Summary:** Session 43 — Pinned Store Layout, Persistent Branding & Duplicate Rating Prevention. Replaced the green `S` avatar with a permanently visible header Logout button and removed the redundant sidebar logout. Fixed the sidebar and header to the screen using CSS `sticky` positioning with native window scrolling. Relocated the GoRola logo and brand text to the main header beside the toggle button (moved to the extreme left), keeping them always visible in web view. Displayed the store name (styled prominently with `text-lg font-bold`) instead of the Store ID. Blocked duplicate rating submissions on the backend and synced query caches between the receipt and history pages, refactoring the history rating list to be read-only.
-- **Next Session Must Start With:** Phase 4 (Admin Panel) planning.
-- **In Progress Right Now:** None.
+- **Date:** 2026-06-04
+- **Session Summary:** Session 50 — Completed Phase 4.5 (Store Management) in the Admin Panel. Implemented store provisioning dialog form, validation of commerce type (Quick/Booking), metrics dashboard details page, and soft-delete active/inactive status toggles with invalidation updates. Verified all backend integration tests (100% green), frontend Vitest component tests, lint rules, and builds are passing.
+- **Next Session Must Start With:** Phase 4.6 (Category Management) implementation.
+- **In Progress Right Now:** None. Phase 4.5 complete.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 3 or Phase 4 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -29,7 +29,7 @@
 
 ## In Progress Right Now
 
-None. All Phase 3 features are completed and green!
+None. Phase 4.3 is completed!
 
 ---
 
@@ -1421,41 +1421,41 @@ Same pattern as 3.1 (store auth) but stricter: `AdminRoute` checks ADMIN role AN
 
 ---
 
-- [ ] **RED — Integration (`admin-auth.routes.test.ts`):**
-  - [ ] Test: `POST /api/v1/auth/admin/login` with correct email + password → HTTP 200 `{ requiresTwoFactor: true }`
-  - [ ] Test: `POST /api/v1/auth/admin/login` with wrong password → HTTP 401 `AUTH_FAILED`
-  - [ ] Test: `POST /api/v1/auth/admin/login` after 10 failed attempts → HTTP 429 `RATE_LIMITED`
-  - [ ] Test: `POST /api/v1/auth/admin/verify-2fa` with valid TOTP → HTTP 200 with `accessToken` and `refreshToken`
-  - [ ] Test: `POST /api/v1/auth/admin/verify-2fa` with invalid TOTP → HTTP 401 `INVALID_TOTP`
-  - [ ] Test: `POST /api/v1/auth/admin/setup-2fa` authenticated as admin → HTTP 200 `{ secret, qrUri }`
-  - [ ] **Run — confirm RED if any route is missing or wrong shape**
+- [x] **RED — Integration (`admin-auth.routes.test.ts`):**
+  - [x] Test: `POST /api/v1/auth/admin/login` with correct email + password → HTTP 200 `{ requiresTwoFactor: true }`
+  - [x] Test: `POST /api/v1/auth/admin/login` with wrong password → HTTP 401 `AUTH_FAILED`
+  - [x] Test: `POST /api/v1/auth/admin/login` after 10 failed attempts → HTTP 429 `RATE_LIMITED`
+  - [x] Test: `POST /api/v1/auth/admin/verify-2fa` with valid TOTP → HTTP 200 with `accessToken` and `refreshToken`
+  - [x] Test: `POST /api/v1/auth/admin/verify-2fa` with invalid TOTP → HTTP 401 `INVALID_TOTP`
+  - [x] Test: `POST /api/v1/auth/admin/setup-2fa` authenticated as admin → HTTP 200 `{ secret, qrUri }`
+  - [x] **Run — confirm RED if any route is missing or wrong shape**
 
-- [ ] **GREEN — Backend Verification:**
-  - [ ] Confirm `registerAdminAuthRoutes(app)` is called in `routes.ts`; if missing, add it
-  - [ ] Verify all 3 routes appear in dev route graph
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend Verification:**
+  - [x] Confirm `registerAdminAuthRoutes(app)` is called in `routes.ts`; if missing, add it
+  - [x] Verify all 3 routes appear in dev route graph
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminLoginPage.test.tsx`):**
-  - [ ] Test: renders email + password inputs with correct `id` attributes and submit button
-  - [ ] Test: on success response, `navigate` called with `/admin/2fa`
-  - [ ] Test: on 401, shows "Invalid credentials" error message
+- [x] **RED — Unit/Component (`AdminLoginPage.test.tsx`):**
+  - [x] Test: renders email + password inputs with correct `id` attributes and submit button
+  - [x] Test: on success response, `navigate` called with `/admin/2fa`
+  - [x] Test: on 401, shows "Invalid credentials" error message
 
-- [ ] **RED — Unit/Component (`AdminRoute.test.tsx`):**
-  - [ ] Test: non-ADMIN role → `<Navigate to="/admin/login" />`
-  - [ ] Test: ADMIN role with `twoFactorVerified = false` → `<Navigate to="/admin/2fa" />`
-  - [ ] Test: ADMIN role with `twoFactorVerified = true` AND `twoFactorEnabled = false` → `<Navigate to="/admin/setup-2fa" />`
-  - [ ] Test: ADMIN + `twoFactorVerified = true` + `twoFactorEnabled = true` → renders children
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminRoute.test.tsx`):**
+  - [x] Test: non-ADMIN role → `<Navigate to="/admin/login" />`
+  - [x] Test: ADMIN role with `twoFactorVerified = false` → `<Navigate to="/admin/2fa" />`
+  - [x] Test: ADMIN role with `twoFactorVerified = true` AND `twoFactorEnabled = false` → `<Navigate to="/admin/setup-2fa" />`
+  - [x] Test: ADMIN + `twoFactorVerified = true` + `twoFactorEnabled = true` → renders children
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `AdminLoginPage.tsx`, `AdminTwoFactorPage.tsx`, `AdminSetup2FAPage.tsx`
-  - [ ] Create `AdminRoute.tsx` guard with all 4 cases above
-  - [ ] Create `AdminLayout.tsx`: top nav + sidebar with links to Dashboard, Orders, Users, Stores, Categories, Feature Flags, Ads, Audit Logs
-  - [ ] Register all `/admin/*` routes in `App.tsx` wrapped in `<AdminRoute>` and `<AdminLayout>`
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `AdminLoginPage.tsx`, `AdminTwoFactorPage.tsx`, `AdminSetup2FAPage.tsx`
+  - [x] Create `AdminRoute.tsx` guard with all 4 cases above
+  - [x] Create `AdminLayout.tsx`: top nav + sidebar with links to Dashboard, Orders, Users, Stores, Categories, Feature Flags, Ads, Audit Logs
+  - [x] Register all `/admin/*` routes in `App.tsx` wrapped in `<AdminRoute>` and `<AdminLayout>`
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] `/admin/dashboard` → redirect to `/admin/login` → correct credentials → `/admin/2fa` → valid TOTP → admin dashboard loads → ✅
+- [x] **Verification chain:**
+  - [x] `/admin/dashboard` → redirect to `/admin/login` → correct credentials → `/admin/2fa` → valid TOTP → admin dashboard loads → ✅
 
 ---
 
@@ -1469,30 +1469,30 @@ Create `GET /api/v1/admin/dashboard` in a new `admin.controller.ts`. Aggregates 
 
 ---
 
-- [ ] **RED — Integration (`admin.dashboard.test.ts`):**
-  - [ ] Test: `GET /api/v1/admin/dashboard` with ADMIN JWT → HTTP 200 with shape `{ totalOrdersToday, totalRevenueToday, perStoreBreakdown: [{ storeId, storeName, ordersToday, revenueToday, pendingOrdersCount }], weeklyRevenue: [{ date, revenue }], lowStockAlertCount, totalActiveBuyers, totalProducts, pendingAdApprovalsCount, featureFlags: [{ key, value }] }`
-  - [ ] Test: `GET /api/v1/admin/dashboard` with STORE_OWNER JWT → HTTP 403 `FORBIDDEN`
-  - [ ] Test: `GET /api/v1/admin/dashboard` with no JWT → HTTP 401
-  - [ ] Test: `pendingAdApprovalsCount` = count of ads with `isApproved: false` and `isActive: true` across all stores
-  - [ ] **Run — confirm RED (404)**
+- [x] **RED — Integration (`admin.dashboard.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/dashboard` with ADMIN JWT → HTTP 200 with shape `{ totalOrdersToday, totalRevenueToday, perStoreBreakdown: [{ storeId, storeName, ordersToday, revenueToday, pendingOrdersCount }], weeklyRevenue: [{ date, revenue }], lowStockAlertCount, totalActiveBuyers, totalProducts, pendingAdApprovalsCount, featureFlags: [{ key, value }] }`
+  - [x] Test: `GET /api/v1/admin/dashboard` with STORE_OWNER JWT → HTTP 403 `FORBIDDEN`
+  - [x] Test: `GET /api/v1/admin/dashboard` with no JWT → HTTP 401
+  - [x] Test: `pendingAdApprovalsCount` = count of ads with `isApproved: false` and `isActive: true` across all stores
+  - [x] **Run — confirm RED (404)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Create `apps/api/src/modules/admin/admin.service.ts` with `getDashboard()` aggregating all stores
-  - [ ] [Controller] Create `apps/api/src/modules/admin/admin.controller.ts` with `GET /api/v1/admin/dashboard`
-  - [ ] [Routes] Create `registerAdminRoutes(app)` in `routes.ts` with `requireAuth` + `requireRole('ADMIN')` for all admin endpoints
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Create `apps/api/src/modules/admin/admin.service.ts` with `getDashboard()` aggregating all stores
+  - [x] [Controller] Create `apps/api/src/modules/admin/admin.controller.ts` with `GET /api/v1/admin/dashboard`
+  - [x] [Routes] Create `registerAdminRoutes(app)` in `routes.ts` with `requireAuth` + `requireRole('ADMIN')` for all admin endpoints
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminDashboardPage.test.tsx`):**
-  - [ ] Test: renders KPI cards: "Total Orders Today", "Total Revenue Today", "Active Buyers", "Total Products", "Pending Approvals" badge
-  - [ ] Test: per-store breakdown table with columns "Store", "Orders Today", "Revenue Today", "Pending"
-  - [ ] Test: pending approvals count > 0 shows red badge on "Advertisements" sidebar link
-  - [ ] Test: weather mode feature flag shows current on/off status with a quick-toggle button (confirmation modal first)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminDashboardPage.test.tsx`):**
+  - [x] Test: renders KPI cards: "Total Orders Today", "Total Revenue Today", "Active Buyers", "Total Products", "Pending Approvals" badge
+  - [x] Test: per-store breakdown table with columns "Store", "Orders Today", "Revenue Today", "Pending"
+  - [x] Test: pending approvals count > 0 shows red badge on "Advertisements" sidebar link
+  - [x] Test: weather mode feature flag shows current on/off status with a quick-toggle button (confirmation modal first)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminDashboardPage.tsx`; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminDashboardPage.tsx`; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin logs in → dashboard shows real data across all stores → pending ad count badge visible → ✅
+- [x] **Verification chain:**
+  - [x] Admin logs in → dashboard shows real data across all stores → pending ad count badge visible → ✅
 
 ---
 
@@ -1503,32 +1503,32 @@ No admin order list endpoint exists. Admin needs to see ALL orders across ALL st
 
 ---
 
-- [ ] **RED — Integration (`admin.orders.test.ts`):**
-  - [ ] Test: `GET /api/v1/admin/orders` with ADMIN JWT → returns orders from ALL stores (not scoped)
-  - [ ] Test: `GET /api/v1/admin/orders?storeId=<id>` → returns only orders for that store
-  - [ ] Test: `GET /api/v1/admin/orders?status=PLACED` → returns only PLACED orders
-  - [ ] Test: response each order has `{ id, buyerMaskedPhone, storeName, itemsCount, total, status, createdAt, paymentMethod }`
-  - [ ] Test: `PUT /api/v1/admin/orders/<id>/status` with body `{ status: 'CANCELLED', auditNote: 'Fraud detected' }` → HTTP 200; order status = CANCELLED in DB; `AuditLog` created with `action: 'ADMIN_FORCE_STATUS_UPDATE'`, `entityId: orderId`, `newValue: { status: 'CANCELLED', note: 'Fraud detected' }`
-  - [ ] Test: `PUT /api/v1/admin/orders/<id>/status` with missing `auditNote` → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: `GET /api/v1/admin/orders/export?format=csv` → HTTP 200 with `Content-Type: text/csv` header
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.orders.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/orders` with ADMIN JWT → returns orders from ALL stores (not scoped)
+  - [x] Test: `GET /api/v1/admin/orders?storeId=<id>` → returns only orders for that store
+  - [x] Test: `GET /api/v1/admin/orders?status=PLACED` → returns only PLACED orders
+  - [x] Test: response each order has `{ id, buyerMaskedPhone, storeName, itemsCount, total, status, createdAt, paymentMethod }`
+  - [x] Test: `PUT /api/v1/admin/orders/<id>/status` with body `{ status: 'CANCELLED', auditNote: 'Fraud detected' }` → HTTP 200; order status = CANCELLED in DB; `AuditLog` created with `action: 'ADMIN_FORCE_STATUS_UPDATE'`, `entityId: orderId`, `newValue: { status: 'CANCELLED', note: 'Fraud detected' }`
+  - [x] Test: `PUT /api/v1/admin/orders/<id>/status` with missing `auditNote` → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: `GET /api/v1/admin/orders/export?format=csv` → HTTP 200 with `Content-Type: text/csv` header
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `getOrders(filters)`, `forceUpdateOrderStatus(orderId, status, auditNote, adminId)` to `admin.service.ts`. Force-update must call `AuditRepository.create` in the same transaction as `OrderRepository.updateStatus`. If status = CANCELLED, trigger stock restoration via `OrderService.cancelAndRestoreStock`.
-  - [ ] [Controller] Add `GET /api/v1/admin/orders` (cursor-based pagination, 50/page), `PUT /api/v1/admin/orders/:id/status`, `GET /api/v1/admin/orders/export` to `admin.controller.ts`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `getOrders(filters)`, `forceUpdateOrderStatus(orderId, status, auditNote, adminId)` to `admin.service.ts`. Force-update must call `AuditRepository.create` in the same transaction as `OrderRepository.updateStatus`. If status = CANCELLED, trigger stock restoration via `OrderService.cancelAndRestoreStock`.
+  - [x] [Controller] Add `GET /api/v1/admin/orders` (cursor-based pagination, 50/page), `PUT /api/v1/admin/orders/:id/status`, `GET /api/v1/admin/orders/export` to `admin.controller.ts`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminOrdersPage.test.tsx`):**
-  - [ ] Test: table renders with all 8 columns; clicking row opens detail modal
-  - [ ] Test: filter bar: store dropdown, status dropdown, date pickers — each updates URL param and re-fetches
-  - [ ] Test: force-status modal requires auditNote text before "Confirm" button is enabled
-  - [ ] Test: "Export CSV" button triggers file download with correct MIME type
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminOrdersPage.test.tsx`):**
+  - [x] Test: table renders with all 8 columns; clicking row opens detail modal
+  - [x] Test: filter bar: store dropdown, status dropdown, date pickers — each updates URL param and re-fetches
+  - [x] Test: force-status modal requires auditNote text before "Confirm" button is enabled
+  - [x] Test: "Export CSV" button triggers file download with correct MIME type
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminOrdersPage.tsx` with filters, table, detail modal, force-status modal, CSV export; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminOrdersPage.tsx` with filters, table, detail modal, force-status modal, CSV export; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin → All Orders → filter by store → click order → force cancel with audit note → stock restored → audit log records action → ✅
+- [x] **Verification chain:**
+  - [x] Admin → All Orders → filter by store → click order → force cancel with audit note → stock restored → audit log records action → ✅
 
 ---
 
@@ -1539,30 +1539,30 @@ No admin user management endpoints exist. Admin needs to search buyers by phone 
 
 ---
 
-- [ ] **RED — Integration (`admin.users.test.ts`):**
-  - [ ] Test: `GET /api/v1/admin/users` → returns buyers with `{ id, maskedPhone, name, orderCount, totalSpent, createdAt, isActive }`
-  - [ ] Test: `GET /api/v1/admin/users?phone=9876` → returns only buyers whose phone contains "9876" (masked in response)
-  - [ ] Test: `PUT /api/v1/admin/users/<userId>/suspend` → HTTP 200; `user.isActive = false`; subsequent `POST /api/v1/auth/buyer/verify-otp` for this user → HTTP 403 `ACCOUNT_SUSPENDED`
-  - [ ] Test: `PUT /api/v1/admin/users/<userId>/unsuspend` → HTTP 200; `user.isActive = true`; login works again
-  - [ ] Test: all suspend/unsuspend actions create `AuditLog` with `action: 'ADMIN_USER_SUSPEND'` or `'ADMIN_USER_UNSUSPEND'`
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.users.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/users` → returns buyers with `{ id, maskedPhone, name, orderCount, totalSpent, createdAt, isActive }`
+  - [x] Test: `GET /api/v1/admin/users?phone=9876` → returns only buyers whose phone contains "9876" (masked in response)
+  - [x] Test: `PUT /api/v1/admin/users/<userId>/suspend` → HTTP 200; `user.isActive = false`; subsequent `POST /api/v1/auth/buyer/verify-otp` for this user → HTTP 403 `ACCOUNT_SUSPENDED`
+  - [x] Test: `PUT /api/v1/admin/users/<userId>/unsuspend` → HTTP 200; `user.isActive = true`; login works again
+  - [x] Test: all suspend/unsuspend actions create `AuditLog` with `action: 'ADMIN_USER_SUSPEND'` or `'ADMIN_USER_UNSUSPEND'`
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `getUsers(filters)`, `suspendUser(userId, adminId)`, `unsuspendUser(userId, adminId)` to `admin.service.ts`. Each creates an audit log entry. Ensure `AuthService.verifyOtp` checks `user.isActive` and throws `ForbiddenError` if false.
-  - [ ] [Controller] Add `GET /api/v1/admin/users`, `PUT /api/v1/admin/users/:id/suspend`, `PUT /api/v1/admin/users/:id/unsuspend` with `requireAuth` + `requireRole('ADMIN')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `getUsers(filters)`, `suspendUser(userId, adminId)`, `unsuspendUser(userId, adminId)` to `admin.service.ts`. Each creates an audit log entry. Ensure `AuthService.verifyOtp` checks `user.isActive` and throws `ForbiddenError` if false.
+  - [x] [Controller] Add `GET /api/v1/admin/users`, `PUT /api/v1/admin/users/:id/suspend`, `PUT /api/v1/admin/users/:id/unsuspend` with `requireAuth` + `requireRole('ADMIN')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminUsersPage.test.tsx`):**
-  - [ ] Test: table shows masked phone, name, order count, total spent, status badge (Active/Suspended)
-  - [ ] Test: search by phone input debounces 300ms before re-fetching
-  - [ ] Test: clicking user row opens drawer with order history list and masked address list
-  - [ ] Test: "Suspend" button shows confirmation modal before calling API
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminUsersPage.test.tsx`):**
+  - [x] Test: table shows masked phone, name, order count, total spent, status badge (Active/Suspended)
+  - [x] Test: search by phone input debounces 300ms before re-fetching
+  - [x] Test: clicking user row opens drawer with order history list and masked address list
+  - [x] Test: "Suspend" button shows confirmation modal before calling API
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminUsersPage.tsx`; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminUsersPage.tsx`; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin searches buyer → opens drawer → clicks Suspend → confirm → buyer login returns 403 → admin unsuspends → buyer can log in again → ✅
+- [x] **Verification chain:**
+  - [x] Admin searches buyer → opens drawer → clicks Suspend → confirm → buyer login returns 403 → admin unsuspends → buyer can log in again → ✅
 
 ---
 
@@ -1584,39 +1584,39 @@ Admin needs to create new stores (with an auto-created store owner account), vie
 
 ---
 
-- [ ] **RED — Integration (`admin.stores.test.ts`):**
-  - [ ] Test: `POST /api/v1/admin/stores` with body `{ storeName: 'New Store', description: '...', phone: '+919000000000', landmarkAddress: '...', storeType: 'QUICK_COMMERCE', ownerEmail: 'owner@test.com', ownerTempPassword: 'TempPass123!' }` → HTTP 201 with `{ storeId, storeType: 'QUICK_COMMERCE', ownerId }`; both `Store` and `StoreOwner` rows created in DB atomically; `store.storeType = 'QUICK_COMMERCE'` confirmed in DB
-  - [ ] Test: `POST /api/v1/admin/stores` with body containing `storeType: 'BOOKING_COMMERCE'` → HTTP 201; `store.storeType = 'BOOKING_COMMERCE'` in DB
-  - [ ] Test: `POST /api/v1/admin/stores` with `storeType` omitted → HTTP 400 `VALIDATION_ERROR` (storeType is required — no guessing)
-  - [ ] Test: `POST /api/v1/admin/stores` with `storeType: 'INVALID_TYPE'` → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: `POST /api/v1/admin/stores` with duplicate `ownerEmail` → HTTP 409 `CONFLICT`
-  - [ ] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, isActive }`
-  - [ ] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail including `storeType` field
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: false }` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
-  - [ ] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: true }` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
-  - [ ] Test: all store create and active/inactive status toggle actions create `AuditLog` entries
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.stores.test.ts`):**
+  - [x] Test: `POST /api/v1/admin/stores` with body `{ storeName: 'New Store', description: '...', phone: '+919000000000', landmarkAddress: '...', storeType: 'QUICK_COMMERCE', ownerEmail: 'owner@test.com', ownerTempPassword: 'TempPass123!' }` → HTTP 201 with `{ storeId, storeType: 'QUICK_COMMERCE', ownerId }`; both `Store` and `StoreOwner` rows created in DB atomically; `store.storeType = 'QUICK_COMMERCE'` confirmed in DB
+  - [x] Test: `POST /api/v1/admin/stores` with body containing `storeType: 'BOOKING_COMMERCE'` → HTTP 201; `store.storeType = 'BOOKING_COMMERCE'` in DB
+  - [x] Test: `POST /api/v1/admin/stores` with `storeType` omitted → HTTP 400 `VALIDATION_ERROR` (storeType is required — no guessing)
+  - [x] Test: `POST /api/v1/admin/stores` with `storeType: 'INVALID_TYPE'` → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: `POST /api/v1/admin/stores` with duplicate `ownerEmail` → HTTP 409 `CONFLICT`
+  - [x] Test: `GET /api/v1/admin/stores` → returns ALL stores with `{ id, name, storeType, ownerEmail, orderCount, revenue, productCount, isActive }`
+  - [x] Test: `GET /api/v1/admin/stores/<storeId>` → returns store detail including `storeType` field
+  - [x] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: false }` → HTTP 200; `store.isActive = false`; `GET /api/v1/products?categoryId=<id>` (buyer endpoint) returns 0 products for this store
+  - [x] Test: `PUT /api/v1/admin/stores/<storeId>/status` with `{ isActive: true }` → HTTP 200; `store.isActive = true`; products visible again in buyer catalog
+  - [x] Test: all store create and active/inactive status toggle actions create `AuditLog` entries
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
+- [x] **GREEN — Backend:**
   - [x] [Schema] Confirm `storeType StoreType @default(QUICK_COMMERCE)` exists on `Store` model and `enum StoreType { QUICK_COMMERCE BOOKING_COMMERCE }` exists in `schema.prisma`. **This is added in Phase 7.1.** If working on Phase 4.5 before Phase 7.1: add the enum and field now with a migration named `add_store_type`. Do not wait for Phase 7.
-  - [ ] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `updateStoreStatus(storeId, isActive: boolean, adminId)`.
-  - [ ] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/status` with `requireAuth` + `requireRole('ADMIN')`
-  - [ ] Run integration tests — **confirm GREEN**
+  - [x] [Service] Add `createStore(dto, adminId)` to `admin.service.ts`: Zod-validated `dto` includes `storeType: z.enum(['QUICK_COMMERCE', 'BOOKING_COMMERCE'])`. Transaction creates `Store` (with `storeType`) + `StoreOwner` (with hashed temp password) + `AuditLog`. Add `getStores()`, `getStoreDetail(storeId)`, `updateStoreStatus(storeId, isActive: boolean, adminId)`.
+  - [x] [Controller] Add `POST /api/v1/admin/stores` — Zod body schema includes `storeType` as required enum field. Add `GET /api/v1/admin/stores`, `GET /api/v1/admin/stores/:id`, `PUT /api/v1/admin/stores/:id/status` with `requireAuth` + `requireRole('ADMIN')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminStoresPage.test.tsx`):**
-  - [ ] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Active" columns
-  - [ ] Test: "Add Store" form has a required `storeType` radio group with two options: "Quick Commerce (groceries, medicines, electronics)" and "Booking Commerce (tests, repairs)"; submitting without selecting one shows validation error "Store type is required"
-  - [ ] Test: submitting a valid form with `storeType: 'BOOKING_COMMERCE'` calls `POST /api/v1/admin/stores` with `{ storeType: 'BOOKING_COMMERCE', ... }` in the request body
-  - [ ] Test: the store type badge in the table shows "Quick" in pine-green and "Booking" in amber so admins can distinguish at a glance
-  - [ ] Test: clicking store row navigates to `/admin/stores/:id`
-  - [ ] Test: store detail page shows `storeType` prominently so admins know which order flow applies
-  - [ ] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/stores/:id/status` mutation, triggers query invalidation, and greys out the row (`opacity-60 bg-gray-50/50 border-gray-200 grayscale-[25%] transition-all`)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminStoresPage.test.tsx`):**
+  - [x] Test: table with "Store Name", "Type" (Quick / Booking badge), "Owner Email", "Orders", "Revenue", "Products", "Active" columns
+  - [x] Test: "Add Store" form has a required `storeType` radio group with two options: "Quick Commerce (groceries, medicines, electronics)" and "Booking Commerce (tests, repairs)"; submitting without selecting one shows validation error "Store type is required"
+  - [x] Test: submitting a valid form with `storeType: 'BOOKING_COMMERCE'` calls `POST /api/v1/admin/stores` with `{ storeType: 'BOOKING_COMMERCE', ... }` in the request body
+  - [x] Test: the store type badge in the table shows "Quick" in pine-green and "Booking" in amber so admins can distinguish at a glance
+  - [x] Test: clicking store row navigates to `/admin/stores/:id`
+  - [x] Test: store detail page shows `storeType` prominently so admins know which order flow applies
+  - [x] Test: active/inactive toggle switch per row calls `PUT /api/v1/admin/stores/:id/status` mutation, triggers query invalidation, and greys out the row (`opacity-60 bg-gray-50/50 border-gray-200 grayscale-[25%] transition-all`)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` and `isActive` fields. Add `storeType` and `isActive` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminStoresPage.tsx` and `AdminStoreDetailPage.tsx` — both include `storeType` and `isActive` fields. Add `storeType` and `isActive` to the `AdminStore` TypeScript type. Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin toggles store to inactive → row is instantly greyed out on list → buyer catalog shows 0 products from that store → admin toggles back to active → products reappear → ✅
+- [x] **Verification chain:**
+  - [x] Admin opens Add Store form → selects "Booking Commerce" for Medical Tests store → fills details → submits → new store appears in table with amber "Booking" type badge → new store owner logs in with temp password → store owner dashboard shows same UI as quick commerce (Phase 7 adds booking-specific panels later) → admin toggles store to inactive → row is instantly greyed out on list → buyer catalog shows 0 products from that store → admin toggles back to active → products reappear → ✅
 
 ---
 
@@ -2412,4 +2412,56 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 **Result:** Verified that E2E-023 passes 100% green on all projects (both desktop `chromium` and mobile `iphone-se`). All TypeScript checks and linters pass cleanly.
 
 ---
+
+### Session 45 — 2026-06-04 — Completed Phase 4.1 (Admin Auth, Mandatory 2FA & Cookie Isolation)
+- **Completed Phase 4.1 Checklist**: Implemented frontend layout, guard rules, Zustand session stores, and bootstrap managers to securely handle system administrator sessions.
+- **Dedicated Cookie Namespace (`adminRefreshToken`)**: Isolated admin refresh tokens into a separate namespace to prevent session collision or state hijacking between buyers, merchants, and admins.
+- **Subdomain-Aware Navigation & Layout**: Configured `AdminRoute` and the sidebar-based `AdminLayout` to be fully subdomain-aware (supporting `admin.gorola.com` and `/admin` prefix fallbacks) using `resolveSubdomain` and `getScopedPath`.
+- **Mandatory TOTP 2FA Guarding**: Configured `AdminRoute` to enforce role checking and both 2FA verification (`twoFactorVerified`) and 2FA configuration (`twoFactorEnabled`). Unconfigured accounts are routed to `/admin/setup-2fa` for TOTP onboarding before accessing the platform panel.
+- **TypeScript Exact Optional Property Fixes**: Fixed TS2375 and TS2379 compatibility errors in `auth.schema.ts` and `admin-auth.service.ts` under the strict `exactOptionalPropertyTypes: true` compiler flag by explicitly allowing `string | undefined` union types.
+- **Workspace Build & Lint Verification**: Verified all linters are green and compiled the entire workspace cleanly (`pnpm build`).
+
+---
+
+### Session 46 — 2026-06-04 — Completed Phase 4.2 (Admin Dashboard & All-Stores Overview)
+- **Completed Phase 4.2 Checklist**: Fully implemented and verified the platform-wide Administrator Dashboard.
+- **Backend Analytics Aggregation**: Created `AdminService` and `AdminController` to aggregate orders, revenues, active buyers, product counts, and pending ads across both Quick Commerce and Booking Commerce stores.
+- **Avoided N+1 Query Anti-Pattern**: Optimized store performance breakdown query, fetching orders for all active stores in a single database request and grouping them in-memory.
+- **Vibrant Admin Dashboard UI**: Designed and built the responsive `AdminDashboardPage` utilizing GoRola's premium HSL colors, micro-animations, dynamic SVG chart bars, and store-performance tables.
+- **Interactive Weather Mode Controls**: Added feature flag controls with a safety confirmation modal to prevent accidental activation of high-impact system toggles (e.g. `WEATHER_MODE_ACTIVE`).
+- **Sidebar Notification Badges**: Extended the admin sidebar and mobile navigation lists to query and render notification badges next to the "Advertisements" section when there are pending advertisement approvals.
+- **100% Passing Tests & Checks**: Verified with Vitest unit tests, integration tests, `pnpm typecheck`, and ESLint checking.
+
+
+
+---
+
+### Session 47 - 2026-06-04 - Admin Dashboard Chart Range/Granularity Filter (Phase 4.2 Polish)
+- **Multi-Dimensional Chart Filters on Admin Dashboard**: Extended the Platform Revenue Trend chart on AdminDashboardPage with the same range and granularity controls that exist on the Store Partner dashboard. Admins can now switch between **Today / Last 7 Days / Last 30 Days / Current Year / All Time** (range) and **Hourly / Daily / Monthly / Yearly** (groupBy) granularity levels.
+- **Backend AdminService Refactored**: getDashboard() now accepts range and groupBy parameters. Replaced the hardcoded 7-day loop with the exact same multi-dimensional in-memory aggregation logic from store-owner.service.ts, supporting all 5 - 4 range/groupBy combinations cleanly.
+- **Controller Updated**: admin.controller.ts reads ?range= and ?groupBy= query params and forwards them to the service. Default values: WEEK / DAILY.
+- **Guardrail Logic Preserved**: Selecting `TODAY` auto-locks groupBy to `HOURLY`; `WEEK`/`MONTH` default to `DAILY`; `YEAR` defaults to `MONTHLY`; `ALL` defaults to `YEARLY` - matching store dashboard guardrails exactly.
+- **Adaptive Bar Sizing**: Chart bars automatically adapt gap spacing and max-width depending on the number of data points (7 for week, 24 for hourly, 30 for month, etc.) using the same `gapClass`, `barMaxWidthClass`, and `shouldShowLabel` helpers.
+- **Admin Seed in seed.ts**: Integrated admin account creation (admin@gorola.in / AdminGorola#123) directly into the main prisma:seed command - no separate seed script needed. Uses idempotent upsert; 	otpSecret is left null to force TOTP setup on first login.
+- **Verification**: Integration tests (4/4 passing), unit tests (4/4 passing), pnpm lint clean, pnpm typecheck clean.
+
+---
+
+### Session 48 — 2026-06-04 — Completed Phase 4.3 (All-Orders View)
+- **Completed Phase 4.3 Checklist**: Implemented the administrative All-Orders View.
+- **Backend Service & Controller Integration**: Wired `getOrders`, `getOrderDetail`, `forceUpdateOrderStatus`, and `exportOrdersCsv` in `AdminService` and `AdminController`. Wired `OrderService` and `OrderRepository` dependencies inside `routes.ts`.
+- **Status Force-Update Controls**: Added status force-updates gated by mandatory audit notes, recording history, generating `AuditLog` records, and triggering variant stock restoration on cancellation.
+- **Frontend Orders UI Page**: Created `AdminOrdersPage.tsx` with paginated table, search filters synced to URL params, detailed modal, audit note dialog, and CSV export.
+- **Subdomain Routing & Code Quality**: Registered the orders route mapping in `admin.tsx`. Resolved typecheck errors under `exactOptionalPropertyTypes` and cleaned up all linter unused variables and `any` types in `AdminOrdersPage.test.tsx` and `admin.service.ts`. Verified that all integration and Vitest component tests pass cleanly.
+
+---
+
+### Session 49 — 2026-06-04 — Completed Phase 4.4 (User Management — Buyers)
+- **Completed Phase 4.4 Checklist**: Fully implemented administrative User Management (Buyers).
+- **Created Users UI Component**: Built [AdminUsersPage.tsx](file:///Users/manish/Desktop/GoRola/gorola_app/apps/web/src/pages/admin/AdminUsersPage.tsx) which includes a search bar input debounced by 300ms (`search-phone-input`), buyer data tables with masked phone numbers, join dates, status indicators, and actions buttons.
+- **Toggle Action Confirmation**: Built a warning confirmation modal dialog for user suspensions and unsuspensions.
+- **Slide-over Details Drawer**: Created an overlay drawer displaying buyer registered address list and order history.
+- **Route Mapping**: Mapped route `/admin/users` to `<AdminUsersPage />` inside [admin.tsx](file:///Users/manish/Desktop/GoRola/gorola_app/apps/web/src/app/routes/admin.tsx).
+- **TypeScript Fixes**: Fixed TS2532 error in the backend integration test file [admin.users.test.ts](file:///Users/manish/Desktop/GoRola/gorola_app/apps/api/src/__tests__/integration/admin/admin.users.test.ts) and removed unused icons in [AdminUsersPage.tsx](file:///Users/manish/Desktop/GoRola/gorola_app/apps/web/src/pages/admin/AdminUsersPage.tsx).
+- **Verification**: Verified typecheck compiles cleanly across packages, Vitest backend tests pass 100% green (529 tests), frontend unit tests pass 100% green (328 tests), and mono-repo production build completes successfully.
 

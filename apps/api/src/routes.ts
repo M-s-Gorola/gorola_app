@@ -9,6 +9,9 @@ import { getPrismaClient } from "./lib/prisma.js";
 import { socketPlugin } from "./lib/socket.js";
 import { registerBuyerAddressRoutes } from "./modules/address/address.controller.js";
 import { AddressRepository } from "./modules/address/address.repository.js";
+import { registerAdminRoutes } from "./modules/admin/admin.controller.js";
+import { AdminRepository } from "./modules/admin/admin.repository.js";
+import { AdminAuthService } from "./modules/auth/admin-auth.service.js";
 import { registerAuthRoutes } from "./modules/auth/auth.controller.js";
 import { AuthService } from "./modules/auth/auth.service.js";
 import { createBuyerTokenService } from "./modules/auth/buyer-token.service.js";
@@ -111,7 +114,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
       return {
         id: row.id,
         name: row.name,
-        phone: row.phone
+        phone: row.phone,
+        isActive: row.isActive
       };
     },
     findUserById: async (id) => {
@@ -120,7 +124,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
       return {
         id: row.id,
         name: row.name,
-        phone: row.phone
+        phone: row.phone,
+        isActive: row.isActive
       };
     },
     otpProvider: createNoopOtpProvider(),
@@ -241,18 +246,44 @@ export function registerAppRoutes(app: FastifyInstance): void {
     totpProvider
   });
 
+  const adminRepository = new AdminRepository(prisma);
+
+  const adminTokenService = {
+    issueTokens: async (input: { role: "ADMIN"; sub: string }) => {
+      const refreshRaw = randomBytes(32).toString("hex");
+      const key = `rt:admin:${refreshRaw}`;
+      const stored = JSON.stringify({
+        role: "ADMIN",
+        userId: input.sub
+      });
+      await redis.set(key, stored, "EX", 7 * 24 * 60 * 60);
+
+      const accessToken = await new SignJWT({
+        role: "ADMIN"
+      })
+        .setProtectedHeader({ alg: "RS256" })
+        .setSubject(input.sub)
+        .setJti(randomUUID())
+        .setIssuedAt()
+        .setExpirationTime("15m")
+        .sign(keys.privateKey);
+
+      return {
+        accessToken,
+        refreshToken: refreshRaw
+      };
+    }
+  };
+
+  const adminAuthService = new AdminAuthService({
+    redis,
+    adminRepository,
+    tokenService: adminTokenService,
+    totpProvider
+  });
+
   registerAuthRoutes(app, {
-    adminAuthService: {
-      login: async () => {
-        throw new NotImplementedError("Admin auth runtime wiring pending");
-      },
-      setup2FA: async () => {
-        throw new NotImplementedError("Admin auth runtime wiring pending");
-      },
-      verify2FA: async () => {
-        throw new NotImplementedError("Admin auth runtime wiring pending");
-      }
-    },
+    adminAuthService,
     authService,
     storeOwnerAuthService
   });
@@ -263,6 +294,12 @@ export function registerAppRoutes(app: FastifyInstance): void {
   });
 
   registerStoreOwnerRoutes(app, {
+    tokenVerifier: tokenService,
+    orderService: buyerOrderSvc,
+    orders: orderRepoOrders
+  });
+
+  registerAdminRoutes(app, {
     tokenVerifier: tokenService,
     orderService: buyerOrderSvc,
     orders: orderRepoOrders

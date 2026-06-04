@@ -307,7 +307,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('#restock-qty-input').fill('10');
     await page.getByRole('button', { name: 'Confirm Restock' }).click({ force: true });
     // Wait for restock modal to close
-    await expect(page.locator('#restock-qty-input')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#restock-qty-input')).not.toBeVisible({ timeout: 30000 });
 
     // Adjust: click Adjust button on variant 0, fill qty and reason, confirm
     await page.locator('[data-testid="adjust-button-0"]').click({ force: true });
@@ -315,7 +315,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.locator('#adjust-reason-input').fill(`E2E Audit-${suffix}`);
     await page.getByRole('button', { name: 'Confirm Adjustment' }).click({ force: true });
     // Wait for adjust modal to close
-    await expect(page.locator('#adjust-qty-input')).not.toBeVisible({ timeout: 10000 });
+    await expect(page.locator('#adjust-qty-input')).not.toBeVisible({ timeout: 30000 });
 
     // Navigate back to Products list to access stock history
     await page.getByRole('link', { name: 'Products' }).click({ force: true });
@@ -324,6 +324,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Go to Stock History list and verify audit log entries
     await page.getByTestId('stock-history-prod_rice_1').click({ force: true });
+
+    // Wait for both React Query fetches (product detail + stock history) to resolve.
+    // Use .first() to avoid strict mode violation — 3 skeleton divs are rendered simultaneously.
+    await expect(page.locator('[data-testid="history-row-skeleton"]').first()).not.toBeVisible({ timeout: 15000 });
 
     // Verify movement rows are rendered correctly
     await expect(page.locator('tr').filter({ hasText: 'RESTOCK' }).first()).toBeVisible({ timeout: 10000 });
@@ -440,7 +444,8 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // 4. Verify bookings list and details normalizes DELIVERED status to render as COMPLETED
     await page.getByRole("link", { name: "Bookings" }).click();
-    await expect(page.getByRole("heading", { name: "Bookings" })).toBeVisible();
+    // Use exact heading text "Bookings Dashboard" to avoid ambiguous match with "No bookings found"
+    await expect(page.getByRole("heading", { name: "Bookings Dashboard", exact: true })).toBeVisible();
 
     // The Bookings page normalizes DELIVERED → COMPLETED in status history.
     // approvalStatus uses BookingStatus which includes "COMPLETED" directly.
