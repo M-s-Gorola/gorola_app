@@ -18,8 +18,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-05
-- **Session Summary:** Session 54 — Diagnosed and fixed the persistent E2E-023 flakiness (Inventory Restock & Audit History Logging) that only manifested during `ci:quality` runs (not `test:e2e` standalone). Root cause was a multi-layer Sonner toast pointer interception pattern. Final fix is a 3-gate approach: (1) upfront toast dismissal gate at test start to clear serial-test leftover toasts, (2) `waitForResponse(PUT /stock)` as a hard proof that the restock mutation reached the server, (3) inter-modal toast gate + `dispatchEvent` on Confirm Adjustment. All 68 tests now pass consistently on both chromium and iphone-se under full ci:quality load. Also documented the `force:true` anti-pattern and the `dispatchEvent` limitation in the ISSUES GUIDE.
-- **Next Session Must Start With:** Phase 4.7 (Feature Flag Management) implementation.
+- **Session Summary:** Session 57 — Adjusted the buyer storefront's advertisement carousel banner. Removed the viewport container's horizontal padding and updated the active slide width to 85% (mobile) / 90% (desktop) to ensure it takes up most of the space while adjacent ads are displayed as small peeking slivers.
+- **Next Session Must Start With:** Phase 4.9 (Audit Log Viewer) implementation plan and execution.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -1690,31 +1690,31 @@ No admin feature flag management endpoints exist. Admin needs to view all featur
 
 ---
 
-- [ ] **RED — Integration (`admin.feature-flags.test.ts`):**
-  - [ ] Test: `GET /api/v1/admin/feature-flags` → returns ALL flags with `{ key, value, description, updatedAt }`
-  - [ ] Test: `PUT /api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE` with body `{ value: true }` → HTTP 200; flag updated in DB; Redis cache for `feature_flag:WEATHER_MODE_ACTIVE` invalidated (key deleted or set to new value)
-  - [ ] Test: `PUT /api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE` with body `{ value: true }` → `AuditLog` created with `action: 'ADMIN_FEATURE_FLAG_UPDATE'`, `entityId: 'WEATHER_MODE_ACTIVE'`, `newValue: { value: true }`
-  - [ ] Test: `PUT /api/v1/admin/feature-flags/NONEXISTENT_KEY` → HTTP 404 `NOT_FOUND`
-  - [ ] Test: `PUT /api/v1/admin/feature-flags/<key>` with STORE_OWNER JWT → HTTP 403 `FORBIDDEN`
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.feature-flags.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/feature-flags` → returns ALL flags with `{ key, value, description, updatedAt }`
+  - [x] Test: `PUT /api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE` with body `{ value: true }` → HTTP 200; flag updated in DB; Redis cache for `feature_flag:WEATHER_MODE_ACTIVE` invalidated (key deleted or set to new value)
+  - [x] Test: `PUT /api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE` with body `{ value: true }` → `AuditLog` created with `action: 'ADMIN_FEATURE_FLAG_UPDATE'`, `entityId: 'WEATHER_MODE_ACTIVE'`, `newValue: { value: true }`
+  - [x] Test: `PUT /api/v1/admin/feature-flags/NONEXISTENT_KEY` → HTTP 404 `NOT_FOUND`
+  - [x] Test: `PUT /api/v1/admin/feature-flags/<key>` with STORE_OWNER JWT → HTTP 403 `FORBIDDEN`
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `getFlags()`, `updateFlag(key, value, adminId)` to `admin.service.ts`. `updateFlag` calls `FeatureFlagRepository.update(key, value)` and `AuditRepository.create(...)` in a transaction, then invalidates Redis key `feature_flag:<key>`
-  - [ ] [Controller + Routes] Add `GET /api/v1/admin/feature-flags`, `PUT /api/v1/admin/feature-flags/:key` with `requireAuth` + `requireRole('ADMIN')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `getFlags()`, `updateFlag(key, value, adminId)` to `admin.service.ts`. `updateFlag` calls `FeatureFlagRepository.update(key, value)` and `AuditRepository.create(...)` in a transaction, then invalidates Redis key `feature_flag:<key>`
+  - [x] [Controller + Routes] Add `GET /api/v1/admin/feature-flags`, `PUT /api/v1/admin/feature-flags/:key` with `requireAuth` + `requireRole('ADMIN')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminFeatureFlagsPage.test.tsx`):**
-  - [ ] Test: table lists all flags with description text and current on/off toggle switch
-  - [ ] Test: toggling a non-high-impact flag directly calls `PUT` without modal
-  - [ ] Test: toggling `WEATHER_MODE_ACTIVE` opens confirmation modal showing impact summary text before calling API
-  - [ ] Test: after toggle success, toggle switch updates visually and toast shows "Flag updated"
-  - [ ] Test: note text "Changes reflected in 60 seconds" is visible on the page
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminFeatureFlagsPage.test.tsx`):**
+  - [x] Test: table lists all flags with description text and current on/off toggle switch
+  - [x] Test: toggling a non-high-impact flag directly calls `PUT` without modal
+  - [x] Test: toggling `WEATHER_MODE_ACTIVE` opens confirmation modal showing impact summary text before calling API
+  - [x] Test: after toggle success, toggle switch updates visually and toast shows "Flag updated"
+  - [x] Test: note text "Changes reflected in 60 seconds" is visible on the page
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminFeatureFlagsPage.tsx`; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminFeatureFlagsPage.tsx`; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin toggles WEATHER_MODE_ACTIVE → confirmation modal → confirm → audit log created → within 60s buyer home page shifts to weather mode → ✅
+- [x] **Verification chain:**
+  - [x] Admin toggles WEATHER_MODE_ACTIVE → confirmation modal → confirm → audit log created → within 60s buyer home page shifts to weather mode → ✅
 
 ---
 
@@ -1725,32 +1725,32 @@ No admin ad approval endpoints exist. Ads submitted by store owners have `isAppr
 
 ---
 
-- [ ] **RED — Integration (`admin.ads.test.ts`):**
-  - [ ] Test setup: create 2 pending ads from 2 different stores
-  - [ ] Test: `GET /api/v1/admin/advertisements?status=PENDING` → returns both pending ads with `{ id, imageUrl, title, storeName, startsAt, endsAt, submittedAt }`
-  - [ ] Test: `PUT /api/v1/admin/advertisements/<id>/approve` → HTTP 200; `ad.isApproved = true`; ad now appears in buyer `GET /api/v1/promotions/advertisements` response; `AuditLog` created
-  - [ ] Test: `PUT /api/v1/admin/advertisements/<id>/reject` with body `{ reason: 'Image too small' }` → HTTP 200; `ad.isApproved = false`, `ad.isActive = false`; `AuditLog` created with rejection reason
-  - [ ] Test: `PUT /api/v1/admin/advertisements/<id>/reject` with missing `reason` → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: `PUT /api/v1/admin/advertisements/<id>/deactivate` (for approved ad) → HTTP 200; ad no longer appears in buyer feed
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.ads.test.ts`):**
+  - [x] Test setup: create 2 pending ads from 2 different stores
+  - [x] Test: `GET /api/v1/admin/advertisements?status=PENDING` → returns both pending ads with `{ id, imageUrl, title, storeName, startsAt, endsAt, submittedAt }`
+  - [x] Test: `PUT /api/v1/admin/advertisements/<id>/approve` → HTTP 200; `ad.isApproved = true`; ad now appears in buyer `GET /api/v1/promotions/advertisements` response; `AuditLog` created
+  - [x] Test: `PUT /api/v1/admin/advertisements/<id>/reject` with body `{ reason: 'Image too small' }` → HTTP 200; `ad.isApproved = false`, `ad.isActive = false`; `AuditLog` created with rejection reason
+  - [x] Test: `PUT /api/v1/admin/advertisements/<id>/reject` with missing `reason` → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: `PUT /api/v1/admin/advertisements/<id>/deactivate` (for approved ad) → HTTP 200; ad no longer appears in buyer feed
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `getAds(status?)`, `approveAd(adId, adminId)`, `rejectAd(adId, reason, adminId)`, `deactivateAd(adId, adminId)` to `admin.service.ts`. Each creates audit log.
-  - [ ] [Controller + Routes] Add `GET /api/v1/admin/advertisements`, `PUT /api/v1/admin/advertisements/:id/approve`, `PUT /api/v1/admin/advertisements/:id/reject`, `PUT /api/v1/admin/advertisements/:id/deactivate` with `requireAuth` + `requireRole('ADMIN')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `getAds(status?)`, `approveAd(adId, adminId)`, `rejectAd(adId, reason, adminId)`, `deactivateAd(adId, adminId)` to `admin.service.ts`. Each creates audit log.
+  - [x] [Controller + Routes] Add `GET /api/v1/admin/advertisements`, `PUT /api/v1/admin/advertisements/:id/approve`, `PUT /api/v1/admin/advertisements/:id/reject`, `PUT /api/v1/admin/advertisements/:id/deactivate` with `requireAuth` + `requireRole('ADMIN')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminAdvertisementsPage.test.tsx`):**
-  - [ ] Test: 3 tabs: "Pending" | "Approved" | "All"
-  - [ ] Test: pending tab shows ad image preview (`<img>` with correct src), title, store name, date range
-  - [ ] Test: "Approve" button calls `PUT .../approve` and moves item to "Approved" tab
-  - [ ] Test: "Reject" button opens modal requiring rejection reason text before enabling "Confirm Rejection"
-  - [ ] Test: approved tab shows "Deactivate" button; clicking calls `PUT .../deactivate`
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminAdvertisementsPage.test.tsx`):**
+  - [x] Test: 3 tabs: "Pending" | "Approved" | "All"
+  - [x] Test: pending tab shows ad image preview (`<img>` with correct src), title, store name, date range
+  - [x] Test: "Approve" button calls `PUT .../approve` and moves item to "Approved" tab
+  - [x] Test: "Reject" button opens modal requiring rejection reason text before enabling "Confirm Rejection"
+  - [x] Test: approved tab shows "Deactivate" button; clicking calls `PUT .../deactivate`
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminAdvertisementsPage.tsx`; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminAdvertisementsPage.tsx`; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Store owner submits ad → admin opens Pending tab → image preview visible → approve → ad appears on buyer home carousel → admin deactivates → ad removed from buyer carousel → ✅
+- [x] **Verification chain:**
+  - [x] Store owner submits ad → admin opens Pending tab → image preview visible → approve → ad appears on buyer home carousel → admin deactivates → ad removed from buyer carousel → ✅
 
 ---
 
@@ -2517,3 +2517,22 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 **Result:** 68/68 tests pass on both chromium and iphone-se under full `ci:quality` load. No retries consumed.
 
 **ISSUES GUIDE updated:** Section 10 (`{ force: true }` Anti-Pattern) added to [e2e_flakiness_and_state_races.md](file:///Users/kashishyadav/Desktop/GoRola/gorola_app/ISSUES%20GUIDE/e2e_flakiness_and_state_races.md). Pattern 4 corrected to replace the wrong `dispatchEvent + waitForURL` approach with the correct upfront-toast-gate pattern. Pattern 1 `[!IMPORTANT]` block updated with the confirmed `navigate()` limitation. Cheat sheet row for navigation buttons updated with the correct fix.
+
+---
+
+### Session 56 — 2026-06-05 — Feature Flag Analysis & Future Capability Clarification
+- **Feature Flag Clarification**: Clarified the operational distinction between the `WEATHER_MODE_ACTIVE` flag and the `SCHEDULED_DELIVERY_ENABLED` flag. 
+  - `WEATHER_MODE_ACTIVE` is fully implemented in the frontend/backend to shift the buyer theme to slate, display ETA warnings, and restrict delivery windows.
+  - `SCHEDULED_DELIVERY_ENABLED` is seeded in the database and defined in specifications, but remains a placeholder for future quick-commerce scheduling integrations. It currently has no active UI/API logic gates on the buyer's end.
+- **Completed Phase 4.8 (Advertisement Approval Queue)**: Fully implemented backend service methods, controllers, and subdomain-routing-aware dashboard list page with tab filters, image previews, and modal reason-validation dialogs. Added complete integration and unit tests under TDD (100% green).
+
+---
+
+### Session 57 — 2026-06-05 — Advertisement Carousel Peeking UX Tweak
+- **Carousel Peeking UX Adjustments**: Tweaked the home page advertisement banner Embla carousel layout. Removed the artificial horizontal padding (`px-6 sm:px-10`) on the viewport container (setting it to `px-0`) so that adjacent slides peek edge-to-edge relative to the main layout content wrapper.
+- **Active Slide Width Scaling**: Replaced the static slide width configuration with a responsive layout `flex-[0_0_85%] sm:flex-[0_0_90%]`, ensuring the current active advertisement takes up most of the screen width while keeping previous and next ads as thin peeking slivers.
+- **Future Feature Flag Clarifications**: Marked unimplemented capabilities (`SCHEDULED_DELIVERY_ENABLED`, `UPI_PAYMENT_ENABLED`, and `CARD_PAYMENT_ENABLED`) as future features. Updated their descriptions to prefix with "Future" in the seeding files and executed a custom prisma DB script to apply these changes directly in the database.
+- **Verification**: Ran and verified all frontend unit tests in `AdvertisementBanner.test.tsx` successfully.
+
+
+

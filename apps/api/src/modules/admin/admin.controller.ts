@@ -545,4 +545,139 @@ export function registerAdminRoutes(
       }
     };
   });
+
+  app.get("/api/v1/admin/feature-flags", { preHandler }, async (request, reply) => {
+    const result = await adminService.getFlags();
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const updateFlagBodySchema = z.object({
+    value: z.boolean()
+  });
+
+  app.put("/api/v1/admin/feature-flags/:key", { preHandler }, async (request, reply) => {
+    const { key } = request.params as { key: string };
+    const parsed = updateFlagBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid flag value", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.updateFlag(
+      key,
+      parsed.data.value,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/advertisements", { preHandler }, async (request, reply) => {
+    const statusSchema = z.object({
+      status: z.enum(["PENDING", "APPROVED", "ALL"]).optional()
+    });
+    const parsed = statusSchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid status filter", parsed.error.flatten());
+    }
+
+    const result = await adminService.getAds(parsed.data.status);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/advertisements/:id/approve", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.approveAd(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const rejectAdBodySchema = z.object({
+    reason: z.string().min(1, "Reason is required")
+  });
+
+  app.put("/api/v1/admin/advertisements/:id/reject", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = rejectAdBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid rejection request", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.rejectAd(id, parsed.data.reason, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/advertisements/:id/deactivate", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.deactivateAd(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }

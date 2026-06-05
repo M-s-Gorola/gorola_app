@@ -1,7 +1,8 @@
-import { ConflictError, NotFoundError } from "@gorola/shared";
+import { ConflictError, NotFoundError, ValidationError } from "@gorola/shared";
 import { type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
+import { getRedisClient } from "../../lib/redis.js";
 import { CategoryRepository } from "../catalog/category.repository.js";
 import { SubCategoryRepository } from "../catalog/sub-category.repository.js";
 import { OrderRepository } from "../order/order.repository.js";
@@ -1118,5 +1119,221 @@ export class AdminService {
         userAgent
       }
     });
+  }
+
+  public async getFlags() {
+    return this.db.featureFlag.findMany({
+      orderBy: { key: "asc" }
+    });
+  }
+
+  public async updateFlag(
+    key: string,
+    value: boolean,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const oldFlag = await this.db.featureFlag.findUnique({
+      where: { key }
+    });
+    if (!oldFlag) {
+      throw new NotFoundError("Feature flag not found");
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const flag = await tx.featureFlag.update({
+        where: { key },
+        data: { value, updatedBy: adminId }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_FEATURE_FLAG_UPDATE",
+          entityType: "FeatureFlag",
+          entityId: key,
+          oldValue: { value: oldFlag.value },
+          newValue: { value },
+          ip,
+          userAgent
+        }
+      });
+
+      return flag;
+    });
+
+    const isTest = process.env.NODE_ENV === "test";
+    const redis = isTest ? null : getRedisClient();
+    if (redis) {
+      try {
+        await redis.del(`feature_flag:${key}`);
+      } catch (err) {
+        console.error("Redis del flag error", err);
+      }
+    }
+
+    return updated;
+  }
+
+  public async getAds(status?: string) {
+    const where: Prisma.AdvertisementWhereInput = {
+      store: { isDeleted: false }
+    };
+
+    if (status === "PENDING") {
+      where.isApproved = false;
+      where.isActive = true;
+    } else if (status === "APPROVED") {
+      where.isApproved = true;
+      where.isActive = true;
+    }
+
+    const ads = await this.db.advertisement.findMany({
+      where,
+      include: {
+        store: {
+          select: { name: true }
+        }
+      },
+      orderBy: { createdAt: "desc" }
+    });
+
+    return ads.map((ad) => ({
+      id: ad.id,
+      storeId: ad.storeId,
+      storeName: ad.store.name,
+      title: ad.title,
+      imageUrl: ad.imageUrl,
+      linkUrl: ad.linkUrl,
+      startsAt: ad.startsAt,
+      endsAt: ad.endsAt,
+      isApproved: ad.isApproved,
+      isActive: ad.isActive,
+      submittedAt: ad.createdAt
+    }));
+  }
+
+  public async approveAd(
+    adId: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const oldAd = await this.db.advertisement.findUnique({
+      where: { id: adId }
+    });
+    if (!oldAd) {
+      throw new NotFoundError("Advertisement not found");
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const ad = await tx.advertisement.update({
+        where: { id: adId },
+        data: { isApproved: true, isActive: true }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_ADVERTISEMENT_APPROVE",
+          entityType: "Advertisement",
+          entityId: adId,
+          oldValue: { isApproved: oldAd.isApproved, isActive: oldAd.isActive },
+          newValue: { isApproved: true, isActive: true },
+          ip,
+          userAgent
+        }
+      });
+
+      return ad;
+    });
+
+    return updated;
+  }
+
+  public async rejectAd(
+    adId: string,
+    reason: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    if (!reason || reason.trim() === "") {
+      throw new ValidationError("Rejection reason is required");
+    }
+
+    const oldAd = await this.db.advertisement.findUnique({
+      where: { id: adId }
+    });
+    if (!oldAd) {
+      throw new NotFoundError("Advertisement not found");
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const ad = await tx.advertisement.update({
+        where: { id: adId },
+        data: { isApproved: false, isActive: false }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_ADVERTISEMENT_REJECT",
+          entityType: "Advertisement",
+          entityId: adId,
+          oldValue: { isApproved: oldAd.isApproved, isActive: oldAd.isActive },
+          newValue: { isApproved: false, isActive: false, reason },
+          ip,
+          userAgent
+        }
+      });
+
+      return ad;
+    });
+
+    return updated;
+  }
+
+  public async deactivateAd(
+    adId: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const oldAd = await this.db.advertisement.findUnique({
+      where: { id: adId }
+    });
+    if (!oldAd) {
+      throw new NotFoundError("Advertisement not found");
+    }
+
+    const updated = await this.db.$transaction(async (tx) => {
+      const ad = await tx.advertisement.update({
+        where: { id: adId },
+        data: { isActive: false }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_ADVERTISEMENT_DEACTIVATE",
+          entityType: "Advertisement",
+          entityId: adId,
+          oldValue: { isApproved: oldAd.isApproved, isActive: oldAd.isActive },
+          newValue: { isApproved: oldAd.isApproved, isActive: false },
+          ip,
+          userAgent
+        }
+      });
+
+      return ad;
+    });
+
+    return updated;
   }
 }

@@ -2,8 +2,10 @@ import type { ReactElement } from "react";
 import { Navigate, Route } from "react-router-dom";
 
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminAdvertisementsPage } from "@/pages/admin/AdminAdvertisementsPage";
 import { AdminCategoriesPage } from "@/pages/admin/AdminCategoriesPage";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
+import { AdminFeatureFlagsPage } from "@/pages/admin/AdminFeatureFlagsPage";
 import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
 import { AdminSetup2FAPage } from "@/pages/admin/AdminSetup2FAPage";
@@ -113,7 +115,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Feature Flags" />
+            <AdminFeatureFlagsPage />
           </AdminLayout>
         </AdminRoute>
       }
@@ -124,7 +126,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Advertisements" />
+            <AdminAdvertisementsPage />
           </AdminLayout>
         </AdminRoute>
       }
