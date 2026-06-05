@@ -43,6 +43,7 @@ describe("Admin Categories API Integration Tests", () => {
     await db.order.deleteMany();
     await db.address.deleteMany();
     await db.user.deleteMany();
+    await db.stockMovement.deleteMany();
     await db.productVariant.deleteMany();
     await db.product.deleteMany();
     await db.storeOwner.deleteMany();

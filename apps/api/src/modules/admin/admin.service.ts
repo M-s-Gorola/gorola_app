@@ -1,8 +1,9 @@
 import { ConflictError, NotFoundError, ValidationError } from "@gorola/shared";
-import { type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
+import { type ActorRole, type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
 import { getRedisClient } from "../../lib/redis.js";
+import { AuditRepository } from "../audit/audit.repository.js";
 import { CategoryRepository } from "../catalog/category.repository.js";
 import { SubCategoryRepository } from "../catalog/sub-category.repository.js";
 import { OrderRepository } from "../order/order.repository.js";
@@ -12,6 +13,31 @@ function maskPhone(phone: string): string {
   if (!phone) return "";
   if (phone.length <= 4) return "****";
   return "*".repeat(phone.length - 4) + phone.slice(-4);
+}
+
+function maskEmail(email: string): string {
+  if (!email) return "";
+  const parts = email.split("@");
+  if (parts.length !== 2) return "****";
+  const local = parts[0];
+  const domain = parts[1];
+  if (!local || !domain) return "****";
+  if (local.length <= 2) {
+    return `${"*".repeat(local.length)}@${domain}`;
+  }
+  return `${local[0]}${"*".repeat(local.length - 2)}${local[local.length - 1]}@${domain}`;
+}
+
+function maskIp(ip: string): string {
+  if (!ip) return "";
+  if (ip.includes(":")) {
+    const segments = ip.split(":");
+    if (segments.length <= 2) return "IPv6:***";
+    return `${segments[0]}:****:****:${segments[segments.length - 1]}`;
+  }
+  const parts = ip.split(".");
+  if (parts.length !== 4) return ip;
+  return `${parts[0]}.${parts[1]}.***.***`;
 }
 
 export type AdminDashboardData = {
@@ -35,10 +61,12 @@ export type AdminDashboardData = {
 export class AdminService {
   private readonly categoryRepo: CategoryRepository;
   private readonly subCategoryRepo: SubCategoryRepository;
+  private readonly auditRepo: AuditRepository;
 
   public constructor(private readonly db: PrismaClient) {
     this.categoryRepo = new CategoryRepository(db);
     this.subCategoryRepo = new SubCategoryRepository(db);
+    this.auditRepo = new AuditRepository(db);
   }
 
   public async getDashboard(
@@ -1335,5 +1363,145 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  public async getAuditLogs(filters: {
+    actorRole?: ActorRole | undefined;
+    action?: string | undefined;
+    entityType?: string | undefined;
+    entityId?: string | undefined;
+    from?: string | Date | undefined;
+    to?: string | Date | undefined;
+    cursor?: string | undefined;
+    limit?: number | undefined;
+  }) {
+    const { items, nextCursor } = await this.auditRepo.findMany(filters);
+
+    const buyersMap = new Map<string, string>();
+    const merchantsMap = new Map<string, string>();
+    const adminsMap = new Map<string, string>();
+
+    const buyerIds = new Set<string>();
+    const merchantIds = new Set<string>();
+    const adminIds = new Set<string>();
+
+    for (const log of items) {
+      if (log.actorRole === "BUYER") {
+        buyerIds.add(log.actorId);
+      } else if (log.actorRole === "STORE_OWNER") {
+        merchantIds.add(log.actorId);
+      } else if (log.actorRole === "ADMIN") {
+        adminIds.add(log.actorId);
+      }
+    }
+
+    const [buyers, merchants, admins] = await Promise.all([
+      buyerIds.size > 0
+        ? this.db.user.findMany({
+            where: { id: { in: Array.from(buyerIds) } },
+            select: { id: true, phone: true }
+          })
+        : [],
+      merchantIds.size > 0
+        ? this.db.storeOwner.findMany({
+            where: { id: { in: Array.from(merchantIds) } },
+            select: { id: true, email: true }
+          })
+        : [],
+      adminIds.size > 0
+        ? this.db.admin.findMany({
+            where: { id: { in: Array.from(adminIds) } },
+            select: { id: true, email: true }
+          })
+        : []
+    ]);
+
+    for (const b of buyers) {
+      buyersMap.set(b.id, maskPhone(b.phone));
+    }
+    for (const m of merchants) {
+      merchantsMap.set(m.id, maskEmail(m.email));
+    }
+    for (const a of admins) {
+      adminsMap.set(a.id, maskEmail(a.email));
+    }
+
+    const mapped = items.map((log) => {
+      let actorMasked = "system-service";
+      if (log.actorRole === "BUYER") {
+        actorMasked = buyersMap.get(log.actorId) ?? "Unknown Buyer";
+      } else if (log.actorRole === "STORE_OWNER") {
+        actorMasked = merchantsMap.get(log.actorId) ?? "Unknown Merchant";
+      } else if (log.actorRole === "ADMIN") {
+        actorMasked = adminsMap.get(log.actorId) ?? "Unknown Admin";
+      } else if (log.actorRole === "SYSTEM") {
+        actorMasked = "SYSTEM";
+      }
+
+      return {
+        id: log.id,
+        actorId: log.actorId,
+        actorRole: log.actorRole,
+        actorMasked,
+        action: log.action,
+        entityType: log.entityType,
+        entityId: log.entityId,
+        oldValue: log.oldValue,
+        newValue: log.newValue,
+        ipMasked: maskIp(log.ip),
+        userAgent: log.userAgent,
+        createdAt: log.createdAt.toISOString()
+      };
+    });
+
+    return {
+      items: mapped,
+      nextCursor
+    };
+  }
+
+  public async exportAuditLogsCsv(filters: {
+    actorRole?: ActorRole | undefined;
+    action?: string | undefined;
+    entityType?: string | undefined;
+    entityId?: string | undefined;
+    from?: string | Date | undefined;
+    to?: string | Date | undefined;
+  }): Promise<string> {
+    const { items } = await this.getAuditLogs({ ...filters, limit: 1000 });
+
+    const headers = [
+      "Timestamp",
+      "Actor (Masked)",
+      "Role",
+      "Action",
+      "Entity Type",
+      "Entity ID",
+      "IP (Masked)",
+      "Old Value",
+      "New Value"
+    ];
+    const rows = items.map((log) => {
+      const oldValueStr = log.oldValue ? JSON.stringify(log.oldValue) : "";
+      const newValueStr = log.newValue ? JSON.stringify(log.newValue) : "";
+      return [
+        log.createdAt,
+        log.actorMasked,
+        log.actorRole,
+        log.action,
+        log.entityType,
+        log.entityId,
+        log.ipMasked,
+        oldValueStr,
+        newValueStr
+      ];
+    });
+
+    const csvContent = [
+      headers.map((h) => `"${h}"`).join(","),
+      ...rows.map((r) => r.map((val) => `"${String(val).replace(/"/g, '""')}"`).join(","))
+    ].join("\n");
+
+    return csvContent;
   }
 }

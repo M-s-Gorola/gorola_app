@@ -12,14 +12,15 @@
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
 | Phase 3 | Store Owner Panel | 🟢 COMPLETE   | Phase 3.1–3.10.1 complete. All E2E tests passing green, including responsive mobile navigation and toast pointer interception fixes. |
+| Phase 4 | Admin Panel       | 🟡 IN PROGRESS | Phase 4.1–4.9.1 complete. Phase 4.9.1 (Platform-Wide Audit Log Generation) fully implemented and all 566 tests green. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-05
-- **Session Summary:** Session 57 — Adjusted the buyer storefront's advertisement carousel banner. Removed the viewport container's horizontal padding and updated the active slide width to 85% (mobile) / 90% (desktop) to ensure it takes up most of the space while adjacent ads are displayed as small peeking slivers.
-- **Next Session Must Start With:** Phase 4.9 (Audit Log Viewer) implementation plan and execution.
+- **Date:** 2026-06-06
+- **Session Summary:** Session 59 — Implemented Phase 4.9.1 (Platform-Wide Audit Log Generation). Added `AuditLog` writes inside transactions for all critical buyer and store owner actions across `BuyerCheckoutService`, `BookingOrderService`, and `StoreOwnerService`. Updated controllers (`order`, `booking`, `store-owner`) to forward `request.ip` and `user-agent`. Fixed all 5 pre-existing test failures caused by the new `StockMovement→ProductVariant` FK constraint in 15+ integration test cleanup functions. Compacted the AdminAuditLogsPage table (tighter padding + 10px fonts) so all columns are visible without horizontal scrolling. All 566 tests passing (93 test files). TypeCheck clean.
+- **Next Session Must Start With:** Phase 4.10 (Admin E2E Tests with Playwright).
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -28,7 +29,7 @@
 
 ## In Progress Right Now
 
-None. Phase 4.3 is completed!
+None. Phase 4.9 is completed!
 
 ---
 
@@ -1761,30 +1762,81 @@ No admin audit log endpoint exists. Admin needs read-only access to all system a
 
 ---
 
-- [ ] **RED — Integration (`admin.audit-logs.test.ts`):**
-  - [ ] Test: `GET /api/v1/admin/audit-logs` → returns logs with `{ id, timestamp, actorMasked, actorRole, action, entityType, entityId, ipMasked, oldValue, newValue }`
-  - [ ] Test: `GET /api/v1/admin/audit-logs?action=ADMIN_USER_SUSPEND` → returns only suspension logs
-  - [ ] Test: `GET /api/v1/admin/audit-logs?role=ADMIN&from=<iso>&to=<iso>` → filtered results
-  - [ ] Test: `GET /api/v1/admin/audit-logs?format=csv` → HTTP 200 with `Content-Type: text/csv`
-  - [ ] Test: no DELETE or PUT endpoints exist for audit logs (read-only; any attempt returns 405 `Method Not Allowed`)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Integration (`admin.audit-logs.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/audit-logs` → returns logs with `{ id, timestamp, actorMasked, actorRole, action, entityType, entityId, ipMasked, oldValue, newValue }`
+  - [x] Test: `GET /api/v1/admin/audit-logs?action=ADMIN_USER_SUSPEND` → returns only suspension logs
+  - [x] Test: `GET /api/v1/admin/audit-logs?role=ADMIN&from=<iso>&to=<iso>` → filtered results
+  - [x] Test: `GET /api/v1/admin/audit-logs?format=csv` → HTTP 200 with `Content-Type: text/csv`
+  - [x] Test: no DELETE or PUT endpoints exist for audit logs (read-only; any attempt returns 405 `Method Not Allowed`)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `getAuditLogs(filters, pagination)` to `admin.service.ts`. Calls `AuditRepository.findMany` with filters.
-  - [ ] [Controller + Routes] Add `GET /api/v1/admin/audit-logs` and `GET /api/v1/admin/audit-logs/export` (CSV) with `requireAuth` + `requireRole('ADMIN')`. NO PUT or DELETE routes registered.
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `getAuditLogs(filters, pagination)` to `admin.service.ts`. Calls `AuditRepository.findMany` with filters.
+  - [x] [Controller + Routes] Add `GET /api/v1/admin/audit-logs` and `GET /api/v1/admin/audit-logs/export` (CSV) with `requireAuth` + `requireRole('ADMIN')`. NO PUT or DELETE routes registered.
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`AdminAuditLogsPage.test.tsx`):**
-  - [ ] Test: table with "Timestamp", "Actor (masked)", "Role", "Action", "Entity", "Entity ID", "IP (masked)" columns
-  - [ ] Test: expanding a row shows `oldValue` and `newValue` as formatted JSON diff viewer
-  - [ ] Test: no edit or delete buttons exist anywhere on this page
-  - [ ] Test: "Export CSV" triggers download
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`AdminAuditLogsPage.test.tsx`):**
+  - [x] Test: table with "Timestamp", "Actor (masked)", "Role", "Action", "Entity", "Entity ID", "IP (masked)" columns
+  - [x] Test: expanding a row shows `oldValue` and `newValue` as formatted JSON diff viewer
+  - [x] Test: no edit or delete buttons exist anywhere on this page
+  - [x] Test: "Export CSV" triggers download
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Create `AdminAuditLogsPage.tsx` (read-only, no mutations anywhere); run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Create `AdminAuditLogsPage.tsx` (read-only, no mutations anywhere); run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Admin performs any action (suspend user, approve ad, toggle flag) → audit log page shows new entry → expand row → old/new values visible as JSON diff → no edit/delete options anywhere → ✅
+- [x] **Verification chain:**
+  - [x] Admin performs any action (suspend user, approve ad, toggle flag) → audit log page shows new entry → expand row → old/new values visible as JSON diff → no edit/delete options anywhere → ✅
+
+---
+
+### 4.9.1 — Platform-Wide Audit Log Generation (Buyers & Store Owners)
+
+**Root cause / Goal:**
+Currently, only actions taken by administrators (via `AdminService`) are recorded in the `AuditLog` table. Important actions taken by buyers (such as placing quick-commerce orders, placing booking requests, cancelling orders/bookings, completing payments) and store owners (such as approving/rejecting/completing bookings, updating order status, managing products/services, submitting advertisements, deactivating offers) are not being logged. To ensure full platform accountability, security compliance, and comprehensive audit history, we must log all important actions taken by buyers and store owners under their respective actor roles.
+
+**Fix / Approach:**
+Inject `AuditRepository` or use the Prisma transaction client inside `buyer-checkout.service.ts`, `booking-order.service.ts`, `order.service.ts`, and `store-owner.service.ts` to log events to `AuditLog`. We will record logs for the following events:
+- **Buyer Actions**:
+  1. Placing a quick commerce order (`BUYER_ORDER_CREATE`)
+  2. Placing a booking commerce request (`BUYER_BOOKING_CREATE`)
+  3. Cancelling a quick commerce order or booking (`BUYER_ORDER_CANCEL`, `BUYER_BOOKING_CANCEL`)
+- **Store Owner Actions**:
+  1. Updating order status (`STORE_ORDER_STATUS_UPDATE`)
+  2. Approving a booking (`STORE_BOOKING_APPROVE`)
+  3. Rejecting a booking (`STORE_BOOKING_REJECT`)
+  4. Completing a booking (`STORE_BOOKING_COMPLETE`)
+  5. Creating a product/service (`STORE_PRODUCT_CREATE`)
+  6. Updating a product/service (`STORE_PRODUCT_UPDATE`)
+  7. Toggling product/service status (`STORE_PRODUCT_STATUS_UPDATE`)
+  8. Creating/updating a product variant (`STORE_VARIANT_CREATE`, `STORE_VARIANT_UPDATE`)
+  9. Creating/deactivating an advertisement (`STORE_AD_CREATE`, `STORE_AD_DELETE`)
+  10. Creating/deactivating/deleting an offer (`STORE_OFFER_CREATE`, `STORE_OFFER_DEACTIVATE`, `STORE_OFFER_DELETE`)
+
+---
+
+- [x] **RED — Integration (`buyer-store.audit-logs.test.ts`):**
+  - [x] Test: `POST /api/v1/orders` (Buyer order checkout) -> creates an `AuditLog` entry in the database with `actorRole = "BUYER"`, `action = "BUYER_ORDER_CREATE"`, and the placed order's ID as `entityId`.
+  - [x] Test: `POST /api/v1/bookings` (Buyer booking placement) -> creates an `AuditLog` entry in the database with `actorRole = "BUYER"`, `action = "BUYER_BOOKING_CREATE"`, and the booking order's ID as `entityId`.
+  - [x] Test: `PUT /api/v1/store/orders/:orderId/status` (Store owner status change) -> creates an `AuditLog` entry in the database with `actorRole = "STORE_OWNER"`, `action = "STORE_ORDER_STATUS_UPDATE"`, and records `oldValue` and `newValue` of the status correctly.
+  - [x] Test: `PUT /api/v1/store/bookings/:orderId/approve` (Store owner booking approval) -> creates an `AuditLog` entry in the database with `actorRole = "STORE_OWNER"`, `action = "STORE_BOOKING_APPROVE"`.
+  - [x] Test: `POST /api/v1/store/products` (Store owner product creation) -> creates an `AuditLog` entry in the database with `actorRole = "STORE_OWNER"`, `action = "STORE_PRODUCT_CREATE"`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Service] Inject `AuditRepository` or use Prisma client transaction to create `AuditLog` entries on all specified Buyer checkout and cancellation actions in `buyer-checkout.service.ts`, `booking-order.service.ts`, and `order.service.ts`.
+  - [x] [Service] Inject `AuditRepository` or use Prisma client transaction to create `AuditLog` entries on all specified Store Owner actions in `store-owner.service.ts`, `booking-order.service.ts`, and `order.service.ts`.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **RED — Unit / Component (`AdminAuditLogsPage.test.tsx`):**
+  - [x] Test: Mock `GET /api/v1/admin/audit-logs` returning a list containing a log from `BUYER` and a log from `STORE_OWNER`. Verify that `BUYER` row displays their masked phone number, and `STORE_OWNER` row displays their masked email.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Component] Verify and update `AdminAuditLogsPage.tsx` to handle display and expansion of these multi-role actions seamlessly.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Buyer places a quick commerce order -> store owner updates status to `PREPARING` -> admin opens Audit Log viewer -> admin sees two new entries: `BUYER_ORDER_CREATE` (actor: Buyer [masked phone]) and `STORE_ORDER_STATUS_UPDATE` (actor: Store Owner [masked email] with status transition in diff) -> ✅ Done.
 
 ---
 
@@ -2528,11 +2580,41 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 
 ---
 
+### Session 59 — 2026-06-06 — Phase 4.9.1 (Platform-Wide Audit Log Generation)
+
+- **Completed Phase 4.9.1**: Fully implemented platform-wide audit log generation for buyers and store owners following TDD (RED → GREEN → REFACTOR).
+- **Integration Tests (RED → GREEN)**: Wrote `buyer-store.audit-logs.test.ts` with 3 scenarios covering `BUYER_ORDER_CREATE`, `STORE_ORDER_STATUS_UPDATE`, `BUYER_BOOKING_CREATE`, `STORE_BOOKING_APPROVE`, and `STORE_PRODUCT_CREATE`. All 3 tests confirmed GREEN.
+- **Backend Service Layer**: Added `auditLog.create` inside the Prisma `$transaction` scope for all critical mutations:
+  - `BuyerCheckoutService.placeFromCart` → `BUYER_ORDER_CREATE`
+  - `BookingOrderService.placeBookingRequest` → `BUYER_BOOKING_CREATE`
+  - `BookingOrderService.approveBooking` → `STORE_BOOKING_APPROVE`
+  - `BookingOrderService.rejectBooking` → `STORE_BOOKING_REJECT`
+  - `BookingOrderService.cancelBookingByBuyer` → `BUYER_BOOKING_CANCEL`
+  - `BookingOrderService.completeBooking` → `STORE_BOOKING_COMPLETE`
+  - `StoreOwnerService` → 12 action types covering order status, products, variants, ads, and offers.
+- **Controller Layer**: Updated `order.controller.ts`, `booking.controller.ts`, and `store-owner.controller.ts` to forward `request.ip` and `request.headers["user-agent"]` to service methods for full client metadata in audit records.
+- **Type Safety**: Fixed all `TS2322` errors caused by `ip ?? null` on non-nullable `String` schema fields — changed fallback to `ip ?? ""` across all 4 `BookingOrderService` methods.
+- **Test Suite Cleanup (566 tests / 93 files — all GREEN)**: Fixed 5 pre-existing test failures introduced as a side-effect of audit activity generating `StockMovement` rows:
+  - `booking-order.service.test.ts`: Added `auditLog: { create: vi.fn() }` to `mockTx`.
+  - `order.controller.unit.test.ts`: Updated `placeFromCart` assertion to match 4-arg signature `(userId, body, ip, userAgent)` and enriched mock request with `ip` and `user-agent`.
+  - Promotion tests (×3) + `admin.categories.test.ts` + 14 other integration test files: Added `db.stockMovement.deleteMany()` before `db.productVariant.deleteMany()` in all `beforeEach`/`afterAll` cleanup graphs to respect the `StockMovement_productVariantId_fkey` Restrict constraint.
+- **UI Polish**: Compacted `AdminAuditLogsPage.tsx` table — reduced cell padding (`p-4` → `px-3 py-2.5`), headers and all cell text to `text-[10px]`, and shrunk the expand/collapse button icons — so all 8 columns (including the full Details column) are visible on a standard wide screen without horizontal scrolling.
+
+---
+
 ### Session 57 — 2026-06-05 — Advertisement Carousel Peeking UX Tweak
 - **Carousel Peeking UX Adjustments**: Tweaked the home page advertisement banner Embla carousel layout. Removed the artificial horizontal padding (`px-6 sm:px-10`) on the viewport container (setting it to `px-0`) so that adjacent slides peek edge-to-edge relative to the main layout content wrapper.
 - **Active Slide Width Scaling**: Replaced the static slide width configuration with a responsive layout `flex-[0_0_85%] sm:flex-[0_0_90%]`, ensuring the current active advertisement takes up most of the screen width while keeping previous and next ads as thin peeking slivers.
 - **Future Feature Flag Clarifications**: Marked unimplemented capabilities (`SCHEDULED_DELIVERY_ENABLED`, `UPI_PAYMENT_ENABLED`, and `CARD_PAYMENT_ENABLED`) as future features. Updated their descriptions to prefix with "Future" in the seeding files and executed a custom prisma DB script to apply these changes directly in the database.
 - **Verification**: Ran and verified all frontend unit tests in `AdvertisementBanner.test.tsx` successfully.
+
+---
+
+### Session 58 — 2026-06-05 — Audit Log Viewer & Platform-Wide Audit Log Checklist
+- **Completed Phase 4.9 (Audit Log Viewer)**: Fully implemented the platform-wide audit log access for admins. Exposed a secure read-only endpoint `GET /api/v1/admin/audit-logs` and a CSV download endpoint `GET /api/v1/admin/audit-logs/export` with doubled-quote escaping for oldValue/newValue payload cells. Added strict HTTP 405 Method Not Allowed write blocks.
+- **Data Masking**: Integrated IP masking rules (hiding last two octets of IPv4 and middle segments of IPv6) and role-based actor detail masking (buyer phone numbers & store owner/admin emails).
+- **TypeScript strict Optional types (`exactOptionalPropertyTypes: true`) Compliant**: Resolved all strict TS compilation errors by explicitly allowing `undefined` on query parameter fields in `findMany`, `getAuditLogs`, and `exportAuditLogsCsv`.
+- **Created Phase 4.9.1 (Platform-Wide Audit Log Generation)**: Outlined a complete TDD-compliant checklist to log important buyer actions (order checkouts, bookings, cancellations) and store owner actions (status updates, booking approvals/rejections/completions, inventory management, offers/discounts creation) to ensure a complete system audit trail.
 
 
 

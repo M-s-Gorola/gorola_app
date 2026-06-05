@@ -81,9 +81,10 @@ describe("OrderController Idempotency Unit", () => {
     const handler = mockApp.post.mock.calls.find((call: any) => call[0] === "/api/v1/orders")[2];
 
     const mockRequest = {
-      headers: { "x-idempotency-key": "new-key" },
+      headers: { "x-idempotency-key": "new-key", "user-agent": "test-agent" },
       user: { sub: "buyer-2" },
       body: { addressMode: "saved", addressId: "addr-2", paymentMethod: "COD" },
+      ip: "127.0.0.1",
       id: "req-2"
     } as any;
 
@@ -121,7 +122,12 @@ describe("OrderController Idempotency Unit", () => {
     await handler(mockRequest, mockReply);
 
     expect(mockRedis.get).toHaveBeenCalledWith("idempotency:buyer-2:new-key");
-    expect(mockBuyerCheckout.placeFromCart).toHaveBeenCalledWith("buyer-2", expect.anything());
+    expect(mockBuyerCheckout.placeFromCart).toHaveBeenCalledWith(
+      "buyer-2",
+      expect.objectContaining({ addressMode: "saved", addressId: "addr-2", paymentMethod: "COD" }),
+      "127.0.0.1",
+      "test-agent"
+    );
     expect(mockRedis.set).toHaveBeenCalledWith(
       "idempotency:buyer-2:new-key", 
       expect.stringContaining("order-new"), 

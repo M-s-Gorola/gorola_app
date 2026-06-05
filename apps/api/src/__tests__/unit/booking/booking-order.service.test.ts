@@ -37,10 +37,15 @@ const mockOrderStatusHistory = {
   create: vi.fn()
 };
 
+const mockAuditLog = {
+  create: vi.fn()
+};
+
 const mockTx = {
   order: mockOrder,
   bookingOrder: mockBookingOrder,
-  orderStatusHistory: mockOrderStatusHistory
+  orderStatusHistory: mockOrderStatusHistory,
+  auditLog: mockAuditLog
 } as never;
 
 const mockDb = {

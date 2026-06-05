@@ -20,6 +20,7 @@ async function cleanCartIntegrationGraph(db: PrismaClient): Promise<void> {
   await db.cart.deleteMany();
   await db.address.deleteMany();
   await db.user.deleteMany();
+  await db.stockMovement.deleteMany();
   await db.productVariant.deleteMany();
   await db.product.deleteMany();
   await db.storeOwner.deleteMany();

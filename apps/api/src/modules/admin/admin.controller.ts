@@ -680,4 +680,93 @@ export function registerAdminRoutes(
       }
     };
   });
+
+  const getAuditLogsQuerySchema = z.object({
+    role: z.enum(["ADMIN", "STORE_OWNER", "BUYER", "SYSTEM"]).optional(),
+    action: z.string().optional(),
+    entityType: z.string().optional(),
+    entityId: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    format: z.string().optional()
+  });
+
+  const exportAuditLogsQuerySchema = z.object({
+    role: z.enum(["ADMIN", "STORE_OWNER", "BUYER", "SYSTEM"]).optional(),
+    action: z.string().optional(),
+    entityType: z.string().optional(),
+    entityId: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional()
+  });
+
+  const methodNotAllowedHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    return reply.status(405).send({
+      success: false,
+      error: {
+        code: "METHOD_NOT_ALLOWED",
+        message: "Method Not Allowed"
+      }
+    });
+  };
+
+  app.get("/api/v1/admin/audit-logs", { preHandler }, async (request, reply) => {
+    const parsed = getAuditLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const { format, role, ...rest } = parsed.data;
+    const filters = {
+      ...(role ? { actorRole: role } : {}),
+      ...rest
+    };
+
+    if (format === "csv") {
+      const csv = await adminService.exportAuditLogsCsv(filters);
+      return reply
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header("Content-Disposition", 'attachment; filename="audit-logs-export.csv"')
+        .send(csv);
+    }
+
+    const result = await adminService.getAuditLogs(filters);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/audit-logs/export", { preHandler }, async (request, reply) => {
+    const parsed = exportAuditLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const { role, ...rest } = parsed.data;
+    const filters = {
+      ...(role ? { actorRole: role } : {}),
+      ...rest
+    };
+
+    const csv = await adminService.exportAuditLogsCsv(filters);
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", 'attachment; filename="audit-logs-export.csv"')
+      .send(csv);
+  });
+
+  // Read-only method restrictions (returning 405 Method Not Allowed)
+  app.put("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
+  app.post("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
+  app.delete("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
+
+  app.put("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
+  app.post("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
+  app.delete("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
 }

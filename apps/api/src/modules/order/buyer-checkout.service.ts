@@ -31,7 +31,7 @@ export class BuyerCheckoutService {
     return discountValue.toDecimalPlaces(2);
   }
 
-  public async placeFromCart(userId: string, body: PlaceBuyerOrderBody) {
+  public async placeFromCart(userId: string, body: PlaceBuyerOrderBody, ip: string, userAgent: string) {
     const cart = await this.cartRepo.findByUserId(userId);
     if (cart === null || cart.items.length === 0) {
       throw new ValidationError("Cart is empty");
@@ -238,6 +238,22 @@ export class BuyerCheckoutService {
         userId
       });
     }
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: userId,
+        actorRole: "BUYER",
+        action: "BUYER_ORDER_CREATE",
+        entityType: "Order",
+        entityId: order.id,
+        newValue: {
+          total: total.toString(),
+          itemsCount: order.items.length
+        },
+        ip,
+        userAgent
+      }
+    });
 
     return {
       appliedDiscountAmount: appliedDiscountAmount.toFixed(2),

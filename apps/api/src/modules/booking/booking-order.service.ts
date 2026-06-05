@@ -26,6 +26,8 @@ export class BookingOrderService {
     storeId: string,
     items: Array<{ productId: string; variantId: string; quantity?: number }>,
     bookingDetails: { scheduledDate: Date; timeslot: string; addressId: string },
+    ip?: string,
+    userAgent?: string,
     discountCode?: string
   ): Promise<Order> {
     if (!items || items.length === 0) {
@@ -280,6 +282,23 @@ export class BookingOrderService {
         }
       });
 
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          actorRole: "BUYER",
+          action: "BUYER_BOOKING_CREATE",
+          entityType: "Order",
+          entityId: order.id,
+          newValue: {
+            total: total.toString(),
+            scheduledDate: bookingDetails.scheduledDate.toISOString(),
+            timeslot: bookingDetails.timeslot
+          },
+          ip: ip ?? "",
+          userAgent: userAgent ?? ""
+        }
+      });
+
       return order;
     });
 
@@ -290,7 +309,9 @@ export class BookingOrderService {
   public async approveBooking(
     storeId: string,
     orderId: string,
-    ownerId: string
+    ownerId: string,
+    ip?: string,
+    userAgent?: string
   ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
     const booking = await this.repository.findById(orderId);
     if (!booking) {
@@ -329,6 +350,20 @@ export class BookingOrderService {
         }
       });
 
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_BOOKING_APPROVE",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { approvalStatus: booking.approvalStatus },
+          newValue: { approvalStatus: "APPROVED" },
+          ip: ip ?? "",
+          userAgent: userAgent ?? ""
+        }
+      });
+
       return tx.order.findUniqueOrThrow({
         where: { id: orderId },
         include: {
@@ -346,7 +381,9 @@ export class BookingOrderService {
     storeId: string,
     orderId: string,
     ownerId: string,
-    reason: string
+    reason: string,
+    ip?: string,
+    userAgent?: string
   ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
     const booking = await this.repository.findById(orderId);
     if (!booking) {
@@ -384,6 +421,20 @@ export class BookingOrderService {
         }
       });
 
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_BOOKING_REJECT",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { approvalStatus: booking.approvalStatus },
+          newValue: { approvalStatus: "REJECTED", reason },
+          ip: ip ?? "",
+          userAgent: userAgent ?? ""
+        }
+      });
+
       return tx.order.findUniqueOrThrow({
         where: { id: orderId },
         include: {
@@ -399,7 +450,9 @@ export class BookingOrderService {
 
   public async cancelBookingByBuyer(
     userId: string,
-    orderId: string
+    orderId: string,
+    ip?: string,
+    userAgent?: string
   ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
     const booking = await this.repository.findById(orderId);
     if (!booking) {
@@ -439,6 +492,20 @@ export class BookingOrderService {
         }
       });
 
+      await tx.auditLog.create({
+        data: {
+          actorId: userId,
+          actorRole: "BUYER",
+          action: "BUYER_BOOKING_CANCEL",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { approvalStatus: booking.approvalStatus },
+          newValue: { approvalStatus: "CANCELLED" },
+          ip: ip ?? "",
+          userAgent: userAgent ?? ""
+        }
+      });
+
       return tx.order.findUniqueOrThrow({
         where: { id: orderId },
         include: {
@@ -455,7 +522,9 @@ export class BookingOrderService {
   public async completeBooking(
     storeId: string,
     orderId: string,
-    ownerId: string
+    ownerId: string,
+    ip?: string,
+    userAgent?: string
   ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
     const booking = await this.repository.findById(orderId);
     if (!booking) {
@@ -489,6 +558,20 @@ export class BookingOrderService {
           status: "DELIVERED",
           changedBy: `store-owner:${ownerId}`,
           note: "Booking service completed"
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_BOOKING_COMPLETE",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { approvalStatus: booking.approvalStatus },
+          newValue: { approvalStatus: "COMPLETED" },
+          ip: ip ?? "",
+          userAgent: userAgent ?? ""
         }
       });
 
