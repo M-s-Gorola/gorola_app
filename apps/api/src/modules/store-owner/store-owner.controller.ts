@@ -143,8 +143,26 @@ export function registerStoreOwnerRoutes(
 
   // GET /api/v1/store/categories
   app.get("/api/v1/store/categories", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await prisma.storeOwner.findUnique({
+      where: { id: userId },
+      include: { store: true }
+    });
+    if (!owner || !owner.store) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const storeType = owner.store.storeType;
+
     const categories = await prisma.category.findMany({
-      where: { isActive: true },
+      where: { 
+        isActive: true,
+        commerceType: storeType
+      },
       include: {
         subCategories: {
           where: { isActive: true },

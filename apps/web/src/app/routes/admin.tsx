@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { Navigate, Route } from "react-router-dom";
 
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminCategoriesPage } from "@/pages/admin/AdminCategoriesPage";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
@@ -101,7 +102,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Categories" />
+            <AdminCategoriesPage />
           </AdminLayout>
         </AdminRoute>
       }

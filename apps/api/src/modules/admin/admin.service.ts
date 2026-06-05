@@ -1,7 +1,9 @@
 import { ConflictError, NotFoundError } from "@gorola/shared";
-import { type OrderStatus, type PaymentMethod, Prisma, type PrismaClient } from "@prisma/client";
+import { type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
+import { CategoryRepository } from "../catalog/category.repository.js";
+import { SubCategoryRepository } from "../catalog/sub-category.repository.js";
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
 
@@ -30,7 +32,13 @@ export type AdminDashboardData = {
 };
 
 export class AdminService {
-  public constructor(private readonly db: PrismaClient) {}
+  private readonly categoryRepo: CategoryRepository;
+  private readonly subCategoryRepo: SubCategoryRepository;
+
+  public constructor(private readonly db: PrismaClient) {
+    this.categoryRepo = new CategoryRepository(db);
+    this.subCategoryRepo = new SubCategoryRepository(db);
+  }
 
   public async getDashboard(
     range = "WEEK",
@@ -779,5 +787,336 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  public async getCategories() {
+    const categories = await this.db.category.findMany({
+      orderBy: [{ displayOrder: "asc" }, { name: "asc" }],
+      include: {
+        subCategories: {
+          orderBy: [{ displayOrder: "asc" }, { name: "asc" }]
+        }
+      }
+    });
+
+    const categoryIds = categories.map((c) => c.id);
+    const productCounts = await this.db.product.groupBy({
+      by: ["categoryId"],
+      where: {
+        categoryId: { in: categoryIds },
+        isDeleted: false
+      },
+      _count: {
+        _all: true
+      }
+    });
+    const countByCategory = new Map(productCounts.map((row) => [row.categoryId, row._count._all]));
+
+    const subCategoryIds = categories.flatMap((c) => c.subCategories.map((sc) => sc.id));
+    const subProductCounts = await this.db.product.groupBy({
+      by: ["subCategoryId"],
+      where: {
+        subCategoryId: { in: subCategoryIds },
+        isDeleted: false
+      },
+      _count: {
+        _all: true
+      }
+    });
+    const countBySubCategory = new Map(subProductCounts.map((row) => [row.subCategoryId, row._count._all]));
+
+    return categories.map((c) => ({
+      ...c,
+      productCount: countByCategory.get(c.id) ?? 0,
+      subCategories: c.subCategories.map((sc) => ({
+        ...sc,
+        productCount: countBySubCategory.get(sc.id) ?? 0
+      }))
+    }));
+  }
+
+  public async createCategory(
+    dto: {
+      name: string;
+      slug: string;
+      imageUrl?: string | null;
+      displayOrder?: number;
+      isActive?: boolean;
+      commerceType?: StoreType;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const category = await this.categoryRepo.create(dto);
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_CATEGORY_CREATE",
+        entityType: "Category",
+        entityId: category.id,
+        oldValue: Prisma.JsonNull,
+        newValue: {
+          name: category.name,
+          slug: category.slug,
+          commerceType: category.commerceType,
+          isActive: category.isActive
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return category;
+  }
+
+  public async updateCategory(
+    id: string,
+    dto: {
+      name?: string;
+      slug?: string;
+      imageUrl?: string | null;
+      displayOrder?: number;
+      isActive?: boolean;
+      commerceType?: StoreType;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const oldCategory = await this.db.category.findUnique({ where: { id } });
+    if (!oldCategory) {
+      throw new NotFoundError("Category not found");
+    }
+
+    const updated = await this.categoryRepo.update(id, dto);
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_CATEGORY_UPDATE",
+        entityType: "Category",
+        entityId: id,
+        oldValue: {
+          name: oldCategory.name,
+          slug: oldCategory.slug,
+          commerceType: oldCategory.commerceType,
+          isActive: oldCategory.isActive
+        },
+        newValue: {
+          name: updated.name,
+          slug: updated.slug,
+          commerceType: updated.commerceType,
+          isActive: updated.isActive
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return updated;
+  }
+
+  public async deleteCategory(id: string, adminId: string, ip: string, userAgent: string) {
+    const category = await this.db.category.findUnique({
+      where: { id }
+    });
+    if (!category) {
+      throw new NotFoundError("Category not found");
+    }
+
+    const productCount = await this.db.product.count({
+      where: { categoryId: id, isDeleted: false }
+    });
+    if (productCount > 0) {
+      throw new ConflictError(
+        "Cannot delete category with associated products",
+        { code: "CANNOT_DELETE_CATEGORY_WITH_PRODUCTS" }
+      );
+    }
+
+    await this.db.$transaction(async (tx) => {
+      const subCategories = await tx.subCategory.findMany({
+        where: { categoryId: id }
+      });
+      for (const sc of subCategories) {
+        const subProdCount = await tx.product.count({
+          where: { subCategoryId: sc.id, isDeleted: false }
+        });
+        if (subProdCount > 0) {
+          throw new ConflictError(
+            "Cannot delete category because some subcategories contain products",
+            { code: "CANNOT_DELETE_CATEGORY_WITH_PRODUCTS" }
+          );
+        }
+      }
+
+      await tx.subCategory.deleteMany({
+        where: { categoryId: id }
+      });
+
+      await tx.category.delete({
+        where: { id }
+      });
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_CATEGORY_DELETE",
+        entityType: "Category",
+        entityId: id,
+        oldValue: { name: category.name, slug: category.slug },
+        newValue: Prisma.JsonNull,
+        ip,
+        userAgent
+      }
+    });
+  }
+
+  public async reorderCategories(
+    items: { id: string; displayOrder: number }[],
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    await this.db.$transaction(
+      items.map((item) =>
+        this.db.category.update({
+          where: { id: item.id },
+          data: { displayOrder: item.displayOrder }
+        })
+      )
+    );
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_CATEGORY_REORDER",
+        entityType: "Category",
+        entityId: "global",
+        oldValue: Prisma.JsonNull,
+        newValue: { items },
+        ip,
+        userAgent
+      }
+    });
+  }
+
+  public async createSubCategory(
+    categorySlug: string,
+    dto: {
+      name: string;
+      slug: string;
+      imageUrl?: string | null;
+      displayOrder?: number;
+      isActive?: boolean;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const category = await this.db.category.findUnique({
+      where: { slug: categorySlug }
+    });
+    if (!category) {
+      throw new NotFoundError("Category not found");
+    }
+
+    const subCategory = await this.subCategoryRepo.create(category.id, dto);
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_SUBCATEGORY_CREATE",
+        entityType: "SubCategory",
+        entityId: subCategory.id,
+        oldValue: Prisma.JsonNull,
+        newValue: {
+          name: subCategory.name,
+          slug: subCategory.slug,
+          categoryId: subCategory.categoryId,
+          isActive: subCategory.isActive
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return subCategory;
+  }
+
+  public async updateSubCategory(
+    id: string,
+    dto: {
+      name?: string;
+      slug?: string;
+      imageUrl?: string | null;
+      displayOrder?: number;
+      isActive?: boolean;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const oldSubCategory = await this.db.subCategory.findUnique({ where: { id } });
+    if (!oldSubCategory) {
+      throw new NotFoundError("Subcategory not found");
+    }
+
+    const updated = await this.subCategoryRepo.update(id, dto);
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_SUBCATEGORY_UPDATE",
+        entityType: "SubCategory",
+        entityId: id,
+        oldValue: {
+          name: oldSubCategory.name,
+          slug: oldSubCategory.slug,
+          isActive: oldSubCategory.isActive
+        },
+        newValue: {
+          name: updated.name,
+          slug: updated.slug,
+          isActive: updated.isActive
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return updated;
+  }
+
+  public async reorderSubCategories(
+    items: { id: string; displayOrder: number }[],
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    await this.subCategoryRepo.reorder(items);
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_SUBCATEGORY_REORDER",
+        entityType: "SubCategory",
+        entityId: "global",
+        oldValue: Prisma.JsonNull,
+        newValue: { items },
+        ip,
+        userAgent
+      }
+    });
   }
 }

@@ -1,5 +1,5 @@
 import { ConflictError, NotFoundError } from "@gorola/shared";
-import type { Category, PrismaClient } from "@prisma/client";
+import { type Category, type PrismaClient, StoreType } from "@prisma/client";
 
 export type CreateCategoryInput = {
   slug: string;
@@ -8,10 +8,11 @@ export type CreateCategoryInput = {
   icon?: string | null;
   displayOrder?: number;
   isActive?: boolean;
+  commerceType?: StoreType;
 };
 
 export type UpdateCategoryInput = Partial<
-  Pick<Category, "slug" | "name" | "imageUrl" | "icon" | "displayOrder" | "isActive">
+  Pick<Category, "slug" | "name" | "imageUrl" | "icon" | "displayOrder" | "isActive" | "commerceType">
 >;
 
 export type BuyerCategory = Category & {
@@ -100,7 +101,8 @@ export class CategoryRepository {
           imageUrl: input.imageUrl ?? null,
           icon: input.icon ?? null,
           displayOrder: input.displayOrder ?? 0,
-          isActive: input.isActive ?? true
+          isActive: input.isActive ?? true,
+          commerceType: input.commerceType ?? StoreType.QUICK_COMMERCE
         }
       });
     } catch (error: unknown) {

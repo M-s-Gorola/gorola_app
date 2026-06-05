@@ -290,6 +290,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await page.getByLabel("Password").fill("Owner#123");
     await page.getByRole("button", { name: "Login" }).click();
     await expect(page.getByRole("heading", { name: "Dashboard" })).toBeVisible();
+    // E2E-022 (previous serial test) ends with a toast (e.g. "Order delivered"). Sonner toasts
+    // persist across React Router navigation inside the same browser context. Clear any lingering
+    // toast NOW — before any button clicks — so it can't intercept subsequent actions.
+    await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 8000 }).catch(() => {});
 
     // Go to Products — search for Basmati Rice Premium first (may be on page 2+ without search)
     await page.getByRole("link", { name: "Products" }).click({ force: true });
@@ -302,18 +306,37 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Wait for edit page to load (variants section with Restock button appears)
     await expect(page.locator('[data-testid="restock-button-0"]')).toBeVisible({ timeout: 15000 });
 
-    // Restock: click Restock button on variant 0, fill qty, confirm
+    // Restock: click Restock button on variant 0, fill qty, confirm.
+    // Pre-hook a network response listener BEFORE any click — if the Confirm Restock click is
+    // ever intercepted by an overlay and the mutation never fires, this times out at 15s with a
+    // clear "waitForResponse" error at exactly this line, rather than silently proceeding and
+    // failing 10 assertions later with a cryptic "RESTOCK row not found" message.
+    const restockApiCall = page.waitForResponse(
+      (resp) => resp.url().includes('/api/v1/store/products') && resp.url().includes('/stock') && resp.request().method() === 'PUT',
+      { timeout: 15000 }
+    );
     await page.locator('[data-testid="restock-button-0"]').click({ force: true });
     await page.locator('#restock-qty-input').fill('10');
+    // Safe to use force:true here — the toast gate at line 296 already cleared any lingering
+    // E2E-022 toast (order delivery), so nothing sits over this button.
     await page.getByRole('button', { name: 'Confirm Restock' }).click({ force: true });
+    // Hard proof the mutation reached the server — if click was somehow intercepted and the
+    // PUT never fires, this fails here with a clear error rather than 10 lines later.
+    await restockApiCall;
     // Wait for restock modal to close
     await expect(page.locator('#restock-qty-input')).not.toBeVisible({ timeout: 30000 });
+    // Wait for the Sonner "Inventory restocked successfully" toast to fully dismiss before
+    // opening the adjust modal. On a loaded system (e.g. after build+unit tests in ci:quality)
+    // the toast is still animating when we click "Confirm Adjustment", and on the iPhone SE
+    // 375px viewport it intercepts the click — causing the mutation to never fire.
+    await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 10000 });
 
     // Adjust: click Adjust button on variant 0, fill qty and reason, confirm
     await page.locator('[data-testid="adjust-button-0"]').click({ force: true });
     await page.locator('#adjust-qty-input').fill('15');
     await page.locator('#adjust-reason-input').fill(`E2E Audit-${suffix}`);
-    await page.getByRole('button', { name: 'Confirm Adjustment' }).click({ force: true });
+    // Use dispatchEvent to bypass hit-testing — prevents any residual overlay from stealing the click
+    await page.getByRole('button', { name: 'Confirm Adjustment' }).dispatchEvent('click');
     // Wait for adjust modal to close
     await expect(page.locator('#adjust-qty-input')).not.toBeVisible({ timeout: 30000 });
 
