@@ -317,9 +317,8 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     );
     await page.locator('[data-testid="restock-button-0"]').click({ force: true });
     await page.locator('#restock-qty-input').fill('10');
-    // Safe to use force:true here — the toast gate at line 296 already cleared any lingering
-    // E2E-022 toast (order delivery), so nothing sits over this button.
-    await page.getByRole('button', { name: 'Confirm Restock' }).click({ force: true });
+    // Use dispatchEvent to bypass hit-testing — prevents any residual overlay from stealing the click
+    await page.getByRole('button', { name: 'Confirm Restock' }).dispatchEvent('click');
     // Hard proof the mutation reached the server — if click was somehow intercepted and the
     // PUT never fires, this fails here with a clear error rather than 10 lines later.
     await restockApiCall;
@@ -331,14 +330,30 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // 375px viewport it intercepts the click — causing the mutation to never fire.
     await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 10000 });
 
-    // Adjust: click Adjust button on variant 0, fill qty and reason, confirm
+    // Adjust: click Adjust button on variant 0, fill qty and reason, confirm.
+    // Pre-hook a network response listener BEFORE any click — mirrors the restock gate above.
+    // Uses /stock/adjust which is unambiguous and cannot accidentally match the restock PUT (/stock).
+    // If dispatchEvent lands on a stale React closure (adjustReason still empty) and the early-return
+    // guard fires, the mutation never runs, this awaiter times out at 15s with a clear error — rather
+    // than silently proceeding to the history page and failing 3 assertions later.
+    const adjustApiCall = page.waitForResponse(
+      (resp) => resp.url().includes('/stock/adjust') && resp.request().method() === 'PUT',
+      { timeout: 15000 }
+    );
     await page.locator('[data-testid="adjust-button-0"]').click({ force: true });
     await page.locator('#adjust-qty-input').fill('15');
     await page.locator('#adjust-reason-input').fill(`E2E Audit-${suffix}`);
     // Use dispatchEvent to bypass hit-testing — prevents any residual overlay from stealing the click
     await page.getByRole('button', { name: 'Confirm Adjustment' }).dispatchEvent('click');
+    // Hard proof the mutation reached the server.
+    await adjustApiCall;
     // Wait for adjust modal to close
     await expect(page.locator('#adjust-qty-input')).not.toBeVisible({ timeout: 30000 });
+    // Wait for the Sonner "Stock quantity adjusted successfully" toast to fully dismiss before
+    // clicking the Products nav link. The adjust onSuccess fires this toast at the same moment
+    // the modal closes (line above). Sonner toasts persist across React Router navigation.
+    // On iPhone SE 375px, the toast can overlap the nav link coordinates when force:true is used.
+    await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 10000 });
 
     // Navigate back to Products list to access stock history
     await page.getByRole('link', { name: 'Products' }).click({ force: true });

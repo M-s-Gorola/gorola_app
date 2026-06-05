@@ -323,7 +323,7 @@ export function StoreProductFormPage(): ReactElement {
     return (
       <div className="space-y-6 animate-pulse">
         <div className="h-6 w-32 bg-gorola-charcoal/10 rounded" />
-        <div className="grid gap-6 md:grid-cols-2">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="bg-white border border-gorola-mint/15 rounded-3xl p-6 space-y-4">
             <div className="h-4 w-28 bg-gorola-charcoal/10 rounded" />
             <div className="h-10 w-full bg-gorola-charcoal/10 rounded-xl" />
@@ -362,9 +362,9 @@ export function StoreProductFormPage(): ReactElement {
         </p>
       </div>
 
-      <form onSubmit={onSubmit} className="grid gap-6 md:grid-cols-12">
+      <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-12 gap-6">
         {/* Left Side: Product Metadata */}
-        <div className="md:col-span-5 space-y-6">
+        <div className="col-span-1 md:col-span-5 space-y-6">
           <div className="bg-white border border-gorola-mint/15 rounded-3xl p-6 shadow-sm space-y-4">
             <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/75 mb-2">
               General Information
@@ -456,7 +456,7 @@ export function StoreProductFormPage(): ReactElement {
         </div>
 
         {/* Right Side: Variants List */}
-        <div className="md:col-span-7 space-y-6">
+        <div className="col-span-1 md:col-span-7 space-y-6">
           <div className="bg-white border border-gorola-mint/15 rounded-3xl p-6 shadow-sm space-y-4">
             <div className="flex justify-between items-center mb-2">
               <div>
@@ -535,7 +535,7 @@ export function StoreProductFormPage(): ReactElement {
                       </div>
                     </div>
 
-                    <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                       {/* Variant Label */}
                       <div className="flex flex-col gap-1.5">
                         <label
@@ -584,7 +584,7 @@ export function StoreProductFormPage(): ReactElement {
                     </div>
 
                     {storeType === "QUICK_COMMERCE" ? (
-                      <div className="grid gap-3 sm:grid-cols-3">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         {/* Variant Price */}
                         <div className="flex flex-col gap-1.5">
                           <label
@@ -705,7 +705,7 @@ export function StoreProductFormPage(): ReactElement {
                         </div>
                       </div>
                     ) : (
-                      <div className="grid gap-3 sm:grid-cols-1">
+                      <div className="grid grid-cols-1 gap-3">
                         {/* Variant Price */}
                         <div className="flex flex-col gap-1.5 max-w-[200px]">
                           <label
@@ -740,7 +740,7 @@ export function StoreProductFormPage(): ReactElement {
         </div>
 
         {/* Form Actions Footer Panel */}
-        <div className="col-span-12 flex justify-end gap-3 pt-6 border-t border-gorola-mint/15">
+        <div className="col-span-1 md:col-span-12 flex justify-end gap-3 pt-6 border-t border-gorola-mint/15">
           <Button
             type="button"
             variant="ghost"

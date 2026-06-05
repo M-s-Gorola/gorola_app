@@ -12,15 +12,15 @@
 | Phase   | Name              | Status       | Notes |
 | ------- | ----------------- | ------------ | ----- |
 | Phase 3 | Store Owner Panel | 🟢 COMPLETE   | Phase 3.1–3.10.1 complete. All E2E tests passing green, including responsive mobile navigation and toast pointer interception fixes. |
-| Phase 4 | Admin Panel       | 🟡 IN PROGRESS | Phase 4.1–4.9.1 complete. Phase 4.9.1 (Platform-Wide Audit Log Generation) fully implemented and all 566 tests green. |
+| Phase 4 | Admin Panel       | 🟢 COMPLETE   | Phase 4.1–4.10 complete. All Admin E2E Playwright tests and quality validations passing cleanly. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-06-06
-- **Session Summary:** Session 59 — Implemented Phase 4.9.1 (Platform-Wide Audit Log Generation). Added `AuditLog` writes inside transactions for all critical buyer and store owner actions across `BuyerCheckoutService`, `BookingOrderService`, and `StoreOwnerService`. Updated controllers (`order`, `booking`, `store-owner`) to forward `request.ip` and `user-agent`. Fixed all 5 pre-existing test failures caused by the new `StockMovement→ProductVariant` FK constraint in 15+ integration test cleanup functions. Compacted the AdminAuditLogsPage table (tighter padding + 10px fonts) so all columns are visible without horizontal scrolling. All 566 tests passing (93 test files). TypeCheck clean.
-- **Next Session Must Start With:** Phase 4.10 (Admin E2E Tests with Playwright).
+- **Session Summary:** Session 60 — Completed Phase 4.10 (Admin E2E Playwright Tests). Resolved the cross-project state contamination bug where `store-owner` resets deleted `adv_pending_e2e`. Modified endpoints to preserve and upsert the pending advertisement dynamically. Resolved layout and horizontal overflow bugs on `StoreProductFormPage.tsx` by correcting unbounded `col-span-12` layouts and enforcing grid column resets. Verified all 80 tests passing cleanly in `pnpm ci:quality`.
+- **Next Session Must Start With:** Phase 5 — Rider Interface.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -29,7 +29,7 @@
 
 ## In Progress Right Now
 
-None. Phase 4.9 is completed!
+None. Phase 4 is completed!
 
 ---
 
@@ -1842,13 +1842,13 @@ Inject `AuditRepository` or use the Prisma transaction client inside `buyer-chec
 
 ### 4.10 — Admin E2E Tests (Playwright)
 
-- [ ] `tests/e2e/admin-journey.spec.ts`:
-  - [ ] Login → mandatory 2FA → dashboard loads with platform-wide metrics
-  - [ ] Toggle `WEATHER_MODE_ACTIVE` → confirmation modal → confirm → buyer home page shifts to weather mode
-  - [ ] Approve a pending advertisement → ad appears on buyer home page carousel
-  - [ ] Create a new store + owner → new store owner logs in with provided temp credentials
-  - [ ] Suspend a buyer account → buyer login returns 403 → unsuspend → buyer login works
-  - [ ] Audit log shows all above actions with correct actor, action, and entity ID
+- [x] `tests/e2e/admin-journey.spec.ts`:
+  - [x] Login → mandatory 2FA → dashboard loads with platform-wide metrics
+  - [x] Toggle `WEATHER_MODE_ACTIVE` → confirmation modal → confirm → buyer home page shifts to weather mode
+  - [x] Approve a pending advertisement → ad appears on buyer home page carousel
+  - [x] Create a new store + owner → new store owner logs in with provided temp credentials
+  - [x] Suspend a buyer account → buyer login returns 403 → unsuspend → buyer login works
+  - [x] Audit log shows all above actions with correct actor, action, and entity ID
 
 ---
 
@@ -2580,6 +2580,22 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 
 ---
 
+### Session 57 — 2026-06-05 — Advertisement Carousel Peeking UX Tweak
+- **Carousel Peeking UX Adjustments**: Tweaked the home page advertisement banner Embla carousel layout. Removed the artificial horizontal padding (`px-6 sm:px-10`) on the viewport container (setting it to `px-0`) so that adjacent slides peek edge-to-edge relative to the main layout content wrapper.
+- **Active Slide Width Scaling**: Replaced the static slide width configuration with a responsive layout `flex-[0_0_85%] sm:flex-[0_0_90%]`, ensuring the current active advertisement takes up most of the screen width while keeping previous and next ads as thin peeking slivers.
+- **Future Feature Flag Clarifications**: Marked unimplemented capabilities (`SCHEDULED_DELIVERY_ENABLED`, `UPI_PAYMENT_ENABLED`, and `CARD_PAYMENT_ENABLED`) as future features. Updated their descriptions to prefix with "Future" in the seeding files and executed a custom prisma DB script to apply these changes directly in the database.
+- **Verification**: Ran and verified all frontend unit tests in `AdvertisementBanner.test.tsx` successfully.
+
+---
+
+### Session 58 — 2026-06-05 — Audit Log Viewer & Platform-Wide Audit Log Checklist
+- **Completed Phase 4.9 (Audit Log Viewer)**: Fully implemented the platform-wide audit log access for admins. Exposed a secure read-only endpoint `GET /api/v1/admin/audit-logs` and a CSV download endpoint `GET /api/v1/admin/audit-logs/export` with doubled-quote escaping for oldValue/newValue payload cells. Added strict HTTP 405 Method Not Allowed write blocks.
+- **Data Masking**: Integrated IP masking rules (hiding last two octets of IPv4 and middle segments of IPv6) and role-based actor detail masking (buyer phone numbers & store owner/admin emails).
+- **TypeScript strict Optional types (`exactOptionalPropertyTypes: true`) Compliant**: Resolved all strict TS compilation errors by explicitly allowing `undefined` on query parameter fields in `findMany`, `getAuditLogs`, and `exportAuditLogsCsv`.
+- **Created Phase 4.9.1 (Platform-Wide Audit Log Generation)**: Outlined a complete TDD-compliant checklist to log important buyer actions (order checkouts, bookings, cancellations) and store owner actions (status updates, booking approvals/rejections/completions, inventory management, offers/discounts creation) to ensure a complete system audit trail.
+
+---
+
 ### Session 59 — 2026-06-06 — Phase 4.9.1 (Platform-Wide Audit Log Generation)
 
 - **Completed Phase 4.9.1**: Fully implemented platform-wide audit log generation for buyers and store owners following TDD (RED → GREEN → REFACTOR).
@@ -2602,19 +2618,12 @@ Investigation complete. No code changed this session. Phase 3.10.1 is ready for 
 
 ---
 
-### Session 57 — 2026-06-05 — Advertisement Carousel Peeking UX Tweak
-- **Carousel Peeking UX Adjustments**: Tweaked the home page advertisement banner Embla carousel layout. Removed the artificial horizontal padding (`px-6 sm:px-10`) on the viewport container (setting it to `px-0`) so that adjacent slides peek edge-to-edge relative to the main layout content wrapper.
-- **Active Slide Width Scaling**: Replaced the static slide width configuration with a responsive layout `flex-[0_0_85%] sm:flex-[0_0_90%]`, ensuring the current active advertisement takes up most of the screen width while keeping previous and next ads as thin peeking slivers.
-- **Future Feature Flag Clarifications**: Marked unimplemented capabilities (`SCHEDULED_DELIVERY_ENABLED`, `UPI_PAYMENT_ENABLED`, and `CARD_PAYMENT_ENABLED`) as future features. Updated their descriptions to prefix with "Future" in the seeding files and executed a custom prisma DB script to apply these changes directly in the database.
-- **Verification**: Ran and verified all frontend unit tests in `AdvertisementBanner.test.tsx` successfully.
+### Session 60 — 2026-06-06 — Completed Phase 4.10 (Admin E2E Playwright Tests)
+- **Completed Phase 4.10**: Implemented and verified the complete Admin Panel E2E journey. Verified that all tests pass cleanly in desktop Chrome and iPhone SE viewports with zero flaky occurrences.
+- **Cross-Project State Isolation**: Resolved a critical test pollution bug where `/api/v1/test/store-owner/:email/reset` deleted the pending advertisement (`adv_pending_e2e`) during the `chromium` run, causing `admin-journey`'s E2E-036 to fail on `iphone-se` runs due to a missing advertisement. Modified the reset route to preserve `adv_pending_e2e` and updated the admin reset route `/api/v1/test/admin/reset` to upsert the advertisement dynamically if missing.
+- **Layout & Responsiveness Fixes**: Resolved layout and horizontal overflow issues on the merchant product form (`StoreProductFormPage.tsx`). Replaced the unbounded `col-span-12` class (which caused layout engine track count explosion and implicit columns generation on mobile) with `col-span-1 md:col-span-12`, and structured form grids as `grid grid-cols-1 md:grid-cols-12` to guarantee vertical stacking on mobile viewports.
 
 ---
 
-### Session 58 — 2026-06-05 — Audit Log Viewer & Platform-Wide Audit Log Checklist
-- **Completed Phase 4.9 (Audit Log Viewer)**: Fully implemented the platform-wide audit log access for admins. Exposed a secure read-only endpoint `GET /api/v1/admin/audit-logs` and a CSV download endpoint `GET /api/v1/admin/audit-logs/export` with doubled-quote escaping for oldValue/newValue payload cells. Added strict HTTP 405 Method Not Allowed write blocks.
-- **Data Masking**: Integrated IP masking rules (hiding last two octets of IPv4 and middle segments of IPv6) and role-based actor detail masking (buyer phone numbers & store owner/admin emails).
-- **TypeScript strict Optional types (`exactOptionalPropertyTypes: true`) Compliant**: Resolved all strict TS compilation errors by explicitly allowing `undefined` on query parameter fields in `findMany`, `getAuditLogs`, and `exportAuditLogsCsv`.
-- **Created Phase 4.9.1 (Platform-Wide Audit Log Generation)**: Outlined a complete TDD-compliant checklist to log important buyer actions (order checkouts, bookings, cancellations) and store owner actions (status updates, booking approvals/rejections/completions, inventory management, offers/discounts creation) to ensure a complete system audit trail.
-
-
-
+### E2E-023 Flakiness Fixes Session Note — 2026-06-06
+- **Added two targeted fixes to the flaky E2E-023 (Inventory Restock & Audit History Logging) test in `store-owner-journey.spec.ts`**: (1) a `waitForResponse` gate for the Adjust mutation (`PUT /stock/adjust`) mirroring the existing Restock gate — using the unambiguous `/stock/adjust` predicate so it can never cross-match the Restock `PUT` — which ensures if `dispatchEvent('click')` fires into a stale React closure where `adjustReason` is still empty (causing the early-return guard to fire and the mutation to never run), the test fails immediately at the gate with a clear error rather than ghost-passing and failing cryptically at the `RESTOCK` row assertion 15+ lines later; and (2) a Sonner toast-dismissal gate (`[data-sonner-toast]` not visible) after the adjust modal closes and before the Products nav link click, because the adjust `onSuccess` fires `toast.success("Stock quantity adjusted successfully")` at the same instant the modal closes — and since Sonner toasts persist across React Router navigation, that toast remains live in the DOM through the Products page and Stock History page, which on the iPhone SE's 375px viewport can cause the `force:true` Products nav click to land on the toast instead of the link. The run confirmed clean: 80 passed, 0 flaky on `pnpm ci:quality`.
