@@ -153,7 +153,12 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         }
       }
 
-      const placed = await deps.buyerCheckout.placeFromCart(buyerId, parsed);
+      const placed = await deps.buyerCheckout.placeFromCart(
+        buyerId,
+        parsed,
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string
+      );
       
       // Broadcast to the store's socket room about the brand new order placement!
       if (app.io) {

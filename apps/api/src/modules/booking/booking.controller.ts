@@ -222,6 +222,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
           timeslot: body.timeslot,
           addressId: body.addressId
         },
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string,
         body.discountCode
       );
 
@@ -299,7 +301,13 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
       }
 
       const params = parseSafe(orderParamsSchema, request.params);
-      await deps.bookingService.approveBooking(owner.storeId, params.orderId, ownerId);
+      await deps.bookingService.approveBooking(
+        owner.storeId,
+        params.orderId,
+        ownerId,
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string
+      );
 
       const booking = await deps.bookingService.repository.findById(params.orderId);
       if (!booking) {
@@ -335,7 +343,9 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
         owner.storeId,
         params.orderId,
         ownerId,
-        body.reason
+        body.reason,
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string
       );
 
       const booking = await deps.bookingService.repository.findById(params.orderId);
@@ -369,7 +379,9 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
       await deps.bookingService.completeBooking(
         owner.storeId,
         params.orderId,
-        ownerId
+        ownerId,
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string
       );
 
       const booking = await deps.bookingService.repository.findById(params.orderId);
@@ -392,7 +404,12 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
       }
 
       const params = parseSafe(orderParamsSchema, request.params);
-      await deps.bookingService.cancelBookingByBuyer(buyerId, params.orderId);
+      await deps.bookingService.cancelBookingByBuyer(
+        buyerId,
+        params.orderId,
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string
+      );
 
       const booking = await deps.bookingService.repository.findById(params.orderId);
       if (!booking) {

@@ -80,7 +80,10 @@ export class StoreOwnerService {
     orderService: {
       cancelOrderWithStockRestore: (orderId: string, actor: string) => Promise<unknown>;
       updateStatus: (orderId: string, newStatus: OrderStatus, actor: string) => Promise<unknown>;
-    }
+    },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const order = await this.db.order.findUnique({
       where: { id: orderId }
@@ -114,11 +117,25 @@ export class StoreOwnerService {
       });
     }
 
-    if (newStatus === "CANCELLED") {
-      return orderService.cancelOrderWithStockRestore(orderId, "STORE_OWNER");
-    } else {
-      return orderService.updateStatus(orderId, newStatus, "STORE_OWNER");
-    }
+    const result = newStatus === "CANCELLED"
+      ? await orderService.cancelOrderWithStockRestore(orderId, "STORE_OWNER")
+      : await orderService.updateStatus(orderId, newStatus, "STORE_OWNER");
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: ownerId,
+        actorRole: "STORE_OWNER",
+        action: "STORE_ORDER_STATUS_UPDATE",
+        entityType: "Order",
+        entityId: orderId,
+        oldValue: { status: currentStatus },
+        newValue: { status: newStatus },
+        ip,
+        userAgent
+      }
+    });
+
+    return result;
   }
 
 
@@ -569,7 +586,10 @@ export class StoreOwnerService {
         unit: string;
         lowStockThreshold?: number;
       }[];
-    }
+    },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const subCategory = await this.db.subCategory.findUnique({
       where: { id: dto.subCategoryId }
@@ -634,6 +654,24 @@ export class StoreOwnerService {
         })
       );
 
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_PRODUCT_CREATE",
+          entityType: "Product",
+          entityId: product.id,
+          newValue: {
+            name: product.name,
+            description: product.description,
+            imageUrl: product.imageUrl,
+            subCategoryId: product.subCategoryId
+          },
+          ip,
+          userAgent
+        }
+      });
+
       return {
         ...product,
         variants
@@ -649,7 +687,10 @@ export class StoreOwnerService {
       subCategoryId?: string;
       description?: string;
       imageUrl?: string;
-    }
+    },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const product = await this.db.product.findUnique({
       where: { id: productId }
@@ -674,18 +715,42 @@ export class StoreOwnerService {
       categoryId = subCategory.categoryId;
     }
 
-    return this.db.product.update({
-      where: { id: productId },
-      data: {
-        ...(dto.name ? { name: dto.name } : {}),
-        ...(dto.description ? { description: dto.description } : {}),
-        ...(dto.imageUrl ? { imageUrl: dto.imageUrl } : {}),
-        ...(dto.subCategoryId ? { subCategoryId: dto.subCategoryId, categoryId } : {})
-      }
+    return this.db.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id: productId },
+        data: {
+          ...(dto.name ? { name: dto.name } : {}),
+          ...(dto.description ? { description: dto.description } : {}),
+          ...(dto.imageUrl ? { imageUrl: dto.imageUrl } : {}),
+          ...(dto.subCategoryId ? { subCategoryId: dto.subCategoryId, categoryId } : {})
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_PRODUCT_UPDATE",
+          entityType: "Product",
+          entityId: productId,
+          oldValue: { name: product.name, description: product.description, imageUrl: product.imageUrl, subCategoryId: product.subCategoryId },
+          newValue: { name: updated.name, description: updated.description, imageUrl: updated.imageUrl, subCategoryId: updated.subCategoryId },
+          ip,
+          userAgent
+        }
+      });
+
+      return updated;
     });
   }
 
-  public async softDeleteProduct(storeId: string, productId: string) {
+  public async softDeleteProduct(
+    storeId: string,
+    productId: string,
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
     const product = await this.db.product.findUnique({
       where: { id: productId }
     });
@@ -698,15 +763,40 @@ export class StoreOwnerService {
       throw new ForbiddenError("You are not authorized to delete this product");
     }
 
-    return this.db.product.update({
-      where: { id: productId },
-      data: {
-        isDeleted: true
-      }
+    return this.db.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id: productId },
+        data: {
+          isDeleted: true
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_PRODUCT_UPDATE",
+          entityType: "Product",
+          entityId: productId,
+          oldValue: { isDeleted: product.isDeleted },
+          newValue: { isDeleted: true },
+          ip,
+          userAgent
+        }
+      });
+
+      return updated;
     });
   }
 
-  public async updateProductStatus(storeId: string, productId: string, isActive: boolean) {
+  public async updateProductStatus(
+    storeId: string,
+    productId: string,
+    isActive: boolean,
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
     const product = await this.db.product.findUnique({
       where: { id: productId }
     });
@@ -719,11 +809,29 @@ export class StoreOwnerService {
       throw new ForbiddenError("You are not authorized to modify this product's status");
     }
 
-    return this.db.product.update({
-      where: { id: productId },
-      data: {
-        isActive
-      }
+    return this.db.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id: productId },
+        data: {
+          isActive
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_PRODUCT_STATUS_UPDATE",
+          entityType: "Product",
+          entityId: productId,
+          oldValue: { isActive: product.isActive },
+          newValue: { isActive },
+          ip,
+          userAgent
+        }
+      });
+
+      return updated;
     });
   }
 
@@ -739,7 +847,10 @@ export class StoreOwnerService {
       lowStockThreshold?: number;
       isActive?: boolean;
       isAvailableForBooking?: boolean;
-    }
+    },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const product = await this.db.product.findUnique({
       where: { id: productId }
@@ -797,6 +908,32 @@ export class StoreOwnerService {
         });
       }
 
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_VARIANT_UPDATE",
+          entityType: "ProductVariant",
+          entityId: variantId,
+          oldValue: {
+            label: variant.label,
+            price: Number(variant.price),
+            stockQty: variant.stockQty,
+            unit: variant.unit,
+            isActive: variant.isActive
+          },
+          newValue: {
+            label: updated.label,
+            price: Number(updated.price),
+            stockQty: updated.stockQty,
+            unit: updated.unit,
+            isActive: updated.isActive
+          },
+          ip,
+          userAgent
+        }
+      });
+
       return updated;
     });
   }
@@ -810,7 +947,10 @@ export class StoreOwnerService {
       stockQty: number;
       unit: string;
       lowStockThreshold?: number;
-    }
+    },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const product = await this.db.product.findUnique({
       where: { id: productId, isDeleted: false }
@@ -869,6 +1009,24 @@ export class StoreOwnerService {
         }
       });
 
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_VARIANT_CREATE",
+          entityType: "ProductVariant",
+          entityId: variant.id,
+          newValue: {
+            label: variant.label,
+            price: Number(variant.price),
+            stockQty: variant.stockQty,
+            unit: variant.unit
+          },
+          ip,
+          userAgent
+        }
+      });
+
       return variant;
     });
   }
@@ -882,7 +1040,10 @@ export class StoreOwnerService {
 
   public async createAd(
     storeId: string,
-    dto: { imageUrl: string; title: string; linkUrl: string; startsAt: string | Date; endsAt: string | Date }
+    dto: { imageUrl: string; title: string; linkUrl: string; startsAt: string | Date; endsAt: string | Date },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
@@ -894,7 +1055,7 @@ export class StoreOwnerService {
       });
     }
 
-    return this.db.advertisement.create({
+    const ad = await this.db.advertisement.create({
       data: {
         storeId,
         title: dto.title,
@@ -906,9 +1067,34 @@ export class StoreOwnerService {
         isActive: true
       }
     });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: ownerId,
+        actorRole: "STORE_OWNER",
+        action: "STORE_AD_CREATE",
+        entityType: "Advertisement",
+        entityId: ad.id,
+        newValue: {
+          title: ad.title,
+          imageUrl: ad.imageUrl,
+          linkUrl: ad.linkUrl
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return ad;
   }
 
-  public async deleteAd(storeId: string, adId: string) {
+  public async deleteAd(
+    storeId: string,
+    adId: string,
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
     const ad = await this.db.advertisement.findUnique({
       where: { id: adId }
     });
@@ -931,6 +1117,23 @@ export class StoreOwnerService {
     await this.db.advertisement.delete({
       where: { id: adId }
     });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: ownerId,
+        actorRole: "STORE_OWNER",
+        action: "STORE_AD_DELETE",
+        entityType: "Advertisement",
+        entityId: adId,
+        oldValue: {
+          title: ad.title,
+          imageUrl: ad.imageUrl,
+          linkUrl: ad.linkUrl
+        },
+        ip,
+        userAgent
+      }
+    });
   }
 
   public async getOffers(storeId: string) {
@@ -951,7 +1154,10 @@ export class StoreOwnerService {
       endsAt: string | Date;
       minOrderAmount?: number | undefined;
       maxDiscount?: number | undefined;
-    }
+    },
+    ownerId: string,
+    ip: string,
+    userAgent: string
   ) {
     const startsAt = new Date(dto.startsAt);
     const endsAt = new Date(dto.endsAt);
@@ -977,7 +1183,7 @@ export class StoreOwnerService {
       });
     }
 
-    return this.db.offer.create({
+    const offer = await this.db.offer.create({
       data: {
         storeId,
         title: dto.title,
@@ -991,9 +1197,34 @@ export class StoreOwnerService {
         isActive: true
       }
     });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: ownerId,
+        actorRole: "STORE_OWNER",
+        action: "STORE_OFFER_CREATE",
+        entityType: "Offer",
+        entityId: offer.id,
+        newValue: {
+          title: offer.title,
+          discountType: offer.discountType,
+          discountValue: Number(offer.discountValue)
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return offer;
   }
 
-  public async deactivateOffer(storeId: string, offerId: string) {
+  public async deactivateOffer(
+    storeId: string,
+    offerId: string,
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
     const offer = await this.db.offer.findUnique({
       where: { id: offerId }
     });
@@ -1006,10 +1237,26 @@ export class StoreOwnerService {
       throw new ForbiddenError("You are not authorized to access this offer");
     }
 
-    return this.db.offer.update({
+    const updated = await this.db.offer.update({
       where: { id: offerId },
       data: { isActive: false }
     });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: ownerId,
+        actorRole: "STORE_OWNER",
+        action: "STORE_OFFER_DEACTIVATE",
+        entityType: "Offer",
+        entityId: offerId,
+        oldValue: { isActive: offer.isActive },
+        newValue: { isActive: false },
+        ip,
+        userAgent
+      }
+    });
+
+    return updated;
   }
 
   public async getDiscounts(storeId: string) {
@@ -1120,7 +1367,13 @@ export class StoreOwnerService {
     });
   }
 
-  public async deleteOffer(storeId: string, offerId: string) {
+  public async deleteOffer(
+    storeId: string,
+    offerId: string,
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
     const offer = await this.db.offer.findUnique({
       where: { id: offerId }
     });
@@ -1133,8 +1386,25 @@ export class StoreOwnerService {
       throw new ForbiddenError("You are not authorized to delete this offer");
     }
 
-    return this.db.offer.delete({
+    await this.db.offer.delete({
       where: { id: offerId }
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: ownerId,
+        actorRole: "STORE_OWNER",
+        action: "STORE_OFFER_DELETE",
+        entityType: "Offer",
+        entityId: offerId,
+        oldValue: {
+          title: offer.title,
+          discountType: offer.discountType,
+          discountValue: Number(offer.discountValue)
+        },
+        ip,
+        userAgent
+      }
     });
   }
 

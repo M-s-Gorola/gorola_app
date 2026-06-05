@@ -28,7 +28,7 @@ export function AdvertisementBanner(): ReactElement | null {
     }
   });
 
-  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true }, [
+  const [emblaRef, emblaApi] = useEmblaCarousel({ loop: true, align: "center" }, [
     Autoplay({ delay: 5000, stopOnInteraction: false })
   ]);
 
@@ -51,8 +51,8 @@ export function AdvertisementBanner(): ReactElement | null {
   }
 
   return (
-    <section className="overflow-hidden px-6 sm:px-10" aria-label="Promotions">
-      <div className="embla" ref={emblaRef}>
+    <section className="overflow-hidden py-2" aria-label="Promotions">
+      <div className="embla overflow-hidden px-0" ref={emblaRef}>
         <div className="embla__container flex">
           {data.map((ad) => {
             const content = (
@@ -70,7 +70,7 @@ export function AdvertisementBanner(): ReactElement | null {
             );
 
             return (
-              <div key={ad.id} data-testid="ad-slide" className="embla__slide min-w-0 flex-[0_0_100%] pr-4">
+              <div key={ad.id} data-testid="ad-slide" className="embla__slide min-w-0 flex-[0_0_85%] sm:flex-[0_0_90%] px-2 sm:px-3">
                 {ad.linkUrl ? (
                   <Link to={ad.linkUrl} className="block outline-none ring-gorola-saffron focus-visible:ring-2">
                     {content}

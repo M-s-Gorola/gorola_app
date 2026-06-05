@@ -2,7 +2,11 @@ import type { ReactElement } from "react";
 import { Navigate, Route } from "react-router-dom";
 
 import { AdminLayout } from "@/components/admin/AdminLayout";
+import { AdminAdvertisementsPage } from "@/pages/admin/AdminAdvertisementsPage";
+import { AdminAuditLogsPage } from "@/pages/admin/AdminAuditLogsPage";
+import { AdminCategoriesPage } from "@/pages/admin/AdminCategoriesPage";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
+import { AdminFeatureFlagsPage } from "@/pages/admin/AdminFeatureFlagsPage";
 import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
 import { AdminSetup2FAPage } from "@/pages/admin/AdminSetup2FAPage";
@@ -13,14 +17,7 @@ import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
 
 import { AdminRoute } from "./guards";
 
-function PlaceholderPage({ title }: { title: string }): ReactElement {
-  return (
-    <section className="space-y-3">
-      <h1 className="text-2xl font-semibold text-gorola-charcoal">{title}</h1>
-      <p className="font-dm-sans text-sm text-gorola-slate">This page is not ready yet.</p>
-    </section>
-  );
-}
+
 
 interface AdminRoutesProps {
   prefix?: string;
@@ -101,7 +98,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Categories" />
+            <AdminCategoriesPage />
           </AdminLayout>
         </AdminRoute>
       }
@@ -112,7 +109,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Feature Flags" />
+            <AdminFeatureFlagsPage />
           </AdminLayout>
         </AdminRoute>
       }
@@ -123,7 +120,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Advertisements" />
+            <AdminAdvertisementsPage />
           </AdminLayout>
         </AdminRoute>
       }
@@ -134,7 +131,7 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       element={
         <AdminRoute>
           <AdminLayout>
-            <PlaceholderPage title="Audit Logs" />
+            <AdminAuditLogsPage />
           </AdminLayout>
         </AdminRoute>
       }

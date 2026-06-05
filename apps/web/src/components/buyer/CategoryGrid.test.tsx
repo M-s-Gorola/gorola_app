@@ -59,8 +59,8 @@ describe("CategoryGrid", () => {
       data: {
         success: true,
         data: [
-          { id: "c1", slug: "groceries", name: "Groceries", imageUrl: "https://example.com/groc.jpg", productCount: 12 },
-          { id: "c2", slug: "medical", name: "Medical", imageUrl: "https://example.com/med.jpg", productCount: 7 }
+          { id: "c1", slug: "groceries", name: "Groceries", imageUrl: "https://example.com/groc.jpg", productCount: 12, commerceType: "QUICK_COMMERCE" },
+          { id: "c2", slug: "medical", name: "Medical", imageUrl: "https://example.com/med.jpg", productCount: 7, commerceType: "QUICK_COMMERCE" }
         ]
       }
     });

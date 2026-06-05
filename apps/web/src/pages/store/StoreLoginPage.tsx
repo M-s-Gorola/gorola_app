@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AxiosError } from "axios";
+import { Eye, EyeOff } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
@@ -53,6 +54,7 @@ export function StoreLoginPage(): ReactElement {
   const setStoreOwnerSession = useAuthStore((s) => s.setStoreOwnerSession);
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   const {
     register,
@@ -144,14 +146,25 @@ export function StoreLoginPage(): ReactElement {
           <label className="text-sm font-medium leading-none" htmlFor="store-login-password">
             Password
           </label>
-          <Input
-            id="store-login-password"
-            type="password"
-            placeholder="••••••••"
-            autoComplete="current-password"
-            {...register("password")}
-            aria-invalid={errors.password ? "true" : undefined}
-          />
+          <div className="relative">
+            <Input
+              id="store-login-password"
+              type={showPassword ? "text" : "password"}
+              placeholder="••••••••"
+              autoComplete="current-password"
+              className="pr-10"
+              {...register("password")}
+              aria-invalid={errors.password ? "true" : undefined}
+            />
+            <button
+              type="button"
+              onClick={() => setShowPassword((prev) => !prev)}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+              aria-label={showPassword ? "Hide" : "Show"}
+            >
+              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </button>
+          </div>
           {errors.password && (
             <p className="text-destructive text-xs" role="alert">
               {errors.password.message}

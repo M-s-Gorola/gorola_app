@@ -129,7 +129,10 @@ export function registerStoreOwnerRoutes(
           newStatus: import("@prisma/client").OrderStatus,
           actor: string
         ) => Promise<unknown>;
-      }
+      },
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
     );
 
     return {
@@ -143,8 +146,26 @@ export function registerStoreOwnerRoutes(
 
   // GET /api/v1/store/categories
   app.get("/api/v1/store/categories", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await prisma.storeOwner.findUnique({
+      where: { id: userId },
+      include: { store: true }
+    });
+    if (!owner || !owner.store) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const storeType = owner.store.storeType;
+
     const categories = await prisma.category.findMany({
-      where: { isActive: true },
+      where: { 
+        isActive: true,
+        commerceType: storeType
+      },
       include: {
         subCategories: {
           where: { isActive: true },
@@ -312,7 +333,13 @@ export function registerStoreOwnerRoutes(
       variants: variantsMapped
     };
 
-    const product = await storeOwnerService.createProduct(owner.storeId, createPayload);
+    const product = await storeOwnerService.createProduct(
+      owner.storeId,
+      createPayload,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     reply.code(201);
     return {
@@ -373,7 +400,14 @@ export function registerStoreOwnerRoutes(
       updatePayload.imageUrl = parsed.data.imageUrl;
     }
 
-    const product = await storeOwnerService.updateProduct(owner.storeId, productId, updatePayload);
+    const product = await storeOwnerService.updateProduct(
+      owner.storeId,
+      productId,
+      updatePayload,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,
@@ -402,7 +436,13 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Product ID is required");
     }
 
-    await storeOwnerService.softDeleteProduct(owner.storeId, productId);
+    await storeOwnerService.softDeleteProduct(
+      owner.storeId,
+      productId,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,
@@ -477,7 +517,15 @@ export function registerStoreOwnerRoutes(
       variantPayload.isAvailableForBooking = parsed.data.isAvailableForBooking;
     }
 
-    const variant = await storeOwnerService.updateVariant(owner.storeId, productId, variantId, variantPayload);
+    const variant = await storeOwnerService.updateVariant(
+      owner.storeId,
+      productId,
+      variantId,
+      variantPayload,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,
@@ -535,7 +583,14 @@ export function registerStoreOwnerRoutes(
       createPayload.lowStockThreshold = parsed.data.lowStockThreshold;
     }
 
-    const variant = await storeOwnerService.createVariant(owner.storeId, productId, createPayload);
+    const variant = await storeOwnerService.createVariant(
+      owner.storeId,
+      productId,
+      createPayload,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     reply.code(201);
     return {
@@ -574,7 +629,14 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Invalid product status data", parsed.error.flatten());
     }
 
-    const product = await storeOwnerService.updateProductStatus(owner.storeId, productId, parsed.data.isActive);
+    const product = await storeOwnerService.updateProductStatus(
+      owner.storeId,
+      productId,
+      parsed.data.isActive,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,
@@ -658,7 +720,13 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Invalid advertisement data", parsed.error.flatten());
     }
 
-    const ad = await storeOwnerService.createAd(owner.storeId, parsed.data);
+    const ad = await storeOwnerService.createAd(
+      owner.storeId,
+      parsed.data,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     reply.code(201);
     return {
@@ -688,7 +756,13 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Advertisement ID is required");
     }
 
-    await storeOwnerService.deleteAd(owner.storeId, adId);
+    await storeOwnerService.deleteAd(
+      owner.storeId,
+      adId,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,
@@ -750,7 +824,13 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Invalid offer data", parsed.error.flatten());
     }
 
-    const offer = await storeOwnerService.createOffer(owner.storeId, parsed.data);
+    const offer = await storeOwnerService.createOffer(
+      owner.storeId,
+      parsed.data,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     reply.code(201);
     return {
@@ -780,7 +860,13 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Offer ID is required");
     }
 
-    await storeOwnerService.deactivateOffer(owner.storeId, offerId);
+    await storeOwnerService.deactivateOffer(
+      owner.storeId,
+      offerId,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,
@@ -949,7 +1035,13 @@ export function registerStoreOwnerRoutes(
       throw new ValidationError("Offer ID is required");
     }
 
-    await storeOwnerService.deleteOffer(owner.storeId, offerId);
+    await storeOwnerService.deleteOffer(
+      owner.storeId,
+      offerId,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
 
     return {
       success: true,

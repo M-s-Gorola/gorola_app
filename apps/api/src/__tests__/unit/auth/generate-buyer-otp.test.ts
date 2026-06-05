@@ -7,6 +7,7 @@ describe("generateBuyerOtp", () => {
 
   afterEach(() => {
     delete process.env.GOROLA_DUMMY_OTP;
+    delete process.env.GOROLA_OTP;
     delete process.env.GOROLA_TEST_OTP;
     process.env.NODE_ENV = previousNodeEnv;
   });
@@ -18,11 +19,18 @@ describe("generateBuyerOtp", () => {
     expect(generateBuyerOtp()).toBe("123456");
   });
 
-  it("throws when GOROLA_DUMMY_OTP is not six digits", () => {
+  it("returns GOROLA_OTP in any environment when GOROLA_DUMMY_OTP is not set", () => {
+    process.env.NODE_ENV = "production";
+    process.env.GOROLA_OTP = "654321";
+
+    expect(generateBuyerOtp()).toBe("654321");
+  });
+
+  it("throws when GOROLA_DUMMY_OTP/GOROLA_OTP is not six digits", () => {
     process.env.GOROLA_DUMMY_OTP = "12345";
 
     expect(() => generateBuyerOtp()).toThrowError(
-      "GOROLA_DUMMY_OTP must be exactly 6 digits when set"
+      "GOROLA_DUMMY_OTP or GOROLA_OTP must be exactly 6 digits when set"
     );
   });
 });

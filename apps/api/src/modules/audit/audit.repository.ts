@@ -30,4 +30,50 @@ export class AuditRepository {
       }
     });
   }
+
+  public async findMany(filters: {
+    actorRole?: ActorRole | undefined;
+    action?: string | undefined;
+    entityType?: string | undefined;
+    entityId?: string | undefined;
+    from?: string | Date | undefined;
+    to?: string | Date | undefined;
+    cursor?: string | undefined;
+    limit?: number | undefined;
+  }): Promise<{ items: AuditLog[]; nextCursor: string | null }> {
+    const limit = filters.limit ?? 50;
+    const { actorRole, action, entityType, entityId, from, to, cursor } = filters;
+
+    const where: Prisma.AuditLogWhereInput = {
+      ...(actorRole ? { actorRole } : {}),
+      ...(action ? { action } : {}),
+      ...(entityType ? { entityType } : {}),
+      ...(entityId ? { entityId } : {}),
+      ...(from || to ? {
+        createdAt: {
+          ...(from ? { gte: new Date(from) } : {}),
+          ...(to ? { lte: new Date(to) } : {})
+        }
+      } : {})
+    };
+
+    const logs = await this.db.auditLog.findMany({
+      where,
+      take: limit + 1,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+      orderBy: [
+        { createdAt: "desc" },
+        { id: "desc" }
+      ]
+    });
+
+    const hasMore = logs.length > limit;
+    const items = hasMore ? logs.slice(0, limit) : logs;
+    const nextCursor = hasMore && items.length > 0 ? items[items.length - 1]!.id : null;
+
+    return {
+      items,
+      nextCursor
+    };
+  }
 }
