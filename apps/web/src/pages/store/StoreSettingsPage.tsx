@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AxiosError } from "axios";
+import { Eye, EyeOff } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -67,6 +68,11 @@ export function StoreSettingsPage(): ReactElement {
   // 2FA local states
   const [setup2FAData, setSetup2FAData] = useState<{ secret: string; qrCodeUri: string } | null>(null);
   const [setupError, setSetupError] = useState<string | null>(null);
+
+  // Password visibility states
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   // Form 1: Settings
   const {
@@ -164,6 +170,9 @@ export function StoreSettingsPage(): ReactElement {
           newPassword: "",
           confirmPassword: ""
         });
+        setShowCurrentPassword(false);
+        setShowNewPassword(false);
+        setShowConfirmPassword(false);
       } else {
         toast.error("Failed to update password.");
       }
@@ -362,13 +371,24 @@ export function StoreSettingsPage(): ReactElement {
               <label className="text-sm font-semibold text-gorola-charcoal" htmlFor="current-password">
                 Current Password
               </label>
-              <Input
-                id="current-password"
-                type="password"
-                placeholder="••••••••"
-                {...registerPassword("currentPassword")}
-                aria-invalid={passwordErrors.currentPassword ? "true" : undefined}
-              />
+              <div className="relative">
+                <Input
+                  id="current-password"
+                  type={showCurrentPassword ? "text" : "password"}
+                  placeholder="••••••••"
+                  className="pr-10"
+                  {...registerPassword("currentPassword")}
+                  aria-invalid={passwordErrors.currentPassword ? "true" : undefined}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowCurrentPassword((prev) => !prev)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                  aria-label={showCurrentPassword ? "Hide" : "Show"}
+                >
+                  {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
               {passwordErrors.currentPassword && (
                 <p className="text-destructive text-xs" role="alert">
                   {passwordErrors.currentPassword.message}
@@ -381,13 +401,24 @@ export function StoreSettingsPage(): ReactElement {
                 <label className="text-sm font-semibold text-gorola-charcoal" htmlFor="new-password">
                   New Password
                 </label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  placeholder="••••••••"
-                  {...registerPassword("newPassword")}
-                  aria-invalid={passwordErrors.newPassword ? "true" : undefined}
-                />
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pr-10"
+                    {...registerPassword("newPassword")}
+                    aria-invalid={passwordErrors.newPassword ? "true" : undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showNewPassword ? "Hide" : "Show"}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {passwordErrors.newPassword && (
                   <p className="text-destructive text-xs" role="alert">
                     {passwordErrors.newPassword.message}
@@ -399,13 +430,24 @@ export function StoreSettingsPage(): ReactElement {
                 <label className="text-sm font-semibold text-gorola-charcoal" htmlFor="confirm-password">
                   Confirm New Password
                 </label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  placeholder="••••••••"
-                  {...registerPassword("confirmPassword")}
-                  aria-invalid={passwordErrors.confirmPassword ? "true" : undefined}
-                />
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="••••••••"
+                    className="pr-10"
+                    {...registerPassword("confirmPassword")}
+                    aria-invalid={passwordErrors.confirmPassword ? "true" : undefined}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showConfirmPassword ? "Hide" : "Show"}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
                 {passwordErrors.confirmPassword && (
                   <p className="text-destructive text-xs" role="alert">
                     {passwordErrors.confirmPassword.message}

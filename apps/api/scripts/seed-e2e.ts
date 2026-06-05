@@ -86,6 +86,27 @@ async function main() {
     },
   });
 
+  // 1b. Seed pending advertisement for E2E-036
+  await prisma.advertisement.upsert({
+    where: { id: "adv_pending_e2e" },
+    update: {
+      isApproved: false,
+      isActive: true,
+      title: "E2E Pending Ad",
+    },
+    create: {
+      id: "adv_pending_e2e",
+      storeId: store.id,
+      title: "E2E Pending Ad",
+      imageUrl: "https://fastly.picsum.photos/id/11/2500/1667.jpg?hmac=xxjFJtAPgshYkysU_aqx2sZir-kIOjNR9vx0te7GycQ",
+      linkUrl: "/categories/groceries",
+      startsAt: new Date(Date.now() - 1000 * 60 * 60),
+      endsAt: new Date(Date.now() + 1000 * 60 * 60 * 24 * 30),
+      isApproved: false,
+      isActive: true,
+    },
+  });
+
   // 2. Seed test users for E2E
   const phones = ["+919876543210", "+919876543211", "+919876543212", "+919876543214"];
   const users = await Promise.all(phones.map(async (phone) => {

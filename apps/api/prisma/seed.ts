@@ -171,7 +171,7 @@ async function main(): Promise<void> {
       {
         key: "SCHEDULED_DELIVERY_ENABLED",
         value: false,
-        description: "Enable scheduled delivery windows.",
+        description: "Future scheduled delivery toggle.",
         updatedBy: "system"
       },
       {
@@ -195,13 +195,13 @@ async function main(): Promise<void> {
       {
         key: "UPI_PAYMENT_ENABLED",
         value: false,
-        description: "Enable UPI checkout option.",
+        description: "Future UPI checkout toggle.",
         updatedBy: "system"
       },
       {
         key: "CARD_PAYMENT_ENABLED",
         value: false,
-        description: "Enable card checkout option.",
+        description: "Future card checkout toggle.",
         updatedBy: "system"
       }
     ],

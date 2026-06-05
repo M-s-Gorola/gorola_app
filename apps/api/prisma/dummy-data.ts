@@ -41,13 +41,17 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
 
   const medicalTestsCategory = await prisma.category.upsert({
     where: { slug: "medical-tests" },
-    update: { imageUrl: "https://picsum.photos/seed/medical-tests/400/300" },
+    update: { 
+      imageUrl: "https://picsum.photos/seed/medical-tests/400/300",
+      commerceType: "BOOKING_COMMERCE"
+    },
     create: {
       slug: "medical-tests",
       name: "Medical tests",
       imageUrl: "https://picsum.photos/seed/medical-tests/400/300",
       displayOrder: 3,
-      isActive: true
+      isActive: true,
+      commerceType: "BOOKING_COMMERCE"
     }
   });
 
@@ -65,13 +69,17 @@ export async function seedDummyData(prisma: PrismaClient, storeAId: string, stor
 
   const repairsCategory = await prisma.category.upsert({
     where: { slug: "repairs" },
-    update: { imageUrl: "https://picsum.photos/seed/repairs/400/300" },
+    update: { 
+      imageUrl: "https://picsum.photos/seed/repairs/400/300",
+      commerceType: "BOOKING_COMMERCE"
+    },
     create: {
       slug: "repairs",
       name: "Repairs",
       imageUrl: "https://picsum.photos/seed/repairs/400/300",
       displayOrder: 5,
-      isActive: true
+      isActive: true,
+      commerceType: "BOOKING_COMMERCE"
     }
   });
 

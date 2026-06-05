@@ -13,6 +13,7 @@ type CategoryDto = {
   name: string;
   imageUrl: string | null;
   productCount: number;
+  commerceType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
 };
 
 type CategoriesEnvelope = {
@@ -48,10 +49,10 @@ export function CategoryGrid(): ReactElement {
     const quick: CategoryDto[] = [];
     const booking: CategoryDto[] = [];
     for (const category of categories) {
-      if (["groceries", "medical", "electronics"].includes(category.slug)) {
-        quick.push(category);
-      } else {
+      if (category.commerceType === "BOOKING_COMMERCE") {
         booking.push(category);
+      } else {
+        quick.push(category);
       }
     }
     return { quickCommerceCategories: quick, bookingCommerceCategories: booking };

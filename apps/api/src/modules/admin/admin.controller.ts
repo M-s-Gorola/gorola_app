@@ -13,6 +13,27 @@ function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
   return reply.getHeader("x-request-id")?.toString() ?? request.id;
 }
 
+type OmitUndefined<T> = {
+  [K in keyof T]: Exclude<T[K], undefined>;
+};
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function cleanUndefined<T extends Record<string, any>>(obj: T): OmitUndefined<T> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const result = {} as any;
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      // eslint-disable-next-line security/detect-object-injection
+      const val = obj[key];
+      if (val !== undefined) {
+        // eslint-disable-next-line security/detect-object-injection
+        result[key] = val;
+      }
+    }
+  }
+  return result;
+}
+
 export function registerAdminRoutes(
   app: FastifyInstance,
   deps: {
@@ -304,4 +325,448 @@ export function registerAdminRoutes(
       }
     };
   });
+
+  // Zod schemas for category routes
+  const createCategorySchema = z.object({
+    name: z.string().trim().min(1, "Name is required"),
+    slug: z.string().trim().min(1, "Slug is required"),
+    imageUrl: z.string().trim().nullable().optional(),
+    displayOrder: z.coerce.number().int().default(0),
+    isActive: z.boolean().default(true),
+    commerceType: z.enum(["QUICK_COMMERCE", "BOOKING_COMMERCE"])
+  });
+
+  const updateCategorySchema = z.object({
+    name: z.string().trim().min(1).optional(),
+    slug: z.string().trim().min(1).optional(),
+    imageUrl: z.string().trim().nullable().optional(),
+    displayOrder: z.coerce.number().int().optional(),
+    isActive: z.boolean().optional(),
+    commerceType: z.enum(["QUICK_COMMERCE", "BOOKING_COMMERCE"]).optional()
+  });
+
+  const reorderSchema = z.array(
+    z.object({
+      id: z.string().min(1),
+      displayOrder: z.coerce.number().int()
+    })
+  );
+
+  const createSubCategorySchema = z.object({
+    name: z.string().trim().min(1, "Name is required"),
+    slug: z.string().trim().min(1, "Slug is required"),
+    imageUrl: z.string().trim().nullable().optional(),
+    displayOrder: z.coerce.number().int().default(0),
+    isActive: z.boolean().default(true)
+  });
+
+  const updateSubCategorySchema = z.object({
+    name: z.string().trim().min(1).optional(),
+    slug: z.string().trim().min(1).optional(),
+    imageUrl: z.string().trim().nullable().optional(),
+    displayOrder: z.coerce.number().int().optional(),
+    isActive: z.boolean().optional()
+  });
+
+  // Endpoints
+  app.get("/api/v1/admin/categories", { preHandler }, async (request, reply) => {
+    const result = await adminService.getCategories();
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.post("/api/v1/admin/categories", { preHandler }, async (request, reply) => {
+    const parsed = createCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid category creation data", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.createCategory(cleanUndefined(parsed.data), adminId, ip, userAgent);
+    reply.status(201);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/categories/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid category update data", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.updateCategory(id, cleanUndefined(parsed.data), adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.delete("/api/v1/admin/categories/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    await adminService.deleteCategory(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/categories/reorder", { preHandler }, async (request, reply) => {
+    const parsed = reorderSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid reorder data", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    await adminService.reorderCategories(parsed.data, adminId, ip, userAgent);
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.post("/api/v1/admin/categories/:slug/sub-categories", { preHandler }, async (request, reply) => {
+    const { slug } = request.params as { slug: string };
+    const parsed = createSubCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid subcategory creation data", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.createSubCategory(slug, cleanUndefined(parsed.data), adminId, ip, userAgent);
+    reply.status(201);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/sub-categories/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateSubCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid subcategory update data", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.updateSubCategory(id, cleanUndefined(parsed.data), adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/sub-categories/reorder", { preHandler }, async (request, reply) => {
+    const parsed = reorderSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid reorder data", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    await adminService.reorderSubCategories(parsed.data, adminId, ip, userAgent);
+    return {
+      success: true,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/feature-flags", { preHandler }, async (request, reply) => {
+    const result = await adminService.getFlags();
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const updateFlagBodySchema = z.object({
+    value: z.boolean()
+  });
+
+  app.put("/api/v1/admin/feature-flags/:key", { preHandler }, async (request, reply) => {
+    const { key } = request.params as { key: string };
+    const parsed = updateFlagBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid flag value", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.updateFlag(
+      key,
+      parsed.data.value,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/advertisements", { preHandler }, async (request, reply) => {
+    const statusSchema = z.object({
+      status: z.enum(["PENDING", "APPROVED", "ALL"]).optional()
+    });
+    const parsed = statusSchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid status filter", parsed.error.flatten());
+    }
+
+    const result = await adminService.getAds(parsed.data.status);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/advertisements/:id/approve", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.approveAd(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const rejectAdBodySchema = z.object({
+    reason: z.string().min(1, "Reason is required")
+  });
+
+  app.put("/api/v1/admin/advertisements/:id/reject", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = rejectAdBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid rejection request", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.rejectAd(id, parsed.data.reason, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/advertisements/:id/deactivate", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.deactivateAd(id, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const getAuditLogsQuerySchema = z.object({
+    role: z.enum(["ADMIN", "STORE_OWNER", "BUYER", "SYSTEM"]).optional(),
+    action: z.string().optional(),
+    entityType: z.string().optional(),
+    entityId: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional(),
+    cursor: z.string().optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(50),
+    format: z.string().optional()
+  });
+
+  const exportAuditLogsQuerySchema = z.object({
+    role: z.enum(["ADMIN", "STORE_OWNER", "BUYER", "SYSTEM"]).optional(),
+    action: z.string().optional(),
+    entityType: z.string().optional(),
+    entityId: z.string().optional(),
+    from: z.string().optional(),
+    to: z.string().optional()
+  });
+
+  const methodNotAllowedHandler = async (request: FastifyRequest, reply: FastifyReply) => {
+    return reply.status(405).send({
+      success: false,
+      error: {
+        code: "METHOD_NOT_ALLOWED",
+        message: "Method Not Allowed"
+      }
+    });
+  };
+
+  app.get("/api/v1/admin/audit-logs", { preHandler }, async (request, reply) => {
+    const parsed = getAuditLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const { format, role, ...rest } = parsed.data;
+    const filters = {
+      ...(role ? { actorRole: role } : {}),
+      ...rest
+    };
+
+    if (format === "csv") {
+      const csv = await adminService.exportAuditLogsCsv(filters);
+      return reply
+        .header("Content-Type", "text/csv; charset=utf-8")
+        .header("Content-Disposition", 'attachment; filename="audit-logs-export.csv"')
+        .send(csv);
+    }
+
+    const result = await adminService.getAuditLogs(filters);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/audit-logs/export", { preHandler }, async (request, reply) => {
+    const parsed = exportAuditLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const { role, ...rest } = parsed.data;
+    const filters = {
+      ...(role ? { actorRole: role } : {}),
+      ...rest
+    };
+
+    const csv = await adminService.exportAuditLogsCsv(filters);
+    return reply
+      .header("Content-Type", "text/csv; charset=utf-8")
+      .header("Content-Disposition", 'attachment; filename="audit-logs-export.csv"')
+      .send(csv);
+  });
+
+  // Read-only method restrictions (returning 405 Method Not Allowed)
+  app.put("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
+  app.post("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
+  app.delete("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
+
+  app.put("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
+  app.post("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
+  app.delete("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
 }

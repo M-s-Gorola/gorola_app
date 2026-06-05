@@ -233,14 +233,164 @@ This guarantees that tests remain layout-agnostic and execute flawlessly across 
 
 ---
 
-## 10. Summary Cheat Sheet for Developers
+## 10. The `{ force: true }` Anti-Pattern: Why It Exists, Why It Silently Fails, and the Correct Replacement
+
+### Why `force: true` Was Introduced
+
+Playwright's `locator.click()` runs a full pre-click actionability check sequence before dispatching the event:
+1. Element is attached to the DOM
+2. Element is visible (not `display:none` or `opacity:0`)
+3. Element is stable (not animating or layout-shifting)
+4. Element is enabled (not `disabled` attribute)
+5. Element **is not obscured** — the point at the center of the element is not covered by another element
+
+Step 5 is the one that bites most in rich UIs. Mobile viewports (e.g. iPhone SE at 375px) frequently have Sonner toast notifications, loading overlays, or animation artifacts that sit briefly at the top of the z-stack, covering button hit areas. When Playwright detects the element is obscured, it throws `locator.click: Element is not visible` or just waits for the obstruction to clear, eventually timing out.
+
+The instinctive solution is to add `{ force: true }`, which **skips all actionability checks** and fires the mouse event immediately:
+
+```typescript
+// "Fix" — skips checks so the test doesn't timeout
+await page.getByRole('button', { name: 'Confirm Restock' }).click({ force: true });
+```
+
+This pattern spread across the codebase as a way to "get past" the timeout on narrow viewports, especially inside toast-heavy mutation flows.
+
+---
+
+### Why It Fails Silently (and Is Worse Than the Timeout)
+
+`{ force: true }` bypasses Playwright's checks, but it **does NOT bypass the browser's native event dispatch**. The way `locator.click({ force: true })` works under the hood is:
+
+1. It moves the virtual mouse pointer to the center coordinate of the target element.
+2. It dispatches `mousedown` / `mouseup` / `click` native events to **whatever DOM element is at that coordinate**.
+
+If a Sonner toast (with `z-index: 9999`) is visually on top of the button, the browser's event dispatch sends the click **to the toast's DOM node**, not the button. The button's `onClick` handler never fires. The mutation never runs.
+
+The test then proceeds past the click line and may: 
+- Wait for the modal to close (`not.toBeVisible`), which times out → **visible failure**, OR
+- See the modal close for an *unrelated* reason (e.g. backdrop interaction, prior state) and proceed silently → **ghost pass / downstream failure** at a later assertion that depends on the mutation having run (e.g. a missing `RESTOCK` row in audit history)
+
+The ghost-pass scenario is the most dangerous because the test appears to "work" for the wrong reason, and the actual bug surfaces 10 lines later with a cryptic error that has nothing to do with the real cause.
+
+---
+
+### Real-World Example from GoRola
+
+In `store-owner-journey.spec.ts` (E2E-023: Inventory Restock & Audit History Logging), the test:
+
+1. Opens the restock modal and clicks `Confirm Restock` with `force: true`
+2. The `onSuccess` handler on the restock mutation fires `toast.success("Inventory restocked successfully")`
+3. The restock modal closes (mutually: `setRestockVariant(null)` is called in `onSuccess`)
+4. The test immediately opens the adjust modal and clicks `Confirm Adjustment` with `force: true`
+
+On a fresh, idle system (`test:e2e` standalone), the Sonner toast dismissed quickly enough that the adjust click landed on the button. On a loaded system (`ci:quality`, which runs build + unit tests first), the toast animated for a fraction longer, widening the window — the adjust click landed on the toast. The adjust mutation never fired. The `#adjust-qty-input` became `not.toBeVisible` via a different path (backdrop). The test proceeded. Then the stock history page showed no `ADJUSTMENT` row → test failed at line 356 with a confusing "element not found" error.
+
+The same pattern caused a second failure mode: `Confirm Restock` itself being intercepted in a prior scenario, resulting in no `RESTOCK` row either.
+
+---
+
+### The Correct Replacement: `dispatchEvent` + Network Settlement Gates
+
+**Rule: never rely on `force: true` when clicking a button that triggers a mutation.** Use two patterns together:
+
+#### Pattern 1: `dispatchEvent('click')` to bypass browser hit-testing
+
+Unlike `locator.click()`, `locator.dispatchEvent('click')` fires the event **directly on the element's registered JavaScript event listeners**, completely bypassing the browser's coordinate-based hit-testing. The event does not "land" on a z-index winner — it goes straight to the target element's handlers.
+
+```typescript
+// Before (broken on narrow viewports with overlapping toasts):
+await page.getByRole('button', { name: 'Confirm Restock' }).click({ force: true });
+
+// After (fires directly on the button's onClick handler regardless of what's on top):
+await page.getByRole('button', { name: 'Confirm Restock' }).dispatchEvent('click');
+```
+
+> [!IMPORTANT]
+> **Critical limitation:** `dispatchEvent` works correctly for pure React `onClick` mutation handlers (e.g. a `<button onClick={() => mutate(...)}`). It does **NOT** reliably work for buttons that call `navigate()` (React Router's programmatic navigation). The reason: `navigate()` is invoked inside the onClick handler, but when the event is non-trusted (synthetic), React Router's navigation guard may not execute the history push correctly, and `page.waitForURL()` will time out. For navigation buttons, use `click({ force: true })` instead after ensuring any blocking toast is cleared.
+> 
+> `dispatchEvent` also does NOT scroll to the element, does NOT check enabled state, and does NOT wait for stability. Ensure you have already confirmed the button is present and enabled before dispatching.
+
+#### Pattern 2: Pre-hook a `waitForResponse` as a mutation proof gate
+
+"Did the click work?" is best answered by watching the network, not the UI. Set up a response listener *before* the click, then await it after. If the mutation never fires (click was intercepted), this awaiter hangs and fails at *the right place* with a clear timeout message — not silently 10 assertions later.
+
+```typescript
+// Hook the PUT /stock response BEFORE dispatching the click
+const mutationSettled = page.waitForResponse(
+  (resp) => resp.url().includes('/stock') && resp.request().method() === 'PUT',
+  { timeout: 15000 }
+);
+
+await page.getByRole('button', { name: 'Confirm Restock' }).dispatchEvent('click');
+
+// Explicit proof that the mutation reached the server
+await mutationSettled;
+
+// Only now check the UI side-effects
+await expect(page.locator('#restock-qty-input')).not.toBeVisible({ timeout: 30000 });
+```
+
+#### Pattern 3: Toast-dismissal gate between sequential mutations
+
+When two mutations fire in sequence (restock → adjust), the first mutation's `onSuccess` fires a toast. That toast can block the second mutation's button. Gate on toast dismissal between them:
+
+```typescript
+// After restock modal closes:
+await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 10000 });
+// Now safe to open the adjust modal — no toast in the way
+await page.locator('[data-testid="adjust-button-0"]').click({ force: true });
+```
+
+#### Pattern 4: Upfront toast gate + `force: true` + `waitForURL` for navigation buttons
+
+If a `<button onClick={() => navigate(...)}>` is being intercepted by a toast, `dispatchEvent` will **not** fix it — React Router's programmatic navigation does not trigger reliably from non-trusted synthetic events. The correct fix is:
+
+1. Clear any lingering toast **at the start of the test** (not just before the click) with `.catch(() => {})` so the gate never blocks if no toast is present.
+2. Use `click({ force: true })` on the navigation button (safe because the toast is already gone).
+3. Gate on `waitForURL` to confirm navigation actually happened before asserting page content.
+
+```typescript
+// Step 1: At test start, after navigating to a new page, clear any leftover toasts
+// from prior serial tests. Sonner toasts persist across React Router navigation.
+await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 8000 }).catch(() => {});
+
+// ... navigate to products page, search, find the edit button ...
+
+// Step 2: force:true is safe — toast was already cleared above
+await page.locator('[data-testid="edit-product-prod_rice_1"]').click({ force: true });
+// Step 3: confirm navigation happened (proves the click landed on the button, not a toast)
+await expect(page.locator('[data-testid="restock-button-0"]')).toBeVisible({ timeout: 15000 });
+```
+
+> [!WARNING]
+> Do NOT use `dispatchEvent('click')` on navigation buttons and then await `waitForURL()`. This was tested and confirmed to fail — `waitForURL` times out because React Router's `navigate()` is not invoked from a non-trusted event in all environments. The timeout is identical to whatever `waitForURL` timeout you set, making the failure look like a slow page load rather than a click issue.
+
+This confirms navigation actually occurred before proceeding.
+
+---
+
+### When `force: true` IS Still Appropriate
+
+`{ force: true }` remains valid for non-mutation interactions where the click target has no z-index competitor and the only reason for the actionability failure is a known Playwright false-positive:
+
+- Clicking a `role="switch"` with `aria-checked` where Playwright misidentifies the inner thumb as the hit target
+- Clicking inside a Radix UI `Dialog` or `Popover` where the portal overlay covers child elements
+- Clicking deeply nested elements where `scrollIntoViewIfNeeded` doesn't help due to scroll container scoping
+
+In these cases, `force: true` is acceptable **only if** the button is not inside a toast/overlay shadow and there is no mutation that needs to be verified via network gate.
+
+---
+
+## 11. Summary Cheat Sheet for Developers
 
 | Symptom | Probable Cause | Corrective Action |
 | :--- | :--- | :--- |
 | `Locator not found / Timeout` on modal, dropdown, or submenu | Component re-render unmounted the UI overlay mid-flight. | Wait for the cache update/query refresh to settle (`waitForResponse`) before opening the menu. |
 | Test fails on CI but is 100% green locally | CI runner CPU throttle lag slows React/DOM rendering cycles. | Avoid arbitrary delays; use dynamic assertion gates (`toBeVisible`, `toHaveCount`). |
-| Click event doesn't seem to fire | A layout shift or overlapping toast message intercepted the click. | Use `{ force: true }` or scroll the element into view first (`scrollIntoViewIfNeeded()`). |
+| Mutation-dependent assertion fails (e.g. "RESTOCK row not found") even though the modal appeared to close | `force: true` click landed on a toast overlay; mutation never fired; modal closed via a ghost interaction | Replace `click({ force: true })` with `dispatchEvent('click')` and add a `waitForResponse` gate to prove the API was called. |
+| Click event doesn't seem to fire on a non-mutation UI element | A layout shift or animation is covering the element | `{ force: true }` is acceptable here; use `scrollIntoViewIfNeeded()` first if possible. |
 | `INVALID_BOOKING_DATE` failure on midnight/timezone boundary | Server and browser date mismatch on `+1 day` boundaries. | Shift the E2E date selection to **at least +2 days** in the future to ensure safety. |
 | Stale details (like rejection reason) missing after WebSocket status update | The socket event only pushed the basic status string without secondary DB fields. | Concurrently update local status query data optimistically, and trigger `queryClient.invalidateQueries` to fetch the complete updated record. |
 | `locator.click: Timeout` on multi-viewport navigation links | The first matched element is hidden in the current viewport (e.g. desktop sidebar is hidden on mobile). | Use `.filter({ visible: true }).first()` to dynamically target the active visible element in the current viewport. |
-| Click event blocked/deadlocked by toast notifications | Sonner's "hover to pause" feature deadlocks the auto-dismiss timer when Playwright's mouse pointer hovers over a toast. | Programmatically hide the toaster element: `await page.evaluate(() => { (document.querySelector('[data-sonner-toaster]') as HTMLElement).style.display = 'none'; })`. |
+| Navigation button (`onClick={() => navigate(...)}`) click does nothing; next page element times out | A toast from a prior serial test persisted across React Router navigation and intercepted the button click; `navigate()` never called | Add a toast-dismissal gate **at the start of the test** (`.catch(() => {})` so it doesn't block if no toast): `await expect(page.locator('[data-sonner-toast]')).not.toBeVisible({ timeout: 8000 }).catch(() => {})`, then use `click({ force: true })`. Do NOT use `dispatchEvent` — React Router navigation does not trigger from non-trusted events. |
+| Click event blocked/deadlocked by toast notifications | Sonner's "hover to pause" feature deadlocks the auto-dismiss timer when Playwright's mouse pointer hovers over a toast. | Wait for `[data-sonner-toast]` to be `not.toBeVisible` before the next click, OR programmatically hide: `await page.evaluate(() => { (document.querySelector('[data-sonner-toaster]') as HTMLElement).style.display = 'none'; })`. |

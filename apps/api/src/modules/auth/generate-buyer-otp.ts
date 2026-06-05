@@ -15,10 +15,10 @@ export function generateBuyerOtp(): string {
     return fixed;
   }
 
-  const dummy = process.env.GOROLA_DUMMY_OTP?.trim();
+  const dummy = (process.env.GOROLA_DUMMY_OTP ?? process.env.GOROLA_OTP)?.trim();
   if (dummy !== undefined && dummy.length > 0) {
     if (!/^\d{6}$/.test(dummy)) {
-      throw new Error("GOROLA_DUMMY_OTP must be exactly 6 digits when set");
+      throw new Error("GOROLA_DUMMY_OTP or GOROLA_OTP must be exactly 6 digits when set");
     }
     return dummy;
   }

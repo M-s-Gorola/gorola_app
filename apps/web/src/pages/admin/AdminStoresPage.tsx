@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Plus, RefreshCw } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -50,6 +50,7 @@ export function AdminStoresPage(): ReactElement {
   const [storeType, setStoreType] = useState<"QUICK_COMMERCE" | "BOOKING_COMMERCE" | "">("");
   const [ownerEmail, setOwnerEmail] = useState("");
   const [ownerPassword, setOwnerPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Fetch stores query
@@ -112,6 +113,7 @@ export function AdminStoresPage(): ReactElement {
     setStoreType("");
     setOwnerEmail("");
     setOwnerPassword("");
+    setShowPassword(false);
     setFormError(null);
   };
 
@@ -434,14 +436,24 @@ export function AdminStoresPage(): ReactElement {
 
               <label className="block space-y-1">
                 <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Temp Password</span>
-                <input
-                  data-testid="owner-password-input"
-                  type="password"
-                  className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
-                  value={ownerPassword}
-                  onChange={(e) => setOwnerPassword(e.target.value)}
-                  placeholder="Minimum 8 characters"
-                />
+                <div className="relative">
+                  <input
+                    data-testid="owner-password-input"
+                    type={showPassword ? "text" : "password"}
+                    className="w-full rounded-lg border border-gorola-pine/20 pl-3 pr-10 py-2 font-dm-sans text-sm"
+                    value={ownerPassword}
+                    onChange={(e) => setOwnerPassword(e.target.value)}
+                    placeholder="Minimum 8 characters"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                    aria-label={showPassword ? "Hide" : "Show"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </label>
             </div>
 
