@@ -322,4 +322,255 @@ describe("Admin Categories API Integration Tests", () => {
     expect(dbSc1?.displayOrder).toBe(4);
     expect(dbSc2?.displayOrder).toBe(2);
   });
+
+  describe("Bulk Category Import Endpoints", () => {
+    it("should enforce ADMIN role authorization for validate and confirm", async () => {
+      const buyerToken = await generateAccessToken("buyer-123", "BUYER");
+
+      const resVal = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/validate",
+        headers: { authorization: `Bearer ${buyerToken}` },
+        payload: { rows: [] }
+      });
+      expect(resVal.statusCode).toBe(403);
+
+      const resConf = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm",
+        headers: { authorization: `Bearer ${buyerToken}` },
+        payload: { rows: [] }
+      });
+      expect(resConf.statusCode).toBe(403);
+    });
+
+    it("should validate bulk categories dry-run without DB writes", async () => {
+      const payload = {
+        rows: [
+          {
+            name: "Dairy Products",
+            subCategories: [{ name: "Full Cream Milk" }, { name: "Toned Milk" }],
+            commerceType: "QUICK_COMMERCE",
+            displayOrder: 1
+          },
+          {
+            name: "Bakery Delights",
+            subCategories: [{ name: "Brown Bread" }],
+            commerceType: "QUICK_COMMERCE",
+            displayOrder: 2
+          }
+        ]
+      };
+
+      const res = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/validate",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(true);
+      expect(body.data.conflicts).toEqual([]);
+      expect(body.data.totalRows).toBe(2);
+      expect(body.data.totalSubCategoryRows).toBe(3);
+
+      // Verify zero DB writes
+      const catCount = await db.category.count();
+      expect(catCount).toBe(0);
+    });
+
+    it("should identify category slug conflict on validation", async () => {
+      // Pre-insert conflicting category
+      await db.category.create({
+        data: { name: "Dairy", slug: "dairy", commerceType: "QUICK_COMMERCE" }
+      });
+
+      const payload = {
+        rows: [
+          {
+            name: "Dairy",
+            subCategories: [],
+            commerceType: "QUICK_COMMERCE"
+          }
+        ]
+      };
+
+      const res = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/validate",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.conflicts).toEqual([
+        {
+          row: 1,
+          type: "CATEGORY_SLUG_EXISTS",
+          name: "Dairy",
+          slug: "dairy"
+        }
+      ]);
+
+      const catCount = await db.category.count();
+      expect(catCount).toBe(1); // Only the pre-existing one
+    });
+
+    it("should confirm and insert categories/subcategories with mode=strict", async () => {
+      const payload = {
+        rows: [
+          {
+            name: "Dairy Products",
+            subCategories: [{ name: "Full Cream Milk" }],
+            commerceType: "QUICK_COMMERCE",
+            displayOrder: 1
+          }
+        ]
+      };
+
+      const res = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm?mode=strict",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.inserted).toBe(1);
+      expect(body.data.skipped).toBe(0);
+
+      // Verify DB
+      const cat = await db.category.findUnique({
+        where: { slug: "dairy-products" },
+        include: { subCategories: true }
+      });
+      expect(cat).toBeDefined();
+      expect(cat?.name).toBe("Dairy Products");
+      expect(cat?.subCategories.length).toBe(1);
+      expect(cat?.subCategories[0]?.slug).toBe("full-cream-milk");
+
+      // Verify AuditLog
+      const audit = await db.auditLog.findFirst({
+        where: { action: "ADMIN_BULK_CATEGORY_INSERT" }
+      });
+      expect(audit).toBeDefined();
+      expect(audit?.actorId).toBe("admin-123");
+      expect((audit?.newValue as Record<string, unknown>)?.insertedCount).toBe(1);
+    });
+
+    it("should reject confirm with 409 Conflict if conflicts exist in mode=strict", async () => {
+      await db.category.create({
+        data: { name: "Dairy", slug: "dairy", commerceType: "QUICK_COMMERCE" }
+      });
+
+      const payload = {
+        rows: [
+          {
+            name: "Dairy",
+            subCategories: [],
+            commerceType: "QUICK_COMMERCE"
+          }
+        ]
+      };
+
+      const res = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm?mode=strict",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+
+      expect(res.statusCode).toBe(409);
+      const body = res.json();
+      expect(body.success).toBe(false);
+      expect(body.error.code).toBe("BULK_CONFLICT");
+      expect(body.error.details.conflicts).toEqual([
+        {
+          row: 1,
+          type: "CATEGORY_SLUG_EXISTS",
+          name: "Dairy",
+          slug: "dairy"
+        }
+      ]);
+
+      // Category count should remain 1 (no new insert)
+      const count = await db.category.count();
+      expect(count).toBe(1);
+    });
+
+    it("should confirm and skip conflicts if mode=skip", async () => {
+      await db.category.create({
+        data: { name: "Dairy", slug: "dairy", commerceType: "QUICK_COMMERCE" }
+      });
+
+      const payload = {
+        rows: [
+          {
+            name: "Dairy",
+            subCategories: [],
+            commerceType: "QUICK_COMMERCE"
+          },
+          {
+            name: "Bakery",
+            subCategories: [{ name: "Toast" }],
+            commerceType: "QUICK_COMMERCE"
+          }
+        ]
+      };
+
+      const res = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm?mode=skip",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+
+      expect(res.statusCode).toBe(201);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data.inserted).toBe(1);
+      expect(body.data.skipped).toBe(1);
+      expect(body.data.insertedNames).toEqual(["Bakery"]);
+      expect(body.data.skippedNames).toEqual(["Dairy"]);
+
+      // Verify DB has pre-existing Dairy and new Bakery
+      const count = await db.category.count();
+      expect(count).toBe(2);
+
+      const bakery = await db.category.findUnique({
+        where: { slug: "bakery" },
+        include: { subCategories: true }
+      });
+      expect(bakery).toBeDefined();
+      expect(bakery?.subCategories.length).toBe(1);
+    });
+
+    it("should return 400 validation error if body fails zod validation", async () => {
+      // Empty rows
+      const res1 = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { rows: [] }
+      });
+      expect(res1.statusCode).toBe(400);
+
+      // Missing subcategories / invalid format
+      const res2 = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { rows: [{ name: "" }] }
+      });
+      expect(res2.statusCode).toBe(400);
+    });
+  });
 });

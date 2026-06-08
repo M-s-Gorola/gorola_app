@@ -336,6 +336,25 @@ export function registerAdminRoutes(
     commerceType: z.enum(["QUICK_COMMERCE", "BOOKING_COMMERCE"])
   });
 
+  const bulkCategoryRowSchema = z.object({
+    name: z.string().trim().min(1, "Category name is required"),
+    subCategories: z.array(
+      z.object({
+        name: z.string().trim().min(1, "Subcategory name is required")
+      })
+    ),
+    commerceType: z.enum(["QUICK_COMMERCE", "BOOKING_COMMERCE"]).optional(),
+    displayOrder: z.number().int().optional()
+  });
+
+  const bulkCategoryValidateSchema = z.object({
+    rows: z.array(bulkCategoryRowSchema).min(1, "Rows array cannot be empty").max(200, "Maximum 200 rows allowed")
+  });
+
+  const bulkCategoryConfirmQuerySchema = z.object({
+    mode: z.enum(["strict", "skip"]).default("strict")
+  });
+
   const updateCategorySchema = z.object({
     name: z.string().trim().min(1).optional(),
     slug: z.string().trim().min(1).optional(),
@@ -371,6 +390,59 @@ export function registerAdminRoutes(
   // Endpoints
   app.get("/api/v1/admin/categories", { preHandler }, async (request, reply) => {
     const result = await adminService.getCategories();
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.post("/api/v1/admin/bulk/categories/validate", { preHandler }, async (request, reply) => {
+    const parsed = bulkCategoryValidateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid bulk category validation data", parsed.error.flatten());
+    }
+
+    const result = await adminService.bulkValidateCategories(parsed.data.rows);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.post("/api/v1/admin/bulk/categories/confirm", { preHandler }, async (request, reply) => {
+    const parsedQuery = bulkCategoryConfirmQuerySchema.safeParse(request.query);
+    if (!parsedQuery.success) {
+      throw new ValidationError("Invalid query parameters", parsedQuery.error.flatten());
+    }
+
+    const parsedBody = bulkCategoryValidateSchema.safeParse(request.body);
+    if (!parsedBody.success) {
+      throw new ValidationError("Invalid bulk category confirmation data", parsedBody.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.bulkConfirmCategories(
+      parsedBody.data.rows,
+      parsedQuery.data.mode,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    reply.status(201);
     return {
       success: true,
       data: result,

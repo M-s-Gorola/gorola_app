@@ -1408,3 +1408,69 @@ High-altitude environments like Mussoorie experience severe and volatile incleme
 - Requires maintaining the settings inputs on the store settings page even for service/booking stores. This is a negligible UI footprint compared to the massive structural benefit of a clean, unified store settings entity model.
 
 
+---
+
+## [DECISION-048] Bulk Insert & Restock Scope: Store-Scoped Only, Two-Phase Validate/Confirm, Skip over Upsert
+
+**Date:** 2026-06-08
+**Status:** Accepted
+
+**Context:**
+Phase 6.10 introduces bulk insert of products+variants (store owner), bulk insert of categories+subcategories (admin), and bulk restock (store owner). Three key design decisions were made during planning:
+
+1. **Scope boundary** — Who inserts what?
+2. **Conflict resolution** — What happens when a row conflicts with existing data?
+3. **Restock identity** — How do we identify which variant to update, without a SKU field?
+
+**Decision:**
+1. **Scope boundary:** Store owners can bulk insert their own products/variants and bulk restock their own variants. Admin can bulk insert categories/subcategories only. Admin does **not** bulk insert products on behalf of stores — store owners own their own catalog. This eliminates any need for `storeId` in request bodies for store owner operations (it is always sourced from the JWT). It also eliminates cross-store ambiguity from the restock identity problem.
+2. **Conflict resolution — Two-Phase Validate/Confirm with strict-first, skip-as-option:** The API exposes two endpoints per operation: `validate` (dry-run, no DB writes, returns conflict report) and `confirm?mode=strict|skip` (actual write). The validate endpoint is always called first. If conflicts are found, the frontend shows the user a conflict table and presents two choices: "Fix my file" (return to upload, no confirm call) or "Skip conflicts & continue" (call confirm with `mode=skip`). `mode=skip` inserts only non-conflicting rows. `mode=upsert` (overwrite existing records) is explicitly **not** supported — overwriting live production data from a bulk file is a high-risk destructive operation unsuitable for a v1 implementation. `mode=strict` (reject all if any conflict exists) is the default.
+3. **Restock identity without SKU:** Since restock is scoped to a single store (storeId from JWT), the compound key `(storeId + productName + variantLabel)` is sufficient to uniquely identify a variant for update. Per DECISION-039, variant labels are unique within a product. Product names are practically unique within a store (enforced by the store owner themselves). If ambiguity is detected (two products with the same name in the same store), the row is rejected with `AMBIGUOUS_PRODUCT_NAME` — a loud, safe failure that prevents silent data corruption. This eliminates the need for a `sku` field on `ProductVariant` for this use case.
+
+**Rationale:**
+- Store-scoped boundaries respect the existing authorization model (DECISION-039, DECISION-034) without introducing any schema changes.
+- Two-phase validate/confirm is an established UX pattern (used by Shopify product imports, GitHub PR checks) that prevents partial data corruption and gives users full visibility into conflicts before any write occurs.
+- Skip (not upsert) is safer: it leaves existing records untouched. If an admin or store owner wants to update an existing category or product, they use the existing single-edit UI — that is the correct context for intentional updates.
+- Compound key `(storeId + productName + variantLabel)` avoids any schema migration and works within existing DECISION-039 constraints.
+
+**Tradeoffs:**
+- Two API calls per operation increases latency for the happy path (no conflicts). Acceptable: bulk operations are not latency-sensitive — the user is uploading a file and waiting anyway.
+- `mode=skip` can silently succeed while leaving some rows unprocessed. Mitigated by the explicit response body (`{ inserted: N, skipped: M }`) and UI toast showing both counts.
+- Compound key approach is fragile if a store owner has two products with the same name. Mitigated by the `AMBIGUOUS_PRODUCT_NAME` error, which forces the store owner to resolve the naming collision before bulk restocking those products.
+
+**Alternatives Considered:**
+1. Single-endpoint upsert — rejected: too destructive for bulk operations on live production data.
+2. Admin bulk-inserts products on behalf of stores — rejected: violates store ownership principle (DECISION-034), adds storeId auth complexity.
+3. Add `sku` field to `ProductVariant` for restock identity — rejected (for this phase): unnecessary complexity when store-scope + compound key is sufficient. Deferred to a future phase if bulk cross-store admin restock ever becomes a requirement.
+4. Require slug in bulk category Excel — rejected: slugs are a technical implementation detail. Auto-generation from name follows the existing single-create flow and removes all technical knowledge from the user-facing sheet.
+
+---
+
+## [DECISION-049] No E2E (Playwright) Tests for Phase 6.10 Bulk Operations
+
+**Date:** 2026-06-08
+**Status:** Accepted
+
+**Context:**
+The project follows a strict TDD approach (TDD_INSTRUCTIONS.md) requiring both unit/component tests and integration tests. The question for Phase 6.10 is whether bulk insert/restock operations also require E2E Playwright tests.
+
+**Decision:**
+No new E2E Playwright tests are written for Phase 6.10 bulk operations. Coverage is provided entirely by:
+- **Integration tests** (Vitest, `src/__tests__/integration/`) — hit real HTTP routes with a real test database. Cover validate/confirm endpoint contracts, auth guards, conflict detection, DB state assertions, StockMovement creation, and AuditLog entries.
+- **Unit/component tests** (Vitest + Testing Library) — cover modal open/close behavior, conflict table rendering, file input interactions, and toast messages with mocked API responses.
+
+**Rationale:**
+- Bulk insert is an **operational tool** (admin catalog setup, store onboarding) not a **buyer-facing flow**. Playwright E2E is optimized for buyer journeys and primary happy paths.
+- File upload interactions in Playwright (`page.setInputFiles`) require fixture `.xlsx` files on the filesystem and are brittle to modal state changes. Integration + unit tests provide equivalent and more reliable coverage.
+- The validate/confirm API contract is already 100% covered by integration tests hitting real routes — there is no "phantom feature" risk (the concern that TDD_INSTRUCTIONS.md warns against) because the HTTP contract is directly verified against a real DB.
+- Existing E2E tests (home page category counts, product listings) act as an implicit regression check: if bulk-inserted data is malformed, those tests will catch it if the data is seeded into the test fixture.
+
+**Tradeoffs:**
+- If a future regression occurs specifically in the frontend modal wiring (not caught by unit tests), it would not be caught by E2E. Mitigated by hyper-specific unit test assertions for the modal's API call sequence.
+- The decision is consciously documented so a future engineer can add E2E coverage using `page.setInputFiles('input[data-testid="bulk-file-input"]', '/path/to/fixture/sample.xlsx')` without interacting with the OS file dialog.
+
+**Alternatives Considered:**
+1. Add Playwright E2E tests for bulk insert modal — rejected: file upload dialog interactions are flaky without `setInputFiles`, and the coverage is duplicative of integration tests that already prove the HTTP contract.
+2. Add E2E smoke test only (no file upload, just assert button exists) — rejected: too low value to justify the maintenance burden.
+
+---

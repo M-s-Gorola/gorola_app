@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 
+import type { Category, Store, StoreOwner, SubCategory } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { SignJWT } from "jose";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -1088,5 +1089,394 @@ describe("StoreOwner Products Integration Tests", () => {
     expect(foundProductActive).toBeDefined();
     expect(foundProductActive.name).toBe("Toggle Product Status");
   });
+
+  describe("StoreOwner Bulk Products Insertion", () => {
+    let store: Store;
+    let owner: StoreOwner;
+    let category: Category;
+    let subCategory: SubCategory;
+    let token: string;
+
+    beforeEach(async () => {
+      store = await storeRepo.create({
+        name: "Store A",
+        description: "Organic Groceries",
+        phone: "+919999999901",
+        address: "Store A Street"
+      });
+
+      owner = await ownerRepo.create({
+        email: "owner.a@gorola.in",
+        passwordHash: "dummy-hash",
+        storeId: store.id
+      });
+
+      category = await db.category.create({
+        data: {
+          slug: "dairy",
+          name: "Dairy",
+          isActive: true
+        }
+      });
+
+      subCategory = await db.subCategory.create({
+        data: {
+          slug: "full-cream-milk",
+          name: "Full Cream Milk",
+          isActive: true,
+          categoryId: category.id
+        }
+      });
+
+      token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+    });
+
+    it("should validate a valid bulk product insert request with zero DB writes", async () => {
+      const payload = {
+        rows: [{
+          productName: "Amul Milk",
+          subCategoryName: "Full Cream Milk",
+          description: "Fresh milk",
+          imageUrl: "http://example.com/milk.png",
+          variants: [
+            { label: "500ml", price: 35, stockQty: 100, unit: "packet" },
+            { label: "1L", price: 65, stockQty: 50, unit: "bottle" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/validate",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(true);
+      expect(body.data.conflicts).toHaveLength(0);
+      expect(body.data.totalRows).toBe(1);
+      expect(body.data.totalVariantRows).toBe(2);
+
+      // Verify zero DB writes
+      const productsCount = await db.product.count({ where: { storeId: store.id } });
+      expect(productsCount).toBe(0);
+    });
+
+    it("should flag a subcategory that does not exist in the system", async () => {
+      const payload = {
+        rows: [{
+          productName: "Amul Milk",
+          subCategoryName: "NonExistentCategory",
+          description: "Fresh milk",
+          imageUrl: "http://example.com/milk.png",
+          variants: [
+            { label: "500ml", price: 35, stockQty: 100, unit: "packet" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/validate",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.conflicts).toHaveLength(1);
+      expect(body.data.conflicts[0].type).toBe("SUBCATEGORY_NOT_FOUND");
+      expect(body.data.conflicts[0].subCategoryName).toBe("NonExistentCategory");
+      expect(body.data.conflicts[0].row).toBe(1);
+    });
+
+    it("should flag a product whose name already exists in the store", async () => {
+      // Pre-create the product
+      await db.product.create({
+        data: {
+          storeId: store.id,
+          categoryId: category.id,
+          subCategoryId: subCategory.id,
+          name: "Amul Milk",
+          description: "Existing milk",
+          imageUrl: "http://example.com/existing.png",
+          isActive: true
+        }
+      });
+
+      const payload = {
+        rows: [{
+          productName: "Amul Milk",
+          subCategoryName: "Full Cream Milk",
+          description: "Fresh milk",
+          imageUrl: "http://example.com/milk.png",
+          variants: [
+            { label: "500ml", price: 35, stockQty: 100, unit: "packet" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/validate",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.conflicts).toHaveLength(1);
+      expect(body.data.conflicts[0].type).toBe("PRODUCT_NAME_EXISTS");
+      expect(body.data.conflicts[0].productName).toBe("Amul Milk");
+      expect(body.data.conflicts[0].row).toBe(1);
+    });
+
+    it("should flag duplicate variant labels within the same product row", async () => {
+      const payload = {
+        rows: [{
+          productName: "Amul Milk",
+          subCategoryName: "Full Cream Milk",
+          description: "Fresh milk",
+          imageUrl: "http://example.com/milk.png",
+          variants: [
+            { label: "500ml", price: 35, stockQty: 100, unit: "packet" },
+            { label: "500ml", price: 38, stockQty: 50, unit: "packet" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/validate",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.conflicts).toHaveLength(1);
+      expect(body.data.conflicts[0].type).toBe("DUPLICATE_VARIANT_LABEL");
+      expect(body.data.conflicts[0].label).toBe("500ml");
+      expect(body.data.conflicts[0].row).toBe(1);
+    });
+
+    it("should flag commerce type mismatch when a QUICK_COMMERCE store uploads a BOOKING_COMMERCE subcategory", async () => {
+      const bookingCategory = await db.category.create({
+        data: {
+          slug: "booking-cat",
+          name: "Booking Category",
+          displayOrder: 2,
+          isActive: true,
+          commerceType: "BOOKING_COMMERCE"
+        }
+      });
+
+      await db.subCategory.create({
+        data: {
+          slug: "booking-sub",
+          name: "Booking Sub",
+          isActive: true,
+          categoryId: bookingCategory.id
+        }
+      });
+
+      const payload = {
+        rows: [{
+          productName: "Service Item",
+          subCategoryName: "Booking Sub",
+          description: "Service description",
+          imageUrl: "http://example.com/service.png",
+          variants: [
+            { label: "1hr", price: 100, stockQty: 1, unit: "hour" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/validate",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.valid).toBe(false);
+      expect(body.data.conflicts).toHaveLength(1);
+      expect(body.data.conflicts[0].type).toBe("COMMERCE_TYPE_MISMATCH");
+      expect(body.data.conflicts[0].subCategoryName).toBe("Booking Sub");
+      expect(body.data.conflicts[0].commerceType).toBe("BOOKING_COMMERCE");
+      expect(body.data.conflicts[0].row).toBe(1);
+    });
+
+    it("should return 403 Forbidden for a buyer role calling validate", async () => {
+      const buyerToken = await generateAccessToken("buyer-123", "BUYER");
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/validate",
+        headers: { authorization: `Bearer ${buyerToken}` },
+        payload: { rows: [] }
+      });
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should successfully confirm and insert products, variants, stock movements, and audit log in strict mode", async () => {
+      const payload = {
+        rows: [{
+          productName: "Amul Milk",
+          subCategoryName: "Full Cream Milk",
+          description: "Fresh milk",
+          imageUrl: "http://example.com/milk.png",
+          variants: [
+            { label: "500ml", price: 35, stockQty: 100, unit: "packet" },
+            { label: "1L", price: 65, stockQty: 50, unit: "bottle" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/confirm?mode=strict",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.inserted).toBe(1);
+      expect(body.data.skipped).toBe(0);
+
+      // Verify product and variants created in DB
+      const createdProduct = await db.product.findFirstOrThrow({
+        where: { storeId: store.id, name: "Amul Milk" },
+        include: { variants: true }
+      });
+      expect(createdProduct.variants).toHaveLength(2);
+      expect(createdProduct.variants[0]!.label).toBe("500ml");
+      expect(createdProduct.variants[1]!.label).toBe("1L");
+
+      // Verify stock movements
+      const movements = await db.stockMovement.findMany({
+        where: { productVariantId: { in: createdProduct.variants.map((v) => v.id) } }
+      });
+      expect(movements).toHaveLength(2);
+      expect(movements[0]!.type).toBe("INITIAL");
+      expect(movements[1]!.type).toBe("INITIAL");
+
+      // Verify AuditLog
+      const auditLog = await db.auditLog.findFirst({
+        where: { action: "STORE_BULK_PRODUCT_INSERT", actorId: owner.id }
+      });
+      expect(auditLog).toBeDefined();
+    });
+
+    it("should return 409 Conflict in strict mode if there is a conflict", async () => {
+      // Pre-create duplicate product
+      await db.product.create({
+        data: {
+          storeId: store.id,
+          categoryId: category.id,
+          subCategoryId: subCategory.id,
+          name: "Amul Milk",
+          description: "Existing",
+          imageUrl: "http://example.com/existing.png",
+          isActive: true
+        }
+      });
+
+      const payload = {
+        rows: [{
+          productName: "Amul Milk",
+          subCategoryName: "Full Cream Milk",
+          description: "Fresh milk",
+          imageUrl: "http://example.com/milk.png",
+          variants: [
+            { label: "500ml", price: 35, stockQty: 100, unit: "packet" }
+          ]
+        }]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/confirm?mode=strict",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(409);
+      expect(response.json().success).toBe(false);
+      expect(response.json().error.code).toBe("BULK_CONFLICT");
+      
+      // Verify no other products inserted
+      const count = await db.product.count({ where: { storeId: store.id } });
+      expect(count).toBe(1); // only the pre-existing one
+    });
+
+    it("should skip conflicting rows and insert valid rows in skip mode", async () => {
+      // Pre-create duplicate product
+      await db.product.create({
+        data: {
+          storeId: store.id,
+          categoryId: category.id,
+          subCategoryId: subCategory.id,
+          name: "Amul Milk",
+          description: "Existing",
+          imageUrl: "http://example.com/existing.png",
+          isActive: true
+        }
+      });
+
+      const payload = {
+        rows: [
+          {
+            productName: "Amul Milk",
+            subCategoryName: "Full Cream Milk",
+            description: "Fresh milk",
+            imageUrl: "http://example.com/milk.png",
+            variants: [{ label: "500ml", price: 35, stockQty: 100, unit: "packet" }]
+          },
+          {
+            productName: "Amul Cheese",
+            subCategoryName: "Full Cream Milk",
+            description: "Fresh cheese",
+            imageUrl: "http://example.com/cheese.png",
+            variants: [{ label: "200g", price: 120, stockQty: 80, unit: "block" }]
+          }
+        ]
+      };
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/store/bulk/products/confirm?mode=skip",
+        headers: { authorization: `Bearer ${token}` },
+        payload
+      });
+
+      expect(response.statusCode).toBe(201);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.inserted).toBe(1);
+      expect(body.data.skipped).toBe(1);
+
+      // Verify "Amul Cheese" was inserted, but duplicate "Amul Milk" was not inserted again
+      const count = await db.product.count({ where: { storeId: store.id } });
+      expect(count).toBe(2); // original duplicate + Amul Cheese
+
+      const cheese = await db.product.findFirst({ where: { name: "Amul Cheese" } });
+      expect(cheese).toBeDefined();
+    });
+  });
 });
+
 
