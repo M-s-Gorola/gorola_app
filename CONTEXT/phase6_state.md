@@ -19,16 +19,16 @@
 | Phase 6.7 | Refresh Token Race Condition | COMPLETE | Deduplicate overlapping /refresh calls in Axios interceptor to prevent unexpected logouts on reload or parallel requests. |
 | Phase 6.8 | E2E Test Suite Alignment | COMPLETE | Aligned category segregation homepage assertions and E2E test routes. |
 | Phase 6.9 | Booking Commerce Feature Parity & Discount Integration | COMPLETE | Standardized discount pipelines, collapsible itemized detail modals, and transparent maximum discount disclosure rules. |
-| Phase 6.10 | Bulk Insert & Bulk Restock | 🔴 NOT STARTED | Two-phase validate/confirm pattern. Store owner: bulk product insert + bulk restock. Admin: bulk category + subcategory insert. See DECISION-048. |
+| Phase 6.10 | Bulk Insert & Bulk Restock | 🟡 IN PROGRESS | Two-phase validate/confirm pattern. Admin bulk category/subcategory import complete (Phase 6.10.1). Store owner bulk product import (Phase 6.10.2) and bulk restock (Phase 6.10.3) pending. See DECISION-048. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-06-08
-- **Session Summary:** Planned Phase 6.10 — Bulk Insert & Bulk Restock. Investigated full system (schema, service, controller, existing tests) and wrote a complete TDD checklist. Added DECISION-048 and DECISION-049 to decision_log.md. No code was changed — planning only.
-- **Next Session Must Start With:** Phase 6.10 — Begin with Step 1: Write failing integration tests for `POST /api/v1/store/bulk/products/validate` and `POST /api/v1/admin/bulk/categories/validate`.
-- **In Progress Right Now:** None — Phase 6.10 plan written, awaiting execution.
+- **Session Summary:** Completed Phase 6.10.1 (Admin Bulk Category & SubCategory Import) with client-side Excel validation and embedded Excel dropdown/numeric constraints. All frontend and backend tests pass cleanly.
+- **Next Session Must Start With:** Phase 6.10.2 (Store Owner: Bulk Insert Products & Variants). Begin by writing failing integration tests for `POST /api/v1/store/bulk/products/validate` and `POST /api/v1/store/bulk/products/confirm`.
+- **In Progress Right Now:** Phase 6.10.2 (Store Owner: Bulk Insert Products & Variants).
 - **Current Blocker:** None.
 
 ---
@@ -551,61 +551,61 @@ Admin currently must create each category and subcategory one-by-one through the
 
 ---
 
-- [ ] **RED — Integration (append to `admin.categories.test.ts`):**
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/validate` with a valid ADMIN JWT and body `{ rows: [{ name: "Dairy", subCategories: [{ name: "Full Cream Milk" }, { name: "Toned Milk" }] }, { name: "Bakery", subCategories: [{ name: "Bread" }] }] }` → HTTP 200 with body `{ success: true, data: { valid: true, conflicts: [], totalRows: 2, totalSubCategoryRows: 3 } }`. Zero DB writes — verify `db.category.count()` is still 0 after this call.
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/validate` with a BUYER JWT → HTTP 403.
-  - [ ] Test: Pre-insert a category with slug `"dairy"` in the test DB. Then call validate with body `{ rows: [{ name: "Dairy", subCategories: [] }] }`. Expect HTTP 200 with `{ data: { valid: false, conflicts: [{ row: 1, type: "CATEGORY_SLUG_EXISTS", name: "Dairy", slug: "dairy" }] } }`. Verify zero DB writes.
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=strict` with body `{ rows: [{ name: "Dairy", subCategories: [{ name: "Milk" }] }] }` and no pre-existing conflict → HTTP 201, `db.category.count()` is 1, `db.subCategory.count()` is 1, slug of created category is `"dairy"` (auto-generated), slug of subcategory is `"milk"`.
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=strict` when category slug `"dairy"` already exists → HTTP 409 with `{ error: { code: "BULK_CONFLICT", conflicts: [{ row: 1, name: "Dairy", slug: "dairy" }] } }`. Verify zero DB writes (entire operation rejected atomically).
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=skip` when category slug `"dairy"` already exists and body contains 2 rows (row 1: `"Dairy"`, row 2: `"Bakery"`) → HTTP 201, `db.category.count()` is 1 (only "Bakery" inserted, "Dairy" skipped), response body includes `{ data: { inserted: 1, skipped: 1, insertedNames: ["Bakery"], skippedNames: ["Dairy"] } }`.
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm` with an empty `rows` array → HTTP 400 `VALIDATION_ERROR`.
-  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm` with a row missing `name` → HTTP 400 `VALIDATION_ERROR` identifying which field is missing.
-  - [ ] Verify: After a successful confirm, `db.auditLog.findMany({ where: { action: "ADMIN_BULK_CATEGORY_INSERT" } })` returns exactly 1 log entry whose `newValue` contains `{ insertedCount, skippedCount }`.
-  - [ ] **Run — confirm RED (404 — endpoints do not exist).**
+- [x] **RED — Integration (append to `admin.categories.test.ts`):**
+  - [x] Test: `POST /api/v1/admin/bulk/categories/validate` with a valid ADMIN JWT and body `{ rows: [{ name: "Dairy", subCategories: [{ name: "Full Cream Milk" }, { name: "Toned Milk" }] }, { name: "Bakery", subCategories: [{ name: "Bread" }] }] }` → HTTP 200 with body `{ success: true, data: { valid: true, conflicts: [], totalRows: 2, totalSubCategoryRows: 3 } }`. Zero DB writes — verify `db.category.count()` is still 0 after this call.
+  - [x] Test: `POST /api/v1/admin/bulk/categories/validate` with a BUYER JWT → HTTP 403.
+  - [x] Test: Pre-insert a category with slug `"dairy"` in the test DB. Then call validate with body `{ rows: [{ name: "Dairy", subCategories: [] }] }`. Expect HTTP 200 with `{ data: { valid: false, conflicts: [{ row: 1, type: "CATEGORY_SLUG_EXISTS", name: "Dairy", slug: "dairy" }] } }`. Verify zero DB writes.
+  - [x] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=strict` with body `{ rows: [{ name: "Dairy", subCategories: [{ name: "Milk" }] }] }` and no pre-existing conflict → HTTP 201, `db.category.count()` is 1, `db.subCategory.count()` is 1, slug of created category is `"dairy"` (auto-generated), slug of subcategory is `"milk"`.
+  - [x] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=strict` when category slug `"dairy"` already exists → HTTP 409 with `{ error: { code: "BULK_CONFLICT", conflicts: [{ row: 1, name: "Dairy", slug: "dairy" }] } }`. Verify zero DB writes (entire operation rejected atomically).
+  - [x] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=skip` when category slug `"dairy"` already exists and body contains 2 rows (row 1: `"Dairy"`, row 2: `"Bakery"`) → HTTP 201, `db.category.count()` is 1 (only "Bakery" inserted, "Dairy" skipped), response body includes `{ data: { inserted: 1, skipped: 1, insertedNames: ["Bakery"], skippedNames: ["Dairy"] } }`.
+  - [x] Test: `POST /api/v1/admin/bulk/categories/confirm` with an empty `rows` array → HTTP 400 `VALIDATION_ERROR`.
+  - [x] Test: `POST /api/v1/admin/bulk/categories/confirm` with a row missing `name` → HTTP 400 `VALIDATION_ERROR` identifying which field is missing.
+  - [x] Verify: After a successful confirm, `db.auditLog.findMany({ where: { action: "ADMIN_BULK_CATEGORY_INSERT" } })` returns exactly 1 log entry whose `newValue` contains `{ insertedCount, skippedCount }`.
+  - [x] **Run — confirm RED (404 — endpoints do not exist).**
 
-- [ ] **GREEN — Backend (Service → Controller → Routes):**
-  - [ ] [Service] Add `bulkValidateCategories(rows: BulkCategoryRow[])` to `admin.service.ts`:
+- [x] **GREEN — Backend (Service → Controller → Routes):**
+  - [x] [Service] Add `bulkValidateCategories(rows: BulkCategoryRow[])` to `admin.service.ts`:
     - `BulkCategoryRow` type: `{ name: string; subCategories: { name: string }[]; commerceType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE"; displayOrder?: number }`.
     - For each row: generate slug via `name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-")`. Check `db.category.findUnique({ where: { slug } })`. If found, push to conflicts array. Never writes to DB.
     - Returns `{ valid: boolean; conflicts: BulkConflict[]; totalRows: number; totalSubCategoryRows: number }`.
-  - [ ] [Service] Add `bulkConfirmCategories(rows: BulkCategoryRow[], mode: "strict" | "skip", adminId: string, ip: string, userAgent: string)` to `admin.service.ts`:
+  - [x] [Service] Add `bulkConfirmCategories(rows: BulkCategoryRow[], mode: "strict" | "skip", adminId: string, ip: string, userAgent: string)` to `admin.service.ts`:
     - Re-runs conflict detection (do not trust a prior validate call — always re-check at confirm time).
     - If `mode = "strict"` and any conflict exists: throw `AppError` with code `BULK_CONFLICT` and HTTP 409. Zero DB writes.
     - If `mode = "skip"`: filter out conflicting rows, insert only clean rows.
     - Insert is done in a single `db.$transaction`: for each clean row, `tx.category.create(...)` with auto-generated slug, then `tx.subCategory.create(...)` for each subCategory with auto-generated slug (using `subName.toLowerCase().trim().replace(...)`).
     - After transaction: write one `auditLog` entry with `action: "ADMIN_BULK_CATEGORY_INSERT"` and `newValue: { insertedCount, skippedCount, insertedNames }`.
     - Returns `{ inserted: number; skipped: number; insertedNames: string[]; skippedNames: string[] }`.
-  - [ ] [Controller] Add two handlers in `admin.controller.ts`:
+  - [x] [Controller] Add two handlers in `admin.controller.ts`:
     - `POST /api/v1/admin/bulk/categories/validate`: parse body with Zod schema `z.object({ rows: z.array(z.object({ name: z.string().min(1), subCategories: z.array(z.object({ name: z.string().min(1) })), commerceType: z.enum(["QUICK_COMMERCE","BOOKING_COMMERCE"]).optional(), displayOrder: z.number().int().optional() })).min(1).max(200) })`. Call `adminService.bulkValidateCategories(dto.rows)`. Return result with HTTP 200.
     - `POST /api/v1/admin/bulk/categories/confirm`: same body Zod schema + query param `mode: z.enum(["strict","skip"]).default("strict")`. Call `adminService.bulkConfirmCategories(dto.rows, mode, ...)`. Return result with HTTP 201.
     - Both routes require `requireAuth` + `requireRole("ADMIN")` preHandlers.
-  - [ ] [Routes] In `routes.ts`, verify `registerAdminRoutes(app, ...)` call already exists — no new call needed (the new handlers register inside the existing `registerAdminRoutes` function).
-  - [ ] Run integration tests — **confirm GREEN.**
+  - [x] [Routes] In `routes.ts`, verify `registerAdminRoutes(app, ...)` call already exists — no new call needed (the new handlers register inside the existing `registerAdminRoutes` function).
+  - [x] Run integration tests — **confirm GREEN.**
 
-- [ ] **RED — Unit / Component (`AdminCategoriesPage.test.tsx` — new test blocks appended to existing file):**
-  - [ ] Test: A button with `data-testid="import-categories-btn"` and label "Import Categories" exists on the page.
-  - [ ] Test: Clicking "Import Categories" opens a modal (`data-testid="bulk-import-modal"`) containing a "Download Sample" link, a file upload input (`data-testid="bulk-file-input"`), and a disabled "Validate" button.
-  - [ ] Test: After a file is selected in the input, the "Validate" button becomes enabled.
-  - [ ] Test: When the validate API returns `{ data: { valid: true, conflicts: [] } }`, the modal shows a success banner `data-testid="bulk-validation-success"` containing "All rows are valid" and a "Confirm & Import" button.
-  - [ ] Test: When the validate API returns `{ data: { valid: false, conflicts: [{ row: 1, name: "Dairy", slug: "dairy" }] } }`, the modal shows a conflict table (`data-testid="bulk-conflict-table"`) with one row and two action buttons: "Fix my file" and "Skip conflicts & continue".
-  - [ ] Test: Clicking "Skip conflicts & continue" calls `POST /api/v1/admin/bulk/categories/confirm?mode=skip` and on success shows a toast "Import complete: 1 inserted, 1 skipped".
-  - [ ] Test: Clicking "Fix my file" closes the modal without calling the confirm endpoint.
-  - [ ] **Run — confirm RED (no import button or modal exists).**
+- [x] **RED — Unit / Component (`AdminCategoriesPage.test.tsx` — new test blocks appended to existing file):**
+  - [x] Test: A button with `data-testid="import-categories-btn"` and label "Import Categories" exists on the page.
+  - [x] Test: Clicking "Import Categories" opens a modal (`data-testid="bulk-import-modal"`) containing a "Download Sample" link, a file upload input (`data-testid="bulk-file-input"`), and a disabled "Validate" button.
+  - [x] Test: After a file is selected in the input, the "Validate" button becomes enabled.
+  - [x] Test: When the validate API returns `{ data: { valid: true, conflicts: [] } }`, the modal shows a success banner `data-testid="bulk-validation-success"` containing "All rows are valid" and a "Confirm & Import" button.
+  - [x] Test: When the validate API returns `{ data: { valid: false, conflicts: [{ row: 1, name: "Dairy", slug: "dairy" }] } }`, the modal shows a conflict table (`data-testid="bulk-conflict-table"`) with one row and two action buttons: "Fix my file" and "Skip conflicts & continue".
+  - [x] Test: Clicking "Skip conflicts & continue" calls `POST /api/v1/admin/bulk/categories/confirm?mode=skip` and on success shows a toast "Import complete: 1 inserted, 1 skipped".
+  - [x] Test: Clicking "Fix my file" closes the modal without calling the confirm endpoint.
+  - [x] **Run — confirm RED (no import button or modal exists).**
 
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Types] Define `BulkCategoryRow`, `BulkConflict`, `BulkValidateResponse`, and `BulkConfirmResponse` types in `AdminCategoriesPage.tsx` or a shared `bulk.types.ts` file.
-  - [ ] [Component] In `AdminCategoriesPage.tsx`, add an "Import Categories" button next to the existing "Add Category" button. On click, open a shadcn `Dialog`.
-  - [ ] [Modal] Inside the dialog:
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] Define `BulkCategoryRow`, `BulkConflict`, `BulkValidateResponse`, and `BulkConfirmResponse` types in `AdminCategoriesPage.tsx` or a shared `bulk.types.ts` file.
+  - [x] [Component] In `AdminCategoriesPage.tsx`, add an "Import Categories" button next to the existing "Add Category" button. On click, open a shadcn `Dialog`.
+  - [x] [Modal] Inside the dialog:
     - "Download Sample" link → triggers download of a hardcoded sample `.xlsx` file (can be a static asset served by Vite, or a data-URI blob). Sample file has columns: `Category Name`, `SubCategory Name`, `Commerce Type (QUICK_COMMERCE or BOOKING_COMMERCE)`, `Display Order (optional)`. Multiple rows with the same Category Name = multiple subcategories under that category.
     - File upload input: `<input type="file" accept=".xlsx,.csv" data-testid="bulk-file-input">`. On change, parse the file client-side using `xlsx` (SheetJS) library into a `BulkCategoryRow[]` array. Display parsed row count.
     - "Validate" button: calls `POST /api/v1/admin/bulk/categories/validate` with parsed rows. Shows result.
     - Conflict resolution UI: if `valid: false`, show conflict table with "Fix my file" and "Skip conflicts & continue" buttons.
     - If `valid: true` or user clicks "Skip conflicts & continue": call `POST /api/v1/admin/bulk/categories/confirm?mode=strict` or `?mode=skip` respectively.
     - On success: close modal, invalidate `["admin", "categories"]` query, show success toast.
-  - [ ] Run unit tests — **confirm GREEN.**
+  - [x] Run unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Admin navigates to `AdminCategoriesPage` → clicks "Import Categories" → clicks "Download Sample" → fills in the Excel with 3 categories (each with 2 subcategories) → uploads file → clicks "Validate" → sees "All rows are valid" banner → clicks "Confirm & Import" → modal closes → categories list refreshes showing 3 new categories with their subcategories → DB has 3 new `Category` rows and 6 new `SubCategory` rows, all with auto-generated slugs → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Admin navigates to `AdminCategoriesPage` → clicks "Import Categories" → clicks "Download Sample" → fills in the Excel with 3 categories (each with 2 subcategories) → uploads file → clicks "Validate" → sees "All rows are valid" banner → clicks "Confirm & Import" → modal closes → categories list refreshes showing 3 new categories with their subcategories → DB has 3 new `Category` rows and 6 new `SubCategory` rows, all with auto-generated slugs → ✅ Done.
 
 ---
 
@@ -874,7 +874,17 @@ The two-phase validate/confirm API is thoroughly covered by **integration tests*
 5. **Test Adjustments:** Refactored unit/integration tests (`CheckoutPage.test.tsx`, `StoreBookingsPage.test.tsx`) to assert layout compliance.
 - **Validation:** Entire workspace typecheck (`tsc --noEmit`) and strict ESLint checks pass with 100% green, warning-free exits.
 
-
+### 2026-06-08: Phase 6.10.1 — Admin Bulk Category & SubCategory Import
+- **Goal:** Implement bulk Category & SubCategory import functionality for admins via Excel/CSV uploads with strict typecheck safety and zero ESLint warnings/errors.
+- **Implementation:**
+  - Added TypeScript type declarations (`BulkCategoryRow`, `BulkConflict`, `BulkValidateResponse`) and handled edge-case undefined worksheets during SheetJS parsing.
+  - Replaced native `for` loop with a `for...of` loop and a separate counter in `admin.service.ts` to prevent ESLint `security/detect-object-injection` warnings.
+  - Refactored `handleDownloadSample` to download a pre-built static sample Excel template (`/categories_sample.xlsx`) containing embedded dropdown data validations for `Commerce Type` and whole number constraints for `Display Order`.
+  - Added `await waitFor(() => expect(validateBtn).toBeEnabled())` inside the frontend unit tests to eliminate race conditions caused by asynchronous `FileReader` file loading in JSDOM under CPU load.
+  - Added dynamic `displayOrder` calculation in `bulkConfirmCategories` transaction block, querying existing maximum display orders to assign sequential increments, and sequentially numbering imported subcategories starting from `0`.
+- **Validation:** 
+  - Ran global typecheck and linter: 100% green with 0 errors/warnings.
+  - Ran Vitest suite: all 348 frontend unit tests and 573 backend tests passed successfully.
 
 ---
 

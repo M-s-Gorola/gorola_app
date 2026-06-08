@@ -1,4 +1,4 @@
-import { ConflictError, NotFoundError, ValidationError } from "@gorola/shared";
+import { AppError, ConflictError, NotFoundError, ValidationError } from "@gorola/shared";
 import { type ActorRole, type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
@@ -1504,4 +1504,167 @@ export class AdminService {
 
     return csvContent;
   }
+
+  public async bulkValidateCategories(rows: BulkCategoryRow[]) {
+    const conflicts: BulkConflict[] = [];
+    let totalSubCategoryRows = 0;
+
+    let i = 0;
+    for (const row of rows) {
+      totalSubCategoryRows += row.subCategories.length;
+      const slug = generateSlug(row.name);
+
+      const existing = await this.db.category.findUnique({
+        where: { slug }
+      });
+
+      if (existing) {
+        conflicts.push({
+          row: i + 1,
+          type: "CATEGORY_SLUG_EXISTS",
+          name: row.name,
+          slug
+        });
+      }
+      i++;
+    }
+
+    return {
+      valid: conflicts.length === 0,
+      conflicts,
+      totalRows: rows.length,
+      totalSubCategoryRows
+    };
+  }
+
+  public async bulkConfirmCategories(
+    rows: BulkCategoryRow[],
+    mode: "strict" | "skip",
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const validation = await this.bulkValidateCategories(rows);
+
+    if (mode === "strict" && !validation.valid) {
+      throw new AppError("Bulk insertion contains conflicts", {
+        code: "BULK_CONFLICT",
+        statusCode: 409,
+        details: { conflicts: validation.conflicts }
+      });
+    }
+
+    const conflictsSet = new Set(validation.conflicts.map((c) => c.row));
+
+    const cleanRows = rows.filter((_, idx) => !conflictsSet.has(idx + 1));
+    const skippedRows = rows.filter((_, idx) => conflictsSet.has(idx + 1));
+
+    const insertedNames: string[] = [];
+    const skippedNames = skippedRows.map((r) => r.name);
+
+    if (cleanRows.length > 0) {
+      await this.db.$transaction(async (tx) => {
+        const maxQcCategory = await tx.category.findFirst({
+          where: { commerceType: StoreType.QUICK_COMMERCE },
+          orderBy: { displayOrder: "desc" },
+          select: { displayOrder: true }
+        });
+        const maxBookingCategory = await tx.category.findFirst({
+          where: { commerceType: StoreType.BOOKING_COMMERCE },
+          orderBy: { displayOrder: "desc" },
+          select: { displayOrder: true }
+        });
+
+        let nextQcDisplayOrder = (maxQcCategory?.displayOrder ?? -1) + 1;
+        let nextBookingDisplayOrder = (maxBookingCategory?.displayOrder ?? -1) + 1;
+
+        for (const row of cleanRows) {
+          const catSlug = generateSlug(row.name);
+          const commerceType = row.commerceType ?? StoreType.QUICK_COMMERCE;
+          
+          let displayOrder = row.displayOrder;
+          if (displayOrder === undefined || displayOrder === null) {
+            if (commerceType === StoreType.QUICK_COMMERCE) {
+              displayOrder = nextQcDisplayOrder++;
+            } else {
+              displayOrder = nextBookingDisplayOrder++;
+            }
+          }
+
+          const category = await tx.category.create({
+            data: {
+              name: row.name,
+              slug: catSlug,
+              commerceType,
+              displayOrder,
+              isActive: true
+            }
+          });
+          insertedNames.push(category.name);
+
+          let subDisplayOrder = 0;
+          for (const sub of row.subCategories) {
+            const subSlug = generateSlug(sub.name);
+            await tx.subCategory.create({
+              data: {
+                name: sub.name,
+                slug: subSlug,
+                categoryId: category.id,
+                displayOrder: subDisplayOrder++,
+                isActive: true
+              }
+            });
+          }
+        }
+      });
+    }
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_BULK_CATEGORY_INSERT",
+        entityType: "Category",
+        entityId: "global",
+        oldValue: Prisma.JsonNull,
+        newValue: {
+          insertedCount: cleanRows.length,
+          skippedCount: skippedRows.length,
+          insertedNames
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return {
+      inserted: cleanRows.length,
+      skipped: skippedRows.length,
+      insertedNames,
+      skippedNames
+    };
+  }
 }
+
+export type BulkCategoryRow = {
+  name: string;
+  subCategories: { name: string }[];
+  commerceType?: StoreType | undefined;
+  displayOrder?: number | undefined;
+};
+
+export type BulkConflict = {
+  row: number;
+  type: "CATEGORY_SLUG_EXISTS";
+  name: string;
+  slug: string;
+};
+
+function generateSlug(name: string): string {
+  return name
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/(^-|-$)+/g, "");
+}
+
