@@ -1,4 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { isAxiosError } from "axios";
 import {
   AlertTriangle,
   ChevronDown,
@@ -14,6 +15,7 @@ import {
 import type { FormEvent, ReactElement } from "react";
 import React, { useEffect, useState } from "react";
 import { toast } from "sonner";
+import { read, utils } from "xlsx";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -54,6 +56,27 @@ type CategoriesListResponse = {
   data: Category[];
 };
 
+export type BulkCategoryRow = {
+  name: string;
+  subCategories: { name: string }[];
+  commerceType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+  displayOrder?: number | undefined;
+};
+
+export type BulkConflict = {
+  row: number;
+  type: "CATEGORY_SLUG_EXISTS";
+  name: string;
+  slug: string;
+};
+
+export type BulkValidateResponse = {
+  valid: boolean;
+  conflicts: BulkConflict[];
+  totalRows: number;
+  totalSubCategoryRows: number;
+};
+
 export function AdminCategoriesPage(): ReactElement {
   const queryClient = useQueryClient();
 
@@ -92,6 +115,136 @@ export function AdminCategoriesPage(): ReactElement {
   // Dragging states
   const [draggingCategoryId, setDraggingCategoryId] = useState<string | null>(null);
   const [draggingSubCategoryId, setDraggingSubCategoryId] = useState<string | null>(null);
+
+  // Bulk import states
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [parsedRows, setParsedRows] = useState<BulkCategoryRow[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [validationResult, setValidationResult] = useState<BulkValidateResponse | null>(null);
+
+  const handleDownloadSample = () => {
+    const a = document.createElement("a");
+    a.href = "/categories_sample.xlsx";
+    a.download = "categories_sample.xlsx";
+    a.click();
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    setValidationResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+          toast.error("Excel sheet is empty");
+          return;
+        }
+        const worksheet = workbook.Sheets[firstSheetName];
+        if (!worksheet) {
+          toast.error("Invalid sheet format");
+          return;
+        }
+        const jsonData = utils.sheet_to_json<Record<string, string>>(worksheet);
+
+        const categoryMap = new Map<string, {
+          name: string;
+          subCategories: { name: string }[];
+          commerceType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+          displayOrder?: number | undefined;
+        }>();
+
+        for (const row of jsonData) {
+          const catNameVal = row["Category Name"];
+          const catName = (catNameVal !== undefined && catNameVal !== null) ? String(catNameVal).trim() : "";
+
+          const subNameVal = row["SubCategory Name"];
+          const subName = (subNameVal !== undefined && subNameVal !== null) ? String(subNameVal).trim() : "";
+
+          const commTypeVal = row["Commerce Type"];
+          const commType = ((commTypeVal !== undefined && commTypeVal !== null) ? String(commTypeVal).trim() : "QUICK_COMMERCE") as "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+          
+          const dispOrderVal = row["Display Order"];
+          const dispOrderRaw = (dispOrderVal !== undefined && dispOrderVal !== null) ? String(dispOrderVal).trim() : undefined;
+          const dispOrder = dispOrderRaw ? parseInt(dispOrderRaw, 10) : undefined;
+
+          if (!catName) continue;
+
+          if (!categoryMap.has(catName)) {
+            categoryMap.set(catName, {
+              name: catName,
+              subCategories: [],
+              commerceType: commType,
+              displayOrder: dispOrder !== undefined && !isNaN(dispOrder) ? dispOrder : undefined
+            });
+          }
+
+          const catObj = categoryMap.get(catName)!;
+          if (subName) {
+            catObj.subCategories.push({ name: subName });
+          }
+        }
+
+        const rowsArray = Array.from(categoryMap.values());
+        setParsedRows(rowsArray);
+      } catch {
+        toast.error("Failed to parse Excel file");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleValidate = async () => {
+    if (!api) return;
+    setIsValidating(true);
+    try {
+      const res = await api.post<{ success: boolean; data: BulkValidateResponse }>("/api/v1/admin/bulk/categories/validate", {
+        rows: parsedRows
+      });
+      setValidationResult(res.data.data);
+    } catch (err: unknown) {
+      let errMsg = "Validation failed";
+      if (isAxiosError(err)) {
+        errMsg = err.response?.data?.error?.message || errMsg;
+      }
+      toast.error(errMsg);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleConfirm = async (mode: "strict" | "skip") => {
+    if (!api) return;
+    setIsConfirming(true);
+    try {
+      const res = await api.post<{ success: boolean; data: { inserted: number; skipped: number } }>(
+        `/api/v1/admin/bulk/categories/confirm?mode=${mode}`,
+        { rows: parsedRows }
+      );
+      const info = res.data.data;
+      toast.success(`Import complete: ${info.inserted} inserted, ${info.skipped} skipped`);
+      setIsBulkModalOpen(false);
+      setSelectedFile(null);
+      setParsedRows([]);
+      setValidationResult(null);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "categories"] });
+    } catch (err: unknown) {
+      let errMsg = "Import failed";
+      if (isAxiosError(err)) {
+        errMsg = err.response?.data?.error?.message || errMsg;
+      }
+      toast.error(errMsg);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
 
   // Fetch categories query
   const { data: categoriesData, isLoading, isError, isFetching, refetch } = useQuery<Category[]>({
@@ -551,22 +704,30 @@ export function AdminCategoriesPage(): ReactElement {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => void refetch()}
             disabled={isFetching}
-            className="px-4 py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all disabled:opacity-50 font-dm-sans"
+            className="px-3 py-2 sm:px-4 sm:py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all disabled:opacity-50 font-dm-sans"
           >
-            <RefreshCw className={`h-4 w-4 text-gorola-pine ${isFetching ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-3.5 w-3.5 sm:h-4 sm:w-4 text-gorola-pine ${isFetching ? "animate-spin" : ""}`} />
             Sync Lists
+          </button>
+
+          <button
+            data-testid="import-categories-btn"
+            onClick={() => setIsBulkModalOpen(true)}
+            className="px-3 py-2 sm:px-4 sm:py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all font-dm-sans"
+          >
+            Import Categories
           </button>
 
           <Button
             data-testid="add-category-button"
             onClick={handleOpenAddCategory}
-            className="px-4 py-2.5 bg-gorola-pine hover:bg-gorola-pine-dark text-white rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all font-dm-sans"
+            className="px-3 py-2 sm:px-4 sm:py-2.5 bg-gorola-pine hover:bg-gorola-pine-dark text-white rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all font-dm-sans"
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Add Category
           </Button>
         </div>
@@ -634,47 +795,47 @@ export function AdminCategoriesPage(): ReactElement {
                 } ${draggingCategoryId === category.id ? "opacity-20 border-dashed border-gorola-pine" : ""}`}
               >
                 {/* Category Main Row */}
-                <div className="flex items-center justify-between p-4 md:p-5 gap-4">
-                  <div className="flex items-center gap-3">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-3.5 sm:p-4 md:p-5 gap-3 sm:gap-4">
+                  <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                     {/* Drag Handle */}
                     <div
                       draggable
                       onDragStart={(e) => handleCategoryDragStart(e, category.id)}
                       onDragEnd={handleCategoryDragEnd}
-                      className="cursor-grab text-gorola-slate/50 hover:text-gorola-charcoal transition-colors p-1"
+                      className="cursor-grab text-gorola-slate/50 hover:text-gorola-charcoal transition-colors p-1 shrink-0"
                       title="Drag to reorder"
                     >
                       <GripVertical className="h-5 w-5" />
                     </div>
 
                     {/* Image / Icon Preview */}
-                    <div className="h-12 w-12 rounded-xl bg-gorola-fog border border-gorola-charcoal/5 flex items-center justify-center overflow-hidden shrink-0">
+                    <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gorola-fog border border-gorola-charcoal/5 flex items-center justify-center overflow-hidden shrink-0">
                       {category.imageUrl ? (
                         <img src={category.imageUrl} alt={category.name} className="h-full w-full object-cover" />
                       ) : (
-                        <ImageIcon className="h-6 w-6 text-gorola-slate/40" />
+                        <ImageIcon className="h-5 w-5 sm:h-6 sm:w-6 text-gorola-slate/40" />
                       )}
                     </div>
 
                     {/* Meta info */}
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-bold text-gorola-charcoal text-base">{category.name}</h3>
-                        <span className="text-[10px] bg-gorola-fog border border-gorola-charcoal/5 text-gorola-charcoal font-mono px-1.5 py-0.5 rounded-md">
+                    <div className="space-y-0.5 min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h3 className="font-bold text-gorola-charcoal text-sm sm:text-base truncate">{category.name}</h3>
+                        <span className="text-[9px] sm:text-[10px] bg-gorola-fog border border-gorola-charcoal/5 text-gorola-charcoal font-mono px-1.5 py-0.5 rounded-md truncate">
                           /{category.slug}
                         </span>
                       </div>
-                      <p className="text-xs text-gorola-slate font-dm-sans">
+                      <p className="text-[10px] sm:text-xs text-gorola-slate font-dm-sans">
                         Display Order: {category.displayOrder} | Active Products: <span className="font-bold">{category.productCount}</span>
                       </p>
                     </div>
                   </div>
 
                   {/* Actions */}
-                  <div className="flex items-center gap-3">
+                  <div className="flex flex-wrap items-center gap-2 sm:gap-3 justify-end sm:justify-start pl-[34px] sm:pl-0">
                     <button
                       onClick={() => handleToggleCategoryStatus(category)}
-                      className={`px-3 py-1.5 border rounded-xl text-xs font-bold font-dm-sans transition-all shadow-sm ${
+                      className={`px-2.5 py-1 sm:px-3 sm:py-1.5 border rounded-xl text-[10px] sm:text-xs font-bold font-dm-sans transition-all shadow-sm ${
                         category.isActive
                           ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
                           : "bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100"
@@ -685,10 +846,10 @@ export function AdminCategoriesPage(): ReactElement {
 
                     <button
                       onClick={() => handleOpenEditCategory(category)}
-                      className="p-2 border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-gorola-pine hover:bg-gorola-fog transition-all"
+                      className="p-1.5 sm:p-2 border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-gorola-pine hover:bg-gorola-fog transition-all"
                       title="Edit Category"
                     >
-                      <Edit2 className="h-4 w-4" />
+                      <Edit2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </button>
 
                     <button
@@ -696,18 +857,18 @@ export function AdminCategoriesPage(): ReactElement {
                         setDeleteConfirmType("category");
                         setDeleteConfirmId(category.id);
                       }}
-                      className="p-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
+                      className="p-1.5 sm:p-2 border border-rose-200 text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
                       title="Delete Category"
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
                     </button>
 
                     <button
                       onClick={() => toggleExpandCategory(category.id)}
-                      className="flex items-center gap-1.5 pl-3 border-l border-gorola-charcoal/10 text-xs font-bold text-gorola-slate hover:text-gorola-charcoal transition-colors font-dm-sans"
+                      className="flex items-center gap-1 sm:gap-1.5 pl-2 sm:pl-3 border-l border-gorola-charcoal/10 text-[10px] sm:text-xs font-bold text-gorola-slate hover:text-gorola-charcoal transition-colors font-dm-sans"
                     >
                       <span>Subcategories ({category.subCategories.length})</span>
-                      {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                      {isExpanded ? <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" /> : <ChevronRight className="h-3.5 w-3.5 sm:h-4 sm:w-4" />}
                     </button>
                   </div>
                 </div>
@@ -721,9 +882,9 @@ export function AdminCategoriesPage(): ReactElement {
                       </h4>
                       <Button
                         onClick={() => handleOpenAddSubCategory(category)}
-                        className="px-3 py-1.5 bg-gorola-pine/10 hover:bg-gorola-pine/20 text-gorola-pine hover:text-gorola-pine rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 font-dm-sans shadow-none border-none"
+                        className="px-2 py-1 sm:px-3 sm:py-1.5 bg-gorola-pine/10 hover:bg-gorola-pine/20 text-gorola-pine hover:text-gorola-pine rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1 sm:gap-1.5 font-dm-sans shadow-none border-none"
                       >
-                        <FolderPlus className="h-3.5 w-3.5" />
+                        <FolderPlus className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                         Add Subcategory
                       </Button>
                     </div>
@@ -738,24 +899,24 @@ export function AdminCategoriesPage(): ReactElement {
                           <div
                             key={sub.id}
                             onDragOver={(e) => handleSubCategoryDragOver(e, category.id, sub.id)}
-                            className={`flex items-center justify-between bg-white px-4 py-3 rounded-xl border border-gorola-charcoal/5 shadow-sm transition-all ${
+                            className={`flex flex-col sm:flex-row sm:items-center justify-between bg-white p-3 sm:px-4 sm:py-3 rounded-xl border border-gorola-charcoal/5 shadow-sm transition-all gap-2.5 sm:gap-4 ${
                               !sub.isActive ? "opacity-60 bg-gray-50/50" : ""
                             } ${draggingSubCategoryId === sub.id ? "opacity-20 border-dashed border-gorola-pine" : ""}`}
                           >
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
                               {/* Drag Handle */}
                               <div
                                 draggable
                                 onDragStart={(e) => handleSubCategoryDragStart(e, sub.id)}
                                 onDragEnd={() => handleSubCategoryDragEnd(category.id)}
-                                className="cursor-grab text-gorola-slate/40 hover:text-gorola-charcoal transition-colors p-1"
+                                className="cursor-grab text-gorola-slate/40 hover:text-gorola-charcoal transition-colors p-1 shrink-0"
                                 title="Drag to reorder"
                               >
                                 <GripVertical className="h-4 w-4" />
                               </div>
 
                               {/* Image Preview */}
-                              <div className="h-9 w-9 rounded-lg bg-gorola-fog border border-gorola-charcoal/5 flex items-center justify-center overflow-hidden shrink-0">
+                              <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-gorola-fog border border-gorola-charcoal/5 flex items-center justify-center overflow-hidden shrink-0">
                                 {sub.imageUrl ? (
                                   <img src={sub.imageUrl} alt={sub.name} className="h-full w-full object-cover" />
                                 ) : (
@@ -763,23 +924,23 @@ export function AdminCategoriesPage(): ReactElement {
                                 )}
                               </div>
 
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-bold text-xs text-gorola-charcoal">{sub.name}</span>
-                                  <span className="text-[9px] bg-gorola-fog text-gorola-slate font-mono px-1 rounded-sm">
+                              <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  <span className="font-bold text-xs text-gorola-charcoal truncate">{sub.name}</span>
+                                  <span className="text-[8px] sm:text-[9px] bg-gorola-fog text-gorola-slate font-mono px-1 rounded-sm truncate">
                                     /{sub.slug}
                                   </span>
                                 </div>
-                                <span className="text-[10px] text-gorola-slate font-dm-sans">
+                                <span className="text-[9px] sm:text-[10px] text-gorola-slate font-dm-sans block sm:inline">
                                   Display Order: {sub.displayOrder} | Active Products: <span className="font-bold">{sub.productCount}</span>
                                 </span>
                               </div>
                             </div>
 
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center gap-2 justify-end sm:justify-start pl-[28px] sm:pl-0">
                               <button
                                 onClick={() => handleToggleSubCategoryStatus(sub)}
-                                className={`px-2.5 py-1 border rounded-lg text-[10px] font-black uppercase tracking-wider transition-all font-dm-sans shadow-sm ${
+                                className={`px-2 py-0.5 sm:px-2.5 sm:py-1 border rounded-lg text-[9px] sm:text-[10px] font-black uppercase tracking-wider transition-all font-dm-sans shadow-sm ${
                                   sub.isActive
                                     ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
                                     : "bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100"
@@ -790,10 +951,10 @@ export function AdminCategoriesPage(): ReactElement {
 
                               <button
                                 onClick={() => handleOpenEditSubCategory(sub)}
-                                className="p-1.5 border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-gorola-pine hover:bg-gorola-fog transition-all"
+                                className="p-1 sm:p-1.5 border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-gorola-pine hover:bg-gorola-fog transition-all"
                                 title="Edit Subcategory"
                               >
-                                <Edit2 className="h-3.5 w-3.5" />
+                                <Edit2 className="h-3 w-3 sm:h-3.5 sm:w-3.5" />
                               </button>
                             </div>
                           </div>
@@ -1052,6 +1213,162 @@ export function AdminCategoriesPage(): ReactElement {
           </div>
         </div>
       )}
+
+      {/* Bulk Category Import Dialog */}
+      <Dialog open={isBulkModalOpen} onOpenChange={setIsBulkModalOpen}>
+        <DialogContent data-testid="bulk-import-modal" className="max-w-2xl gap-6 max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Import Categories</DialogTitle>
+            <DialogDescription>
+              Upload a spreadsheet to bulk import categories and their subcategories.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex justify-between items-center bg-gorola-fog p-4 rounded-xl border border-gorola-charcoal/5">
+              <span className="text-xs text-gorola-slate font-dm-sans">
+                Need a template? Download the sample structure.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadSample}
+                className="text-xs font-bold font-dm-sans border-gorola-mint/30"
+              >
+                Download Sample
+              </Button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-dm-sans text-sm font-semibold text-gorola-charcoal block">
+                Select Excel File
+              </label>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                data-testid="bulk-file-input"
+                onChange={handleFileChange}
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+              />
+              {selectedFile && parsedRows.length > 0 && (
+                <p className="text-xs text-emerald-600 font-bold font-dm-sans">
+                  Parsed {parsedRows.length} categories from file.
+                </p>
+              )}
+            </div>
+
+            {/* Validation State Display */}
+            {validationResult && (
+              <div className="space-y-4">
+                {validationResult.valid ? (
+                  <div
+                    data-testid="bulk-validation-success"
+                    className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-sm font-dm-sans flex items-center gap-2"
+                  >
+                    <span>✓</span> All rows are valid! You can safely import them.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl text-sm font-dm-sans">
+                      ⚠️ Validation failed: {validationResult.conflicts.length} conflict(s) found.
+                    </div>
+
+                    <div className="border border-gorola-charcoal/10 rounded-xl overflow-hidden shadow-sm">
+                      <table data-testid="bulk-conflict-table" className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
+                            <th className="p-3 font-bold text-gorola-charcoal">Row</th>
+                            <th className="p-3 font-bold text-gorola-charcoal">Category</th>
+                            <th className="p-3 font-bold text-gorola-charcoal">Error</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {validationResult.conflicts.map((conflict: BulkConflict, index: number) => (
+                            <tr key={index} className="border-b border-gorola-mint/10 last:border-0">
+                              <td className="p-3 font-mono font-bold text-gorola-slate">Row {conflict.row}</td>
+                              <td className="p-3 font-semibold text-gorola-charcoal">{conflict.name}</td>
+                              <td className="p-3 text-red-600 font-bold font-dm-sans">
+                                Category slug already exists: /{conflict.slug}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter className="flex gap-2 sm:gap-0">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsBulkModalOpen(false);
+                  setSelectedFile(null);
+                  setParsedRows([]);
+                  setValidationResult(null);
+                }}
+                disabled={isValidating || isConfirming}
+              >
+                Cancel
+              </Button>
+
+              {/* Validate action */}
+              {(!validationResult || !validationResult.valid) && (
+                <Button
+                  type="button"
+                  onClick={handleValidate}
+                  disabled={!selectedFile || parsedRows.length === 0 || isValidating || isConfirming}
+                  className="bg-gorola-pine text-white hover:bg-gorola-pine-dark"
+                >
+                  {isValidating ? "Validating..." : "Validate"}
+                </Button>
+              )}
+
+              {/* Conflict choices */}
+              {validationResult && !validationResult.valid && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsBulkModalOpen(false);
+                      setSelectedFile(null);
+                      setParsedRows([]);
+                      setValidationResult(null);
+                    }}
+                    className="border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Fix my file
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleConfirm("skip")}
+                    disabled={isConfirming}
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    {isConfirming ? "Importing..." : "Skip conflicts & continue"}
+                  </Button>
+                </>
+              )}
+
+              {/* Pure success confirm */}
+              {validationResult && validationResult.valid && (
+                <Button
+                  type="button"
+                  onClick={() => handleConfirm("strict")}
+                  disabled={isConfirming}
+                  className="bg-gorola-pine text-white hover:bg-gorola-pine-dark"
+                >
+                  {isConfirming ? "Importing..." : "Confirm & Import"}
+                </Button>
+              )}
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

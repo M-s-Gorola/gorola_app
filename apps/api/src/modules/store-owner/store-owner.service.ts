@@ -1886,5 +1886,365 @@ export class StoreOwnerService {
       }
     });
   }
+
+  public async bulkValidateProducts(storeId: string, rows: BulkProductRow[]) {
+    const conflicts: BulkProductConflict[] = [];
+    let totalVariantRows = 0;
+
+    const store = await this.db.store.findUnique({
+      where: { id: storeId }
+    });
+    if (!store) {
+      throw new AppError("Store not found", { statusCode: 404 });
+    }
+    const storeType = store.storeType;
+
+    let i = 0;
+    for (const row of rows) {
+      const rowNum = ++i;
+      totalVariantRows += row.variants.length;
+
+      // Check if product name exists in store
+      const existingProduct = await this.db.product.findFirst({
+        where: { storeId, name: row.productName, isDeleted: false }
+      });
+      if (existingProduct) {
+        conflicts.push({
+          row: rowNum,
+          type: "PRODUCT_NAME_EXISTS",
+          productName: row.productName
+        });
+      }
+
+      // Check if subcategory exists
+      const subCategory = await this.db.subCategory.findFirst({
+        where: { name: { equals: row.subCategoryName, mode: "insensitive" } },
+        include: { category: true }
+      });
+      if (!subCategory) {
+        conflicts.push({
+          row: rowNum,
+          type: "SUBCATEGORY_NOT_FOUND",
+          subCategoryName: row.subCategoryName
+        });
+      } else if (subCategory.category.commerceType !== storeType) {
+        conflicts.push({
+          row: rowNum,
+          type: "COMMERCE_TYPE_MISMATCH",
+          subCategoryName: row.subCategoryName,
+          commerceType: subCategory.category.commerceType
+        });
+      }
+
+      // Check duplicate variant labels within the same row
+      const labels = row.variants.map((v) => v.label.trim().toLowerCase());
+      const uniqueLabels = new Set(labels);
+      if (uniqueLabels.size !== labels.length) {
+        const seen = new Set<string>();
+        for (const v of row.variants) {
+          const l = v.label.trim().toLowerCase();
+          if (seen.has(l)) {
+            conflicts.push({
+              row: rowNum,
+              type: "DUPLICATE_VARIANT_LABEL",
+              label: v.label
+            });
+            break;
+          }
+          seen.add(l);
+        }
+      }
+    }
+
+    return {
+      valid: conflicts.length === 0,
+      conflicts,
+      totalRows: rows.length,
+      totalVariantRows
+    };
+  }
+
+  public async bulkConfirmProducts(
+    storeId: string,
+    rows: BulkProductRow[],
+    mode: "strict" | "skip",
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const { conflicts } = await this.bulkValidateProducts(storeId, rows);
+
+    if (mode === "strict" && conflicts.length > 0) {
+      throw new AppError("Bulk insertion conflicts detected in strict mode", {
+        code: "BULK_CONFLICT",
+        statusCode: 409,
+        details: { conflicts }
+      });
+    }
+
+    const conflictRowNums = new Set(conflicts.map((c) => c.row));
+    const cleanRows = rows.filter((_, idx) => !conflictRowNums.has(idx + 1));
+
+    if (cleanRows.length === 0) {
+      return {
+        inserted: 0,
+        skipped: rows.length
+      };
+    }
+
+    await this.db.$transaction(async (tx) => {
+      for (const row of cleanRows) {
+        const subCategory = await tx.subCategory.findFirst({
+          where: { name: { equals: row.subCategoryName, mode: "insensitive" } }
+        });
+        if (!subCategory) {
+          throw new NotFoundError(`Subcategory not found: ${row.subCategoryName}`);
+        }
+
+        const product = await tx.product.create({
+          data: {
+            storeId,
+            categoryId: subCategory.categoryId,
+            subCategoryId: subCategory.id,
+            name: row.productName,
+            description: row.description,
+            imageUrl: row.imageUrl,
+            isActive: true
+          }
+        });
+
+        for (const v of row.variants) {
+          const lowStockThreshold = v.lowStockThreshold ?? 5;
+          const isInStock = v.stockQty > 0;
+          const isLowStock = v.stockQty <= lowStockThreshold;
+
+          const variant = await tx.productVariant.create({
+            data: {
+              productId: product.id,
+              label: v.label,
+              price: new Prisma.Decimal(v.price.toString()),
+              stockQty: v.stockQty,
+              lowStockThreshold,
+              isLowStock,
+              isInStock,
+              unit: v.unit,
+              isActive: true
+            }
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              productVariantId: variant.id,
+              type: "INITIAL",
+              quantity: v.stockQty,
+              stockQtyBefore: 0,
+              stockQtyAfter: v.stockQty
+            }
+          });
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_BULK_PRODUCT_INSERT",
+          entityType: "Product",
+          entityId: "BULK",
+          newValue: {
+            insertedCount: cleanRows.length,
+            skippedCount: rows.length - cleanRows.length
+          },
+          ip,
+          userAgent
+        }
+      });
+    });
+
+    return {
+      inserted: cleanRows.length,
+      skipped: rows.length - cleanRows.length
+    };
+  }
+
+  public async bulkValidateRestock(storeId: string, rows: BulkRestockRow[]) {
+    const conflicts: BulkRestockConflict[] = [];
+
+    let i = 0;
+    for (const row of rows) {
+      const rowNum = ++i;
+
+      const matchingProducts = await this.db.product.findMany({
+        where: { storeId, name: row.productName, isDeleted: false }
+      });
+
+      if (matchingProducts.length === 0) {
+        conflicts.push({
+          row: rowNum,
+          type: "PRODUCT_NOT_FOUND",
+          productName: row.productName
+        });
+        continue;
+      }
+
+      if (matchingProducts.length > 1) {
+        conflicts.push({
+          row: rowNum,
+          type: "AMBIGUOUS_PRODUCT_NAME",
+          productName: row.productName
+        });
+        continue;
+      }
+
+      const product = matchingProducts[0]!;
+
+      const variant = await this.db.productVariant.findFirst({
+        where: { productId: product.id, label: row.variantLabel }
+      });
+
+      if (!variant) {
+        conflicts.push({
+          row: rowNum,
+          type: "VARIANT_NOT_FOUND",
+          productName: row.productName,
+          variantLabel: row.variantLabel
+        });
+      }
+    }
+
+    return {
+      valid: conflicts.length === 0,
+      conflicts,
+      totalRows: rows.length
+    };
+  }
+
+  public async bulkConfirmRestock(
+    storeId: string,
+    rows: BulkRestockRow[],
+    mode: "strict" | "skip",
+    ownerId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const { conflicts } = await this.bulkValidateRestock(storeId, rows);
+
+    if (mode === "strict" && conflicts.length > 0) {
+      throw new AppError("Bulk restock conflicts detected in strict mode", {
+        code: "BULK_CONFLICT",
+        statusCode: 409,
+        details: { conflicts }
+      });
+    }
+
+    const conflictRowNums = new Set(conflicts.map((c) => c.row));
+    const cleanRows = rows.filter((_, idx) => !conflictRowNums.has(idx + 1));
+
+    if (cleanRows.length === 0) {
+      return {
+        updated: 0,
+        skipped: rows.length
+      };
+    }
+
+    let updatedCount = 0;
+
+    await this.db.$transaction(async (tx) => {
+      for (const row of cleanRows) {
+        const product = await tx.product.findFirstOrThrow({
+          where: { storeId, name: row.productName, isDeleted: false }
+        });
+
+        const variant = await tx.productVariant.findFirstOrThrow({
+          where: { productId: product.id, label: row.variantLabel }
+        });
+
+        const oldQty = variant.stockQty;
+        const newQty = row.newStockQty;
+
+        if (oldQty !== newQty) {
+          const quantity = Math.abs(newQty - oldQty);
+          const lowStockThreshold = variant.lowStockThreshold;
+          const isLowStock = newQty <= lowStockThreshold;
+          const isInStock = newQty > 0;
+
+          await tx.productVariant.update({
+            where: { id: variant.id },
+            data: {
+              stockQty: newQty,
+              isLowStock,
+              isInStock
+            }
+          });
+
+          await tx.stockMovement.create({
+            data: {
+              productVariantId: variant.id,
+              type: "ADJUSTMENT",
+              quantity,
+              stockQtyBefore: oldQty,
+              stockQtyAfter: newQty,
+              reason: "Bulk restock update"
+            }
+          });
+
+          updatedCount++;
+        }
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_BULK_RESTOCK",
+          entityType: "ProductVariant",
+          entityId: "BULK",
+          newValue: {
+            updatedCount,
+            skippedCount: rows.length - updatedCount
+          },
+          ip,
+          userAgent
+        }
+      });
+    });
+
+    return {
+      updated: updatedCount,
+      skipped: rows.length - updatedCount
+    };
+  }
 }
+
+export type BulkProductRow = {
+  productName: string;
+  subCategoryName: string;
+  description: string;
+  imageUrl: string;
+  variants: {
+    label: string;
+    price: number;
+    stockQty: number;
+    unit: string;
+    lowStockThreshold?: number | undefined;
+  }[];
+};
+
+export type BulkProductConflict =
+  | { row: number; type: "PRODUCT_NAME_EXISTS"; productName: string }
+  | { row: number; type: "SUBCATEGORY_NOT_FOUND"; subCategoryName: string }
+  | { row: number; type: "COMMERCE_TYPE_MISMATCH"; subCategoryName: string; commerceType: string }
+  | { row: number; type: "DUPLICATE_VARIANT_LABEL"; label: string };
+
+export type BulkRestockRow = {
+  productName: string;
+  variantLabel: string;
+  newStockQty: number;
+};
+
+export type BulkRestockConflict =
+  | { row: number; type: "PRODUCT_NOT_FOUND"; productName: string }
+  | { row: number; type: "AMBIGUOUS_PRODUCT_NAME"; productName: string }
+  | { row: number; type: "VARIANT_NOT_FOUND"; productName: string; variantLabel: string };
+
 
