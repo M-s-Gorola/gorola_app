@@ -19,15 +19,16 @@
 | Phase 6.7 | Refresh Token Race Condition | COMPLETE | Deduplicate overlapping /refresh calls in Axios interceptor to prevent unexpected logouts on reload or parallel requests. |
 | Phase 6.8 | E2E Test Suite Alignment | COMPLETE | Aligned category segregation homepage assertions and E2E test routes. |
 | Phase 6.9 | Booking Commerce Feature Parity & Discount Integration | COMPLETE | Standardized discount pipelines, collapsible itemized detail modals, and transparent maximum discount disclosure rules. |
+| Phase 6.10 | Bulk Insert & Bulk Restock | 🔴 NOT STARTED | Two-phase validate/confirm pattern. Store owner: bulk product insert + bulk restock. Admin: bulk category + subcategory insert. See DECISION-048. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-05-27
-- **Session Summary:** Completed Checkout UX parity. Wrapped the Address step selection and form elements inside a premium white card container matching the style of the review receipt card. Stripped all monospace (`font-mono`) classes from the pricing amounts on the `CheckoutPage` to ensure numbers render in the gorgeous, standard `font-dm-sans` of the page. Streamlined the `StoreBookingsPage` merchant dashboard list cards by centralizing details inside the modal, updated associated Vitest suites, and achieved 100% clean typecheck and ESLint states.
-- **Next Session Must Start With:** Run automatic Playwright/Vitest verification suites to double-check E2E coverage.
-- **In Progress Right Now:** None.
+- **Date:** 2026-06-08
+- **Session Summary:** Planned Phase 6.10 — Bulk Insert & Bulk Restock. Investigated full system (schema, service, controller, existing tests) and wrote a complete TDD checklist. Added DECISION-048 and DECISION-049 to decision_log.md. No code was changed — planning only.
+- **Next Session Must Start With:** Phase 6.10 — Begin with Step 1: Write failing integration tests for `POST /api/v1/store/bulk/products/validate` and `POST /api/v1/admin/bulk/categories/validate`.
+- **In Progress Right Now:** None — Phase 6.10 plan written, awaiting execution.
 - **Current Blocker:** None.
 
 ---
@@ -511,6 +512,247 @@ The goal of this phase is to establish absolute parity by building a fully integ
 
 ---
 
+## Phase 6.10 Checklist — Bulk Insert & Bulk Restock
+
+> **Decisions governing this phase:** [DECISION-048] and [DECISION-049] in `decision_log.md`.
+> **Who can do what:**
+> - **Store Owner** → Bulk insert products+variants | Bulk restock (update stock qty only)
+> - **Admin** → Bulk insert categories+subcategories
+> - **Admin does NOT** bulk insert products — store owners own their catalog.
+
+---
+
+### ⚠️ Pre-Implementation: Existing Test Impact Analysis
+
+Before writing a single line of new code, you must understand which existing tests are affected. **No existing test should be broken.** The new bulk endpoints are entirely additive — no existing endpoints change. However, read the following carefully:
+
+**Tests that are NOT affected (do not touch these):**
+- `store-owner.products.test.ts` — tests `POST /api/v1/store/products` (single product creation). New bulk endpoints are at a different URL. No impact.
+- `admin.categories.test.ts` — tests `POST /api/v1/admin/categories` (single category creation). New bulk endpoints are at a different URL. No impact.
+- All E2E Playwright tests — bulk insert is never triggered by E2E flows (see E2E decision at the end of this section).
+
+**Tests that WILL need to be extended (append new `it()` blocks only — never modify existing ones):**
+- `store-owner.products.test.ts` → Add new `it()` blocks for `POST /api/v1/store/bulk/products/validate` and `POST /api/v1/store/bulk/products/confirm`.
+- `admin.categories.test.ts` → Add new `it()` blocks for `POST /api/v1/admin/bulk/categories/validate` and `POST /api/v1/admin/bulk/categories/confirm`.
+- A new file `store-owner.restock.bulk.test.ts` for the restock endpoints.
+
+**Cleanup function note:** Both `cleanStoreGraph` (in `store-owner.products.test.ts`) and the `beforeEach` in `admin.categories.test.ts` already delete all relevant tables. The new tests will reuse the same cleanup — no changes needed to cleanup helpers.
+
+---
+
+### 6.10.1 — Admin: Bulk Insert Categories & SubCategories
+
+**Root cause / Goal:**
+Admin currently must create each category and subcategory one-by-one through the `AdminCategoriesPage` form. When setting up a new instance of GoRola (or adding a new commerce vertical), this requires dozens of manual entries. The goal is to give admin a single Excel-upload flow that creates all categories and subcategories in one operation, with slug auto-generation (no slug column in Excel) and a two-phase validate-then-confirm API so conflicts are surfaced before any data is written.
+
+**Fix / Approach:**
+1. [Backend] Add `POST /api/v1/admin/bulk/categories/validate` (dry-run: validates all rows, returns conflict report, writes nothing to DB) and `POST /api/v1/admin/bulk/categories/confirm?mode=strict|skip` (actual insert: skips conflicting rows if `mode=skip`, rejects all if `mode=strict` and any conflict exists) in `admin.controller.ts`. Slug is auto-generated from name using the same `slugify` logic already used in the single-create flow.
+2. [Frontend] Add an "Import Categories" button on `AdminCategoriesPage.tsx`. Clicking it opens a modal with: download sample Excel button, file upload input, validation result table (shows per-row errors), and a "Skip conflicts & continue" / "Fix my file" choice prompt. The modal calls the validate endpoint first, then the confirm endpoint only after the user makes a choice.
+
+---
+
+- [ ] **RED — Integration (append to `admin.categories.test.ts`):**
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/validate` with a valid ADMIN JWT and body `{ rows: [{ name: "Dairy", subCategories: [{ name: "Full Cream Milk" }, { name: "Toned Milk" }] }, { name: "Bakery", subCategories: [{ name: "Bread" }] }] }` → HTTP 200 with body `{ success: true, data: { valid: true, conflicts: [], totalRows: 2, totalSubCategoryRows: 3 } }`. Zero DB writes — verify `db.category.count()` is still 0 after this call.
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/validate` with a BUYER JWT → HTTP 403.
+  - [ ] Test: Pre-insert a category with slug `"dairy"` in the test DB. Then call validate with body `{ rows: [{ name: "Dairy", subCategories: [] }] }`. Expect HTTP 200 with `{ data: { valid: false, conflicts: [{ row: 1, type: "CATEGORY_SLUG_EXISTS", name: "Dairy", slug: "dairy" }] } }`. Verify zero DB writes.
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=strict` with body `{ rows: [{ name: "Dairy", subCategories: [{ name: "Milk" }] }] }` and no pre-existing conflict → HTTP 201, `db.category.count()` is 1, `db.subCategory.count()` is 1, slug of created category is `"dairy"` (auto-generated), slug of subcategory is `"milk"`.
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=strict` when category slug `"dairy"` already exists → HTTP 409 with `{ error: { code: "BULK_CONFLICT", conflicts: [{ row: 1, name: "Dairy", slug: "dairy" }] } }`. Verify zero DB writes (entire operation rejected atomically).
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm?mode=skip` when category slug `"dairy"` already exists and body contains 2 rows (row 1: `"Dairy"`, row 2: `"Bakery"`) → HTTP 201, `db.category.count()` is 1 (only "Bakery" inserted, "Dairy" skipped), response body includes `{ data: { inserted: 1, skipped: 1, insertedNames: ["Bakery"], skippedNames: ["Dairy"] } }`.
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm` with an empty `rows` array → HTTP 400 `VALIDATION_ERROR`.
+  - [ ] Test: `POST /api/v1/admin/bulk/categories/confirm` with a row missing `name` → HTTP 400 `VALIDATION_ERROR` identifying which field is missing.
+  - [ ] Verify: After a successful confirm, `db.auditLog.findMany({ where: { action: "ADMIN_BULK_CATEGORY_INSERT" } })` returns exactly 1 log entry whose `newValue` contains `{ insertedCount, skippedCount }`.
+  - [ ] **Run — confirm RED (404 — endpoints do not exist).**
+
+- [ ] **GREEN — Backend (Service → Controller → Routes):**
+  - [ ] [Service] Add `bulkValidateCategories(rows: BulkCategoryRow[])` to `admin.service.ts`:
+    - `BulkCategoryRow` type: `{ name: string; subCategories: { name: string }[]; commerceType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE"; displayOrder?: number }`.
+    - For each row: generate slug via `name.toLowerCase().trim().replace(/[^a-z0-9]+/g, "-")`. Check `db.category.findUnique({ where: { slug } })`. If found, push to conflicts array. Never writes to DB.
+    - Returns `{ valid: boolean; conflicts: BulkConflict[]; totalRows: number; totalSubCategoryRows: number }`.
+  - [ ] [Service] Add `bulkConfirmCategories(rows: BulkCategoryRow[], mode: "strict" | "skip", adminId: string, ip: string, userAgent: string)` to `admin.service.ts`:
+    - Re-runs conflict detection (do not trust a prior validate call — always re-check at confirm time).
+    - If `mode = "strict"` and any conflict exists: throw `AppError` with code `BULK_CONFLICT` and HTTP 409. Zero DB writes.
+    - If `mode = "skip"`: filter out conflicting rows, insert only clean rows.
+    - Insert is done in a single `db.$transaction`: for each clean row, `tx.category.create(...)` with auto-generated slug, then `tx.subCategory.create(...)` for each subCategory with auto-generated slug (using `subName.toLowerCase().trim().replace(...)`).
+    - After transaction: write one `auditLog` entry with `action: "ADMIN_BULK_CATEGORY_INSERT"` and `newValue: { insertedCount, skippedCount, insertedNames }`.
+    - Returns `{ inserted: number; skipped: number; insertedNames: string[]; skippedNames: string[] }`.
+  - [ ] [Controller] Add two handlers in `admin.controller.ts`:
+    - `POST /api/v1/admin/bulk/categories/validate`: parse body with Zod schema `z.object({ rows: z.array(z.object({ name: z.string().min(1), subCategories: z.array(z.object({ name: z.string().min(1) })), commerceType: z.enum(["QUICK_COMMERCE","BOOKING_COMMERCE"]).optional(), displayOrder: z.number().int().optional() })).min(1).max(200) })`. Call `adminService.bulkValidateCategories(dto.rows)`. Return result with HTTP 200.
+    - `POST /api/v1/admin/bulk/categories/confirm`: same body Zod schema + query param `mode: z.enum(["strict","skip"]).default("strict")`. Call `adminService.bulkConfirmCategories(dto.rows, mode, ...)`. Return result with HTTP 201.
+    - Both routes require `requireAuth` + `requireRole("ADMIN")` preHandlers.
+  - [ ] [Routes] In `routes.ts`, verify `registerAdminRoutes(app, ...)` call already exists — no new call needed (the new handlers register inside the existing `registerAdminRoutes` function).
+  - [ ] Run integration tests — **confirm GREEN.**
+
+- [ ] **RED — Unit / Component (`AdminCategoriesPage.test.tsx` — new test blocks appended to existing file):**
+  - [ ] Test: A button with `data-testid="import-categories-btn"` and label "Import Categories" exists on the page.
+  - [ ] Test: Clicking "Import Categories" opens a modal (`data-testid="bulk-import-modal"`) containing a "Download Sample" link, a file upload input (`data-testid="bulk-file-input"`), and a disabled "Validate" button.
+  - [ ] Test: After a file is selected in the input, the "Validate" button becomes enabled.
+  - [ ] Test: When the validate API returns `{ data: { valid: true, conflicts: [] } }`, the modal shows a success banner `data-testid="bulk-validation-success"` containing "All rows are valid" and a "Confirm & Import" button.
+  - [ ] Test: When the validate API returns `{ data: { valid: false, conflicts: [{ row: 1, name: "Dairy", slug: "dairy" }] } }`, the modal shows a conflict table (`data-testid="bulk-conflict-table"`) with one row and two action buttons: "Fix my file" and "Skip conflicts & continue".
+  - [ ] Test: Clicking "Skip conflicts & continue" calls `POST /api/v1/admin/bulk/categories/confirm?mode=skip` and on success shows a toast "Import complete: 1 inserted, 1 skipped".
+  - [ ] Test: Clicking "Fix my file" closes the modal without calling the confirm endpoint.
+  - [ ] **Run — confirm RED (no import button or modal exists).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Define `BulkCategoryRow`, `BulkConflict`, `BulkValidateResponse`, and `BulkConfirmResponse` types in `AdminCategoriesPage.tsx` or a shared `bulk.types.ts` file.
+  - [ ] [Component] In `AdminCategoriesPage.tsx`, add an "Import Categories" button next to the existing "Add Category" button. On click, open a shadcn `Dialog`.
+  - [ ] [Modal] Inside the dialog:
+    - "Download Sample" link → triggers download of a hardcoded sample `.xlsx` file (can be a static asset served by Vite, or a data-URI blob). Sample file has columns: `Category Name`, `SubCategory Name`, `Commerce Type (QUICK_COMMERCE or BOOKING_COMMERCE)`, `Display Order (optional)`. Multiple rows with the same Category Name = multiple subcategories under that category.
+    - File upload input: `<input type="file" accept=".xlsx,.csv" data-testid="bulk-file-input">`. On change, parse the file client-side using `xlsx` (SheetJS) library into a `BulkCategoryRow[]` array. Display parsed row count.
+    - "Validate" button: calls `POST /api/v1/admin/bulk/categories/validate` with parsed rows. Shows result.
+    - Conflict resolution UI: if `valid: false`, show conflict table with "Fix my file" and "Skip conflicts & continue" buttons.
+    - If `valid: true` or user clicks "Skip conflicts & continue": call `POST /api/v1/admin/bulk/categories/confirm?mode=strict` or `?mode=skip` respectively.
+    - On success: close modal, invalidate `["admin", "categories"]` query, show success toast.
+  - [ ] Run unit tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Admin navigates to `AdminCategoriesPage` → clicks "Import Categories" → clicks "Download Sample" → fills in the Excel with 3 categories (each with 2 subcategories) → uploads file → clicks "Validate" → sees "All rows are valid" banner → clicks "Confirm & Import" → modal closes → categories list refreshes showing 3 new categories with their subcategories → DB has 3 new `Category` rows and 6 new `SubCategory` rows, all with auto-generated slugs → ✅ Done.
+
+---
+
+### 6.10.2 — Store Owner: Bulk Insert Products & Variants
+
+**Root cause / Goal:**
+Store owners who are stocking a new store or adding a new product range must create each product one-by-one via `StoreProductFormPage`. A store with 50 products needs 50 separate form submissions. The goal is to allow a store owner to upload one Excel file containing all products and their variants in one go, with the same validation and conflict detection used for categories.
+
+**Fix / Approach:**
+1. [Backend] Add `POST /api/v1/store/bulk/products/validate` and `POST /api/v1/store/bulk/products/confirm?mode=strict|skip` in `store-owner.controller.ts`. The `storeId` comes from the JWT — never from the request body. Slug-free: users provide the `subCategory` by its **human-readable name** (not ID, not slug). Backend resolves the name to a `subCategoryId` via DB lookup.
+2. [Frontend] Add a "Bulk Import" button on `StoreProductsPage.tsx` opening a modal identical in structure to the admin one, but with product-specific columns.
+
+---
+
+- [ ] **RED — Integration (append new `describe` block to `store-owner.products.test.ts`):**
+  - [ ] Test setup: Create a store, store owner, category `"Dairy"`, and subcategory `"Full Cream Milk"` (name, not slug) in the test DB.
+  - [ ] Test: `POST /api/v1/store/bulk/products/validate` with valid STORE_OWNER JWT and body `{ rows: [{ productName: "Amul Milk", subCategoryName: "Full Cream Milk", description: "Fresh milk", imageUrl: "http://example.com/milk.png", variants: [{ label: "500ml", price: 35, stockQty: 100, unit: "packet" }, { label: "1L", price: 65, stockQty: 50, unit: "bottle" }] }] }` → HTTP 200 with `{ data: { valid: true, conflicts: [], totalRows: 1, totalVariantRows: 2 } }`. Verify `db.product.count()` is 0 after call.
+  - [ ] Test: `POST /api/v1/store/bulk/products/validate` with a row containing `subCategoryName: "NonExistentCategory"` → HTTP 200 with `{ data: { valid: false, conflicts: [{ row: 1, type: "SUBCATEGORY_NOT_FOUND", subCategoryName: "NonExistentCategory" }] } }`. Zero DB writes.
+  - [ ] Test: Pre-create a product named `"Amul Milk"` for this store. Call validate with a row having `productName: "Amul Milk"`. Expect `conflicts: [{ row: 1, type: "PRODUCT_NAME_EXISTS", productName: "Amul Milk" }]`. Zero DB writes.
+  - [ ] Test: `POST /api/v1/store/bulk/products/validate` with a BUYER JWT → HTTP 403.
+  - [ ] Test: `POST /api/v1/store/bulk/products/confirm?mode=strict` with body containing one valid row → HTTP 201. `db.product.count()` is 1. `db.productVariant.count()` is 2. `db.stockMovement.count()` is 2 (type `INITIAL`). Product's `storeId` matches the JWT's `storeId` — not any value from the request body.
+  - [ ] Test: `POST /api/v1/store/bulk/products/confirm?mode=strict` when product name already exists → HTTP 409 `BULK_CONFLICT`. Zero DB writes.
+  - [ ] Test: `POST /api/v1/store/bulk/products/confirm?mode=skip` with 2 rows (row 1: name already exists, row 2: new) → HTTP 201, `db.product.count()` is 1 (only row 2 inserted), response `{ data: { inserted: 1, skipped: 1 } }`.
+  - [ ] Test: A row with duplicate `variants` labels within itself (e.g. two `"500ml"` entries in the same product row) → validate returns conflict `{ type: "DUPLICATE_VARIANT_LABEL", row: 1, label: "500ml" }`.
+  - [ ] Verify: AuditLog entry with `action: "STORE_BULK_PRODUCT_INSERT"` created after successful confirm.
+  - [ ] **Run — confirm RED (404 — endpoints do not exist).**
+
+- [ ] **GREEN — Backend (Service → Controller → Routes):**
+  - [ ] [Service] Add `bulkValidateProducts(storeId: string, rows: BulkProductRow[])` to `store-owner.service.ts`:
+    - `BulkProductRow` type: `{ productName: string; subCategoryName: string; description: string; imageUrl: string; variants: { label: string; price: number; stockQty: number; unit: string; lowStockThreshold?: number }[] }`.
+    - For each row: check `db.product.findFirst({ where: { storeId, name: row.productName, isDeleted: false } })` — if found, push `PRODUCT_NAME_EXISTS` conflict. Check `db.subCategory.findFirst({ where: { name: { equals: row.subCategoryName, mode: "insensitive" } } })` — if not found, push `SUBCATEGORY_NOT_FOUND` conflict. Check variant labels within the row for duplicates — push `DUPLICATE_VARIANT_LABEL` conflict if found. Never writes to DB.
+    - Returns `{ valid: boolean; conflicts: BulkProductConflict[]; totalRows: number; totalVariantRows: number }`.
+  - [ ] [Service] Add `bulkConfirmProducts(storeId: string, rows: BulkProductRow[], mode: "strict" | "skip", ownerId: string, ip: string, userAgent: string)` to `store-owner.service.ts`:
+    - Re-runs conflict detection at confirm time.
+    - If `mode = "strict"` and any conflict: throw `AppError` code `BULK_CONFLICT` HTTP 409.
+    - If `mode = "skip"`: filter out conflicting rows.
+    - For each clean row: resolve `subCategoryId` from `subCategoryName` via `db.subCategory.findFirst(...)` (also fetches `categoryId` via `subCategory.categoryId`). Run `db.$transaction` to: `tx.product.create(...)`, then for each variant `tx.productVariant.create(...)` + `tx.stockMovement.create({ type: "INITIAL", ... })`.
+    - After all inserts: write one `auditLog` with `action: "STORE_BULK_PRODUCT_INSERT"`.
+    - Returns `{ inserted: number; skipped: number }`.
+  - [ ] [Controller] Add two handlers in `store-owner.controller.ts`:
+    - `POST /api/v1/store/bulk/products/validate`: Zod body: `z.object({ rows: z.array(z.object({ productName: z.string().min(1), subCategoryName: z.string().min(1), description: z.string().min(1), imageUrl: z.string().url(), variants: z.array(z.object({ label: z.string().min(1), price: z.number().positive(), stockQty: z.number().int().min(0), unit: z.string().min(1), lowStockThreshold: z.number().int().optional() })).min(1) })).min(1).max(500) })`. Extract `storeId` from `request.user.storeId`. Call service. Return HTTP 200.
+    - `POST /api/v1/store/bulk/products/confirm`: Same body schema + `mode` query param. Call service. Return HTTP 201.
+    - Both routes: `requireAuth` + `requireRole("STORE_OWNER")` preHandlers.
+  - [ ] [Routes] The new handlers register inside the existing `registerStoreOwnerRoutes` call in `routes.ts`. No change to `routes.ts` needed.
+  - [ ] Run integration tests — **confirm GREEN.**
+
+- [ ] **RED — Unit / Component (`StoreProductsPage.test.tsx` — new test blocks appended to existing file):**
+  - [ ] Test: A button `data-testid="bulk-import-products-btn"` with label "Bulk Import" exists on the page alongside the existing "Add Product" button.
+  - [ ] Test: Clicking "Bulk Import" opens a modal `data-testid="bulk-import-products-modal"` containing a "Download Sample" link, a file upload input `data-testid="bulk-products-file-input"`, and a disabled "Validate" button.
+  - [ ] Test: When validate API returns conflicts with `type: "SUBCATEGORY_NOT_FOUND"`, the conflict table row reads `"Row 2: Sub-category 'NonExistent' was not found in the system."`.
+  - [ ] Test: When validate API returns conflicts with `type: "PRODUCT_NAME_EXISTS"`, the conflict table row reads `"Row 1: Product 'Amul Milk' already exists in your store."`.
+  - [ ] Test: When validate API returns `{ valid: true, conflicts: [] }`, the "Confirm & Import" button is enabled.
+  - [ ] Test: After successful confirm, `queryClient.invalidateQueries(["store", "products"])` is called and a success toast "Import complete: N products added" is shown.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Define `BulkProductRow`, `BulkProductConflict`, and response types in `StoreProductsPage.tsx`.
+  - [ ] [Component] In `StoreProductsPage.tsx`, add "Bulk Import" button next to the existing "Add Product" button.
+  - [ ] [Modal] Inside the dialog:
+    - "Download Sample" link → downloads a sample `.xlsx` with columns: `Product Name`, `Sub-Category Name`, `Description`, `Image URL`, `Variant Label`, `Price`, `Stock Qty`, `Unit`, `Low Stock Threshold (optional)`. Multiple rows with the same `Product Name` = multiple variants for that product.
+    - File upload input: on change, parse `.xlsx` with SheetJS into `BulkProductRow[]`. Group rows by `Product Name` client-side before sending.
+    - Validate → conflict display → skip/fix choice → confirm — identical flow to admin modal.
+  - [ ] Run unit tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Store owner navigates to `StoreProductsPage` → clicks "Bulk Import" → downloads sample Excel → fills in 5 products (each with 2-3 variants) → uploads file → clicks Validate → sees "All rows valid" → clicks "Confirm & Import" → modal closes → product list shows 5 new products → each product's variants are in the DB with `INITIAL` stock movements → buyer storefront shows new products → ✅ Done.
+
+---
+
+### 6.10.3 — Store Owner: Bulk Restock (Update Stock Qty Only)
+
+**Root cause / Goal:**
+When a store owner receives a new shipment, they need to update stock quantities for many variants at once. The current flow requires opening each product's edit form and adjusting each variant individually. This section adds a dedicated bulk restock flow: a simpler Excel (product name + variant label + new stock qty), identity resolved by `(storeId from JWT + productName + variantLabel)` compound key, with the same two-phase validate/confirm pattern.
+
+**Fix / Approach:**
+1. [Backend] Add `POST /api/v1/store/bulk/restock/validate` and `POST /api/v1/store/bulk/restock/confirm` to `store-owner.controller.ts`. For each row, the system resolves the variant by `(storeId, productName, variantLabel)`. If multiple products share the same name in the store (ambiguous match), the row is flagged as a conflict with error `AMBIGUOUS_PRODUCT_NAME` and rejected. A `StockMovement` of type `ADJUSTMENT` is created for every variant whose stock quantity changes.
+2. [Frontend] Add a "Bulk Restock" button on `StoreProductsPage.tsx` (or a dedicated `StoreStockHistoryPage.tsx` — whichever is more prominent) opening a restock modal.
+
+---
+
+- [ ] **RED — Integration (new file: `store-owner.restock.bulk.test.ts` in `src/__tests__/integration/store-owner/`):**
+  - [ ] Test setup: Create store, owner, category, subcategory. Create product `"Amul Milk"` with variant `"500ml"` (stockQty 10) and variant `"1L"` (stockQty 5).
+  - [ ] Test: `POST /api/v1/store/bulk/restock/validate` with valid STORE_OWNER JWT and body `{ rows: [{ productName: "Amul Milk", variantLabel: "500ml", newStockQty: 200 }, { productName: "Amul Milk", variantLabel: "1L", newStockQty: 100 }] }` → HTTP 200 with `{ data: { valid: true, conflicts: [], totalRows: 2 } }`. Verify `db.stockMovement.count()` is still 0 after call (dry-run).
+  - [ ] Test: `POST /api/v1/store/bulk/restock/validate` with `productName: "NonExistent"` → HTTP 200 with `{ data: { valid: false, conflicts: [{ row: 1, type: "PRODUCT_NOT_FOUND", productName: "NonExistent" }] } }`.
+  - [ ] Test: `POST /api/v1/store/bulk/restock/validate` with `variantLabel: "NonExistentLabel"` on a real product → HTTP 200 with `{ data: { valid: false, conflicts: [{ row: 1, type: "VARIANT_NOT_FOUND", productName: "Amul Milk", variantLabel: "NonExistentLabel" }] } }`.
+  - [ ] Test (ambiguous product): Create a second product also named `"Amul Milk"` in the same store. Call validate with `{ productName: "Amul Milk", variantLabel: "500ml", newStockQty: 200 }` → expect conflict `{ type: "AMBIGUOUS_PRODUCT_NAME", productName: "Amul Milk" }`.
+  - [ ] Test: `POST /api/v1/store/bulk/restock/confirm` with valid rows → HTTP 200. `db.productVariant.findFirst({ where: { label: "500ml" } })` has `stockQty: 200`. `db.stockMovement.count()` is 2 (one ADJUSTMENT per variant that changed). Each movement has `stockQtyBefore: 10` (or 5), `stockQtyAfter: 200` (or 100), `type: "ADJUSTMENT"`.
+  - [ ] Test: Confirm with `newStockQty` equal to the current stock (no change) → HTTP 200 but zero new `StockMovement` rows created (delta is 0).
+  - [ ] Test: `POST /api/v1/store/bulk/restock/confirm?mode=skip` with mixed rows (1 conflict + 1 valid) → HTTP 200, only 1 update applied, 1 skipped, 1 ADJUSTMENT stockMovement created.
+  - [ ] Test: BUYER JWT → HTTP 403.
+  - [ ] Verify: AuditLog entry with `action: "STORE_BULK_RESTOCK"` created, `newValue: { updatedCount, skippedCount }`.
+  - [ ] **Run — confirm RED (404 — new file, no endpoints exist).**
+
+- [ ] **GREEN — Backend (Service → Controller → Routes):**
+  - [ ] [Service] Add `bulkValidateRestock(storeId: string, rows: BulkRestockRow[])` to `store-owner.service.ts`:
+    - `BulkRestockRow` type: `{ productName: string; variantLabel: string; newStockQty: number }`.
+    - For each row: `db.product.findMany({ where: { storeId, name: { equals: row.productName, mode: "insensitive" }, isDeleted: false } })`. If result.length > 1: push `AMBIGUOUS_PRODUCT_NAME` conflict. If result.length === 0: push `PRODUCT_NOT_FOUND`. If result.length === 1: find variant by `db.productVariant.findFirst({ where: { productId: product.id, label: { equals: row.variantLabel, mode: "insensitive" }, isActive: true } })`. If not found: push `VARIANT_NOT_FOUND`. Never writes to DB.
+    - Returns `{ valid: boolean; conflicts: BulkRestockConflict[]; totalRows: number }`.
+  - [ ] [Service] Add `bulkConfirmRestock(storeId: string, rows: BulkRestockRow[], mode: "strict" | "skip", ownerId: string, ip: string, userAgent: string)` to `store-owner.service.ts`:
+    - Re-runs conflict detection. If `mode = "strict"` and any conflict: throw `AppError` code `BULK_CONFLICT` HTTP 409.
+    - For each clean row (in a single `db.$transaction`): resolve `(product, variant)`, compare `newStockQty` with `variant.stockQty`. If different: `tx.productVariant.update({ data: { stockQty: row.newStockQty, isInStock: row.newStockQty > 0, isLowStock: row.newStockQty <= variant.lowStockThreshold } })` + `tx.stockMovement.create({ type: "ADJUSTMENT", quantity: Math.abs(delta), stockQtyBefore: variant.stockQty, stockQtyAfter: row.newStockQty })`. If same (delta = 0): skip without creating a movement.
+    - After transaction: write `auditLog` with `action: "STORE_BULK_RESTOCK"`.
+    - Returns `{ updated: number; skipped: number; noChange: number }`.
+  - [ ] [Controller] Add two handlers in `store-owner.controller.ts`:
+    - `POST /api/v1/store/bulk/restock/validate`: Zod body `z.object({ rows: z.array(z.object({ productName: z.string().min(1), variantLabel: z.string().min(1), newStockQty: z.number().int().min(0) })).min(1).max(1000) })`. Extract `storeId` from JWT. Call service. Return HTTP 200.
+    - `POST /api/v1/store/bulk/restock/confirm`: Same body + `mode` query param `z.enum(["strict","skip"]).default("strict")`. Call service. Return HTTP 200.
+    - Both routes: `requireAuth` + `requireRole("STORE_OWNER")`.
+  - [ ] [Routes] New handlers register inside existing `registerStoreOwnerRoutes`. No change to `routes.ts`.
+  - [ ] Run integration tests — **confirm GREEN.**
+
+- [ ] **RED — Unit / Component (`StoreProductsPage.test.tsx` — additional new test blocks):**
+  - [ ] Test: A button `data-testid="bulk-restock-btn"` with label "Bulk Restock" exists on the page.
+  - [ ] Test: Clicking "Bulk Restock" opens modal `data-testid="bulk-restock-modal"` with "Download Sample" link and file upload.
+  - [ ] Test: Sample file downloaded has columns: `Product Name`, `Variant Label`, `New Stock Qty`.
+  - [ ] Test: Conflict type `AMBIGUOUS_PRODUCT_NAME` shows message `"Row 1: Multiple products named 'Amul Milk' found. Please rename one before bulk restocking."`.
+  - [ ] Test: Conflict type `VARIANT_NOT_FOUND` shows message `"Row 2: Variant '750ml' not found for product 'Amul Milk'."`.
+  - [ ] Test: After successful confirm, `queryClient.invalidateQueries(["store", "products"])` is called and toast "Restock complete: N variants updated" is shown.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Define `BulkRestockRow`, `BulkRestockConflict`, and response types.
+  - [ ] [Component] In `StoreProductsPage.tsx`, add "Bulk Restock" button next to "Bulk Import" and "Add Product".
+  - [ ] [Modal] Inside the restock dialog:
+    - "Download Sample" link → downloads a sample `.xlsx` with columns: `Product Name`, `Variant Label`, `New Stock Qty`. Note in the sample file's first comment row: "Tip: Product Name and Variant Label must match exactly as they appear in your store."
+    - File upload → parse → validate API call → conflict display (including special `AMBIGUOUS_PRODUCT_NAME` message) → skip/fix choice → confirm.
+  - [ ] Run unit tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Store owner receives new delivery of 50 products → navigates to `StoreProductsPage` → clicks "Bulk Restock" → downloads sample → fills in product names, variant labels, new stock quantities → uploads file → validates (all rows match store catalog) → confirms → modal closes → product list shows updated stock badges → buyer storefront shows items back in stock → `StockMovement` records show ADJUSTMENT type with correct before/after quantities → ✅ Done.
+
+---
+
+### 6.10.4 — E2E Tests: Decision & Rationale
+
+> **Decision: No new E2E (Playwright) tests for Phase 6.10.**
+
+**Rationale:**
+The Playwright E2E suite covers the **buyer journey** and the **happy-path flows** of store owner and admin panels (login, order management, product creation via form). Bulk insert is an **operational tool** used by admins and store owners during catalog setup — not a buyer-facing flow.
+
+The two-phase validate/confirm API is thoroughly covered by **integration tests** (which hit the real HTTP routes with a real test DB). The Excel parsing and modal interaction are covered by **unit/component tests** (which mock the API responses). Together these provide the same confidence that E2E would, without the brittle file-system upload interactions that Playwright handles poorly (file upload dialogs are notoriously flaky in Playwright without `page.setInputFiles` workarounds).
+
+**The one E2E consideration:** If a future session decides to add E2E coverage, the correct Playwright approach is `page.setInputFiles('input[data-testid="bulk-file-input"]', '/path/to/fixture/sample.xlsx')` — not interacting with the OS file dialog. This is noted here so the decision is conscious and documented.
+
+**What IS verified at E2E level as a side effect:** The existing E2E tests that assert product counts, category listings, and stock levels will naturally catch regressions in bulk-inserted data if seeded into the test fixture — but no new E2E spec files are needed for Phase 6.10.
+
+---
+
 
 ## Session Notes (Phase 6)
 
@@ -629,8 +871,10 @@ The goal of this phase is to establish absolute parity by building a fully integ
   2. **Monospace Pricing Removal:** Stripped all `font-mono` styles from pricing lines, standardising all amounts with the elegant `font-dm-sans` of the page.
   3. **Dashboard Streamlining:** Removed redundant appointment slots, phone contacts, map address pins, and active buttons from merchant list-view cards.
   4. **Rejection Modal Header:** Integrated the rejection/cancellation reason inside the detailed modal header for clean historical records.
-  5. **Test Adjustments:** Refactored unit/integration tests (`CheckoutPage.test.tsx`, `StoreBookingsPage.test.tsx`) to assert layout compliance.
+5. **Test Adjustments:** Refactored unit/integration tests (`CheckoutPage.test.tsx`, `StoreBookingsPage.test.tsx`) to assert layout compliance.
 - **Validation:** Entire workspace typecheck (`tsc --noEmit`) and strict ESLint checks pass with 100% green, warning-free exits.
 
 
+
+---
 
