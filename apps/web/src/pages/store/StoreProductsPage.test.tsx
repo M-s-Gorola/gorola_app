@@ -7,16 +7,24 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { StoreProductsPage } from "./StoreProductsPage";
 
-const { getMock, deleteMock, putMock, profileMock } = vi.hoisted(() => ({
+const { getMock, deleteMock, putMock, profileMock, postMock, xlsxMockRead, xlsxMockSheetToJson, xlsxMockJsonToSheet, xlsxMockAoaToSheet } = vi.hoisted(() => ({
   getMock: vi.fn(),
   deleteMock: vi.fn(),
   putMock: vi.fn(),
+  postMock: vi.fn(),
   profileMock: vi.fn().mockResolvedValue({
     data: {
       success: true,
       data: { storeType: "QUICK_COMMERCE" }
     }
-  })
+  }),
+  xlsxMockRead: vi.fn().mockReturnValue({
+    SheetNames: ["Sheet1"],
+    Sheets: { Sheet1: {} }
+  }),
+  xlsxMockSheetToJson: vi.fn().mockReturnValue([]),
+  xlsxMockJsonToSheet: vi.fn().mockReturnValue({}),
+  xlsxMockAoaToSheet: vi.fn().mockReturnValue({})
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -28,9 +36,21 @@ vi.mock("@/lib/api", () => ({
       return getMock(url, ...args);
     }),
     delete: deleteMock,
-    post: vi.fn(),
+    post: postMock,
     put: putMock
   }
+}));
+
+vi.mock("xlsx", () => ({
+  read: xlsxMockRead,
+  utils: {
+    sheet_to_json: xlsxMockSheetToJson,
+    json_to_sheet: xlsxMockJsonToSheet,
+    book_new: vi.fn().mockReturnValue({}),
+    book_append_sheet: vi.fn(),
+    aoa_to_sheet: xlsxMockAoaToSheet
+  },
+  write: vi.fn().mockReturnValue(new Uint8Array())
 }));
 
 function renderStoreProducts(initialEntries: InitialEntry[] = ["/store/products"]): void {
@@ -58,6 +78,8 @@ describe("StoreProductsPage", () => {
     getMock.mockReset();
     deleteMock.mockReset();
     putMock.mockReset();
+    postMock.mockReset();
+    xlsxMockSheetToJson.mockReset();
   });
 
   it("renders skeletons during loading state", () => {
@@ -416,4 +438,296 @@ describe("StoreProductsPage", () => {
     expect(screen.getByText(/Start expanding your catalog by registering your first service variants today/i)).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Create Service" })).toBeInTheDocument();
   });
+
+  describe("Bulk Import Products", () => {
+    beforeEach(() => {
+      postMock.mockReset();
+
+      // Mock profile as QUICK_COMMERCE by default
+      profileMock.mockResolvedValue({
+        data: { success: true, data: { storeType: "QUICK_COMMERCE" } }
+      });
+
+      // Mock products fetch
+      getMock.mockResolvedValue({
+        data: {
+          success: true,
+          data: [],
+          meta: { total: 0, page: 1, limit: 10, hasMore: false }
+        }
+      });
+    });
+
+    it("renders Bulk Import button for QUICK_COMMERCE stores", async () => {
+      renderStoreProducts();
+      expect(await screen.findByTestId("bulk-import-products-btn")).toBeInTheDocument();
+    });
+
+    it("opens bulk import modal on button click", async () => {
+      renderStoreProducts();
+      const user = userEvent.setup();
+
+      const btn = await screen.findByTestId("bulk-import-products-btn");
+      await user.click(btn);
+
+      expect(screen.getByTestId("bulk-import-products-modal")).toBeInTheDocument();
+      expect(screen.getByText(/Download Sample/i)).toBeInTheDocument();
+      expect(screen.getByTestId("bulk-products-file-input")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Validate" })).toBeDisabled();
+    });
+
+    it("handles validation success flow", async () => {
+      renderStoreProducts();
+      const user = userEvent.setup();
+
+      const btn = await screen.findByTestId("bulk-import-products-btn");
+      await user.click(btn);
+
+      const fileInput = screen.getByTestId("bulk-products-file-input");
+      const file = new File(["dummy content"], "products.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      xlsxMockSheetToJson.mockReturnValueOnce([
+        {
+          "Product Name": "Amul Milk",
+          "Sub-Category Name": "Full Cream Milk",
+          "Description": "Fresh",
+          "Image URL": "http://example.com/milk.png",
+          "Variant Label": "500ml",
+          "Price": 35,
+          "Stock Qty": 100,
+          "Unit": "packet"
+        }
+      ]);
+
+      await user.upload(fileInput, file);
+
+      const validateBtn = screen.getByRole("button", { name: "Validate" });
+      await waitFor(() => expect(validateBtn).toBeEnabled());
+
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            valid: true,
+            conflicts: [],
+            totalRows: 1,
+            totalVariantRows: 1
+          }
+        }
+      });
+
+      await user.click(validateBtn);
+
+      expect(await screen.findByTestId("bulk-validation-success")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Confirm & Import" })).toBeInTheDocument();
+
+      // Trigger confirm
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            inserted: 1,
+            skipped: 0
+          }
+        }
+      });
+
+      await user.click(screen.getByRole("button", { name: "Confirm & Import" }));
+      await waitFor(() => {
+        expect(postMock).toHaveBeenLastCalledWith("/api/v1/store/bulk/products/confirm?mode=strict", expect.any(Object));
+      });
+    });
+
+    it("handles validation failure flow with conflicts display", async () => {
+      renderStoreProducts();
+      const user = userEvent.setup();
+
+      const btn = await screen.findByTestId("bulk-import-products-btn");
+      await user.click(btn);
+
+      const fileInput = screen.getByTestId("bulk-products-file-input");
+      const file = new File(["dummy content"], "products.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      xlsxMockSheetToJson.mockReturnValueOnce([
+        { "Product Name": "Amul Milk", "Variant Label": "500ml", "New Stock Qty": 100 }
+      ]);
+
+      await user.upload(fileInput, file);
+
+      const validateBtn = screen.getByRole("button", { name: "Validate" });
+      
+      // Mock validation failure response
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            valid: false,
+            conflicts: [
+              { row: 1, type: "PRODUCT_NAME_EXISTS", productName: "Amul Milk" },
+              { row: 2, type: "SUBCATEGORY_NOT_FOUND", subCategoryName: "NonExistent" },
+              { row: 3, type: "COMMERCE_TYPE_MISMATCH", subCategoryName: "All Repairs", commerceType: "BOOKING_COMMERCE" },
+              { row: 4, type: "DUPLICATE_VARIANT_LABEL", label: "500ml" }
+            ],
+            totalRows: 4,
+            totalVariantRows: 4
+          }
+        }
+      });
+
+      await user.click(validateBtn);
+
+      expect(await screen.findByTestId("bulk-conflict-table")).toBeInTheDocument();
+      expect(screen.getByText(/^Row 1$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Product 'Amul Milk' already exists in your store./i)).toBeInTheDocument();
+      expect(screen.getByText(/^Row 2$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Sub-category 'NonExistent' was not found in the system./i)).toBeInTheDocument();
+      expect(screen.getByText(/^Row 3$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Sub-category 'All Repairs' is for Booking Commerce and cannot be added to this store./i)).toBeInTheDocument();
+      expect(screen.getByText(/^Row 4$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Duplicate variant label '500ml' found in row 4./i)).toBeInTheDocument();
+
+      const skipBtn = screen.getByRole("button", { name: /Skip conflicts/i });
+      expect(skipBtn).toBeInTheDocument();
+
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: { inserted: 1, skipped: 3 }
+        }
+      });
+
+      await user.click(skipBtn);
+      await waitFor(() => {
+        expect(postMock).toHaveBeenLastCalledWith("/api/v1/store/bulk/products/confirm?mode=skip", expect.any(Object));
+      });
+    });
+  });
+
+  describe("Bulk Restock Products", () => {
+    it("opens bulk restock modal on button click", async () => {
+      renderStoreProducts();
+      const user = userEvent.setup();
+
+      const btn = await screen.findByTestId("bulk-restock-products-btn");
+      await user.click(btn);
+
+      expect(screen.getByTestId("bulk-restock-products-modal")).toBeInTheDocument();
+      expect(screen.getByText(/Download Sample/i)).toBeInTheDocument();
+      expect(screen.getByTestId("bulk-restock-file-input")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Validate" })).toBeDisabled();
+    });
+
+    it("handles restock validation success flow", async () => {
+      renderStoreProducts();
+      const user = userEvent.setup();
+
+      const btn = await screen.findByTestId("bulk-restock-products-btn");
+      await user.click(btn);
+
+      const fileInput = screen.getByTestId("bulk-restock-file-input");
+      const file = new File(["dummy content"], "restock.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      xlsxMockSheetToJson.mockReturnValueOnce([
+        { "Product Name": "Amul Milk", "Variant Label": "500ml", "New Stock Qty": 120 }
+      ]);
+
+      await user.upload(fileInput, file);
+
+      const validateBtn = screen.getByRole("button", { name: "Validate" });
+      await waitFor(() => expect(validateBtn).toBeEnabled());
+
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            valid: true,
+            conflicts: [],
+            totalRows: 1
+          }
+        }
+      });
+
+      await user.click(validateBtn);
+
+      expect(await screen.findByTestId("bulk-restock-validation-success")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Confirm & Restock" })).toBeInTheDocument();
+
+      // Trigger confirm
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            updated: 1,
+            skipped: 0
+          }
+        }
+      });
+
+      await user.click(screen.getByRole("button", { name: "Confirm & Restock" }));
+      await waitFor(() => {
+        expect(postMock).toHaveBeenLastCalledWith("/api/v1/store/bulk/restock/confirm?mode=strict", expect.any(Object));
+      });
+    });
+
+    it("handles restock validation failure flow with conflicts display", async () => {
+      renderStoreProducts();
+      const user = userEvent.setup();
+
+      const btn = await screen.findByTestId("bulk-restock-products-btn");
+      await user.click(btn);
+
+      const fileInput = screen.getByTestId("bulk-restock-file-input");
+      const file = new File(["dummy content"], "restock.xlsx", { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+
+      xlsxMockSheetToJson.mockReturnValueOnce([
+        { "Product Name": "Amul Milk", "Variant Label": "500ml", "New Stock Qty": 120 }
+      ]);
+
+      await user.upload(fileInput, file);
+
+      const validateBtn = screen.getByRole("button", { name: "Validate" });
+
+      // Mock validation failure response
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            valid: false,
+            conflicts: [
+              { row: 1, type: "PRODUCT_NOT_FOUND", productName: "Amul Milk" },
+              { row: 2, type: "AMBIGUOUS_PRODUCT_NAME", productName: "Cheese" },
+              { row: 3, type: "VARIANT_NOT_FOUND", productName: "Butter", variantLabel: "500g" }
+            ],
+            totalRows: 3
+          }
+        }
+      });
+
+      await user.click(validateBtn);
+
+      expect(await screen.findByTestId("bulk-restock-conflict-table")).toBeInTheDocument();
+      expect(screen.getByText(/^Row 1$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Product 'Amul Milk' was not found in your store./i)).toBeInTheDocument();
+      expect(screen.getByText(/^Row 2$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Multiple products share the name 'Cheese'. Match is ambiguous./i)).toBeInTheDocument();
+      expect(screen.getByText(/^Row 3$/i)).toBeInTheDocument();
+      expect(screen.getByText(/Variant '500g' was not found under product 'Butter'./i)).toBeInTheDocument();
+
+      const skipBtn = screen.getByRole("button", { name: /Skip conflicts/i });
+      expect(skipBtn).toBeInTheDocument();
+
+      postMock.mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: { updated: 1, skipped: 2 }
+        }
+      });
+
+      await user.click(skipBtn);
+      await waitFor(() => {
+        expect(postMock).toHaveBeenLastCalledWith("/api/v1/store/bulk/restock/confirm?mode=skip", expect.any(Object));
+      });
+    });
+  });
 });
+

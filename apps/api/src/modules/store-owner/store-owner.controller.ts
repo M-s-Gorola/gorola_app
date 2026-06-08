@@ -351,6 +351,171 @@ export function registerStoreOwnerRoutes(
     };
   });
 
+  // Bulk Products & Restock Schemas
+  const bulkProductsBodySchema = z.object({
+    rows: z.array(
+      z.object({
+        productName: z.string().trim().min(1, "Product name is required"),
+        subCategoryName: z.string().trim().min(1, "Sub-category name is required"),
+        description: z.string().trim().default(""),
+        imageUrl: z.string().trim().min(1, "Image URL/path is required"),
+        variants: z.array(
+          z.object({
+            label: z.string().trim().min(1, "Variant label is required"),
+            price: z.coerce.number().positive("Price must be positive"),
+            stockQty: z.coerce.number().int().nonnegative("Stock quantity must be non-negative").default(0),
+            unit: z.string().trim().min(1, "Unit is required"),
+            lowStockThreshold: z.coerce.number().int().nonnegative().optional()
+          })
+        ).min(1, "At least one variant is required")
+      })
+    ).min(1, "At least one product is required").max(500)
+  });
+
+  const bulkRestockBodySchema = z.object({
+    rows: z.array(
+      z.object({
+        productName: z.string().trim().min(1, "Product name is required"),
+        variantLabel: z.string().trim().min(1, "Variant label is required"),
+        newStockQty: z.coerce.number().int().nonnegative("New stock quantity must be non-negative")
+      })
+    ).min(1, "At least one restock row is required").max(500)
+  });
+
+  // POST /api/v1/store/bulk/products/validate
+  app.post("/api/v1/store/bulk/products/validate", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = bulkProductsBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid bulk products data", parsed.error.flatten());
+    }
+
+    const result = await storeOwnerService.bulkValidateProducts(owner.storeId, parsed.data.rows);
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // POST /api/v1/store/bulk/products/confirm
+  app.post("/api/v1/store/bulk/products/confirm", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = bulkProductsBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid bulk products data", parsed.error.flatten());
+    }
+
+    const query = request.query as Record<string, string | undefined>;
+    const mode = (query.mode === "skip" ? "skip" : "strict") as "strict" | "skip";
+
+    const result = await storeOwnerService.bulkConfirmProducts(
+      owner.storeId,
+      parsed.data.rows,
+      mode,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
+
+    reply.code(201);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // POST /api/v1/store/bulk/restock/validate
+  app.post("/api/v1/store/bulk/restock/validate", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = bulkRestockBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid bulk restock data", parsed.error.flatten());
+    }
+
+    const result = await storeOwnerService.bulkValidateRestock(owner.storeId, parsed.data.rows);
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // POST /api/v1/store/bulk/restock/confirm
+  app.post("/api/v1/store/bulk/restock/confirm", { preHandler }, async (request, reply) => {
+    const userId = request.user?.sub;
+    if (!userId) {
+      throw new ValidationError("User subject missing from auth context");
+    }
+
+    const owner = await storeOwnerRepository.findById(userId);
+    if (!owner) {
+      throw new ValidationError("Store owner profile not found");
+    }
+
+    const parsed = bulkRestockBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid bulk restock data", parsed.error.flatten());
+    }
+
+    const query = request.query as Record<string, string | undefined>;
+    const mode = (query.mode === "skip" ? "skip" : "strict") as "strict" | "skip";
+
+    const result = await storeOwnerService.bulkConfirmRestock(
+      owner.storeId,
+      parsed.data.rows,
+      mode,
+      userId,
+      request.ip,
+      (request.headers["user-agent"] ?? "") as string
+    );
+
+    reply.code(201);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
   // 3. PUT /api/v1/store/products/:id
   const updateProductBodySchema = z.object({
     name: z.string().trim().min(1).optional(),

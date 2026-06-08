@@ -6,10 +6,20 @@ import {
   Plus,
   Search} from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
+import { read, utils, write } from "xlsx";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
@@ -49,6 +59,50 @@ type ProductsEnvelope = {
   };
 };
 
+type BulkProductRow = {
+  productName: string;
+  subCategoryName: string;
+  description: string;
+  imageUrl: string;
+  variants: {
+    label: string;
+    price: number;
+    stockQty: number;
+    unit: string;
+    lowStockThreshold?: number;
+  }[];
+};
+
+type BulkProductConflict =
+  | { row: number; type: "PRODUCT_NAME_EXISTS"; productName: string }
+  | { row: number; type: "SUBCATEGORY_NOT_FOUND"; subCategoryName: string }
+  | { row: number; type: "COMMERCE_TYPE_MISMATCH"; subCategoryName: string; commerceType: string }
+  | { row: number; type: "DUPLICATE_VARIANT_LABEL"; label: string };
+
+type BulkValidateProductsResponse = {
+  valid: boolean;
+  conflicts: BulkProductConflict[];
+  totalRows: number;
+  totalVariantRows: number;
+};
+
+type BulkRestockRow = {
+  productName: string;
+  variantLabel: string;
+  newStockQty: number;
+};
+
+type BulkRestockConflict =
+  | { row: number; type: "PRODUCT_NOT_FOUND"; productName: string }
+  | { row: number; type: "AMBIGUOUS_PRODUCT_NAME"; productName: string }
+  | { row: number; type: "VARIANT_NOT_FOUND"; productName: string; variantLabel: string };
+
+type BulkValidateRestockResponse = {
+  valid: boolean;
+  conflicts: BulkRestockConflict[];
+  totalRows: number;
+};
+
 export function StoreProductsPage(): ReactElement {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -56,6 +110,319 @@ export function StoreProductsPage(): ReactElement {
   const [search, setSearch] = useState(searchParams.get("search") || "");
   const [showLowStockOnly, setShowLowStockOnly] = useState(searchParams.get("lowStock") === "true");
   const [page, setPage] = useState(1);
+
+  // Bulk operation states
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [parsedRows, setParsedRows] = useState<BulkProductRow[]>([]);
+  const [isValidating, setIsValidating] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  const [validationResult, setValidationResult] = useState<BulkValidateProductsResponse | null>(null);
+
+  // Restock states
+  const [isRestockModalOpen, setIsRestockModalOpen] = useState(false);
+  const [selectedRestockFile, setSelectedRestockFile] = useState<File | null>(null);
+  const [parsedRestockRows, setParsedRestockRows] = useState<BulkRestockRow[]>([]);
+  const [isValidatingRestock, setIsValidatingRestock] = useState(false);
+  const [isConfirmingRestock, setIsConfirmingRestock] = useState(false);
+  const [restockValidationResult, setRestockValidationResult] = useState<BulkValidateRestockResponse | null>(null);
+
+  const handleDownloadSample = () => {
+    const ws = utils.json_to_sheet([
+      {
+        "Product Name": "Amul Butter",
+        "Sub-Category Name": "Butter & Spread",
+        "Description": "Delicious salted butter",
+        "Image URL": "https://example.com/butter.jpg",
+        "Variant Label": "100g",
+        "Price": 55,
+        "Stock Qty": 50,
+        "Unit": "packet",
+        "Low Stock Threshold": 5
+      },
+      {
+        "Product Name": "Amul Butter",
+        "Sub-Category Name": "Butter & Spread",
+        "Description": "Delicious salted butter",
+        "Image URL": "https://example.com/butter.jpg",
+        "Variant Label": "500g",
+        "Price": 250,
+        "Stock Qty": 30,
+        "Unit": "packet",
+        "Low Stock Threshold": 5
+      }
+    ]);
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "Products");
+    const out = write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "products_sample.xlsx";
+    a.click();
+  };
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedFile(file);
+    setValidationResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+          toast.error("Excel sheet is empty");
+          return;
+        }
+        const worksheet = workbook.Sheets[firstSheetName];
+        if (!worksheet) {
+          toast.error("Invalid sheet format");
+          return;
+        }
+        const jsonData = utils.sheet_to_json<Record<string, string>>(worksheet);
+
+        const productMap = new Map<string, {
+          productName: string;
+          subCategoryName: string;
+          description: string;
+          imageUrl: string;
+          variants: {
+            label: string;
+            price: number;
+            stockQty: number;
+            unit: string;
+            lowStockThreshold?: number;
+          }[];
+        }>();
+
+        for (const row of jsonData) {
+          const pNameVal = row["Product Name"];
+          const pName = pNameVal ? String(pNameVal).trim() : "";
+          if (!pName) continue;
+
+          const subCatVal = row["Sub-Category Name"];
+          const subCat = subCatVal ? String(subCatVal).trim() : "";
+
+          const descVal = row["Description"];
+          const desc = descVal ? String(descVal).trim() : "";
+
+          const imgVal = row["Image URL"];
+          const img = imgVal ? String(imgVal).trim() : "";
+
+          const varLabelVal = row["Variant Label"];
+          const varLabel = varLabelVal ? String(varLabelVal).trim() : "";
+
+          const priceVal = row["Price"];
+          const price = priceVal ? parseFloat(String(priceVal).trim()) : 0;
+
+          const stockVal = row["Stock Qty"];
+          const stock = stockVal ? parseInt(String(stockVal).trim(), 10) : 0;
+
+          const unitVal = row["Unit"];
+          const unit = unitVal ? String(unitVal).trim() : "";
+
+          const thresholdVal = row["Low Stock Threshold"];
+          const threshold = (thresholdVal !== undefined && thresholdVal !== null && String(thresholdVal).trim() !== "")
+            ? parseInt(String(thresholdVal).trim(), 10)
+            : undefined;
+
+          if (!productMap.has(pName)) {
+            productMap.set(pName, {
+              productName: pName,
+              subCategoryName: subCat,
+              description: desc,
+              imageUrl: img,
+              variants: []
+            });
+          }
+
+          const productObj = productMap.get(pName)!;
+          if (varLabel) {
+            productObj.variants.push({
+              label: varLabel,
+              price,
+              stockQty: stock,
+              unit,
+              ...(threshold !== undefined ? { lowStockThreshold: threshold } : {})
+            });
+          }
+        }
+
+        setParsedRows(Array.from(productMap.values()));
+      } catch {
+        toast.error("Failed to parse Excel file");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleValidate = async () => {
+    if (!api) return;
+    setIsValidating(true);
+    try {
+      const res = await api.post<{ success: boolean; data: BulkValidateProductsResponse }>("/api/v1/store/bulk/products/validate", {
+        rows: parsedRows
+      });
+      setValidationResult(res.data.data);
+    } catch (err: unknown) {
+      let errMsg = "Validation failed";
+      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
+      errMsg = errorResponse?.response?.data?.error?.message || errMsg;
+      toast.error(errMsg);
+    } finally {
+      setIsValidating(false);
+    }
+  };
+
+  const handleConfirm = async (mode: "strict" | "skip") => {
+    if (!api) return;
+    setIsConfirming(true);
+    try {
+      const res = await api.post<{ success: boolean; data: { inserted: number; skipped: number } }>(
+        `/api/v1/store/bulk/products/confirm?mode=${mode}`,
+        { rows: parsedRows }
+      );
+      const info = res.data.data;
+      toast.success(`Import complete: ${info.inserted} products added, ${info.skipped} skipped`);
+      setIsBulkModalOpen(false);
+      setSelectedFile(null);
+      setParsedRows([]);
+      setValidationResult(null);
+      await queryClient.invalidateQueries({ queryKey: ["store", "products"] });
+      await queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
+    } catch (err: unknown) {
+      let errMsg = "Import failed";
+      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
+      errMsg = errorResponse?.response?.data?.error?.message || errMsg;
+      toast.error(errMsg);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
+
+  const handleDownloadRestockSample = () => {
+    const ws = utils.json_to_sheet([
+      {
+        "Product Name": "Amul Butter",
+        "Variant Label": "100g",
+        "New Stock Qty": 150
+      },
+      {
+        "Product Name": "Amul Butter",
+        "Variant Label": "500g",
+        "New Stock Qty": 90
+      }
+    ]);
+    const wb = utils.book_new();
+    utils.book_append_sheet(wb, ws, "Restock");
+    const out = write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([out], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "restock_sample.xlsx";
+    a.click();
+  };
+
+  const handleRestockFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setSelectedRestockFile(file);
+    setRestockValidationResult(null);
+
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      try {
+        const data = new Uint8Array(event.target?.result as ArrayBuffer);
+        const workbook = read(data, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        if (!firstSheetName) {
+          toast.error("Excel sheet is empty");
+          return;
+        }
+        const worksheet = workbook.Sheets[firstSheetName];
+        if (!worksheet) {
+          toast.error("Invalid sheet format");
+          return;
+        }
+        const jsonData = utils.sheet_to_json<Record<string, string>>(worksheet);
+
+        const rowsList: BulkRestockRow[] = [];
+
+        for (const row of jsonData) {
+          const pNameVal = row["Product Name"];
+          const pName = pNameVal ? String(pNameVal).trim() : "";
+          if (!pName) continue;
+
+          const varLabelVal = row["Variant Label"];
+          const varLabel = varLabelVal ? String(varLabelVal).trim() : "";
+
+          const qtyVal = row["New Stock Qty"];
+          const qty = qtyVal ? parseInt(String(qtyVal).trim(), 10) : 0;
+
+          rowsList.push({
+            productName: pName,
+            variantLabel: varLabel,
+            newStockQty: qty
+          });
+        }
+
+        setParsedRestockRows(rowsList);
+      } catch {
+        toast.error("Failed to parse Excel file");
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  const handleValidateRestock = async () => {
+    if (!api) return;
+    setIsValidatingRestock(true);
+    try {
+      const res = await api.post<{ success: boolean; data: BulkValidateRestockResponse }>("/api/v1/store/bulk/restock/validate", {
+        rows: parsedRestockRows
+      });
+      setRestockValidationResult(res.data.data);
+    } catch (err: unknown) {
+      let errMsg = "Validation failed";
+      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
+      errMsg = errorResponse?.response?.data?.error?.message || errMsg;
+      toast.error(errMsg);
+    } finally {
+      setIsValidatingRestock(false);
+    }
+  };
+
+  const handleConfirmRestock = async (mode: "strict" | "skip") => {
+    if (!api) return;
+    setIsConfirmingRestock(true);
+    try {
+      const res = await api.post<{ success: boolean; data: { updated: number; skipped: number } }>(
+        `/api/v1/store/bulk/restock/confirm?mode=${mode}`,
+        { rows: parsedRestockRows }
+      );
+      const info = res.data.data;
+      toast.success(`Restock complete: ${info.updated} variants updated, ${info.skipped} skipped`);
+      setIsRestockModalOpen(false);
+      setSelectedRestockFile(null);
+      setParsedRestockRows([]);
+      setRestockValidationResult(null);
+      await queryClient.invalidateQueries({ queryKey: ["store", "products"] });
+      await queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
+    } catch (err: unknown) {
+      let errMsg = "Restock failed";
+      const errorResponse = err as { response?: { data?: { error?: { message?: string } } } };
+      errMsg = errorResponse?.response?.data?.error?.message || errMsg;
+      toast.error(errMsg);
+    } finally {
+      setIsConfirmingRestock(false);
+    }
+  };
 
   // Synchronize state with URL search params (e.g. from Dashboard deep-links)
   useEffect(() => {
@@ -155,14 +522,34 @@ export function StoreProductsPage(): ReactElement {
             Manage your store catalog, track variants, {isBooking ? "" : "stock status "}and pricing.
           </p>
         </div>
-        <button
-          onClick={() => navigate(getScopedPath("/store/products/new", "store", isSubdomainMode))}
-          className="inline-flex items-center gap-2 px-5 py-3 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-gorola-pine/15 transition-all"
-          id="add-product-btn"
-        >
-          <Plus className="h-4 w-4" />
-          Add {term}
-        </button>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+          <Button
+            data-testid="bulk-import-products-btn"
+            onClick={() => setIsBulkModalOpen(true)}
+            className="px-3 py-2 sm:px-4 sm:py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 text-gorola-pine hover:bg-gorola-fog rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all font-dm-sans"
+          >
+            Bulk Import
+          </Button>
+
+          {!isBooking && (
+            <Button
+              data-testid="bulk-restock-products-btn"
+              onClick={() => setIsRestockModalOpen(true)}
+              className="px-3 py-2 sm:px-4 sm:py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 text-gorola-pine hover:bg-gorola-fog rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all font-dm-sans"
+            >
+              Bulk Restock
+            </Button>
+          )}
+
+          <button
+            onClick={() => navigate(getScopedPath("/store/products/new", "store", isSubdomainMode))}
+            className="inline-flex items-center gap-2 px-4 py-2 sm:px-5 sm:py-3 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl text-[10px] sm:text-xs font-black uppercase tracking-wider shadow-md shadow-gorola-pine/15 transition-all font-dm-sans"
+            id="add-product-btn"
+          >
+            <Plus className="h-4 w-4" />
+            Add {term}
+          </button>
+        </div>
       </div>
 
       {/* Filter / Search Bar */}
@@ -396,6 +783,321 @@ export function StoreProductsPage(): ReactElement {
             Create {term}
           </button>
         </div>
+      )}
+
+      {/* Bulk Product Import Modal */}
+      <Dialog open={isBulkModalOpen} onOpenChange={setIsBulkModalOpen}>
+        <DialogContent data-testid="bulk-import-products-modal" className="sm:max-w-2xl gap-6 max-h-[85vh] overflow-y-auto w-full">
+          <DialogHeader>
+            <DialogTitle className="font-heading text-xl">Import {termPlural}</DialogTitle>
+            <DialogDescription>
+              Upload a spreadsheet to bulk import {termPlural.toLowerCase()} and their variants.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gorola-fog p-4 rounded-xl border border-gorola-charcoal/5">
+              <span className="text-xs text-gorola-slate font-dm-sans">
+                Need a template? Download the sample structure.
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadSample}
+                className="text-xs font-bold font-dm-sans border-gorola-mint/30"
+              >
+                Download Sample
+              </Button>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="font-dm-sans text-sm font-semibold text-gorola-charcoal block">
+                Select Excel File
+              </label>
+              <input
+                type="file"
+                accept=".xlsx,.xls,.csv"
+                data-testid="bulk-products-file-input"
+                onChange={handleFileChange}
+                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+              />
+              {selectedFile && parsedRows.length > 0 && (
+                <p className="text-xs text-emerald-600 font-bold font-dm-sans">
+                  Parsed {parsedRows.length} {termPlural.toLowerCase()} from file.
+                </p>
+              )}
+            </div>
+
+            {/* Validation State Display */}
+            {validationResult && (
+              <div className="space-y-4">
+                {validationResult.valid ? (
+                  <div
+                    data-testid="bulk-validation-success"
+                    className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-sm font-dm-sans flex items-center gap-2"
+                  >
+                    <span>✓</span> All rows are valid! You can safely import them.
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl text-sm font-dm-sans">
+                      ⚠️ Validation failed: {validationResult.conflicts.length} conflict(s) found.
+                    </div>
+
+                    <div className="border border-gorola-charcoal/10 rounded-xl overflow-x-auto shadow-sm w-full">
+                      <table data-testid="bulk-conflict-table" className="w-full text-left border-collapse text-xs">
+                        <thead>
+                          <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
+                            <th className="p-3 font-bold text-gorola-charcoal">Row</th>
+                            <th className="p-3 font-bold text-gorola-charcoal">Details</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {validationResult.conflicts.map((conflict, index) => (
+                            <tr key={index} className="border-b border-gorola-mint/10 last:border-0">
+                              <td className="p-3 font-mono font-bold text-gorola-slate">Row {conflict.row}</td>
+                              <td className="p-3 text-red-600 font-bold font-dm-sans break-words whitespace-normal">
+                                {conflict.type === "PRODUCT_NAME_EXISTS" && `Product '${conflict.productName}' already exists in your store.`}
+                                {conflict.type === "SUBCATEGORY_NOT_FOUND" && `Sub-category '${conflict.subCategoryName}' was not found in the system.`}
+                                {conflict.type === "COMMERCE_TYPE_MISMATCH" && `Sub-category '${conflict.subCategoryName}' is for ${conflict.commerceType === "BOOKING_COMMERCE" ? "Booking" : "Quick"} Commerce and cannot be added to this store.`}
+                                {conflict.type === "DUPLICATE_VARIANT_LABEL" && `Duplicate variant label '${conflict.label}' found in row ${conflict.row}.`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            <DialogFooter className="sm:flex-wrap sm:gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setIsBulkModalOpen(false);
+                  setSelectedFile(null);
+                  setParsedRows([]);
+                  setValidationResult(null);
+                }}
+                disabled={isValidating || isConfirming}
+              >
+                Cancel
+              </Button>
+
+              {/* Validate action */}
+              {(!validationResult || !validationResult.valid) && (
+                <Button
+                  type="button"
+                  onClick={handleValidate}
+                  disabled={!selectedFile || parsedRows.length === 0 || isValidating || isConfirming}
+                  className="bg-gorola-pine text-white hover:bg-gorola-pine-dark"
+                >
+                  {isValidating ? "Validating..." : "Validate"}
+                </Button>
+              )}
+
+              {/* Conflict choices */}
+              {validationResult && !validationResult.valid && (
+                <>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => {
+                      setIsBulkModalOpen(false);
+                      setSelectedFile(null);
+                      setParsedRows([]);
+                      setValidationResult(null);
+                    }}
+                    className="border-red-200 text-red-600 hover:bg-red-50"
+                  >
+                    Fix my file
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => handleConfirm("skip")}
+                    disabled={isConfirming}
+                    className="bg-amber-600 hover:bg-amber-700 text-white"
+                  >
+                    {isConfirming ? "Importing..." : "Skip conflicts & continue"}
+                  </Button>
+                </>
+              )}
+
+              {/* Pure success confirm */}
+              {validationResult && validationResult.valid && (
+                <Button
+                  type="button"
+                  onClick={() => handleConfirm("strict")}
+                  disabled={isConfirming}
+                  className="bg-gorola-pine text-white hover:bg-gorola-pine-dark"
+                >
+                  {isConfirming ? "Importing..." : "Confirm & Import"}
+                </Button>
+              )}
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Bulk Restock Modal */}
+      {!isBooking && (
+        <Dialog open={isRestockModalOpen} onOpenChange={setIsRestockModalOpen}>
+          <DialogContent data-testid="bulk-restock-products-modal" className="sm:max-w-2xl gap-6 max-h-[85vh] overflow-y-auto w-full">
+            <DialogHeader>
+              <DialogTitle className="font-heading text-xl">Bulk Restock</DialogTitle>
+              <DialogDescription>
+                Upload a spreadsheet to update variant stock quantities.
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2 bg-gorola-fog p-4 rounded-xl border border-gorola-charcoal/5">
+                <span className="text-xs text-gorola-slate font-dm-sans">
+                  Need a template? Download the sample restock structure.
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDownloadRestockSample}
+                  className="text-xs font-bold font-dm-sans border-gorola-mint/30"
+                >
+                  Download Sample
+                </Button>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="font-dm-sans text-sm font-semibold text-gorola-charcoal block">
+                  Select Excel File
+                </label>
+                <input
+                  type="file"
+                  accept=".xlsx,.xls,.csv"
+                  data-testid="bulk-restock-file-input"
+                  onChange={handleRestockFileChange}
+                  className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
+                />
+                {selectedRestockFile && parsedRestockRows.length > 0 && (
+                  <p className="text-xs text-emerald-600 font-bold font-dm-sans">
+                    Parsed {parsedRestockRows.length} restock rows from file.
+                  </p>
+                )}
+              </div>
+
+              {/* Validation State Display */}
+              {restockValidationResult && (
+                <div className="space-y-4">
+                  {restockValidationResult.valid ? (
+                    <div
+                      data-testid="bulk-restock-validation-success"
+                      className="bg-emerald-50 border border-emerald-200 text-emerald-800 p-4 rounded-xl text-sm font-dm-sans flex items-center gap-2"
+                    >
+                      <span>✓</span> All rows are valid! You can safely update them.
+                    </div>
+                  ) : (
+                    <div className="space-y-3">
+                      <div className="bg-red-50 border border-red-200 text-red-800 p-4 rounded-xl text-sm font-dm-sans">
+                        ⚠️ Validation failed: {restockValidationResult.conflicts.length} conflict(s) found.
+                      </div>
+
+                      <div className="border border-gorola-charcoal/10 rounded-xl overflow-x-auto shadow-sm w-full">
+                        <table data-testid="bulk-restock-conflict-table" className="w-full text-left border-collapse text-xs">
+                          <thead>
+                            <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
+                              <th className="p-3 font-bold text-gorola-charcoal">Row</th>
+                              <th className="p-3 font-bold text-gorola-charcoal">Details</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {restockValidationResult.conflicts.map((conflict, index) => (
+                              <tr key={index} className="border-b border-gorola-mint/10 last:border-0">
+                                <td className="p-3 font-mono font-bold text-gorola-slate">Row {conflict.row}</td>
+                                <td className="p-3 text-red-600 font-bold font-dm-sans break-words whitespace-normal">
+                                  {conflict.type === "PRODUCT_NOT_FOUND" && `Product '${conflict.productName}' was not found in your store.`}
+                                  {conflict.type === "AMBIGUOUS_PRODUCT_NAME" && `Multiple products share the name '${conflict.productName}'. Match is ambiguous.`}
+                                  {conflict.type === "VARIANT_NOT_FOUND" && `Variant '${conflict.variantLabel}' was not found under product '${conflict.productName}'.`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <DialogFooter className="sm:flex-wrap sm:gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsRestockModalOpen(false);
+                    setSelectedRestockFile(null);
+                    setParsedRestockRows([]);
+                    setRestockValidationResult(null);
+                  }}
+                  disabled={isValidatingRestock || isConfirmingRestock}
+                >
+                  Cancel
+                </Button>
+
+                {/* Validate action */}
+                {(!restockValidationResult || !restockValidationResult.valid) && (
+                  <Button
+                    type="button"
+                    onClick={handleValidateRestock}
+                    disabled={!selectedRestockFile || parsedRestockRows.length === 0 || isValidatingRestock || isConfirmingRestock}
+                    className="bg-gorola-pine text-white hover:bg-gorola-pine-dark"
+                  >
+                    {isValidatingRestock ? "Validating..." : "Validate"}
+                  </Button>
+                )}
+
+                {/* Conflict choices */}
+                {restockValidationResult && !restockValidationResult.valid && (
+                  <>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        setIsRestockModalOpen(false);
+                        setSelectedRestockFile(null);
+                        setParsedRestockRows([]);
+                        setRestockValidationResult(null);
+                      }}
+                      className="border-red-200 text-red-600 hover:bg-red-50"
+                    >
+                      Fix my file
+                    </Button>
+                    <Button
+                      type="button"
+                      onClick={() => handleConfirmRestock("skip")}
+                      disabled={isConfirmingRestock}
+                      className="bg-amber-600 hover:bg-amber-700 text-white"
+                    >
+                      {isConfirmingRestock ? "Updating..." : "Skip conflicts & continue"}
+                    </Button>
+                  </>
+                )}
+
+                {/* Pure success confirm */}
+                {restockValidationResult && restockValidationResult.valid && (
+                  <Button
+                    type="button"
+                    onClick={() => handleConfirmRestock("strict")}
+                    disabled={isConfirmingRestock}
+                    className="bg-gorola-pine text-white hover:bg-gorola-pine-dark"
+                  >
+                    {isConfirmingRestock ? "Updating..." : "Confirm & Restock"}
+                  </Button>
+                )}
+              </DialogFooter>
+            </div>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
