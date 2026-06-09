@@ -30,6 +30,22 @@ const logoutSchema = z.object({
   refreshToken: z.string().min(1, "Refresh token is required")
 });
 
+const updateStatusSchema = z.object({
+  status: z.enum([
+    "PLACED",
+    "PREPARING",
+    "OUT_FOR_DELIVERY",
+    "DELIVERED",
+    "CANCELLED",
+    "PENDING_APPROVAL",
+    "APPROVED"
+  ])
+});
+
+const updateStatusParamsSchema = z.object({
+  id: z.string().min(1, "Order ID is required")
+});
+
 function refreshCookieOptions(): {
   path: string;
   sameSite: "lax" | "none";
@@ -190,8 +206,40 @@ export function registerRiderRoutes(
   });
 
   // PUT /api/v1/rider/orders/:id/status
-  app.put("/api/v1/rider/orders/:id/status", { preHandler }, async () => {
-    throw new NotImplementedError("Rider status update is deferred to Phase 5.3");
+  app.put("/api/v1/rider/orders/:id/status", { preHandler }, async (request, reply) => {
+    const paramsParsed = updateStatusParamsSchema.safeParse(request.params);
+    if (!paramsParsed.success) {
+      throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+    }
+
+    const bodyParsed = updateStatusSchema.safeParse(request.body);
+    if (!bodyParsed.success) {
+      throw new ValidationError("Invalid status transition payload", bodyParsed.error.flatten());
+    }
+
+    const storeId = request.user?.storeId;
+    const changedBy = request.user?.sub;
+    if (!storeId || !changedBy) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const order = await deps.riderOrderService.updateOrderStatus(
+      storeId,
+      paramsParsed.data.id,
+      bodyParsed.data.status,
+      changedBy
+    );
+
+    return {
+      success: true,
+      data: {
+        id: order.id,
+        status: order.status
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
   });
 
   // PUT /api/v1/rider/location

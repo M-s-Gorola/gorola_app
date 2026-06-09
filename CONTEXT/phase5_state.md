@@ -11,16 +11,16 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 is complete. Development of active orders, locations, and technician mode remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1, 5.2, and 5.3 are complete. Geolocation, mobile layout, field technician mode, earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-09
-- **Session Summary:** Completed Phase 5.1 (Rider Auth) using TDD. Set up database schema changes, authentication logic, repository methods, route controller wiring, RiderRoute guard, RiderLoginPage UI component, and local data seeding. All tests and linting are verified green.
-- **Next Session Must Start With:** Phase 5.2 — Active Orders Feed (backend/frontend integration).
-- **In Progress Right Now:** None (Phase 5.1 completed).
+- **Date:** 2026-06-10
+- **Session Summary:** Completed Phase 5.3 (Order Status Update). Implemented strict order status update transitions in RiderOrderService and wired endpoints. Added action buttons with confirmation dialogs to RiderOrdersPage frontend. All integration and unit tests pass, and workspace lint and typechecks are clean.
+- **Next Session Must Start With:** Phase 5.4 — Real-Time Location Tracking.
+- **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 5 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -176,29 +176,29 @@ Replace the 501 stub. Return orders filtered by `storeId` from JWT and status in
 
 ---
 
-- [ ] **RED — Integration (`rider.status.test.ts`):**
-  - [ ] Test: `PUT /api/v1/rider/orders/<orderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (order currently PREPARING) → HTTP 200; DB status = OUT_FOR_DELIVERY; `OrderStatusHistory` has new entry; buyer's Socket.IO `order:{orderId}` room receives `order_status_changed` event
-  - [ ] Test: `PUT .../status` with body `{ status: 'DELIVERED' }` (currently OUT_FOR_DELIVERY) → HTTP 200; DB status = DELIVERED
-  - [ ] Test: `PUT .../status` with body `{ status: 'PLACED' }` → HTTP 422 `INVALID_STATUS_TRANSITION` (backward transition forbidden)
-  - [ ] Test: `PUT .../status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (riders cannot cancel)
-  - [ ] Test: updating an order from a different store → HTTP 403 `FORBIDDEN`
-  - [ ] **Run — confirm RED (501)**
+- [x] **RED — Integration (`rider.status.test.ts`):**
+  - [x] Test: `PUT /api/v1/rider/orders/<orderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (order currently PREPARING) → HTTP 200; DB status = OUT_FOR_DELIVERY; `OrderStatusHistory` has new entry; buyer's Socket.IO `order:{orderId}` room receives `order_status_changed` event
+  - [x] Test: `PUT .../status` with body `{ status: 'DELIVERED' }` (currently OUT_FOR_DELIVERY) → HTTP 200; DB status = DELIVERED
+  - [x] Test: `PUT .../status` with body `{ status: 'PLACED' }` → HTTP 422 `INVALID_STATUS_TRANSITION` (backward transition forbidden)
+  - [x] Test: `PUT .../status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (riders cannot cancel)
+  - [x] Test: updating an order from a different store → HTTP 403 `FORBIDDEN`
+  - [x] **Run — confirm RED (501)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `updateOrderStatus(storeId, orderId, newStatus)` to `rider-order.service.ts`: validates order belongs to `storeId`; validates transition (only PREPARING→OUT_FOR_DELIVERY or OUT_FOR_DELIVERY→DELIVERED allowed); calls `OrderRepository.updateStatus`; emits `order_status_changed` to `order:{orderId}` Socket.IO room
-  - [ ] [Controller] Replace stub: `PUT /api/v1/rider/orders/:id/status` with `requireAuth` + `requireRole('RIDER')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `updateOrderStatus(storeId, orderId, newStatus)` to `rider-order.service.ts`: validates order belongs to `storeId`; validates transition (only PREPARING→OUT_FOR_DELIVERY or OUT_FOR_DELIVERY→DELIVERED allowed); calls `OrderRepository.updateStatus`; emits `order_status_changed` to `order:{orderId}` Socket.IO room
+  - [x] [Controller] Replace stub: `PUT /api/v1/rider/orders/:id/status` with `requireAuth` + `requireRole('RIDER')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests):**
-  - [ ] Test: PREPARING order card shows "Mark as Out for Delivery" button; clicking opens confirmation modal
-  - [ ] Test: OUT_FOR_DELIVERY card shows "Mark as Delivered" button
-  - [ ] Test: after status update, card moves to correct section or disappears from active list
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests):**
+  - [x] Test: PREPARING order card shows "Mark as Out for Delivery" button; clicking opens confirmation modal
+  - [x] Test: OUT_FOR_DELIVERY card shows "Mark as Delivered" button
+  - [x] Test: after status update, card moves to correct section or disappears from active list
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Update `RiderOrdersPage.tsx` with status action buttons; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Update `RiderOrdersPage.tsx` with status action buttons; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Rider clicks "Mark as Out for Delivery" → confirm → order moves to delivery section → buyer `/orders/:id` page updates status in real-time via Socket.IO → ✅
+- [x] **Verification chain:**
+  - [x] Rider clicks "Mark as Out for Delivery" → confirm → order moves to delivery section → buyer `/orders/:id` page updates status in real-time via Socket.IO → ✅
 
 ---
 
@@ -445,3 +445,10 @@ _(Append new entries here — never delete old entries.)_
 - Built `RiderOrdersPage` with status-based order grouping sections, responsive item lists, auto-refreshing polling (30s), and a clean header.
 - Wrote frontend component/unit tests in `RiderOrdersPage.test.tsx` and updated `RiderLoginPage.test.tsx`.
 - Ran full lint, typecheck, integration tests, and E2E playwright stubs suite ensuring all tests are green.
+
+### Session 3 — 2026-06-10 — Phase 5.3 Rider Order Status Update Completed
+- Wired PUT endpoint `/api/v1/rider/orders/:id/status` to handle rider status transitions.
+- Implemented status validation and update logic in `RiderOrderService`, restricting updates to owner store scope and valid transitions (`PREPARING -> OUT_FOR_DELIVERY -> DELIVERED`).
+- Added "Mark as Out for Delivery" and "Mark as Delivered" actions to the `RiderOrdersPage` UI, gated behind standard Radix confirmation dialogs.
+- Created and successfully verified `rider.status.test.ts` backend integration suite and updated `RiderOrdersPage.test.tsx` frontend suite.
+- Fixed unused variable `rider2` inside `rider.status.test.ts` to clear workspace lint checks.

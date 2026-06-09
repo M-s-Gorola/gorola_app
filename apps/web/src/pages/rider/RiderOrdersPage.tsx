@@ -1,8 +1,19 @@
-import { useQuery } from "@tanstack/react-query";
-import { Clock,LogOut, MapPin, Phone, RefreshCw, ShoppingBag } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Clock, LogOut, MapPin, Phone, RefreshCw, ShoppingBag } from "lucide-react";
 import type { ReactElement } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
@@ -32,6 +43,42 @@ type ActiveOrdersResponse = {
 export function RiderOrdersPage(): ReactElement {
   const navigate = useNavigate();
   const clearSession = useAuthStore((s) => s.clearSession);
+
+  const [confirmingOrder, setConfirmingOrder] = useState<{
+    id: string;
+    status: "OUT_FOR_DELIVERY" | "DELIVERED";
+  } | null>(null);
+
+  const queryClient = useQueryClient();
+
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ orderId, status }: { orderId: string; status: "OUT_FOR_DELIVERY" | "DELIVERED" }) => {
+      if (!api) throw new Error("API not configured");
+      const res = await api.put<{ success: boolean }>(`/api/v1/rider/orders/${orderId}/status`, { status });
+      return res.data;
+    },
+    onSuccess: (_, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["riderActiveOrders"] });
+      toast.success(
+        `Order marked as ${variables.status === "OUT_FOR_DELIVERY" ? "Out for Delivery" : "Delivered"}!`
+      );
+      setConfirmingOrder(null);
+    },
+    onError: (err: unknown) => {
+      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      const errMsg = ax?.response?.data?.error?.message ?? "Failed to update order status.";
+      toast.error(errMsg);
+    }
+  });
+
+  const handleConfirmStatusUpdate = () => {
+    if (confirmingOrder) {
+      updateStatusMutation.mutate({
+        orderId: confirmingOrder.id,
+        status: confirmingOrder.status
+      });
+    }
+  };
 
   // Fetch active orders with a 30s auto-refresh interval
   const { data, isLoading, error, refetch, isFetching } = useQuery<ActiveOrdersResponse>({
@@ -119,6 +166,28 @@ export function RiderOrdersPage(): ReactElement {
               </ul>
             </div>
           </div>
+        </div>
+
+        <div className="mt-2 flex w-full border-t border-gorola-fog pt-4">
+          {order.status === "PREPARING" ? (
+            <Button
+              className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
+              onClick={() =>
+                setConfirmingOrder({ id: order.id, status: "OUT_FOR_DELIVERY" })
+              }
+            >
+              Mark as Out for Delivery
+            </Button>
+          ) : order.status === "OUT_FOR_DELIVERY" ? (
+            <Button
+              className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
+              onClick={() =>
+                setConfirmingOrder({ id: order.id, status: "DELIVERED" })
+              }
+            >
+              Mark as Delivered
+            </Button>
+          ) : null}
         </div>
       </div>
     );
@@ -230,6 +299,42 @@ export function RiderOrdersPage(): ReactElement {
           </div>
         )}
       </main>
+
+      {confirmingOrder && (
+        <Dialog open={!!confirmingOrder} onOpenChange={(open) => !open && setConfirmingOrder(null)}>
+          <DialogContent className="sm:max-w-sm rounded-2xl p-6" showCloseButton={false}>
+            <DialogHeader className="gap-2">
+              <DialogTitle className="font-heading text-lg font-bold text-gorola-charcoal">
+                Confirm Status Update
+              </DialogTitle>
+              <DialogDescription className="font-sans text-sm text-muted-foreground">
+                Are you sure you want to mark this order as{" "}
+                <span className="font-semibold text-gorola-charcoal">
+                  {confirmingOrder.status === "OUT_FOR_DELIVERY" ? "Out for Delivery" : "Delivered"}
+                </span>
+                ?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto rounded-xl"
+                onClick={() => setConfirmingOrder(null)}
+                disabled={updateStatusMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="w-full sm:w-auto bg-gorola-pine text-white hover:bg-gorola-pine-dark rounded-xl"
+                onClick={handleConfirmStatusUpdate}
+                disabled={updateStatusMutation.isPending}
+              >
+                {updateStatusMutation.isPending ? "Updating..." : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

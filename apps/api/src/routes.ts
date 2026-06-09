@@ -311,7 +311,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenService: riderTokenService
   });
 
-  const riderOrderService = new RiderOrderService(orderRepoOrders);
+  const riderOrderService = new RiderOrderService(orderRepoOrders, orderEmitter);
 
   registerAuthRoutes(app, {
     adminAuthService,

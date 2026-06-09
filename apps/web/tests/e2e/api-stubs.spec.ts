@@ -15,7 +15,6 @@ test.describe('API Stubs', () => {
 
     // 2. These are the remaining rider backend endpoints that are currently stubs
     const stubs = [
-      { url: '/api/v1/rider/orders/123/status', method: 'put' },
       { url: '/api/v1/rider/location', method: 'put' }
     ];
 

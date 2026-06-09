@@ -32,19 +32,6 @@ describe("Rider Interface Endpoints", () => {
     await app.close();
   });
 
-  it("PUT /api/v1/rider/orders/:id/status should return 501", async () => {
-    const response = await app.inject({
-      method: "PUT",
-      url: "/api/v1/rider/orders/123/status",
-      payload: { status: "DELIVERED" },
-      headers: {
-        authorization: `Bearer ${riderToken}`
-      }
-    });
-
-    expect(response.statusCode).toBe(501);
-    expect(response.json().error.code).toBe("NOT_IMPLEMENTED");
-  });
 
   it("PUT /api/v1/rider/location should return 501", async () => {
     const response = await app.inject({
