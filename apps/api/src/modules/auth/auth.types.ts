@@ -56,7 +56,8 @@ export type TokenService = {
 
 export type AccessTokenPayload = {
   sub: string;
-  role: "ADMIN" | "BUYER" | "STORE_OWNER";
+  role: "ADMIN" | "BUYER" | "STORE_OWNER" | "RIDER";
+  storeId?: string;
 };
 
 export type AccessTokenVerifier = {

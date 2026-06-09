@@ -107,12 +107,13 @@ export function createBuyerTokenService(options: BuyerTokenServiceOptions): Buye
       if (typeof sub !== "string" || sub.length === 0) {
         throw new UnauthorizedError("Invalid access token");
       }
-      if (roleRaw !== "BUYER" && roleRaw !== "ADMIN" && roleRaw !== "STORE_OWNER") {
+      if (roleRaw !== "BUYER" && roleRaw !== "ADMIN" && roleRaw !== "STORE_OWNER" && roleRaw !== "RIDER") {
         throw new UnauthorizedError("Invalid access token");
       }
       return {
-        role: roleRaw,
-        sub
+        role: roleRaw as "BUYER" | "ADMIN" | "STORE_OWNER" | "RIDER",
+        sub,
+        ...(typeof payload.storeId === "string" ? { storeId: payload.storeId } : {})
       };
     } catch {
       throw new UnauthorizedError("Invalid access token");

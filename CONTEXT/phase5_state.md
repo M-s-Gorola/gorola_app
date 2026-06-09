@@ -11,17 +11,17 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | NOT STARTED | Stubs registered (W-015). Start any time after Phase 2. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 is complete. Development of active orders, locations, and technician mode remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** NOT STARTED
-- **Session Summary:** Not started yet. Full 6-section TDD plan drafted (5.1–5.6).
-- **Next Session Must Start With:** Phase 5.1 — Rider Auth. Replace the 501 stub in `delivery/rider.controller.ts` with real `RiderAuthService.login`. Seed a `DeliveryRider` row in the test DB.
-- **In Progress Right Now:** Nothing — Phase 5 has not started. Begin at Phase 5.1.
-- **Current Blocker:** None. Can start independently of Phase 3 & 4.
+- **Date:** 2026-06-09
+- **Session Summary:** Completed Phase 5.1 (Rider Auth) using TDD. Set up database schema changes, authentication logic, repository methods, route controller wiring, RiderRoute guard, RiderLoginPage UI component, and local data seeding. All tests and linting are verified green.
+- **Next Session Must Start With:** Phase 5.2 — Active Orders Feed (backend/frontend integration).
+- **In Progress Right Now:** None (Phase 5.1 completed).
+- **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 5 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
 
@@ -94,38 +94,38 @@ navigate(getScopedPath("/rider/orders", "rider", isSubdomainMode));
 
 ---
 
-- [ ] **RED — Integration (`rider.auth.test.ts`):**
-  - [ ] Test setup: seed 1 `DeliveryRider` row with email `rider@test.com`, hashed password, `storeId`
-  - [ ] Test: `POST /api/v1/rider/auth/login` with `{ email: 'rider@test.com', password: 'correct' }` → HTTP 200 (not 501) with `{ success: true, data: { accessToken, refreshToken } }`; JWT payload contains `{ role: 'RIDER', riderId, storeId }`
-  - [ ] Test: `POST /api/v1/rider/auth/login` with wrong password → HTTP 401 `AUTH_FAILED`
-  - [ ] Test: `POST /api/v1/rider/auth/login` for inactive rider (`isActive: false`) → HTTP 403 `ACCOUNT_SUSPENDED`
-  - [ ] **Run — confirm RED (currently returns 501)**
+- [x] **RED — Integration (`rider.auth.test.ts`):**
+  - [x] Test setup: seed 1 `DeliveryRider` row with email `rider@test.com`, hashed password, `storeId`
+  - [x] Test: `POST /api/v1/rider/auth/login` with `{ email: 'rider@test.com', password: 'correct' }` → HTTP 200 (not 501) with `{ success: true, data: { accessToken, refreshToken } }`; JWT payload contains `{ role: 'RIDER', riderId, storeId }`
+  - [x] Test: `POST /api/v1/rider/auth/login` with wrong password → HTTP 401 `AUTH_FAILED`
+  - [x] Test: `POST /api/v1/rider/auth/login` for inactive rider (`isActive: false`) → HTTP 403 `ACCOUNT_SUSPENDED`
+  - [x] **Run — confirm RED (currently returns 501)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Schema] Verify `DeliveryRider` model in `schema.prisma` has all required fields; run migration if needed
-  - [ ] [Service] Create `RiderAuthService.login(email, password)` in `delivery/rider-auth.service.ts`: find rider by email, compare password hash (`bcryptjs`), check `isActive`, issue JWT with `role: 'RIDER'`
-  - [ ] [Controller] Replace stub in `delivery/rider.controller.ts`: `POST /api/v1/rider/auth/login` calls `RiderAuthService.login`
-  - [ ] [Routes] Update `registerRiderRoutes` in `routes.ts` — remove the 501 stub handler, wire real controller
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Schema] Verify `DeliveryRider` model in `schema.prisma` has all required fields; run migration if needed
+  - [x] [Service] Create `RiderAuthService.login(email, password)` in `delivery/rider-auth.service.ts`: find rider by email, compare password hash (`bcryptjs`), check `isActive`, issue JWT with `role: 'RIDER'`
+  - [x] [Controller] Replace stub in `delivery/rider.controller.ts`: `POST /api/v1/rider/auth/login` calls `RiderAuthService.login`
+  - [x] [Routes] Update `registerRiderRoutes` in `routes.ts` — remove the 501 stub handler, wire real controller
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`RiderLoginPage.test.tsx`):**
-  - [ ] Test: renders email + password inputs with `id="rider-email"` and `id="rider-password"`
-  - [ ] Test: on success, `setRiderSession` called with `{ accessToken, refreshToken, riderId, storeId }` and `navigate` goes to `/rider/orders`
-  - [ ] Test: on 401, shows "Invalid credentials" error
+- [x] **RED — Unit/Component (`RiderLoginPage.test.tsx`):**
+  - [x] Test: renders email + password inputs with `id="rider-email"` and `id="rider-password"`
+  - [x] Test: on success, `setRiderSession` called with `{ accessToken, refreshToken, riderId, storeId }` and `navigate` goes to `/rider/orders`
+  - [x] Test: on 401, shows "Invalid credentials" error
 
-- [ ] **RED — Unit/Component (`RiderRoute.test.tsx`):**
-  - [ ] Test: no RIDER role → `<Navigate to="/rider/login" />`
-  - [ ] Test: RIDER role → children rendered
+- [x] **RED — Unit/Component (`RiderRoute.test.tsx`):**
+  - [x] Test: no RIDER role → `<Navigate to="/rider/login" />`
+  - [x] Test: RIDER role → children rendered
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/pages/rider/RiderLoginPage.tsx`
-  - [ ] Create `apps/web/src/components/rider/RiderRoute.tsx`
-  - [ ] Add `/rider/login` and `/rider/*` routes in `App.tsx`
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/pages/rider/RiderLoginPage.tsx`
+  - [x] Create `apps/web/src/components/rider/RiderRoute.tsx`
+  - [x] Add `/rider/login` and `/rider/*` routes in `App.tsx`
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Seeded rider navigates to `/rider/login` → enters credentials → JWT issued with RIDER role → redirected to `/rider/orders` → ✅
+- [x] **Verification chain:**
+  - [x] Seeded rider navigates to `/rider/login` → enters credentials → JWT issued with RIDER role → redirected to `/rider/orders` → ✅
 
 ---
 
@@ -337,3 +337,11 @@ When Phase 7 goes live, booking orders (`orderType: BOOKING`) will be assigned t
 ## Session Notes (Phase 5)
 
 _(Append new entries here — never delete old entries.)_
+
+### Session 1 — 2026-06-09 — Phase 5.1 Rider Auth Completed
+- Implemented core Rider authentication backend modules including `RiderAuthService` for login/refresh token operations with session rate-limiting, and `rider.controller.ts` routes.
+- Fixed legacy `rider.stubs.test.ts` to include valid signed RIDER tokens for the active orders, order status, and location update routes.
+- Created `RiderLoginPage` and `RiderRoute` components on the web application, wired into `App.tsx` router configuration.
+- Completed full TDD flow: wrote `RiderRoute.test.tsx` and `RiderLoginPage.test.tsx` unit tests, saw them fail, implemented frontend features, and ran full vitest suite ensuring all 360+ tests are green.
+- Updated `seed.ts` to add mock local accounts for both delivery rider (`rider1@gorola.in`) and field technician (`rider2@gorola.in`) with password `Rider#123`.
+- Documented seeded credentials in `quick-links/store-partner-info.md` and fixed all typescript/ESLint linting issues across the workspace.

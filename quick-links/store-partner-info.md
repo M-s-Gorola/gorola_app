@@ -44,6 +44,17 @@ You can log in to any of the following seeded store owner profiles:
 
 ---
 
+## 🚴 Seeded Rider & Field Technician Accounts
+
+Riders and field technicians can authenticate on the Rider Portal with their credentials:
+
+| Rider Name | Email Address | Password | Rider Type | Scoped Store Assignment |
+|---|---|---|---|---|
+| **Hillside Rider** | `rider1@gorola.in` | `Rider#123` | `DELIVERY` | Scoped strictly to **Hillside Mart** (quick commerce delivery orders). |
+| **Aarna Technician** | `rider2@gorola.in` | `Rider#123` | `FIELD_TECHNICIAN` | Scoped strictly to **Aarna Diagnostic Centre** (field booking visits). |
+
+---
+
 ## ⚙️ System Admin Account
 
 The admin account is created by `prisma/seed.ts` (same command as the main catalog seed — no separate step needed).
