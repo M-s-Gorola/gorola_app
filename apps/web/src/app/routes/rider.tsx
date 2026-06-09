@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { Navigate, Route } from "react-router-dom";
 
 import { RiderLoginPage } from "@/pages/rider/RiderLoginPage";
+import { RiderOrdersPage } from "@/pages/rider/RiderOrdersPage";
 
 import { RiderRoute } from "./guards";
 
@@ -17,18 +18,16 @@ export function RiderRoutes({ prefix = "" }: RiderRoutesProps): ReactElement[] {
       path={prefix || "/"}
       element={
         <RiderRoute>
-          <Navigate to={prefix ? `${prefix}/dashboard` : "/dashboard"} replace />
+          <Navigate to={prefix ? `${prefix}/orders` : "/orders"} replace />
         </RiderRoute>
       }
     />,
     <Route
-      key="rider-dashboard"
-      path={`${prefix}/dashboard`}
+      key="rider-orders"
+      path={`${prefix}/orders`}
       element={
         <RiderRoute>
-          <div className="flex h-screen items-center justify-center bg-gorola-fog">
-            <h1 className="font-heading text-2xl text-gorola-pine font-semibold">Rider Dashboard (Phase 5.2/5.3/5.4)</h1>
-          </div>
+          <RiderOrdersPage />
         </RiderRoute>
       }
     />

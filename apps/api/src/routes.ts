@@ -30,6 +30,7 @@ import { registerSubCategoryRoutes } from "./modules/catalog/sub-category.contro
 import { ProductVariantRepository } from "./modules/catalog/variant.repository.js";
 import { registerRiderRoutes } from "./modules/delivery/rider.controller.js";
 import { RiderRepository } from "./modules/delivery/rider.repository.js";
+import { RiderOrderService } from "./modules/delivery/rider-order.service.js";
 import { registerFeatureFlagRoutes } from "./modules/feature-flag/feature-flag.controller.js";
 import { FeatureFlagRepository } from "./modules/feature-flag/feature-flag.repository.js";
 import { FeatureFlagService } from "./modules/feature-flag/feature-flag.service.js";
@@ -310,6 +311,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenService: riderTokenService
   });
 
+  const riderOrderService = new RiderOrderService(orderRepoOrders);
+
   registerAuthRoutes(app, {
     adminAuthService,
     authService,
@@ -346,7 +349,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
 
   registerRiderRoutes(app, {
     tokenVerifier: tokenService,
-    riderAuthService
+    riderAuthService,
+    riderOrderService
   });
 
   void app.register(socketPlugin, {

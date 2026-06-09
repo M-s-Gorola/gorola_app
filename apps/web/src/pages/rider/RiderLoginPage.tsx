@@ -91,7 +91,7 @@ export function RiderLoginPage(): ReactElement {
               userId: decoded.sub,
               storeId: decoded.storeId
             });
-            navigate(getScopedPath("/rider/dashboard", "rider", isSubdomainMode), { replace: true });
+            navigate(getScopedPath("/rider/orders", "rider", isSubdomainMode), { replace: true });
           } else {
             setErrorMessage("Invalid session token received.");
           }

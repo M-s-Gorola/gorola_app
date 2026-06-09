@@ -21,7 +21,8 @@ export const orderRelationsInclude = {
   },
   statusHistory: { orderBy: { changedAt: "asc" as const } },
   store: { select: { id: true, name: true, phone: true, storeType: true } },
-  bookingOrder: true
+  bookingOrder: true,
+  user: { select: { phone: true, name: true } }
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -159,6 +160,22 @@ export class OrderRepository {
       where: { storeId }
     });
   }
+
+  public async findManyByStore(
+    storeId: string,
+    filters?: { status?: OrderStatus[] }
+  ): Promise<OrderWithRelations[]> {
+    const where: Prisma.OrderWhereInput = { storeId };
+    if (filters?.status) {
+      where.status = { in: filters.status };
+    }
+    return this.db.order.findMany({
+      include: orderRelationsInclude,
+      orderBy: { createdAt: "desc" },
+      where
+    });
+  }
+
 
   public async updateStatus(
     orderId: string,

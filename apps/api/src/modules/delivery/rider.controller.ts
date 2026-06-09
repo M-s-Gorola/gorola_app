@@ -5,6 +5,13 @@ import { z } from "zod";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { RiderAuthService } from "../auth/rider-auth.service.js";
+import type { RiderOrderService } from "./rider-order.service.js";
+
+function maskPhone(phone: string): string {
+  if (!phone) return "";
+  if (phone.length <= 4) return "****";
+  return "*".repeat(phone.length - 4) + phone.slice(-4);
+}
 
 function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
   return reply.getHeader("x-request-id")?.toString() ?? request.id;
@@ -83,6 +90,7 @@ export function registerRiderRoutes(
   deps: {
     tokenVerifier: AccessTokenVerifier;
     riderAuthService: RiderAuthService;
+    riderOrderService: RiderOrderService;
   }
 ): void {
   const preHandler = [requireAuth(deps.tokenVerifier), requireRole(["RIDER"])];
@@ -147,8 +155,38 @@ export function registerRiderRoutes(
   });
 
   // GET /api/v1/rider/orders/active
-  app.get("/api/v1/rider/orders/active", { preHandler }, async () => {
-    throw new NotImplementedError("Rider active orders feed is deferred to Phase 5.2");
+  app.get("/api/v1/rider/orders/active", { preHandler }, async (request, reply) => {
+    const storeId = request.user?.storeId;
+    if (!storeId) {
+      return reply.code(400).send({ success: false, error: "Store context missing from session" });
+    }
+
+    const orders = await deps.riderOrderService.getActiveOrders(storeId);
+    
+    const mapped = orders.map((o) => {
+      return {
+        id: o.id,
+        status: o.status,
+        items: o.items.map((i) => ({
+          productName: i.productName,
+          variantLabel: i.variantLabel,
+          quantity: i.quantity
+        })),
+        deliveryAddress: {
+          landmark: o.landmarkDescription
+        },
+        buyerMaskedPhone: maskPhone(o.user?.phone ?? ""),
+        createdAt: o.createdAt
+      };
+    });
+
+    return {
+      success: true,
+      data: mapped,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
   });
 
   // PUT /api/v1/rider/orders/:id/status

@@ -6,7 +6,7 @@ import { resolveBuyerJwtKeyPair } from "../../../modules/auth/jwt-keys.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
 
-describe("Rider Interface Stubs (W-015)", () => {
+describe("Rider Interface Endpoints", () => {
   let app: FastifyInstance;
   let riderToken: string;
 
@@ -30,20 +30,6 @@ describe("Rider Interface Stubs (W-015)", () => {
 
   afterAll(async () => {
     await app.close();
-  });
-
-
-  it("GET /api/v1/rider/orders/active should return 501", async () => {
-    const response = await app.inject({
-      method: "GET",
-      url: "/api/v1/rider/orders/active",
-      headers: {
-        authorization: `Bearer ${riderToken}`
-      }
-    });
-
-    expect(response.statusCode).toBe(501);
-    expect(response.json().error.code).toBe("NOT_IMPLEMENTED");
   });
 
   it("PUT /api/v1/rider/orders/:id/status should return 501", async () => {

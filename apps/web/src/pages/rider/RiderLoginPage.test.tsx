@@ -31,7 +31,7 @@ function renderRiderLogin(initialEntries: InitialEntry[]): void {
       <QueryClientProvider client={queryClient}>
         <Routes>
           <Route path="/rider/login" element={<RiderLoginPage />} />
-          <Route path="/rider/dashboard" element={<div data-testid="rider-dashboard">Rider Dashboard</div>} />
+          <Route path="/rider/orders" element={<div data-testid="rider-orders">Rider Orders</div>} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>
@@ -61,7 +61,7 @@ describe("RiderLoginPage", () => {
     expect(postMock).not.toHaveBeenCalled();
   });
 
-  it("navigates to /rider/dashboard on successful login", async () => {
+  it("navigates to /rider/orders on successful login", async () => {
     const user = userEvent.setup();
     
     // Mock successful login response with fake JWT
@@ -91,7 +91,7 @@ describe("RiderLoginPage", () => {
       });
     });
 
-    expect(await screen.findByTestId("rider-dashboard")).toBeInTheDocument();
+    expect(await screen.findByTestId("rider-orders")).toBeInTheDocument();
   });
 
   it("shows 'Invalid credentials' error message on 401 API response", async () => {

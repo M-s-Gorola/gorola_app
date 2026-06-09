@@ -139,33 +139,33 @@ Replace the 501 stub. Return orders filtered by `storeId` from JWT and status in
 
 ---
 
-- [ ] **RED — Integration (`rider.orders.test.ts`):**
-  - [ ] Test setup: store with 3 orders: 1 PLACED, 1 PREPARING, 1 OUT_FOR_DELIVERY
-  - [ ] Test: `GET /api/v1/rider/orders/active` with RIDER JWT (`storeId` = that store) → HTTP 200 (not 501); returns 2 orders (PREPARING + OUT_FOR_DELIVERY); PLACED order absent
-  - [ ] Test: response each order has `{ id, status, items: [{ productName, variantLabel, quantity }], deliveryAddress: { landmark }, buyerMaskedPhone, createdAt }`
-  - [ ] Test: `GET /api/v1/rider/orders/active` with BUYER JWT → HTTP 403
-  - [ ] Test: `GET /api/v1/rider/orders/active` with RIDER JWT from a different store → returns 0 orders (strict store scope)
-  - [ ] **Run — confirm RED (501)**
+- [x] **RED — Integration (`rider.orders.test.ts`):**
+  - [x] Test setup: store with 3 orders: 1 PLACED, 1 PREPARING, 1 OUT_FOR_DELIVERY
+  - [x] Test: `GET /api/v1/rider/orders/active` with RIDER JWT (`storeId` = that store) → HTTP 200 (not 501); returns 2 orders (PREPARING + OUT_FOR_DELIVERY); PLACED order absent
+  - [x] Test: response each order has `{ id, status, items: [{ productName, variantLabel, quantity }], deliveryAddress: { landmark }, buyerMaskedPhone, createdAt }`
+  - [x] Test: `GET /api/v1/rider/orders/active` with BUYER JWT → HTTP 403
+  - [x] Test: `GET /api/v1/rider/orders/active` with RIDER JWT from a different store → returns 0 orders (strict store scope)
+  - [x] **Run — confirm RED (501)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Create `RiderOrderService.getActiveOrders(storeId)` in `delivery/rider-order.service.ts`: calls `OrderRepository.findManyByStore(storeId, { status: ['PREPARING', 'OUT_FOR_DELIVERY'] })`
-  - [ ] [Controller] Replace stub: `GET /api/v1/rider/orders/active` with `requireAuth` + `requireRole('RIDER')`; extracts `storeId` from JWT; calls service
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Create `RiderOrderService.getActiveOrders(storeId)` in `delivery/rider-order.service.ts`: calls `OrderRepository.findManyByStore(storeId, { status: ['PREPARING', 'OUT_FOR_DELIVERY'] })`
+  - [x] [Controller] Replace stub: `GET /api/v1/rider/orders/active` with `requireAuth` + `requireRole('RIDER')`; extracts `storeId` from JWT; calls service
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx`):**
-  - [ ] Test: renders list of active orders grouped by status (PREPARING section, OUT_FOR_DELIVERY section)
-  - [ ] Test: each order card shows buyer masked phone, delivery landmark, items list, time elapsed since PLACED
-  - [ ] Test: empty state shows "No active orders right now" when list is empty
-  - [ ] Test: page auto-refreshes every 30 seconds (`refetchInterval: 30000`)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderOrdersPage.test.tsx`):**
+  - [x] Test: renders list of active orders grouped by status (PREPARING section, OUT_FOR_DELIVERY section)
+  - [x] Test: each order card shows buyer masked phone, delivery landmark, items list, time elapsed since PLACED
+  - [x] Test: empty state shows "No active orders right now" when list is empty
+  - [x] Test: page auto-refreshes every 30 seconds (`refetchInterval: 30000`)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/pages/rider/RiderOrdersPage.tsx`
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/pages/rider/RiderOrdersPage.tsx`
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Rider logs in → `/rider/orders` shows PREPARING orders ready for pickup → ✅
+- [x] **Verification chain:**
+  - [x] Rider logs in → `/rider/orders` shows PREPARING orders ready for pickup → ✅
 
 ---
 
@@ -345,3 +345,12 @@ _(Append new entries here — never delete old entries.)_
 - Completed full TDD flow: wrote `RiderRoute.test.tsx` and `RiderLoginPage.test.tsx` unit tests, saw them fail, implemented frontend features, and ran full vitest suite ensuring all 360+ tests are green.
 - Updated `seed.ts` to add mock local accounts for both delivery rider (`rider1@gorola.in`) and field technician (`rider2@gorola.in`) with password `Rider#123`.
 - Documented seeded credentials in `quick-links/store-partner-info.md` and fixed all typescript/ESLint linting issues across the workspace.
+
+### Session 2 — 2026-06-09 — Phase 5.2 Rider Active Orders Feed Completed
+- Implemented `OrderRepository.findManyByStore` supporting status filtering, and updated `orderRelationsInclude` to retrieve user information (phone, name) automatically for order query callers.
+- Created `RiderOrderService` and wired it to `routes.ts` and `rider.controller.ts`, replacing the active orders feed stub with a real implementation returning masked customer phone numbers.
+- Renamed `rider.stubs.test.ts` to `rider.endpoints.test.ts` and created `rider.orders.test.ts` integration test suite.
+- Re-routed active rider portals and redirections from `/rider/dashboard` to `/rider/orders`.
+- Built `RiderOrdersPage` with status-based order grouping sections, responsive item lists, auto-refreshing polling (30s), and a clean header.
+- Wrote frontend component/unit tests in `RiderOrdersPage.test.tsx` and updated `RiderLoginPage.test.tsx`.
+- Ran full lint, typecheck, integration tests, and E2E playwright stubs suite ensuring all tests are green.
