@@ -10,7 +10,8 @@ export type OrderStatusUpdate = {
 
 export function useOrderSocket(
   orderId: string | undefined,
-  onStatusChanged: (data: OrderStatusUpdate) => void
+  onStatusChanged: (data: OrderStatusUpdate) => void,
+  onLocationUpdated?: (data: { lat: number; lng: number; updatedAt: string }) => void
 ) {
   const accessToken = useAuthStore((s) => s.accessToken);
   const socketRef = useRef<Socket | null>(null);
@@ -33,6 +34,10 @@ export function useOrderSocket(
 
     socket.on("order_status_changed", (data: OrderStatusUpdate) => {
       onStatusChanged(data);
+    });
+
+    socket.on("rider_location_update", (data: { lat: number; lng: number; updatedAt: string }) => {
+      onLocationUpdated?.(data);
     });
 
     socket.on("error", (err: unknown) => {

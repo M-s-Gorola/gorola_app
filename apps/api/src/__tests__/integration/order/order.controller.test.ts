@@ -27,6 +27,10 @@ async function cleanOrderIntegrationGraph(db: PrismaClient): Promise<void> {
   await db.advertisement.deleteMany();
   await db.offer.deleteMany();
   await db.storeOwner.deleteMany();
+  await db.riderLocation.deleteMany();
+
+  await db.deliveryRider.deleteMany();
+
   await db.store.deleteMany();
   await db.subCategory.deleteMany();
   await db.category.deleteMany();

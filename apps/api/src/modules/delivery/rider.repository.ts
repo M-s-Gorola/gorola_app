@@ -1,5 +1,6 @@
 import { NotImplementedError } from "@gorola/shared";
 import type { DeliveryRider, PrismaClient, RiderLocation } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 export class RiderRepository {
   public constructor(private readonly db: PrismaClient) {}
@@ -58,9 +59,29 @@ export class RiderRepository {
     riderId: string,
     input: { lat: string | number; lng: string | number }
   ): Promise<RiderLocation> {
-    void this.db;
-    void riderId;
-    void input;
-    throw new NotImplementedError("Rider location tracking is deferred to Phase 5.4");
+    const latDecimal = new Prisma.Decimal(input.lat);
+    const lngDecimal = new Prisma.Decimal(input.lng);
+
+    const existing = await this.db.riderLocation.findFirst({
+      where: { riderId }
+    });
+
+    if (existing) {
+      return this.db.riderLocation.update({
+        where: { id: existing.id },
+        data: {
+          lat: latDecimal,
+          lng: lngDecimal
+        }
+      });
+    }
+
+    return this.db.riderLocation.create({
+      data: {
+        riderId,
+        lat: latDecimal,
+        lng: lngDecimal
+      }
+    });
   }
 }

@@ -1,3 +1,5 @@
+import "leaflet/dist/leaflet.css";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
 import { Bike, CheckCircle2, Home, MessageSquare,Package, ThumbsDown, ThumbsUp } from "lucide-react";
@@ -164,9 +166,11 @@ function estimatedDeliveryCopy(
 function StatusStepper({
   history,
   status,
+  riderLocation
 }: {
   history: StatusHistoryItem[];
   status: string;
+  riderLocation: { lat: number; lng: number } | null;
 }): ReactElement {
   const steps = [
     { icon: CheckCircle2, key: "PLACED", label: "Placed" },
@@ -177,6 +181,110 @@ function StatusStepper({
 
   const isCancelled = status === "CANCELLED";
   const currentIndex = steps.findIndex((s) => s.key === status);
+
+  const mapRef = useRef<import("leaflet").Map | null>(null);
+  const riderMarkerRef = useRef<import("leaflet").Marker | null>(null);
+  const homeMarkerRef = useRef<import("leaflet").Marker | null>(null);
+
+  // Default home location for the buyer: Mussoorie Town Center (or slightly offset)
+  const buyerHomeCoords = { lat: 30.4598, lng: 78.0664 };
+
+  useEffect(() => {
+    const isTestEnv = typeof process !== "undefined" && process.env.NODE_ENV === "test";
+    if (isTestEnv || status !== "OUT_FOR_DELIVERY" || !riderLocation) {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        riderMarkerRef.current = null;
+        homeMarkerRef.current = null;
+      }
+      return;
+    }
+
+    const mapElement = document.getElementById("rider-live-map");
+    if (!mapElement) return;
+
+    if (!mapRef.current) {
+      import("leaflet").then((L) => {
+        // Fix default icon issue in Leaflet + Vite
+        delete (L.Icon.Default.prototype as unknown as { _getIconUrl: unknown })._getIconUrl;
+        L.Icon.Default.mergeOptions({
+          iconRetinaUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon-2x.png",
+          iconUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-icon.png",
+          shadowUrl: "https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/images/marker-shadow.png",
+        });
+
+        const map = L.map(mapElement, {
+          zoomControl: false,
+          attributionControl: false
+        }).setView([buyerHomeCoords.lat, buyerHomeCoords.lng], 14);
+
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 19,
+        }).addTo(map);
+
+        L.control.zoom({ position: "bottomright" }).addTo(map);
+
+        const homeIcon = L.divIcon({
+          html: `<div class="flex items-center justify-center w-8 h-8 rounded-full bg-gorola-pine text-white shadow-lg border-2 border-white"><svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></div>`,
+          className: "",
+          iconSize: [32, 32],
+          iconAnchor: [16, 16]
+        });
+
+        const riderIcon = L.divIcon({
+          html: `<div class="flex items-center justify-center w-10 h-10 rounded-full bg-amber-500 text-white shadow-lg border-2 border-white animate-bounce"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5.5" cy="17.5" r="2.5"/><circle cx="18.5" cy="17.5" r="2.5"/><path d="M15 6a1 1 0 1 0 0-2 1 1 0 0 0 0 2zm-3 11.5V14l-3-3 4-3 2 3h2"/></svg></div>`,
+          className: "",
+          iconSize: [40, 40],
+          iconAnchor: [20, 20]
+        });
+
+        const homeMarker = L.marker([buyerHomeCoords.lat, buyerHomeCoords.lng], { icon: homeIcon })
+          .addTo(map)
+          .bindPopup("Your Delivery Location")
+          .openPopup();
+
+        const riderMarker = L.marker([riderLocation.lat, riderLocation.lng], { icon: riderIcon })
+          .addTo(map)
+          .bindPopup("Rider's Location");
+
+        mapRef.current = map;
+        homeMarkerRef.current = homeMarker;
+        riderMarkerRef.current = riderMarker;
+
+        const group = L.featureGroup([homeMarker, riderMarker]);
+        map.fitBounds(group.getBounds().pad(0.15));
+      }).catch((err) => {
+        console.error("Failed to load Leaflet: ", err);
+      });
+    } else {
+      if (riderMarkerRef.current) {
+        riderMarkerRef.current.setLatLng([riderLocation.lat, riderLocation.lng]);
+      }
+      if (mapRef.current && homeMarkerRef.current && riderMarkerRef.current) {
+        try {
+          const homeLatLng = homeMarkerRef.current.getLatLng();
+          const riderLatLng = riderMarkerRef.current.getLatLng();
+          const bounds: import("leaflet").LatLngBoundsExpression = [
+            [homeLatLng.lat, homeLatLng.lng],
+            [riderLatLng.lat, riderLatLng.lng]
+          ];
+          mapRef.current.fitBounds(bounds, { padding: [30, 30] });
+        } catch (err) {
+          console.error("Failed to update map bounds: ", err);
+        }
+      }
+    }
+
+    return () => {
+      if (mapRef.current) {
+        mapRef.current.remove();
+        mapRef.current = null;
+        riderMarkerRef.current = null;
+        homeMarkerRef.current = null;
+      }
+    };
+  }, [status, riderLocation]);
 
   if (isCancelled) {
     return (
@@ -242,14 +350,33 @@ function StatusStepper({
       </div>
 
       {status === "OUT_FOR_DELIVERY" ? (
-        <div className="mt-8 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+        <div className="mt-8 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+            </div>
+            <p className="font-dm-sans text-sm">
+              <strong>Rider location:</strong> Your rider is on the way with your order.
+            </p>
           </div>
-          <p className="font-dm-sans text-sm">
-            <strong>Rider location:</strong> Your rider is on the way with your order.
-          </p>
+
+          {/* Live Tracking Map Container */}
+          <div className="relative h-64 w-full rounded-lg border border-amber-200/60 overflow-hidden bg-amber-100/30 mt-1" data-testid="rider-location-map-container">
+            {riderLocation ? (
+              <div id="rider-live-map" className="h-full w-full z-10" data-testid="rider-location-map" />
+            ) : (
+              <div className="flex items-center justify-center h-full w-full">
+                <p className="text-xs text-amber-800/80 italic animate-pulse">Waiting for rider GPS updates...</p>
+              </div>
+            )}
+          </div>
+
+          {riderLocation ? (
+            <div className="mt-1 text-xs font-mono bg-white/60 p-2 rounded-lg border border-amber-200/50" data-testid="rider-location-display">
+              Rider Coordinates: {riderLocation.lat.toFixed(5)}, {riderLocation.lng.toFixed(5)}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -267,6 +394,7 @@ export function OrderConfirmationPage(): ReactElement {
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
   const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
   const [ratingComment, setRatingComment] = useState("");
+  const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -423,7 +551,14 @@ interface StoreOffer {
     [id, queryClient],
   );
 
-  useOrderSocket(id, onStatusChanged);
+  const onLocationUpdated = useCallback(
+    (data: { lat: number; lng: number }) => {
+      setRiderLocation({ lat: data.lat, lng: data.lng });
+    },
+    []
+  );
+
+  useOrderSocket(id, onStatusChanged, onLocationUpdated);
 
   const currentStatus = query.data?.status;
   const lastStatusRef = useRef<string | null>(null);
@@ -441,6 +576,7 @@ interface StoreOffer {
     entranceDoneRef.current = false;
     setAnimationFinished(false);
     setShowStatusTransitionBloom(false);
+    setRiderLocation(null);
   }, [id]);
 
   const isRecentlyPlaced = query.isSuccess && query.data.createdAt ? (
@@ -737,6 +873,7 @@ interface StoreOffer {
                   <StatusStepper
                     history={order.statusHistory ?? []}
                     status={order.status}
+                    riderLocation={riderLocation}
                   />
                   {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                     <p className="font-dm-sans text-xs text-gorola-slate">

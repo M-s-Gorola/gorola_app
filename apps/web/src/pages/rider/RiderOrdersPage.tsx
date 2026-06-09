@@ -14,6 +14,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useRiderLocation } from "@/hooks/useRiderLocation";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
@@ -108,6 +109,8 @@ export function RiderOrdersPage(): ReactElement {
   const orders = data?.data ?? [];
   const preparingOrders = orders.filter((o) => o.status === "PREPARING");
   const deliveringOrders = orders.filter((o) => o.status === "OUT_FOR_DELIVERY");
+
+  useRiderLocation(deliveringOrders[0]?.id);
 
   function getElapsedTimeStr(createdAt: string): string {
     const elapsedMs = Date.now() - new Date(createdAt).getTime();

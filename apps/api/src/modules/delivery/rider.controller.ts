@@ -1,10 +1,11 @@
-import { NotImplementedError, ValidationError } from "@gorola/shared";
+import { ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { RiderAuthService } from "../auth/rider-auth.service.js";
+import type { RiderLocationService } from "./rider-location.service.js";
 import type { RiderOrderService } from "./rider-order.service.js";
 
 function maskPhone(phone: string): string {
@@ -44,6 +45,12 @@ const updateStatusSchema = z.object({
 
 const updateStatusParamsSchema = z.object({
   id: z.string().min(1, "Order ID is required")
+});
+
+const updateLocationSchema = z.object({
+  lat: z.number().min(-90, "Latitude must be between -90 and 90").max(90, "Latitude must be between -90 and 90"),
+  lng: z.number().min(-180, "Longitude must be between -180 and 180").max(180, "Longitude must be between -180 and 180"),
+  orderId: z.string().min(1, "Order ID is required")
 });
 
 function refreshCookieOptions(): {
@@ -107,6 +114,7 @@ export function registerRiderRoutes(
     tokenVerifier: AccessTokenVerifier;
     riderAuthService: RiderAuthService;
     riderOrderService: RiderOrderService;
+    riderLocationService: RiderLocationService;
   }
 ): void {
   const preHandler = [requireAuth(deps.tokenVerifier), requireRole(["RIDER"])];
@@ -243,7 +251,30 @@ export function registerRiderRoutes(
   });
 
   // PUT /api/v1/rider/location
-  app.put("/api/v1/rider/location", { preHandler }, async () => {
-    throw new NotImplementedError("Rider location tracking is deferred to Phase 5.4");
+  app.put("/api/v1/rider/location", { preHandler }, async (request, reply) => {
+    const parsed = updateLocationSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid location payload", parsed.error.flatten());
+    }
+
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const location = await deps.riderLocationService.updateLocation(riderId, parsed.data);
+
+    return {
+      success: true,
+      data: {
+        id: location.id,
+        lat: Number(location.lat),
+        lng: Number(location.lng),
+        updatedAt: location.updatedAt
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
   });
 }

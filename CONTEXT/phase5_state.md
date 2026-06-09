@@ -18,8 +18,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-10
-- **Session Summary:** Completed Phase 5.3 (Order Status Update). Implemented strict order status update transitions in RiderOrderService and wired endpoints. Added action buttons with confirmation dialogs to RiderOrdersPage frontend. All integration and unit tests pass, and workspace lint and typechecks are clean.
-- **Next Session Must Start With:** Phase 5.4 — Real-Time Location Tracking.
+- **Session Summary:** Completed Phase 5.4 (Real-Time Location Tracking). Implemented `RiderRepository.updateLocation` and `RiderLocationService`. Wired `/api/v1/rider/location` PUT endpoint and authenticated the `/rider` Socket.IO namespace connection middleware. Broadcast location updates in real-time to the default namespace buyer order room. Created `useRiderLocation` React hook and integrated real-time coordinate tracking into `RiderOrdersPage` and `OrderConfirmationPage`. Wrote backend integration tests (`rider.location.test.ts`), frontend hook tests (`useRiderLocation.test.ts`), and page state tests (`OrderConfirmationPage.state.test.tsx`), seeing them fail first, then resolving all test suites to green. Verified clean lint and typechecks in workspace.
+- **Next Session Must Start With:** Phase 5.5 — Rider Frontend (Mobile-First UI).
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -212,33 +212,33 @@ Replace HTTP stub with real implementation. Activate the `/rider` Socket.IO name
 
 ---
 
-- [ ] **RED — Integration (`rider.location.test.ts`):**
-  - [ ] Test: `PUT /api/v1/rider/location` with body `{ lat: 30.4593, lng: 78.0677, orderId: '<id>' }` with RIDER JWT → HTTP 200 (not 501); `RiderLocation` row upserted in DB with `{ riderId, lat, lng, updatedAt }`
-  - [ ] Test: `PUT /api/v1/rider/location` with invalid lat (> 90) → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: Socket.IO `/rider` namespace: connect with valid RIDER JWT → connection accepted (no immediate disconnect)
-  - [ ] Test: after `PUT /api/v1/rider/location`, Socket.IO room `order:<orderId>` receives event `rider_location_update` with payload `{ lat, lng, updatedAt }`
-  - [ ] **Run — confirm RED (501 + Socket.IO disconnect)**
+- [x] **RED — Integration (`rider.location.test.ts`):**
+  - [x] Test: `PUT /api/v1/rider/location` with body `{ lat: 30.4593, lng: 78.0677, orderId: '<id>' }` with RIDER JWT → HTTP 200 (not 501); `RiderLocation` row upserted in DB with `{ riderId, lat, lng, updatedAt }`
+  - [x] Test: `PUT /api/v1/rider/location` with invalid lat (> 90) → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: Socket.IO `/rider` namespace: connect with valid RIDER JWT → connection accepted (no immediate disconnect)
+  - [x] Test: after `PUT /api/v1/rider/location`, Socket.IO room `order:<orderId>` receives event `rider_location_update` with payload `{ lat, lng, updatedAt }`
+  - [x] **Run — confirm RED (501 + Socket.IO disconnect)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Schema] Verify `RiderLocation` model: `{ riderId (unique FK), lat Decimal, lng Decimal, updatedAt }`; run migration if needed
-  - [ ] [Service] Create `RiderLocationService.updateLocation(riderId, { lat, lng, orderId })`: upserts `RiderLocation`; emits `rider_location_update` to `order:{orderId}` Socket.IO room via `io.to(room).emit(...)`
-  - [ ] [Controller] Replace 501 stub: `PUT /api/v1/rider/location` with `requireAuth` + `requireRole('RIDER')`
-  - [ ] [Socket.IO] Update `/rider` namespace in `socket.ts`: authenticate connection via JWT cookie/header; on `rider_location` event from client, call `RiderLocationService.updateLocation`; on disconnect, log rider offline
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Schema] Verify `RiderLocation` model: `{ riderId (unique FK), lat Decimal, lng Decimal, updatedAt }`; run migration if needed
+  - [x] [Service] Create `RiderLocationService.updateLocation(riderId, { lat, lng, orderId })`: upserts `RiderLocation`; emits `rider_location_update` to `order:{orderId}` Socket.IO room via `io.to(room).emit(...)`
+  - [x] [Controller] Replace 501 stub: `PUT /api/v1/rider/location` with `requireAuth` + `requireRole('RIDER')`
+  - [x] [Socket.IO] Update `/rider` namespace in `socket.ts`: authenticate connection via JWT cookie/header; on `rider_location` event from client, call `RiderLocationService.updateLocation`; on disconnect, log rider offline
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (new `useRiderLocation.test.ts` hook):**
-  - [ ] Test: hook calls `navigator.geolocation.watchPosition` on mount and stops watching on unmount
-  - [ ] Test: on each position update, calls `PUT /api/v1/rider/location` with `{ lat, lng, orderId }`
-  - [ ] Test: if geolocation is denied, hook sets `error: 'LOCATION_DENIED'` state
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (new `useRiderLocation.test.ts` hook):**
+  - [x] Test: hook calls `navigator.geolocation.watchPosition` on mount and stops watching on unmount
+  - [x] Test: on each position update, calls `PUT /api/v1/rider/location` with `{ lat, lng, orderId }`
+  - [x] Test: if geolocation is denied, hook sets `error: 'LOCATION_DENIED'` state
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/hooks/useRiderLocation.ts`: wraps `navigator.geolocation.watchPosition`, calls PUT on each update, cleans up on unmount
-  - [ ] Use hook in `RiderOrdersPage.tsx` — active only when rider has an OUT_FOR_DELIVERY order
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/hooks/useRiderLocation.ts`: wraps `navigator.geolocation.watchPosition`, calls PUT on each update, cleans up on unmount
+  - [x] Use hook in `RiderOrdersPage.tsx` — active only when rider has an OUT_FOR_DELIVERY order
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Rider marks order OUT_FOR_DELIVERY → browser requests location permission → rider moves → buyer `/orders/:id` page receives `rider_location_update` → map/placeholder updates → ✅
+- [x] **Verification chain:**
+  - [x] Rider marks order OUT_FOR_DELIVERY → browser requests location permission → rider moves → buyer `/orders/:id` page receives `rider_location_update` → map/placeholder updates → ✅
 
 ---
 
@@ -452,3 +452,10 @@ _(Append new entries here — never delete old entries.)_
 - Added "Mark as Out for Delivery" and "Mark as Delivered" actions to the `RiderOrdersPage` UI, gated behind standard Radix confirmation dialogs.
 - Created and successfully verified `rider.status.test.ts` backend integration suite and updated `RiderOrdersPage.test.tsx` frontend suite.
 - Fixed unused variable `rider2` inside `rider.status.test.ts` to clear workspace lint checks.
+
+### Session 4 — 2026-06-10 — Phase 5.4 Rider Real-Time Location Tracking Completed
+- Implemented DB location upserts in `RiderRepository.updateLocation` and coordinator validation/Socket broadcasts in `RiderLocationService`.
+- Wired PUT endpoint `/api/v1/rider/location` and activated authenticated Socket.IO `/rider` namespace with JWT verifier middleware.
+- Created `useRiderLocation` hook to watch HTML5 Geolocation API coordinates and publish updates.
+- Integrated tracking into `RiderOrdersPage` and `OrderConfirmationPage`, rendering real-time coordinate displays.
+- Wrote full unit/integration test suites and verified that all tests, eslint, and tsc checks pass successfully.

@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import type { MockInstance } from "vitest";
+import type { Mock, MockInstance } from "vitest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -208,6 +209,42 @@ describe("OrderConfirmationPage States", () => {
     // Bloom should be skipped for older non-placed orders
     const bloom = document.querySelector(".occ-bloom");
     expect(bloom).not.toBeInTheDocument();
+  });
+
+  it("renders coordinates in rider-location-display when rider location updates", async () => {
+    const mockOrder = {
+      id: "order-delivering",
+      status: "OUT_FOR_DELIVERY",
+      createdAt: new Date(Date.now() - 3600000).toISOString(), // 1 hour ago
+      store: { name: "Test Bakery", phone: "1234567890" },
+      items: [],
+      subtotal: "100.00",
+      deliveryFee: "20.00",
+      total: "120.00",
+      paymentMethod: "COD",
+      landmarkDescription: "Near red gate",
+    };
+
+    apiGetSpy.mockResolvedValue({
+      data: { success: true, data: mockOrder }
+    });
+
+    renderComponent("order-delivering");
+
+    expect(await screen.findByRole("heading", { name: "On the way" })).toBeInTheDocument();
+
+    expect(useOrderSocket).toHaveBeenCalled();
+    const calls = (useOrderSocket as Mock).mock.calls;
+    const lastCall = calls[calls.length - 1];
+    expect(lastCall).toBeDefined();
+    // The arguments of useOrderSocket(id, onStatusChanged, onLocationUpdated)
+    const onLocationUpdated = lastCall![2];
+
+    // Trigger the callback with mock location
+    onLocationUpdated({ lat: 30.12345, lng: 78.67890 });
+
+    const display = await screen.findByTestId("rider-location-display");
+    expect(display).toHaveTextContent("30.12345, 78.67890");
   });
 });
 

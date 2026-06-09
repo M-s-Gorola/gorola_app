@@ -111,15 +111,33 @@ describe("RiderRepository", () => {
     });
   });
 
+  describe("location", () => {
+    it("updates rider location successfully", async () => {
+      const rider = await repo.create({
+        name: "Test Rider",
+        phone: "+919900000099",
+        email: "test.rider@example.com",
+        passwordHash: "hash",
+        storeId
+      });
+
+      // 1. Create location
+      const loc1 = await repo.updateLocation(rider.id, { lat: 30.1234, lng: 78.1234 });
+      expect(loc1.riderId).toBe(rider.id);
+      expect(Number(loc1.lat)).toBeCloseTo(30.1234);
+      expect(Number(loc1.lng)).toBeCloseTo(78.1234);
+
+      // 2. Update location
+      const loc2 = await repo.updateLocation(rider.id, { lat: 30.5678, lng: 78.5678 });
+      expect(loc2.id).toBe(loc1.id);
+      expect(Number(loc2.lat)).toBeCloseTo(30.5678);
+      expect(Number(loc2.lng)).toBeCloseTo(78.5678);
+    });
+  });
+
   describe("stubs", () => {
     it("getActiveByStore throws NotImplementedError", async () => {
       await expect(repo.getActiveByStore(storeId)).rejects.toThrow(NotImplementedError);
-    });
-
-    it("updateLocation throws NotImplementedError", async () => {
-      await expect(
-        repo.updateLocation("rider_1", { lat: "30.1234567", lng: "78.1234567" })
-      ).rejects.toThrow(NotImplementedError);
     });
   });
 });
