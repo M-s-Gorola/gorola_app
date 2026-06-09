@@ -371,6 +371,7 @@ apps/api/src/modules/
 User (buyer)
   │
   ├── has many → Address
+  ├── has many  → ConsentLog (givenAt, purpose, isWithdrawn, withdrawnAt)
   ├── has one  → Cart
   │               └── has many → CartItem → ProductVariant
   └── has many → Order (orderType = QUICK | BOOKING)
@@ -577,6 +578,7 @@ Used for: physical inventory count correction, damaged goods write-off
 otp:{phone}                 → { hash: string, attempts: number }  TTL: 300s (5 min)
 otp_rate:{phone}            → count (number)                      TTL: 900s (15 min)
 refresh:{token}             → userId                              TTL: 604800s (7 days)
+user_sessions:${userId}      → Set of active refresh tokens        TTL: 604800s (7 days)
 jti:{jwtId}                 → '1'                                 TTL: matches access token (900s)
                               (JWT allowlist — if key missing, token is revoked)
 feature_flags               → JSON object of all flags            TTL: 60s (reloaded every minute)

@@ -304,6 +304,33 @@ AUDIT LOG:
 
 ---
 
+## 7.1 DPDP Act 2023 Compliance & Privacy Rules
+
+```
+CONSENT MANAGEMENT:
+  - Explicit, purpose-specific, and withdrawable consent MUST be obtained before collecting or processing any personal data (e.g. phone number).
+  - OTP auth and order processing are classified as essential consents; marketing and analytics are non-essential and must be withdrawable.
+  - Consent events must be logged in the `ConsentLog` table with: user ID, purpose, notice version, notice text, timestamp, and IP address.
+  - Users must be able to view and withdraw consent for non-essential purposes self-serve in the privacy settings dashboard.
+
+USER RIGHTS (SELF-SERVE ONLY):
+  - **Right to Erasure (Account Deletion):**
+    - A user must be able to request account deletion in one-click from settings.
+    - Personal data (name, phone, addresses) must be overwritten with anonymized placeholders (e.g. `[deleted]`, `DELETED_<userId>`) immediately upon request.
+    - All active user sessions and refresh tokens in Redis must be revoked immediately.
+    - Retain order records for tax/GST purposes for 3 years, but strip out personal buyer data.
+    - Enqueue a 30-day grace-period background purge job (`UserDataPurgeJob` via BullMQ) to hard-delete the user's database record.
+  - **Right to Information (My Data Summary):**
+    - A user must be able to download a complete, structured JSON export of their profile, addresses, orders, and consent log.
+    - Export file must strictly exclude password hashes and security tokens.
+
+AGE GATING & COMPLIANCE:
+  - Users under 18 are prohibited from using the platform (explicit age declaration checkbox required at registration).
+  - Diagnostic medical order transactions require a valid credit/debit card payment method to imply 18+ verification.
+```
+
+---
+
 ## 8. Frontend Rules
 
 ```

@@ -265,23 +265,9 @@ Rider interface needs to be mobile-first (riders use smartphones). The layout mu
 - [ ] **Verification chain:**
   - [ ] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
 
----
+### 5.6 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
 
-### 5.6 — Rider E2E Tests (Playwright)
-
-- [ ] `tests/e2e/rider-journey.spec.ts`:
-  - [ ] Rider login with seeded credentials → JWT with RIDER role → redirect to `/rider/orders`
-  - [ ] Active orders page shows PREPARING orders for rider's store
-  - [ ] Click "Mark as Out for Delivery" on order → confirm → order status updates in DB → buyer order page reflects DELIVERING status
-  - [ ] Click "Mark as Delivered" → DB status = DELIVERED → buyer sees delivered state
-  - [ ] Location update: mock `navigator.geolocation` → PUT location called with valid lat/lng → 200 response
-  - [ ] Unauth access to `/rider/orders` redirects to `/rider/login`
-
----
-
-### 5.7 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
-
-> ⚠️ **Prerequisite: Phase 7.1 (Schema Migration) must be complete before starting 5.7.**
+> ⚠️ **Prerequisite: Phase 7.1 (Schema Migration) must be complete before starting 5.6.**
 > The `BookingOrder` table, `OrderType` enum, and `riderType` field on `DeliveryRider` must exist in the DB.
 
 **Root Cause / Goal:**
@@ -331,6 +317,111 @@ When Phase 7 goes live, booking orders (`orderType: BOOKING`) will be assigned t
 
 - [ ] **Verification chain:**
   - [ ] Field technician logs into rider app → `/rider/orders` shows a booking visit card with scheduled time "09:00–11:00 tomorrow" and a fasting warning → taps "Mark as Departed" → buyer's order page updates to "Technician is on the way" → technician arrives, taps "Mark Visit Complete" → buyer's order page shows "Visit Completed" → `BookingOrder.approvalStatus = COMPLETED` in DB → ✅ Done.
+
+---
+
+### 5.7 — Rider Earnings Page
+
+**Root cause / Goal:**
+Riders have no way to see how much they have earned — either for a single delivery, for today, or historically. The `Order` table already holds the `deliveryFee` field (the amount charged to the buyer for delivery), which is the source of truth for a rider's per-delivery earning. There is no `RiderEarning` model in the schema, no backend service to aggregate earnings by period, no API endpoint, and no frontend page. Riders need this to trust the platform and track their income without calling the store owner.
+
+**Fix / Approach:**
+1. [Schema] Add a `RiderEarning` model that creates one row per `DELIVERED` order, storing `riderId`, `orderId`, `amount` (copied from `Order.deliveryFee` at the moment of delivery), and `createdAt`. This row is created by the order status update flow (5.3) when status transitions to `DELIVERED`.
+2. [Backend] Create `RiderEarningsService` with two methods: `getSummary(riderId)` → aggregated totals for today / this week / this month; `getHistory(riderId, cursor?)` → paginated list of per-delivery records newest-first.
+3. [Backend] Expose two new authenticated endpoints: `GET /api/v1/rider/earnings/summary` and `GET /api/v1/rider/earnings/history`.
+4. [Frontend] Create `RiderEarningsPage.tsx` at `/rider/earnings`. The tab bar introduced in 5.5's `RiderLayout` gets an "Earnings" tab added alongside "Orders" and "Account".
+
+---
+
+- [ ] **RED — Integration (`rider.earnings.test.ts`):**
+  - [ ] Test setup: seed 1 `DeliveryRider` (`riderId`). Seed 3 `Order` rows all with `status: DELIVERED` and `deliveryFee: 40.00`, linked to this rider via `RiderEarning` rows (create rows directly in the test seed, do not rely on 5.3 being implemented yet).
+  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a valid RIDER JWT for that rider → HTTP 200; response shape `{ success: true, data: { today: { count: number, total: string }, thisWeek: { count: number, total: string }, thisMonth: { count: number, total: string } } }`. With 3 deliveries all created today, all three period totals must equal `"120.00"` and count `3`.
+  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a BUYER JWT → HTTP 403.
+  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a RIDER JWT for a **different** rider who has no earnings → HTTP 200; all totals `"0.00"` and counts `0` (strict rider scope — no cross-rider data leakage).
+  - [ ] Test: `GET /api/v1/rider/earnings/history` with a valid RIDER JWT → HTTP 200; response shape `{ success: true, data: { items: [{ id, orderId, amount, createdAt }], nextCursor: string | null } }`; `items` length is `3`; `amount` on each item is `"40.00"`; items ordered newest-first.
+  - [ ] Test: `GET /api/v1/rider/earnings/history?cursor=<cursorFromPreviousResponse>` → returns the next page (empty array if no more records); `nextCursor` is `null`.
+  - [ ] Test: `GET /api/v1/rider/earnings/history` with a RIDER JWT for a different rider → returns `items: []` (no cross-rider leakage).
+  - [ ] **Run — confirm RED (both endpoints return 404 today).**
+
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] Add `RiderEarning` model to `schema.prisma`:
+    ```prisma
+    model RiderEarning {
+      id        String        @id @default(cuid())
+      riderId   String
+      orderId   String        @unique
+      amount    Decimal       @db.Decimal(10, 2)
+      createdAt DateTime      @default(now())
+      rider     DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Restrict)
+      order     Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+      @@index([riderId, createdAt])
+    }
+    ```
+    Also add `earnings RiderEarning[]` back-relation to the `DeliveryRider` model, and `earning RiderEarning?` to the `Order` model.
+    Run: `pnpm --filter @gorola/api prisma migrate dev --name add_rider_earning`.
+  - [ ] [Repository] Create `apps/api/src/modules/delivery/rider-earnings.repository.ts` with:
+    - `createEarning(data: { riderId: string; orderId: string; amount: Decimal }): Promise<RiderEarning>` — simple `prisma.riderEarning.create`.
+    - `getSummary(riderId: string): Promise<{ today: { count: number; total: Decimal }; thisWeek: { count: number; total: Decimal }; thisMonth: { count: number; total: Decimal } }>` — three separate `prisma.riderEarning.aggregate` calls filtered by `riderId` and `createdAt >= startOfDay/startOfWeek/startOfMonth`.
+    - `getHistory(riderId: string, cursor?: string, take = 20): Promise<{ items: RiderEarning[]; nextCursor: string | null }>` — `prisma.riderEarning.findMany` with `where: { riderId }`, `orderBy: { createdAt: 'desc' }`, cursor-based pagination using `id` as the cursor key.
+  - [ ] [Service] Create `apps/api/src/modules/delivery/rider-earnings.service.ts` with:
+    - `getSummary(riderId: string)` — calls `RiderEarningsRepository.getSummary`; formats `Decimal` totals as fixed-2 strings (`total.toFixed(2)`).
+    - `getHistory(riderId: string, cursor?: string)` — calls `RiderEarningsRepository.getHistory`; formats each `amount` as a fixed-2 string.
+  - [ ] [Controller] In `rider.controller.ts`, add two new routes inside `registerRiderRoutes` (both behind the existing `preHandler = [requireAuth, requireRole(['RIDER'])]`):
+    - `GET /api/v1/rider/earnings/summary`: extracts `riderId` from `request.user.riderId`; calls `deps.riderEarningsService.getSummary(riderId)`; returns standard envelope.
+    - `GET /api/v1/rider/earnings/history`: reads optional query param `cursor`; extracts `riderId`; calls `deps.riderEarningsService.getHistory(riderId, cursor)`; returns standard envelope.
+  - [ ] [Routes wiring] Add `riderEarningsService: RiderEarningsService` to the `deps` object passed to `registerRiderRoutes` in `routes.ts`. Instantiate `RiderEarningsRepository` and `RiderEarningsService` in the server bootstrap alongside the existing rider deps.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit / Component (`RiderEarningsPage.test.tsx`):**
+  - [ ] Test: component fetches `GET /api/v1/rider/earnings/summary`; while loading, renders a skeleton or spinner with `data-testid="earnings-summary-loading"`.
+  - [ ] Test: on success, renders three summary cards — today, this week, this month — each with `data-testid="summary-today"`, `data-testid="summary-week"`, `data-testid="summary-month"`; the today card displays `"₹120.00"` when the mocked response total is `"120.00"`.
+  - [ ] Test: component fetches `GET /api/v1/rider/earnings/history`; renders a list where each row has `data-testid="earning-row"`; the first row displays `"₹40.00"`.
+  - [ ] Test: when `nextCursor` is non-null, a "Load more" button with `id="earnings-load-more"` is rendered; clicking it calls the history endpoint with the cursor as a query param.
+  - [ ] Test: when `nextCursor` is `null`, the "Load more" button is absent.
+  - [ ] Test: when the history list is empty (rider has zero deliveries), renders `data-testid="earnings-empty-state"` with the text "No deliveries yet".
+  - [ ] **Run — confirm RED (the page file does not exist yet).**
+
+- [ ] **RED — Unit / Component (`RiderLayout.test.tsx` — additional tab assertion):**
+  - [ ] Test: the bottom tab bar (introduced in 5.5) renders an "Earnings" tab with `data-testid="tab-earnings"` that navigates to `/rider/earnings`.
+  - [ ] **Run — confirm RED (the Earnings tab is absent from the current tab bar).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Create type `EarningsSummary` in `RiderEarningsPage.tsx`:
+    ```typescript
+    type EarningsPeriod = { count: number; total: string };
+    type EarningsSummary = { today: EarningsPeriod; thisWeek: EarningsPeriod; thisMonth: EarningsPeriod };
+    ```
+  - [ ] [Types] Create type `EarningRecord` in `RiderEarningsPage.tsx`:
+    ```typescript
+    type EarningRecord = { id: string; orderId: string; amount: string; createdAt: string };
+    ```
+  - [ ] [Component] Create `apps/web/src/pages/rider/RiderEarningsPage.tsx`:
+    - Fetch summary via `useQuery` with `queryKey: ['riderEarningsSummary']`.
+    - Fetch history via `useInfiniteQuery` with `queryKey: ['riderEarningsHistory']`; pass `cursor` from `pageParam` to the API call; `getNextPageParam` returns `data.data.nextCursor ?? undefined`.
+    - Render three summary cards (today / this week / this month) showing formatted rupee amount and delivery count.
+    - Render a flat list of `EarningRecord` rows, each showing order short-ID, formatted amount, and relative time.
+    - Render a "Load more" button (`id="earnings-load-more"`) only when `hasNextPage` is `true`.
+    - Render `data-testid="earnings-empty-state"` when the flat list is empty.
+    - All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (DECISION-038).
+  - [ ] [Component] In `RiderLayout.tsx` (created in 5.5), add a third tab "Earnings" that navigates to `/rider/earnings` using `getScopedPath()`; give it `data-testid="tab-earnings"`.
+  - [ ] [Routes] In `App.tsx`, add `<Route path="/rider/earnings" element={<RiderRoute><RiderEarningsPage /></RiderRoute>} />`.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Rider logs in → taps the "Earnings" tab in the bottom tab bar → `RiderEarningsPage` loads at `/rider/earnings` → three summary cards display today's / this week's / this month's totals in rupees → below them, a scrollable list shows each past delivery with its earnings amount and order ID → rider taps "Load more" → next page of older deliveries loads and appends to the list → ✅ Done.
+
+---
+
+### 5.8 — Rider E2E Tests (Playwright)
+
+- [ ] `tests/e2e/rider-journey.spec.ts`:
+  - [ ] Rider login with seeded credentials → JWT with RIDER role → redirect to `/rider/orders`
+  - [ ] Active orders page shows PREPARING orders for rider's store
+  - [ ] Click "Mark as Out for Delivery" on order → confirm → order status updates in DB → buyer order page reflects DELIVERING status
+  - [ ] Click "Mark as Delivered" → DB status = DELIVERED → buyer sees delivered state
+  - [ ] Location update: mock `navigator.geolocation` → PUT location called with valid lat/lng → 200 response
+  - [ ] Unauth access to `/rider/orders` redirects to `/rider/login`
 
 ---
 

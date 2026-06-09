@@ -7,10 +7,14 @@
     "status": "In Development",
     "region": "Mussoorie, Uttarakhand, India",
     "locale": "en-IN",
-    "currencies": ["INR"],
-    "language_support": ["en", "hi"]
+    "currencies": [
+      "INR"
+    ],
+    "language_support": [
+      "en",
+      "hi"
+    ]
   },
-
   "architecture": {
     "pattern": "Modular Monolith",
     "layer_pattern": "Controller → Service → Repository",
@@ -28,36 +32,51 @@
     "monorepo": "pnpm workspaces",
     "repo_structure": "apps/web, apps/api, packages/shared, packages/ui"
   },
-
   "domain_actors": {
     "buyer": {
       "description": "Customer placing orders via web browser",
-      "platforms": ["web (responsive, 1440px + 768px + 390px)"],
+      "platforms": [
+        "web (responsive, 1440px + 768px + 390px)"
+      ],
       "note": "Web ONLY for v1. No native mobile app."
     },
     "store_owner": {
       "description": "Shop owner who receives and manages orders, adds products, sets discounts/offers/advertisements",
-      "platforms": ["web (store panel dashboard)"]
+      "platforms": [
+        "web (store panel dashboard)"
+      ]
     },
     "admin": {
       "description": "GoRola super-admin who can see all store sales, manage users, categories, feature flags, weather mode",
-      "platforms": ["web (admin dashboard)"]
+      "platforms": [
+        "web (admin dashboard)"
+      ]
     },
     "delivery_rider": {
       "description": "Under active development in Phase 5. Authentication, session management, and active orders feed are implemented, allowing riders to view preparing and out-for-delivery orders scoped strictly to their store.",
-      "platforms": ["web (rider panel page)"],
+      "platforms": [
+        "web (rider panel page)"
+      ],
       "status": "In Progress (Phase 5.1 & 5.2 complete)"
     }
   },
-
-  "categories_v1": ["Groceries", "Medical", "Medical tests", "Electronics", "Repairs"],
-  "categories_future": ["Water & Drinks", "Snacks", "Gas & Essentials", "Other"],
-
+  "categories_v1": [
+    "Groceries",
+    "Medical",
+    "Medical tests",
+    "Electronics",
+    "Repairs"
+  ],
+  "categories_future": [
+    "Water & Drinks",
+    "Snacks",
+    "Gas & Essentials",
+    "Other"
+  ],
   "stores_v1": {
     "count": 5,
     "note": "5 partner stores seeded (Hillside Mart, Mountain Medico, Aarna Diagnostic Centre, GoRola Electronics, GoRola Repairs). Store owner panel and admin panel support N stores."
   },
-
   "design_system": {
     "source": "Figma export — Design_Pahadi_UI_UX_System.zip",
     "colors": {
@@ -82,7 +101,6 @@
     "scroll": "Lenis smooth scroll + GSAP ScrollTrigger",
     "premium_feel": "Topographic SVG backgrounds, noise texture overlays, fog drift animations, amber pulse ETA banners"
   },
-
   "weather_mode": {
     "description": "System-wide UI state toggle when weather is bad (fog, rain, snow)",
     "controlled_by": "admin panel toggle",
@@ -94,7 +112,6 @@
       "delivery_mode": "Instant → Scheduled time windows"
     }
   },
-
   "feature_flags": {
     "provider": "Simple DB-backed feature flags (no external service for v1)",
     "flags": [
@@ -110,20 +127,21 @@
       "LOW_STOCK_ALERTS_ENABLED"
     ]
   },
-
   "payment_methods": {
-    "v1": ["COD (default, pre-selected)", "UPI (flag-gated)", "Card (flag-gated)"],
+    "v1": [
+      "COD (default, pre-selected)",
+      "UPI (flag-gated)",
+      "Card (flag-gated)"
+    ],
     "payment_gateway": "Razorpay (UPI + Card when enabled)",
     "cod_default": true
   },
-
   "delivery": {
     "model": "Delivery riders assigned to stores log in to view active orders feed, accept/prepare/deliver orders, and push live location updates (Phase 5).",
     "tracking": "Real-time updates via Rider Interface (in progress). Active orders feed implemented.",
     "real_time_location": "In Progress — Socket.IO namespace /rider ready for location integration in Phase 5.4.",
     "eta": "Manually configured per store + distance estimate"
   },
-
   "observability": {
     "logging": "Pino (structured JSON logs, log levels: trace/debug/info/warn/error/fatal)",
     "tracing": "OpenTelemetry SDK → Jaeger (self-hosted on Railway) OR console exporter for dev",
@@ -131,7 +149,6 @@
     "health_check": "GET /health → { status, db, redis, timestamp, version }",
     "request_id": "UUID v4 per request, propagated through all service calls"
   },
-
   "authentication": {
     "buyer": "Phone OTP (SMS via Fast2SMS — India, free tier) + JWT access/refresh tokens",
     "store_owner": "Email/Password + TOTP 2FA (otplib) + JWT",
@@ -144,7 +161,6 @@
     },
     "rate_limiting": "Fastify rate-limit plugin — 5 OTP requests/15min per phone, 10 login attempts/15min per IP"
   },
-
   "security": {
     "cors": "Strict origin whitelist — env-configured",
     "helmet": "fastify-helmet — all security headers",
@@ -155,7 +171,6 @@
     "secrets": "Environment variables only — never in source. dotenv-safe enforces all required vars.",
     "uploads": "Multer + file type validation + virus scan stub (ClamAV future)"
   },
-
   "database_schema_entities": [
     "User (buyer)",
     "Store (with storeType, bookingLeadDays, isAcceptingBookings)",
@@ -181,11 +196,10 @@
     "RiderLocation (stub — empty table, ready for future)",
     "StockMovement (append-only inventory ledger — every stock change recorded)",
     "BookingOrder (links scheduledDate, timeslot, requiresFasting, approvalStatus, assignedTechnicianId to Order)",
+    "ConsentLog",
     "ProductVariant fields to add: lowStockThreshold (Int default 5), isLowStock (Boolean default false), isInStock (Boolean default true)"
   ],
-
   "api_versioning": "URL prefix — /api/v1/...",
-
   "test_strategy": {
     "philosophy": "TDD is NON-NEGOTIABLE. Write failing test → make it pass → refactor.",
     "unit_tests": "Service layer — pure business logic. Mock all dependencies.",
@@ -200,7 +214,6 @@
       "Security cases (SQL injection attempts, unauthorized access, token tampering)"
     ]
   },
-
   "environment_variables_required": [
     "DATABASE_URL",
     "REDIS_URL",
@@ -216,7 +229,6 @@
     "FRONTEND_URL",
     "OTEL_EXPORTER_ENDPOINT"
   ],
-
   "free_deployment_services": {
     "primary": "Railway.app",
     "services_on_railway": [
@@ -227,7 +239,6 @@
     "frontend": "Vercel (free tier — React/Vite static build)",
     "ci_cd": "GitHub Actions (free for public repos)"
   },
-
   "build_sequence": {
     "phase_1_nfr": {
       "name": "NFR Foundation",
@@ -296,6 +307,10 @@
     "phase_7_booking": {
       "name": "Booking Commerce (Phase 7 Completed)",
       "note": "Enables scheduled appointments/timeslot booking, service-based commerce, owner approval workflow, pay-on-service, status normalizations, and back-button history replacement."
+    },
+    "phase_8_dpdp": {
+      "name": "DPDP Act 2023 Compliance",
+      "note": "Phase 8 covers full compliance with India's Digital Personal Data Protection Act 2023, including consent collection, user erasure/information rights, age verification, and data retention."
     }
   }
 }

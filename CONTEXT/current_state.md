@@ -21,6 +21,7 @@
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | 🟡 IN PROGRESS | Phase 5.1 & 5.2 complete (Rider Auth & Active Orders). |
 | Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing, UX refinement, and TDD parity. |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
+| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🔴 NOT STARTED | DPDP Act 2023 Compliance |
 
 ---
 
@@ -35,6 +36,7 @@
 | Phase 5 | Rider Interface      | 🟡 IN PROGRESS | Phase 5.1 (Auth) & 5.2 (Active Orders Feed) complete. |
 | Phase 6 | Subdomain Routing    | ✅ COMPLETE    | All 6.1–6.9 checklists and UX refinements complete. |
 | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
+| Phase 8 | DPDP Act Compliance  | 🔴 NOT STARTED | Must be complete before production launch.    |
 
 ---
 
