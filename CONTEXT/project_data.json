@@ -44,18 +44,18 @@
       "platforms": ["web (admin dashboard)"]
     },
     "delivery_rider": {
-      "description": "NOT in v1. Store owners use own delivery staff. Rider interface is a FUTURE MODULE. Code must be modular enough to plug in with zero rewrites.",
-      "platforms": ["future: progressive web app or native"],
-      "status": "DEFERRED — stub interfaces only in v1"
+      "description": "Under active development in Phase 5. Authentication, session management, and active orders feed are implemented, allowing riders to view preparing and out-for-delivery orders scoped strictly to their store.",
+      "platforms": ["web (rider panel page)"],
+      "status": "In Progress (Phase 5.1 & 5.2 complete)"
     }
   },
 
-  "categories_v1": ["Groceries", "Medical"],
+  "categories_v1": ["Groceries", "Medical", "Medical tests", "Electronics", "Repairs"],
   "categories_future": ["Water & Drinks", "Snacks", "Gas & Essentials", "Other"],
 
   "stores_v1": {
-    "count": 2,
-    "note": "Only two partner stores in v1. Store management panel must support N stores without code changes."
+    "count": 5,
+    "note": "5 partner stores seeded (Hillside Mart, Mountain Medico, Aarna Diagnostic Centre, GoRola Electronics, GoRola Repairs). Store owner panel and admin panel support N stores."
   },
 
   "design_system": {
@@ -118,10 +118,10 @@
   },
 
   "delivery": {
-    "v1_model": "Store owner dispatches own delivery staff",
-    "tracking": "Manual status updates by store owner (Order Placed → Preparing → Out for Delivery → Delivered)",
-    "real_time_location": "FUTURE — Socket.IO infrastructure ready, rider location tracking stubbed",
-    "eta": "Manually configured per store + distance estimate (no live GPS in v1)"
+    "model": "Delivery riders assigned to stores log in to view active orders feed, accept/prepare/deliver orders, and push live location updates (Phase 5).",
+    "tracking": "Real-time updates via Rider Interface (in progress). Active orders feed implemented.",
+    "real_time_location": "In Progress — Socket.IO namespace /rider ready for location integration in Phase 5.4.",
+    "eta": "Manually configured per store + distance estimate"
   },
 
   "observability": {
@@ -289,9 +289,9 @@
         "4.9 Advertisement approval"
       ]
     },
-    "phase_5_future": {
-      "name": "Rider Interface (Future Module — Do Not Build Yet)",
-      "note": "All DB tables (DeliveryRider, RiderLocation), API routes (/api/v1/rider/...), and Socket.IO events are STUBBED with TODO comments. Zero implementation. Plug-in ready."
+    "phase_5_rider": {
+      "name": "Rider Interface (In Progress)",
+      "note": "Phase 5.1 (Rider Auth) and 5.2 (Active Orders Feed) are fully implemented. Phase 5.3 through 5.7 are remaining/in progress."
     },
     "phase_7_booking": {
       "name": "Booking Commerce (Phase 7 Completed)",

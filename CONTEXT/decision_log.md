@@ -1474,3 +1474,45 @@ No new E2E Playwright tests are written for Phase 6.10 bulk operations. Coverage
 2. Add E2E smoke test only (no file upload, just assert button exists) — rejected: too low value to justify the maintenance burden.
 
 ---
+
+## [DECISION-050] Password-Based Authentication for Delivery Riders
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+Delivery riders need to log in to their mobile web interface quickly and reliably. Unlike buyers (who use SMS OTP to avoid passwords) or admins/store owners (who use passwords + TOTP 2FA for high security), riders are pre-registered staff and need an optimized, frictionless authentication loop.
+
+**Decision:**
+Implement email + password authentication (using bcryptjs hashing) for the Rider interface. Do not require SMS OTP or TOTP 2FA. Access is gated by the `RiderRoute` React guard, which checks for the `RIDER` role in the JWT.
+
+**Rationale:**
+- **Friction Reduction:** Riders are active on the road and log in repeatedly from mobile browsers. Requiring SMS OTP introduces latency, relies on cellular network stability, and incurs SMS costs for every login.
+- **Security Balance:** Riders do not have access to administrative settings or cross-store financials; their access is limited strictly to orders assigned to their store. Standard password validation is sufficient.
+- **Administrative Control:** Rider accounts are created by administrators or seeded via scripts, allowing passwords to be managed or reset by store/admin managers.
+
+**Tradeoffs:**
+- Riders must remember a password (mitigated by modern password managers and mobile autocomplete).
+- Lower security posture compared to TOTP 2FA, but appropriate for the RIDER role's limited access scope.
+
+---
+
+## [DECISION-051] Customer Phone Number Masking on Rider Active Feed
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+Riders need to view active orders assigned to their store. While riders may need to contact buyers for delivery coordination, exposing unmasked customer phone numbers directly on the active orders feed creates privacy risks and potential data harvesting issues, violating our privacy-first principles (DECISION-035).
+
+**Decision:**
+Implement customer phone number masking (`maskPhone` helper: e.g. `*********7890`) at the API controller level in `rider.controller.ts` before returning active orders.
+
+**Rationale:**
+- **Data Protection:** Follows the principle of least privilege, preventing unnecessary exposure of PII (Personally Identifiable Information) in plain-text API responses.
+- **Preparation for Proxy Calls:** Aligns with DECISION-035, where direct voice calls will be routed through a Twilio proxy rather than direct dialing. The UI displays the masked phone number and a "Call" trigger, preventing the rider from seeing the actual customer number.
+
+**Tradeoffs:**
+- If the proxy communication system fails or is not yet implemented, riders cannot manually dial customers using their real numbers. However, this is an acceptable privacy constraint.
+
+---

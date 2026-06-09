@@ -207,8 +207,7 @@ REQUIRED COLUMNS ON ALL ENTITIES (where appropriate):
   - createdAt: DateTime @default(now())
   - updatedAt: DateTime @updatedAt
 
-SOFT DELETE RULE: All deletes on User, Store, StoreOwner, Admin, Product, and DeliveryRider are soft deletes via an `isDeleted` boolean.
-                  Repositories filter out isDeleted=true by default.
+SOFT DELETE RULE: All deletes on User, Store, StoreOwner, Admin, Product, and DeliveryRider are soft deletes via an `isDeleted` boolean. Categories and SubCategories are soft-deleted (deactivated) via `isActive: false` (DECISION-042). Repositories and buyer-facing APIs filter out deleted/inactive entities by default.
 
 SENSITIVE DATA:
   - Passwords: bcrypt (cost factor 10-12)
@@ -462,7 +461,6 @@ IMPORTS ORDER (enforced via eslint-plugin-import):
 COMMENTS:
   - Code should be self-documenting — comments explain WHY, not WHAT
   - TODO comments: format // TODO(2024-Q2): [description] — always dated and explained
-  - STUB comments for rider interface: // STUB: Rider interface — implement in Phase 5
 
 ERROR HANDLING:
   - Use typed error classes: class OrderNotFoundError extends AppError { ... }
@@ -473,29 +471,20 @@ ERROR HANDLING:
 
 ---
 
-## 12. The "Rider Interface" Scaffolding Rule
+## 12. The "Rider Interface" Implementation (In Progress)
 
-```
-The rider delivery interface is NOT built in v1. However:
-
-REQUIRED STUBS:
-  - DB tables: delivery_riders, rider_locations (migrations exist, tables empty)
-  - API routes registered but return 501 Not Implemented:
-    POST /api/v1/rider/auth/login → 501
-    GET  /api/v1/rider/orders/active → 501
-    PUT  /api/v1/rider/orders/:id/status → 501
-    PUT  /api/v1/rider/location → 501
-  - Socket.IO namespace: /rider — registered, events defined as interface but handler throws NotImplementedError
-  - Feature flag: RIDER_INTERFACE_ENABLED = false — all rider endpoints check this flag
-  - RiderService class exists with all method signatures typed but bodies throw NotImplementedError
-  - RiderRepository class exists, all methods typed, bodies throw NotImplementedError
-
-This way, Phase 5 implementation is:
-  1. Set RIDER_INTERFACE_ENABLED = true
-  2. Implement the service and repository bodies
-  3. No schema changes needed
-  4. No routing changes needed
-```
+The rider delivery interface is under active development in Phase 5:
+- **Status:** Phase 5.1 (Rider Auth) and Phase 5.2 (Active Orders Feed) are completed using TDD. Phase 5.3 through 5.7 are remaining/in progress.
+- **Implemented API Endpoints:**
+  - `POST /api/v1/rider/auth/login` - Authenticates delivery riders using email and password, returning JWT access and refresh tokens.
+  - `POST /api/v1/rider/auth/refresh` - Rotates rider JWT sessions.
+  - `POST /api/v1/rider/auth/logout` - Revokes rider JWT sessions.
+  - `GET /api/v1/rider/orders/active` - Retrieves active orders ready for pickup or out for delivery, scoped strictly to the rider's associated store.
+- **Stubs returning 501:**
+  - `PUT /api/v1/rider/orders/:id/status` - For transitioning status (PREPARING → OUT_FOR_DELIVERY → DELIVERED).
+  - `PUT /api/v1/rider/location` - Pushes current GPS coordinates.
+- **Socket.IO namespace:** `/rider` is registered and will be wired for real-time location tracking in Phase 5.4.
+- **Routing:** All rider frontend navigation and route guarding (via `RiderRoute`) utilize `getScopedPath` from `@/lib/subdomain-resolver` to seamlessly support both standalone rider subdomain (`rider.gorola.com`) and local subpaths (`/rider/*`).
 
 ---
 
@@ -540,5 +529,21 @@ STOCK HISTORY:
 - Fields: id, variantId, changeType (SALE | REFILL | ADJUSTMENT | CANCELLATION_RESTORE | INITIAL),
   quantityBefore, quantityChange, quantityAfter, referenceId (orderId or null), note, createdBy, createdAt
 - This table is the source of truth for inventory audits
+
+---
+
+## 14. Bulk Operations Rules (Validate/Confirm Pattern)
+
+For bulk import of products/variants (Store Owner), categories/subcategories (Admin), and bulk restock (Store Owner):
+
+- **Scope Limits:** Store owners can only import or restock their own store's items (store ID is sourced from JWT, never from request body). Admin imports categories.
+- **Validate/Confirm Pattern:** All bulk operations must use a two-phase flow:
+  1. `POST .../validate` - Dry-run validator (does not write to DB). Parses file, performs Zod/business validations, and returns a detailed conflict/validation report.
+  2. `POST .../confirm` - Writes to DB. Accepts a `mode` parameter (`strict` or `skip`).
+- **Conflict Resolution Mode:**
+  - `mode=strict` (default): Reject the entire import if any validation error or conflict exists.
+  - `mode=skip`: Skip conflicting rows and import only valid, non-conflicting rows. Returns a summary of successfully imported vs skipped rows.
+  - **No Upsert/Overwrite:** Modifying existing records via bulk upload is prohibited in v1 (prevents silent data corruption). Updates must be done via single-entity edit screens.
+- **Variant Identification without SKU:** Bulk restock identifies variants via the compound key `(storeId + productName + variantLabel)`. If duplicate products share a name in the same store, the operation rejects the row with `AMBIGUOUS_PRODUCT_NAME` for safety.
 
 ---
