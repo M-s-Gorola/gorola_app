@@ -1,6 +1,8 @@
 import type { ReactElement } from "react";
 import { Navigate, Route } from "react-router-dom";
 
+import { RiderLayout } from "@/components/rider/RiderLayout";
+import { RiderAccountPage } from "@/pages/rider/RiderAccountPage";
 import { RiderLoginPage } from "@/pages/rider/RiderLoginPage";
 import { RiderOrdersPage } from "@/pages/rider/RiderOrdersPage";
 
@@ -27,7 +29,20 @@ export function RiderRoutes({ prefix = "" }: RiderRoutesProps): ReactElement[] {
       path={`${prefix}/orders`}
       element={
         <RiderRoute>
-          <RiderOrdersPage />
+          <RiderLayout>
+            <RiderOrdersPage />
+          </RiderLayout>
+        </RiderRoute>
+      }
+    />,
+    <Route
+      key="rider-account"
+      path={`${prefix}/account`}
+      element={
+        <RiderRoute>
+          <RiderLayout>
+            <RiderAccountPage />
+          </RiderLayout>
         </RiderRoute>
       }
     />

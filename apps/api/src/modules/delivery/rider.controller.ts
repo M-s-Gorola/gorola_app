@@ -2,6 +2,7 @@ import { ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { RiderAuthService } from "../auth/rider-auth.service.js";
@@ -273,6 +274,42 @@ export function registerRiderRoutes(
         lat: Number(location.lat),
         lng: Number(location.lng),
         updatedAt: location.updatedAt
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/rider/profile
+  app.get("/api/v1/rider/profile", { preHandler }, async (request, reply) => {
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const prisma = getPrismaClient();
+    const rider = await prisma.deliveryRider.findFirst({
+      where: { id: riderId, isDeleted: false },
+      include: { store: true }
+    });
+
+    if (!rider) {
+      return reply.code(404).send({ success: false, error: "Rider profile not found" });
+    }
+
+    return {
+      success: true,
+      data: {
+        id: rider.id,
+        name: rider.name,
+        email: rider.email,
+        phone: rider.phone,
+        riderType: rider.riderType,
+        store: {
+          id: rider.store.id,
+          name: rider.store.name
+        }
       },
       meta: {
         requestId: getRequestId(request, reply)

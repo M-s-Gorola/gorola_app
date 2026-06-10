@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1, 5.2, 5.3, 5.4, and 5.4.1 are complete. Mobile layout, field technician mode, earnings page, and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.5 are complete. Field technician mode, earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-10
-- **Session Summary:** Completed Phase 5.4 (Real-Time Location Tracking) and Phase 5.4.1 (Modular Geolocation Map Fix). Added coordinates snapshotting on checkout to save `deliveryLat`/`deliveryLng` on orders. Implemented reusable `<OrderRouteMap />` Leaflet component on the frontend to visualize store, buyer, and active rider location markers, integrating it into the buyer order confirmation page and rider active order cards. Removed OSRM routing service endpoints and code to keep the architecture clean, lightweight, and fully DPDP Act compliant without external dependencies. Ran typecheck, lint, and all Vitest/Playwright tests successfully.
-- **Next Session Must Start With:** Phase 5.5 — Rider Frontend (Mobile-First UI).
+- **Date:** 2026-06-11
+- **Session Summary:** Completed Phase 5.5 — Rider Frontend (Mobile-First UI). Added a sticky top header bar with the official logo/brand style matching Store/Admin layouts (`Logo` + `GoRola Rider`). Ensured all mobile interactive elements conform to the $\ge$ 44px height tap target guidelines. Verified all unit/integration tests, eslint lints, and tsc typecheck quality gates are 100% green.
+- **Next Session Must Start With:** Phase 5.5.1 — Implement Store status confirmation dialogs, Rider compact order lists (click to open detail modals), and top status filtering tab menus (Ready for Pickup | Out for Delivery).
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -292,21 +292,57 @@ Rider interface needs to be mobile-first (riders use smartphones). The layout mu
 
 ---
 
-- [ ] **RED — Unit/Component (`RiderLayout.test.tsx`):**
-  - [ ] Test: renders bottom tab bar with "Orders" and "Account" tabs
-  - [ ] Test: "Orders" tab is active on `/rider/orders`; "Account" tab active on `/rider/account`
-  - [ ] Test: on mobile viewport (375px), all tap targets are >= 44px height
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderLayout.test.tsx`):**
+  - [x] Test: renders bottom tab bar with "Orders" and "Account" tabs
+  - [x] Test: "Orders" tab is active on `/rider/orders`; "Account" tab active on `/rider/account`
+  - [x] Test: on mobile viewport (375px), all tap targets are >= 44px height
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
-  - [ ] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
-  - [ ] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
+  - [x] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
+  - [x] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
+
+- [x] **Verification chain:**
+  - [x] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
+
+### 5.5.1 — Rider Active Orders Layout Refactoring & Store Status Confirmations
+
+**Root cause / Goal:**
+Riders need a space-efficient mobile view to scan orders on smartphones (like iPhone SE). Rendering full cards with maps, items, contacts, and status buttons directly on the scrollable feed takes too much space. We want a compact list layout showing only items and address landmark. Tapping an order will open a details modal (similar to the store panel) displaying the full card details and tracking. Additionally, riders need top-level navigation filter tabs to easily switch between "Ready for Pickup" and "Out for Delivery" queues.
+Furthermore, store owners can accidentally update status buttons in the dashboard. To prevent accidental pocket or desktop misclicks, we must require confirmation dialogs for Store status transitions, matching the Rider flow.
+
+**Fix / Approach:**
+1. [Store Panel] In `StoreOrdersPage.tsx`, wrap status mutations in a confirmation dialog/modal.
+2. [Rider Feed] In `RiderOrdersPage.tsx`, replace the stacked layout with a top status filtering tab bar (Ready for Pickup | Out for Delivery).
+3. [Rider Cards] Refactor order cards in `RiderOrdersPage.tsx` to render compact cards (displaying only the items list and landmark address description).
+4. [Rider Modals] Implement a detail overlay modal in `RiderOrdersPage.tsx` that opens upon clicking any compact order card, presenting the full tracking map, actions, and contact info.
+
+---
+
+- [ ] **RED — Integration & Backend (N/A):**
+  - *N/A: No database schema, repository, or service logic changes are required. The REST endpoints and socket payloads remain exactly the same.*
+
+- [ ] **RED — Unit / Component Tests (`StoreOrdersPage.test.tsx` & `RiderOrdersPage.test.tsx`):**
+  - [ ] Test (`StoreOrdersPage.test.tsx`): Click a status button (e.g. "Mark Preparing"), assert that the PUT status endpoint is NOT immediately called, and verify that the confirmation dialog appears in the DOM.
+  - [ ] Test (`StoreOrdersPage.test.tsx`): Assert that clicking "Confirm" inside the modal triggers the API PUT endpoint.
+  - [ ] Test (`RiderOrdersPage.test.tsx`): Verify that the active orders page displays top-level filter tabs ("Ready for Pickup" and "Out for Delivery") instead of grouped vertical sections.
+  - [ ] Test (`RiderOrdersPage.test.tsx`): Assert that the active order list renders compact card containers containing items and address landmark, but NOT displaying the full map, contact phone, or action buttons.
+  - [ ] Test (`RiderOrdersPage.test.tsx`): Assert that clicking a compact card opens a detailed overlay modal displaying the full card components (including map and action button).
+  - [ ] **Run — confirm RED (the tests fail because the confirmation modals, filter tabs, and compact lists do not exist yet).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Store Component] In `StoreOrdersPage.tsx`, add a `confirmingOrderUpdate` state. Wrap the mutation execution in a Radix-based `Dialog` confirmation modal.
+  - [ ] [Rider Component] In `RiderOrdersPage.tsx`, add `selectedFilterTab` state (`"PICKUP" | "DELIVERY"`). Render status filtering tabs at the top of the content pane.
+  - [ ] [Rider Component] Refactor the card renderer in `RiderOrdersPage.tsx` to display a compact list item showing only `items` and `deliveryAddress.landmark`.
+  - [ ] [Rider Component] Implement a modal details overlay that opens on selection, rendering the full active order information (masked phone, collapsible map, status transition actions, close button).
+  - [ ] Run unit tests — **confirm GREEN**.
 
 - [ ] **Verification chain:**
-  - [ ] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
+  - [ ] Store Owner clicks "Mark Preparing" on an order ➔ Confirmation modal pops up ➔ Click "Confirm" ➔ Order moves to preparing status.
+  - [ ] Rider logs in ➔ Sees top filter tabs "Ready for Pickup" and "Out for Delivery" ➔ Feed shows a clean compact list of items + address ➔ Taps an order card ➔ Full card details pop up in a modal ➔ Rider updates status or views location map ➔ ✅ Done.
 
 ### 5.6 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
 
@@ -509,4 +545,10 @@ _(Append new entries here — never delete old entries.)_
 - Removed OSRM routing engine code, routes, configurations, and test cases, configuring the map to present marker pins (store, buyer, rider) without routing polylines to keep the deployment fully private, compliant with the DPDP Act, and lightweight.
 - Cleaned unused imports and updated E2E stubs to align with the location endpoint implementation.
 - Verified that full stack typechecks, lints, integration tests, and E2E journeys are completely green.
+
+### Session 6 — 2026-06-11 — Phase 5.5 Rider Header & Quality Gates Completed
+- Added premium top header/navbar to `RiderLayout` containing the GoRola brand logo and `Rider` tag, matching Store/Admin layouts.
+- Ensured compliance with >= 44px mobile tap target accessibility guidelines and verified all vitest, eslint, and tsc quality gates are 100% green.
+- Clarified and mapped architectural plans for upcoming store status confirmation modals, rider order card list-view refactoring (click to open details modal), and status filtering tab menus.
+
 

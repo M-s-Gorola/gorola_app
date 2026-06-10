@@ -1,8 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, LogOut, MapPin, Phone, RefreshCw, ShoppingBag } from "lucide-react";
+import { Clock, MapPin, Phone, RefreshCw, ShoppingBag } from "lucide-react";
 import type { ReactElement } from "react";
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { io } from "socket.io-client";
 import { toast } from "sonner";
 
 import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
@@ -17,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { useRiderLocation } from "@/hooks/useRiderLocation";
 import { api } from "@/lib/api";
-import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useAuthStore } from "@/store/auth.store";
 
 type OrderItem = {
@@ -45,9 +44,6 @@ type ActiveOrdersResponse = {
 };
 
 export function RiderOrdersPage(): ReactElement {
-  const navigate = useNavigate();
-  const clearSession = useAuthStore((s) => s.clearSession);
-
   const [confirmingOrder, setConfirmingOrder] = useState<{
     id: string;
     status: "OUT_FOR_DELIVERY" | "DELIVERED";
@@ -55,6 +51,43 @@ export function RiderOrdersPage(): ReactElement {
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+
+  const storeId = useAuthStore((s) => s.storeId);
+  const accessToken = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    if (!storeId || !accessToken) return;
+
+    const host = window.location.hostname;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    
+    const socket = io(baseURL, {
+      auth: { token: accessToken },
+      withCredentials: true,
+      transports: ["websocket", "polling"],
+    });
+
+    socket.on("connect", () => {
+      socket.emit("join_store", storeId);
+    });
+
+    const triggerRefresh = () => {
+      void queryClient.invalidateQueries({ queryKey: ["riderActiveOrders"] });
+    };
+
+    socket.on("store:new_order", () => {
+      triggerRefresh();
+      toast.success("🔔 New Order Received! Action required.");
+    });
+
+    socket.on("store:order_updated", () => {
+      triggerRefresh();
+    });
+
+    return () => {
+      socket.disconnect();
+    };
+  }, [storeId, accessToken, queryClient]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: "OUT_FOR_DELIVERY" | "DELIVERED" }) => {
@@ -95,20 +128,6 @@ export function RiderOrdersPage(): ReactElement {
     },
     refetchInterval: 30000
   });
-
-  async function handleLogout() {
-    try {
-      if (api) {
-        await api.post("/api/v1/rider/auth/logout", {});
-      }
-    } catch {
-      // Ignore API logout failures during local cleanups
-    } finally {
-      clearSession();
-      const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
-      navigate(getScopedPath("/rider/login", "rider", isSubdomainMode), { replace: true });
-    }
-  }
 
   const orders = data?.data ?? [];
   const preparingOrders = orders.filter((o) => o.status === "PREPARING");
@@ -227,40 +246,22 @@ export function RiderOrdersPage(): ReactElement {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gorola-fog/30 font-sans pb-16">
+    <div className="flex flex-col gap-6 pb-20">
       {/* Header bar */}
-      <header className="sticky top-0 z-30 border-b border-gorola-fog bg-white shadow-sm">
-        <div className="mx-auto flex max-w-6xl items-center justify-between px-5 py-4 w-full">
-          <div className="flex items-center gap-2">
-            <div className="h-8 w-8 rounded-full bg-gorola-pine/10 flex items-center justify-center">
-              <ShoppingBag className="h-4 w-4 text-gorola-pine" />
-            </div>
-            <h1 className="font-heading text-lg font-bold text-gorola-charcoal">Shift Orders</h1>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => refetch()}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-gorola-fog hover:bg-gorola-fog transition focus:outline-none"
-              aria-label="Refresh orders"
-              disabled={isFetching}
-            >
-              <RefreshCw className={`h-4 w-4 text-muted-foreground ${isFetching ? "animate-spin" : ""}`} />
-            </button>
-
-            <button
-              onClick={handleLogout}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-gorola-fog hover:bg-destructive/10 hover:border-destructive/20 transition focus:outline-none"
-              aria-label="Logout"
-            >
-              <LogOut className="h-4 w-4 text-muted-foreground hover:text-destructive" />
-            </button>
-          </div>
-        </div>
-      </header>
+      <div className="flex items-center justify-between border-b border-gorola-fog pb-4">
+        <h1 className="font-heading text-2xl font-bold text-gorola-charcoal">Shift Orders</h1>
+        <button
+          onClick={() => refetch()}
+          className="flex h-10 w-10 items-center justify-center rounded-full border border-gorola-fog bg-white hover:bg-gorola-fog transition focus:outline-none select-none cursor-pointer"
+          aria-label="Refresh orders"
+          disabled={isFetching}
+        >
+          <RefreshCw className={`h-4 w-4 text-muted-foreground ${isFetching ? "animate-spin" : ""}`} />
+        </button>
+      </div>
 
       {/* Main feed content */}
-      <main className="mx-auto max-w-6xl p-5 md:p-8 flex flex-col gap-6">
+      <div className="flex flex-col gap-6">
         {isLoading && (
           <div className="flex flex-col items-center justify-center py-20 gap-3">
             <RefreshCw className="h-8 w-8 animate-spin text-gorola-pine" />
@@ -273,7 +274,7 @@ export function RiderOrdersPage(): ReactElement {
             <p className="text-sm font-semibold text-destructive">Failed to load active orders.</p>
             <button
               onClick={() => refetch()}
-              className="mt-3 inline-flex items-center justify-center px-4 py-2 border border-destructive/20 text-xs font-semibold text-destructive rounded-full hover:bg-destructive/10 transition focus:outline-none"
+              className="mt-3 inline-flex items-center justify-center px-4 py-2 border border-destructive/20 text-xs font-semibold text-destructive rounded-full hover:bg-destructive/10 transition focus:outline-none select-none cursor-pointer"
             >
               Retry
             </button>
@@ -281,7 +282,7 @@ export function RiderOrdersPage(): ReactElement {
         )}
 
         {!isLoading && !error && orders.length === 0 && (
-          <div className="flex flex-col items-center justify-center py-24 text-center gap-4">
+          <div className="flex flex-col items-center justify-center py-20 text-center gap-4">
             <div className="h-14 w-14 rounded-full bg-gorola-pine/10 flex items-center justify-center mb-2">
               <ShoppingBag className="h-7 w-7 text-gorola-pine" />
             </div>
@@ -293,14 +294,12 @@ export function RiderOrdersPage(): ReactElement {
         )}
 
         {!isLoading && !error && orders.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-start">
+          <div className="flex flex-col gap-8">
             {/* Ready for Pickup section */}
             <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="font-heading text-sm font-bold tracking-wide text-gorola-charcoal uppercase">
-                  Ready for Pickup ({preparingOrders.length})
-                </h2>
-              </div>
+              <h2 className="font-heading text-sm font-bold tracking-wide text-gorola-charcoal uppercase px-1">
+                Ready for Pickup ({preparingOrders.length})
+              </h2>
               {preparingOrders.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gorola-fog bg-white/50 p-6 text-center text-sm text-muted-foreground font-medium">
                   No orders ready for pickup.
@@ -314,11 +313,9 @@ export function RiderOrdersPage(): ReactElement {
 
             {/* Out for Delivery section */}
             <div className="flex flex-col gap-4">
-              <div className="flex items-center justify-between px-1">
-                <h2 className="font-heading text-sm font-bold tracking-wide text-gorola-charcoal uppercase">
-                  Out for Delivery ({deliveringOrders.length})
-                </h2>
-              </div>
+              <h2 className="font-heading text-sm font-bold tracking-wide text-gorola-charcoal uppercase px-1">
+                Out for Delivery ({deliveringOrders.length})
+              </h2>
               {deliveringOrders.length === 0 ? (
                 <div className="rounded-2xl border border-dashed border-gorola-fog bg-white/50 p-6 text-center text-sm text-muted-foreground font-medium">
                   No orders currently in delivery.
@@ -331,7 +328,7 @@ export function RiderOrdersPage(): ReactElement {
             </div>
           </div>
         )}
-      </main>
+      </div>
 
       {confirmingOrder && (
         <Dialog open={!!confirmingOrder} onOpenChange={(open) => !open && setConfirmingOrder(null)}>

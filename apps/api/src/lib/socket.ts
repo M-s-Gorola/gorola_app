@@ -76,7 +76,11 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
 
     socket.on("join_store", async (storeId: string) => {
       try {
-        if (user.role !== "STORE_OWNER" && user.role !== "ADMIN") {
+        if (
+          user.role !== "STORE_OWNER" &&
+          user.role !== "ADMIN" &&
+          (user.role !== "RIDER" || user.storeId !== storeId)
+        ) {
           socket.emit("error", { message: "Unauthorized access to store updates" });
           return;
         }
