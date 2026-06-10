@@ -252,6 +252,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(markPreparingBtn).toBeEnabled({ timeout: 15000 });
     await markPreparingBtn.dispatchEvent('click');
 
+    // Click Confirm on the confirmation Dialog
+    const confirmBtn1 = page.getByRole("button", { name: "Confirm" });
+    await expect(confirmBtn1).toBeVisible({ timeout: 10000 });
+    await confirmBtn1.click();
+
     // Buyer sees PREPARING in real-time — #occ-heading changes to "Store is picking items"
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('Store is picking items', { timeout: 20000 });
@@ -263,6 +268,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(dispatchOrderBtn).toBeEnabled({ timeout: 15000 });
     await dispatchOrderBtn.dispatchEvent('click');
 
+    // Click Confirm on the confirmation Dialog
+    const confirmBtn2 = page.getByRole("button", { name: "Confirm" });
+    await expect(confirmBtn2).toBeVisible({ timeout: 10000 });
+    await confirmBtn2.click();
+
     // Buyer sees On the way — #occ-heading changes to "On the way" (unique element avoids strict mode)
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('On the way', { timeout: 20000 });
@@ -273,6 +283,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(markDeliveredBtn).toBeVisible({ timeout: 15000 });
     await expect(markDeliveredBtn).toBeEnabled({ timeout: 15000 });
     await markDeliveredBtn.dispatchEvent('click');
+
+    // Click Confirm on the confirmation Dialog
+    const confirmBtn3 = page.getByRole("button", { name: "Confirm" });
+    await expect(confirmBtn3).toBeVisible({ timeout: 10000 });
+    await confirmBtn3.click();
 
     // Buyer sees Order Delivered — #occ-heading changes to "Order Delivered"
     await buyerPage.bringToFront();
@@ -489,7 +504,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // approvalStatus uses BookingStatus which includes "COMPLETED" directly.
     // We check for any COMPLETED text in the bookings list.
     // If no completed bookings are seeded, this check is skipped gracefully.
-    const completedBadge = page.getByText("COMPLETED").first();
+    const completedBadge = page.getByText("Completed").first();
     const completedExists = await completedBadge.count() > 0;
     if (completedExists) {
       await expect(completedBadge).toBeVisible();

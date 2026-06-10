@@ -16,9 +16,19 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { lenis } from "@/lib/lenis";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+import { formatStatusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 
 type OrderStatus =
@@ -105,6 +115,7 @@ export function StoreOrdersPage(): ReactElement {
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const [confirmingOrderUpdate, setConfirmingOrderUpdate] = useState<{ orderId: string; status: OrderStatus } | null>(null);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -324,6 +335,7 @@ interface StoreOffer {
     },
     onSuccess: (res, variables) => {
       toast.success(`Order status updated to ${variables.status}`);
+      setConfirmingOrderUpdate(null);
       // Refresh order lists
       void queryClient.invalidateQueries({ queryKey: ["store", "orders"] });
       // Update local modal data
@@ -457,7 +469,7 @@ interface StoreOffer {
                   : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
               }`}
             >
-              {tab === "ALL" ? "All Orders" : tab.replace(/_/g, " ")}
+              {tab === "ALL" ? "All Orders" : formatStatusLabel(tab)}
             </button>
           );
         })}
@@ -523,12 +535,12 @@ interface StoreOffer {
                     <div className="flex items-center gap-2">
                       <ElapsedTimer createdAt={order.createdAt} />
                       <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide border ${getStatusBadgeStyles(
+                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide border ${getStatusBadgeStyles(
                           order.status
                         )}`}
                       >
                         {getStatusIcon(order.status)}
-                        {order.status.replace(/_/g, " ")}
+                        {formatStatusLabel(order.status)}
                       </span>
                     </div>
                   </div>
@@ -612,12 +624,12 @@ interface StoreOffer {
             <div className="flex justify-between items-start gap-4">
               <div>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase border mb-3 ${getStatusBadgeStyles(
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border mb-3 ${getStatusBadgeStyles(
                     selectedOrder.status
                   )}`}
                 >
                   {getStatusIcon(selectedOrder.status)}
-                  {selectedOrder.status.replace(/_/g, " ")}
+                  {formatStatusLabel(selectedOrder.status)}
                 </span>
                 <h2 className="font-mono text-xl md:text-2xl font-black text-gorola-charcoal">
                   #{selectedOrder.id.toUpperCase()}
@@ -696,7 +708,7 @@ interface StoreOffer {
                         }`}
                       />
                       <p className="text-xs font-black text-gorola-charcoal">
-                        {hist.status.replace(/_/g, " ")}
+                        {formatStatusLabel(hist.status)}
                       </p>
                       <p className="text-[10px] text-gorola-slate mt-0.5">
                         By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}
@@ -819,7 +831,7 @@ interface StoreOffer {
                       key={nextStatus}
                       disabled={updateStatusMutation.isPending}
                       onClick={() =>
-                        updateStatusMutation.mutate({ orderId: selectedOrder.id, status: nextStatus })
+                        setConfirmingOrderUpdate({ orderId: selectedOrder.id, status: nextStatus })
                       }
                       className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
                         isCancel
@@ -837,6 +849,50 @@ interface StoreOffer {
             )}
           </div>
         </div>
+      )}
+
+      {confirmingOrderUpdate && (
+        <Dialog
+          open={!!confirmingOrderUpdate}
+          onOpenChange={(open) => !open && setConfirmingOrderUpdate(null)}
+        >
+          <DialogContent className="sm:max-w-sm rounded-2xl p-6" showCloseButton={false}>
+            <DialogHeader className="gap-2">
+              <DialogTitle className="font-heading text-lg font-bold text-gorola-charcoal">
+                Confirm Status Update
+              </DialogTitle>
+              <DialogDescription className="font-sans text-sm text-muted-foreground">
+                Are you sure you want to mark this order as{" "}
+                <span className="font-semibold text-gorola-charcoal">
+                  {getTransitionButtonLabel(confirmingOrderUpdate.status)}
+                </span>
+                ?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto rounded-xl"
+                onClick={() => setConfirmingOrderUpdate(null)}
+                disabled={updateStatusMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="w-full sm:w-auto bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl"
+                onClick={() => {
+                  updateStatusMutation.mutate({
+                    orderId: confirmingOrderUpdate.orderId,
+                    status: confirmingOrderUpdate.status
+                  });
+                }}
+                disabled={updateStatusMutation.isPending}
+              >
+                {updateStatusMutation.isPending ? "Updating..." : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

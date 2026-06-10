@@ -167,11 +167,14 @@ export class OrderRepository {
 
   public async findManyByStore(
     storeId: string,
-    filters?: { status?: OrderStatus[] }
+    filters?: { status?: OrderStatus[]; orderType?: Prisma.OrderWhereInput["orderType"] }
   ): Promise<OrderWithRelations[]> {
     const where: Prisma.OrderWhereInput = { storeId };
     if (filters?.status) {
       where.status = { in: filters.status };
+    }
+    if (filters?.orderType) {
+      where.orderType = filters.orderType;
     }
     return this.db.order.findMany({
       include: orderRelationsInclude,
@@ -201,6 +204,18 @@ export class OrderRepository {
           changedBy
         }
       });
+      if (status === "DELIVERED") {
+        const order = await db.order.findUnique({
+          where: { id: orderId },
+          select: { orderType: true }
+        });
+        if (order?.orderType === "BOOKING") {
+          await db.bookingOrder.updateMany({
+            where: { orderId },
+            data: { approvalStatus: "COMPLETED" }
+          });
+        }
+      }
     };
 
     try {

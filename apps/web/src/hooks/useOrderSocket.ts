@@ -52,7 +52,7 @@ export function useOrderSocket(
       socket.disconnect();
       socketRef.current = null;
     };
-  }, [orderId, accessToken, onStatusChanged]);
+  }, [orderId, accessToken, onStatusChanged, onLocationUpdated]);
 
   return socketRef.current;
 }

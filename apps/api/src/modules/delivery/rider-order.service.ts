@@ -2,6 +2,7 @@ import { AppError, ForbiddenError, NotFoundError } from "@gorola/shared";
 import { type OrderStatus } from "@prisma/client";
 
 import type { OrderRepository, OrderWithRelations } from "../order/order.repository.js";
+import type { RiderRepository } from "./rider.repository.js";
 
 export type RiderOrderEventEmitter = {
   emitStatusChanged: (orderId: string, status: string) => void | Promise<void>;
@@ -10,12 +11,26 @@ export type RiderOrderEventEmitter = {
 export class RiderOrderService {
   public constructor(
     private readonly orders: OrderRepository,
+    private readonly riders: RiderRepository,
     private readonly emitter?: RiderOrderEventEmitter
   ) {}
 
-  public async getActiveOrders(storeId: string): Promise<OrderWithRelations[]> {
+  public async getActiveOrders(storeId: string, riderId: string): Promise<OrderWithRelations[]> {
+    const rider = await this.riders.findById(riderId);
+    if (!rider) {
+      throw new NotFoundError("Rider not found");
+    }
+
+    if (rider.riderType === "FIELD_TECHNICIAN") {
+      return this.orders.findManyByStore(storeId, {
+        status: ["APPROVED", "OUT_FOR_DELIVERY"],
+        orderType: "BOOKING"
+      });
+    }
+
     return this.orders.findManyByStore(storeId, {
-      status: ["PREPARING", "OUT_FOR_DELIVERY"]
+      status: ["PREPARING", "OUT_FOR_DELIVERY"],
+      orderType: "QUICK"
     });
   }
 
@@ -41,10 +56,24 @@ export class RiderOrderService {
       DELIVERED: [],
       CANCELLED: [],
       PENDING_APPROVAL: [],
-      APPROVED: []
+      APPROVED: ["OUT_FOR_DELIVERY"]
     };
 
     const currentStatus = order.status;
+
+    if (order.orderType === "QUICK" && currentStatus === "APPROVED") {
+      throw new AppError(`Invalid status transition from ${currentStatus} to ${newStatus}`, {
+        code: "INVALID_STATUS_TRANSITION",
+        statusCode: 422
+      });
+    }
+    if (order.orderType === "BOOKING" && currentStatus === "PREPARING") {
+      throw new AppError(`Invalid status transition from ${currentStatus} to ${newStatus}`, {
+        code: "INVALID_STATUS_TRANSITION",
+        statusCode: 422
+      });
+    }
+
     // eslint-disable-next-line security/detect-object-injection
     const allowed = currentStatus in VALID_TRANSITIONS ? VALID_TRANSITIONS[currentStatus]! : [];
 

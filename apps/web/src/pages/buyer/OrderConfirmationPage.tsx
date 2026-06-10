@@ -230,7 +230,7 @@ function StatusStepper({
               <div className="text-center">
                 <p
                   className={cn(
-                    "text-[11px] font-bold uppercase tracking-wider",
+                    "text-[11px] font-bold tracking-wider",
                     isActive || isCompleted ? "text-gorola-pine" : "text-gorola-slate",
                   )}
                 >
@@ -646,7 +646,7 @@ interface StoreOffer {
                      order.status === "CANCELLED" ? "Order Cancelled" : "Order Status"}
                   </h1>
                   {order.status === "DELIVERED" && (
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                       <CheckCircle2 className="h-3 w-3" />
                       Delivered in {calculateDeliveryDuration(order.statusHistory ?? [], order.createdAt) ?? "15m"}
                     </div>

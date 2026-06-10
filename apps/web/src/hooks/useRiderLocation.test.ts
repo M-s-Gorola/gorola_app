@@ -12,6 +12,7 @@ vi.mock("@/lib/api", () => ({
 }));
 
 describe("useRiderLocation hook", () => {
+  let getCurrentPositionSpy: ReturnType<typeof vi.fn>;
   let watchPositionSpy: ReturnType<typeof vi.fn>;
   let clearWatchSpy: ReturnType<typeof vi.fn>;
   let successCb: (position: Partial<GeolocationPosition>) => void;
@@ -19,6 +20,8 @@ describe("useRiderLocation hook", () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
+
+    getCurrentPositionSpy = vi.fn();
 
     watchPositionSpy = vi.fn((success, error) => {
       successCb = success;
@@ -31,6 +34,7 @@ describe("useRiderLocation hook", () => {
     // Mock navigator.geolocation
     vi.stubGlobal("navigator", {
       geolocation: {
+        getCurrentPosition: getCurrentPositionSpy,
         watchPosition: watchPositionSpy,
         clearWatch: clearWatchSpy
       }

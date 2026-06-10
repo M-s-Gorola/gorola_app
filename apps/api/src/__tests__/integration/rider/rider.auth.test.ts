@@ -158,4 +158,55 @@ describe("RiderAuth Route Integration", () => {
     expect(body.success).toBe(false);
     expect(body.error.code).toBe("ACCOUNT_SUSPENDED");
   });
+
+  it("GET /api/v1/rider/profile with valid token → HTTP 200 with rider and store details", async () => {
+    const passwordHash = await hash("correct_pass", 8);
+
+    const rider = await db.deliveryRider.create({
+      data: {
+        name: "Test Rider Profile",
+        phone: "+919000000003",
+        email: "rider.profile@test.com",
+        passwordHash,
+        storeId,
+        isActive: true
+      }
+    });
+
+    // Login to get token
+    const loginRes = await server.inject({
+      method: "POST",
+      url: "/api/v1/rider/auth/login",
+      payload: {
+        email: "rider.profile@test.com",
+        password: "correct_pass"
+      }
+    });
+    const accessToken = loginRes.json().data.accessToken;
+
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/v1/rider/profile",
+      headers: {
+        authorization: `Bearer ${accessToken}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.id).toBe(rider.id);
+    expect(body.data.name).toBe("Test Rider Profile");
+    expect(body.data.email).toBe("rider.profile@test.com");
+    expect(body.data.store.id).toBe(storeId);
+    expect(body.data.store.name).toBe("Test Store");
+  });
+
+  it("GET /api/v1/rider/profile without token → HTTP 401", async () => {
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/v1/rider/profile"
+    });
+    expect(response.statusCode).toBe(401);
+  });
 });

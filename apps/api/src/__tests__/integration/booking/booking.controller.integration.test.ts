@@ -907,7 +907,7 @@ describe("Booking HTTP Endpoints (Integration)", () => {
   });
 
   describe("completeBooking Route", () => {
-    it("should allow owner to complete an APPROVED booking (HTTP 200)", async () => {
+    it("should allow owner to complete a booking after dispatching it (HTTP 200)", async () => {
       const server = createServer({
         disableRedis: true,
         registerRoutes: registerAppRoutes
@@ -950,7 +950,15 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       });
       expect(approveRes.statusCode).toBe(200);
 
-      // 3. Complete booking
+      // 3. Dispatch booking
+      const dispatchRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/dispatch`
+      });
+      expect(dispatchRes.statusCode).toBe(200);
+
+      // 4. Complete booking
       const completeRes = await server.inject({
         headers: { authorization: `Bearer ${ownerToken}` },
         method: "PUT",
@@ -1019,6 +1027,13 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       });
       expect(approveRes.statusCode).toBe(200);
 
+      const dispatchRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/dispatch`
+      });
+      expect(dispatchRes.statusCode).toBe(200);
+
       const completeRes = await server.inject({
         headers: { authorization: `Bearer ${wrongOwnerToken}` },
         method: "PUT",
@@ -1030,7 +1045,7 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       expect(completeRes.statusCode).toBe(403);
     });
 
-    it("should fail completion if booking is not in APPROVED status (HTTP 400)", async () => {
+    it("should fail completion if booking is not in OUT_FOR_DELIVERY status (HTTP 400)", async () => {
       const server = createServer({
         disableRedis: true,
         registerRoutes: registerAppRoutes
@@ -1064,7 +1079,7 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       });
       const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
 
-      // Skip approval, attempt completion directly
+      // Skip approval and dispatch, attempt completion directly
       const completeRes = await server.inject({
         headers: { authorization: `Bearer ${ownerToken}` },
         method: "PUT",
@@ -1074,6 +1089,136 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       await server.close();
 
       expect(completeRes.statusCode).toBe(400);
+    });
+
+    it("should allow owner to dispatch an APPROVED booking (HTTP 200)", async () => {
+      const server = createServer({
+        disableRedis: true,
+        registerRoutes: registerAppRoutes
+      });
+
+      const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+      const ownerToken = await signTestToken(owner.id, "STORE_OWNER");
+
+      const addr = await db.address.create({
+        data: {
+          userId: buyerUser.id,
+          label: "Home",
+          landmarkDescription: "Near Clock Tower landmark area min ten"
+        }
+      });
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      const placeRes = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "POST",
+        payload: {
+          storeId: store.id,
+          items: [{ productId: product.id, variantId: variantStandard.id }],
+          scheduledDate: tomorrow.toISOString(),
+          timeslot: "09:00-12:00",
+          addressId: addr.id
+        },
+        url: "/api/v1/bookings"
+      });
+      const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
+
+      const approveRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/approve`
+      });
+      expect(approveRes.statusCode).toBe(200);
+
+      const dispatchRes = await server.inject({
+        headers: { authorization: `Bearer ${ownerToken}` },
+        method: "PUT",
+        url: `/api/v1/store/bookings/${orderId}/dispatch`
+      });
+
+      await server.close();
+
+      expect(dispatchRes.statusCode).toBe(200);
+      const envelope = dispatchRes.json() as {
+        success: boolean;
+        data: { status: string };
+      };
+      expect(envelope.success).toBe(true);
+      expect(envelope.data.status).toBe("OUT_FOR_DELIVERY");
+    });
+  });
+
+  describe("Coordinates & Status Mapping Fixes (Phase 5.6.1)", () => {
+    it("should persist coordinates on Order during booking placement and serialize them in GET /api/v1/bookings/:id", async () => {
+      const server = createServer({
+        disableRedis: true,
+        registerRoutes: registerAppRoutes
+      });
+
+      const buyerToken = await signTestToken(buyerUser.id, "BUYER");
+
+      // Create address with exact coordinates
+      const addr = await db.address.create({
+        data: {
+          userId: buyerUser.id,
+          label: "Office",
+          landmarkDescription: "Mussoorie Library Bazaar",
+          lat: new Prisma.Decimal("30.45980"),
+          lng: new Prisma.Decimal("78.06640")
+        }
+      });
+
+      const tomorrow = new Date();
+      tomorrow.setDate(tomorrow.getDate() + 1);
+
+      // 1. Place a booking
+      const placeRes = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "POST",
+        payload: {
+          storeId: store.id,
+          items: [{ productId: product.id, variantId: variantStandard.id }],
+          scheduledDate: tomorrow.toISOString(),
+          timeslot: "09:00-12:00",
+          addressId: addr.id
+        },
+        url: "/api/v1/bookings"
+      });
+      expect(placeRes.statusCode).toBe(201);
+      const orderId = (placeRes.json() as { data: { orderId: string } }).data.orderId;
+
+      // 2. Fetch via GET and verify coordinates & status
+      const getRes = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "GET",
+        url: `/api/v1/bookings/${orderId}`
+      });
+
+      expect(getRes.statusCode).toBe(200);
+      const getBody = getRes.json();
+      expect(getBody.success).toBe(true);
+      expect(getBody.data.deliveryLat).toBe(30.4598);
+      expect(getBody.data.deliveryLng).toBe(78.0664);
+      expect(getBody.data.status).toBe("PENDING_APPROVAL");
+
+      // 3. Mark the underlying order status as OUT_FOR_DELIVERY manually in DB
+      await db.order.update({
+        where: { id: orderId },
+        data: { status: "OUT_FOR_DELIVERY" }
+      });
+
+      // 4. Fetch again and verify mapped status is OUT_FOR_DELIVERY
+      const getRes2 = await server.inject({
+        headers: { authorization: `Bearer ${buyerToken}` },
+        method: "GET",
+        url: `/api/v1/bookings/${orderId}`
+      });
+      expect(getRes2.statusCode).toBe(200);
+      expect(getRes2.json().data.status).toBe("OUT_FOR_DELIVERY");
+
+      await server.close();
     });
   });
 });

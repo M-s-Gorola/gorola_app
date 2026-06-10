@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1, 5.2, 5.3, 5.4, and 5.4.1 are complete. Mobile layout, field technician mode, earnings page, and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. Earnings page and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-10
-- **Session Summary:** Completed Phase 5.4 (Real-Time Location Tracking) and Phase 5.4.1 (Modular Geolocation Map Fix). Added coordinates snapshotting on checkout to save `deliveryLat`/`deliveryLng` on orders. Implemented reusable `<OrderRouteMap />` Leaflet component on the frontend to visualize store, buyer, and active rider location markers, integrating it into the buyer order confirmation page and rider active order cards. Removed OSRM routing service endpoints and code to keep the architecture clean, lightweight, and fully DPDP Act compliant without external dependencies. Ran typecheck, lint, and all Vitest/Playwright tests successfully.
-- **Next Session Must Start With:** Phase 5.5 — Rider Frontend (Mobile-First UI).
+- **Date:** 2026-06-11
+- **Session Summary:** Implemented Title Case formatting (removing underscores, capitalizing the first letter of every word) for order/booking statuses shown across the Buyer Order History page, Store Incoming Orders and Bookings dashboards. Removed the status badge from the Booking Confirmation receipt page (matching quick commerce receipts), and removed the uppercase transform from the Order Confirmation stepper labels and delivery badge. All 383 unit tests are fully passing.
+- **Next Session Must Start With:** Phase 5.7 — Rider Earnings Page.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -292,21 +292,57 @@ Rider interface needs to be mobile-first (riders use smartphones). The layout mu
 
 ---
 
-- [ ] **RED — Unit/Component (`RiderLayout.test.tsx`):**
-  - [ ] Test: renders bottom tab bar with "Orders" and "Account" tabs
-  - [ ] Test: "Orders" tab is active on `/rider/orders`; "Account" tab active on `/rider/account`
-  - [ ] Test: on mobile viewport (375px), all tap targets are >= 44px height
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderLayout.test.tsx`):**
+  - [x] Test: renders bottom tab bar with "Orders" and "Account" tabs
+  - [x] Test: "Orders" tab is active on `/rider/orders`; "Account" tab active on `/rider/account`
+  - [x] Test: on mobile viewport (375px), all tap targets are >= 44px height
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
-  - [ ] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
-  - [ ] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
+  - [x] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
+  - [x] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
+- [x] **Verification chain:**
+  - [x] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
+
+### 5.5.1 — Rider Active Orders Layout Refactoring & Store Status Confirmations
+
+**Root cause / Goal:**
+Riders need a space-efficient mobile view to scan orders on smartphones (like iPhone SE). Rendering full cards with maps, items, contacts, and status buttons directly on the scrollable feed takes too much space. We want a compact list layout showing only items and address landmark. Tapping an order will open a details modal (similar to the store panel) displaying the full card details and tracking. Additionally, riders need top-level navigation filter tabs to easily switch between "Ready for Pickup" and "Out for Delivery" queues.
+Furthermore, store owners can accidentally update status buttons in the dashboard. To prevent accidental pocket or desktop misclicks, we must require confirmation dialogs for Store status transitions, matching the Rider flow.
+
+**Fix / Approach:**
+1. [Store Panel] In `StoreOrdersPage.tsx`, wrap status mutations in a confirmation dialog/modal.
+2. [Rider Feed] In `RiderOrdersPage.tsx`, replace the stacked layout with a top status filtering tab bar (Ready for Pickup | Out for Delivery).
+3. [Rider Cards] Refactor order cards in `RiderOrdersPage.tsx` to render compact cards (displaying only the items list and landmark address description).
+4. [Rider Modals] Implement a detail overlay modal in `RiderOrdersPage.tsx` that opens upon clicking any compact order card, presenting the full tracking map, actions, and contact info.
+
+---
+
+- [x] **RED — Integration & Backend (N/A):**
+  - *N/A: No database schema, repository, or service logic changes are required. The REST endpoints and socket payloads remain exactly the same.*
+
+- [x] **RED — Unit / Component Tests (`StoreOrdersPage.test.tsx` & `RiderOrdersPage.test.tsx`):**
+  - [x] Test (`StoreOrdersPage.test.tsx`): Click a status button (e.g. "Mark Preparing"), assert that the PUT status endpoint is NOT immediately called, and verify that the confirmation dialog appears in the DOM.
+  - [x] Test (`StoreOrdersPage.test.tsx`): Assert that clicking "Confirm" inside the modal triggers the API PUT endpoint.
+  - [x] Test (`RiderOrdersPage.test.tsx`): Verify that the active orders page displays top-level filter tabs ("Ready for Pickup" and "Out for Delivery") instead of grouped vertical sections.
+  - [x] Test (`RiderOrdersPage.test.tsx`): Assert that the active order list renders compact card containers containing items and address landmark, but NOT displaying the full map, contact phone, or action buttons.
+  - [x] Test (`RiderOrdersPage.test.tsx`): Assert that clicking a compact card opens a detailed overlay modal displaying the full card components (including map and action button).
+  - [x] **Run — confirm RED (the tests fail because the confirmation modals, filter tabs, and compact lists do not exist yet).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Store Component] In `StoreOrdersPage.tsx`, add a `confirmingOrderUpdate` state. Wrap the mutation execution in a Radix-based `Dialog` confirmation modal.
+  - [x] [Rider Component] In `RiderOrdersPage.tsx`, add `selectedFilterTab` state (`"PICKUP" | "DELIVERY"`). Render status filtering tabs at the top of the content pane.
+  - [x] [Rider Component] Refactor the card renderer in `RiderOrdersPage.tsx` to display a compact list item showing only `items` and `deliveryAddress.landmark`.
+  - [x] [Rider Component] Implement a modal details overlay that opens on selection, rendering the full active order information (masked phone, collapsible map, status transition actions, close button).
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Store Owner clicks "Mark Preparing" on an order ➔ Confirmation modal pops up ➔ Click "Confirm" ➔ Order moves to preparing status.
+  - [x] Rider logs in ➔ Sees top filter tabs "Ready for Pickup" and "Out for Delivery" ➔ Feed shows a clean compact list of items + address ➔ Taps an order card ➔ Full card details pop up in a modal ➔ Rider updates status or views location map ➔ ✅ Done.
 
 ### 5.6 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
 
@@ -324,42 +360,44 @@ When Phase 7 goes live, booking orders (`orderType: BOOKING`) will be assigned t
 
 ---
 
-- [ ] **RED — Integration (`rider.field-technician.test.ts` — new file):**
-  - [ ] Test setup: `FIELD_TECHNICIAN` type rider seeded. A `BookingOrder` with `approvalStatus: APPROVED`, `scheduledDate: tomorrow`, `timeslot: '09:00-11:00'` attached to an `Order` with `orderType: BOOKING` and `status: APPROVED`
-  - [ ] Test: `GET /api/v1/rider/orders/active` with `FIELD_TECHNICIAN` JWT → HTTP 200; response includes the APPROVED booking order with fields `{ id, orderType: 'BOOKING', bookingOrder: { scheduledDate, timeslot, requiresFasting }, deliveryAddress: { landmark, lat, lng } }`
-  - [ ] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → booking orders are **absent** (delivery riders only see QUICK orders)
-  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (technician departed) → HTTP 200; `Order.status = OUT_FOR_DELIVERY` in DB; buyer receives `order_status_changed` Socket.IO event
-  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'DELIVERED' }` (visit complete) → HTTP 200; `Order.status = DELIVERED`; `BookingOrder.approvalStatus = COMPLETED` in DB
-  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (technicians cannot cancel)
-  - [ ] **Run — confirm RED (endpoint returns 404 or ignores booking orders).**
+---
 
-- [ ] **GREEN — Backend (Schema → Service → Controller):**
-  - [ ] [Schema] Confirm `riderType RiderType @default(DELIVERY)` exists on `DeliveryRider` (added in Phase 7.1 migration). If Phase 7.1 is not yet done, **stop here and complete 7.1 first**.
-  - [ ] [Service] Update `RiderOrderService.getActiveOrders(storeId, riderId)` in `rider-order.service.ts`:
+- [x] **RED — Integration (`rider.field-technician.test.ts` — new file):**
+  - [x] Test setup: `FIELD_TECHNICIAN` type rider seeded. A `BookingOrder` with `approvalStatus: APPROVED`, `scheduledDate: tomorrow`, `timeslot: '09:00-11:00'` attached to an `Order` with `orderType: BOOKING` and `status: APPROVED`
+  - [x] Test: `GET /api/v1/rider/orders/active` with `FIELD_TECHNICIAN` JWT → HTTP 200; response includes the APPROVED booking order with fields `{ id, orderType: 'BOOKING', bookingOrder: { scheduledDate, timeslot, requiresFasting }, deliveryAddress: { landmark, lat, lng } }`
+  - [x] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → booking orders are **absent** (delivery riders only see QUICK orders)
+  - [x] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (technician departed) → HTTP 200; `Order.status = OUT_FOR_DELIVERY` in DB; buyer receives `order_status_changed` Socket.IO event
+  - [x] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'DELIVERED' }` (visit complete) → HTTP 200; `Order.status = DELIVERED`; `BookingOrder.approvalStatus = COMPLETED` in DB
+  - [x] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (technicians cannot cancel)
+  - [x] **Run — confirm RED (endpoint returns 404 or ignores booking orders).**
+
+- [x] **GREEN — Backend (Schema → Service → Controller):**
+  - [x] [Schema] Confirm `riderType RiderType @default(DELIVERY)` exists on `DeliveryRider` (added in Phase 7.1 migration). If Phase 7.1 is not yet done, **stop here and complete 7.1 first**.
+  - [x] [Service] Update `RiderOrderService.getActiveOrders(storeId, riderId)` in `rider-order.service.ts`:
     - Fetch the rider row to get `riderType`
     - If `DELIVERY`: filter `Order` where `orderType = QUICK` AND `status IN [PREPARING, OUT_FOR_DELIVERY]` — unchanged behaviour
     - If `FIELD_TECHNICIAN`: filter `Order` where `orderType = BOOKING` AND `status IN [APPROVED, OUT_FOR_DELIVERY]`; include `bookingOrder { scheduledDate, timeslot, requiresFasting }` in the response
-  - [ ] [Service] Update `RiderOrderService.updateOrderStatus` to allow `APPROVED → OUT_FOR_DELIVERY → DELIVERED` transitions for booking orders (in addition to existing PREPARING → OUT_FOR_DELIVERY → DELIVERED for quick orders). When a booking order reaches `DELIVERED`, also update `BookingOrder.approvalStatus = COMPLETED` in the same DB transaction.
-  - [ ] Run integration tests — **confirm GREEN.**
+  - [x] [Service] Update `RiderOrderService.updateOrderStatus` to allow `APPROVED → OUT_FOR_DELIVERY → DELIVERED` transitions for booking orders (in addition to existing PREPARING → OUT_FOR_DELIVERY → DELIVERED for quick orders). When a booking order reaches `DELIVERED`, also update `BookingOrder.approvalStatus = COMPLETED` in the same DB transaction.
+  - [x] Run integration tests — **confirm GREEN.**
 
-- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests for booking cards):**
-  - [ ] Test: when `order.orderType === 'BOOKING'`, the order card renders `data-testid="booking-order-card"` (not `data-testid="delivery-order-card"`)
-  - [ ] Test: booking card shows `scheduledDate` formatted as `"Mon, 19 May"`, `timeslot` as `"09:00 – 11:00"`, and a fasting banner `"⚠️ Patient must be fasting"` when `requiresFasting: true`
-  - [ ] Test: booking card shows only the buyer's delivery address (no "Pick up from store" section)
-  - [ ] Test: booking card in `APPROVED` status shows "Mark as Departed" button (not "Mark as Out for Delivery")
-  - [ ] Test: clicking "Mark as Departed" calls `PUT /api/v1/rider/orders/:id/status` with `{ status: 'OUT_FOR_DELIVERY' }`
-  - [ ] Test: booking card in `OUT_FOR_DELIVERY` status shows "Mark Visit Complete" button
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests for booking cards):**
+  - [x] Test: when `order.orderType === 'BOOKING'`, the order card renders `data-testid="booking-order-card"` (not `data-testid="delivery-order-card"`)
+  - [x] Test: booking card shows `scheduledDate` formatted as `"Mon, 19 May"`, `timeslot` as `"09:00 – 11:00"`, and a fasting banner `"⚠️ Patient must be fasting"` when `requiresFasting: true`
+  - [x] Test: booking card shows only the buyer's delivery address (no "Pick up from store" section)
+  - [x] Test: booking card in `APPROVED` status shows "Mark as Departed" button (not "Mark as Out for Delivery")
+  - [x] Test: clicking "Mark as Departed" calls `PUT /api/v1/rider/orders/:id/status` with `{ status: 'OUT_FOR_DELIVERY' }`
+  - [x] Test: booking card in `OUT_FOR_DELIVERY` status shows "Mark Visit Complete" button
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] [Types] Add `orderType: 'QUICK' | 'BOOKING'` and `bookingOrder?: { scheduledDate: string; timeslot: string; requiresFasting: boolean }` to the `RiderOrder` type in `RiderOrdersPage.tsx`
-  - [ ] [Component] In `RiderOrdersPage.tsx`, replace the single card renderer with a conditional: `order.orderType === 'BOOKING' ? <BookingVisitCard> : <DeliveryOrderCard>`
-  - [ ] [Component] Create `BookingVisitCard` sub-component (inline or separate file): shows scheduled date + timeslot + fasting banner + buyer address + action button based on current status
-  - [ ] [Component] `DeliveryOrderCard` is the existing card renamed — no logic changes
-  - [ ] Run unit tests — **confirm GREEN.**
+- [x] **GREEN — Frontend:**
+  - [x] [Types] Add `orderType: 'QUICK' | 'BOOKING'` and `bookingOrder?: { scheduledDate: string; timeslot: string; requiresFasting: boolean }` to the `RiderOrder` type in `RiderOrdersPage.tsx`
+  - [x] [Component] In `RiderOrdersPage.tsx`, replace the single card renderer with a conditional: `order.orderType === 'BOOKING' ? <BookingVisitCard> : <DeliveryOrderCard>`
+  - [x] [Component] Create `BookingVisitCard` sub-component (inline or separate file): shows scheduled date + timeslot + fasting banner + buyer address + action button based on current status
+  - [x] [Component] `DeliveryOrderCard` is the existing card renamed — no logic changes
+  - [x] Run unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Field technician logs into rider app → `/rider/orders` shows a booking visit card with scheduled time "09:00–11:00 tomorrow" and a fasting warning → taps "Mark as Departed" → buyer's order page updates to "Technician is on the way" → technician arrives, taps "Mark Visit Complete" → buyer's order page shows "Visit Completed" → `BookingOrder.approvalStatus = COMPLETED` in DB → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Field technician logs into rider app → `/rider/orders` shows a booking visit card with scheduled time "09:00–11:00 tomorrow" and a fasting warning → taps "Mark as Departed" → buyer's order page updates to "Technician is on the way" → technician arrives, taps "Mark Visit Complete" → buyer's order page shows "Visit Completed" → `BookingOrder.approvalStatus = COMPLETED` in DB → ✅ Done.
 
 ---
 
@@ -510,3 +548,43 @@ _(Append new entries here — never delete old entries.)_
 - Cleaned unused imports and updated E2E stubs to align with the location endpoint implementation.
 - Verified that full stack typechecks, lints, integration tests, and E2E journeys are completely green.
 
+### Session 6 — 2026-06-11 — Phase 5.5 Rider Header & Quality Gates Completed
+- Added premium top header/navbar to `RiderLayout` containing the GoRola brand logo and `Rider` tag, matching Store/Admin layouts.
+- Ensured compliance with >= 44px mobile tap target accessibility guidelines and verified all vitest, eslint, and tsc quality gates are 100% green.
+- Clarified and mapped architectural plans for upcoming store status confirmation modals, rider order card list-view refactoring (click to open details modal), and status filtering tab menus.
+
+### Session 7 — 2026-06-11 — Phase 5.5.1 Rider Active Orders Refactoring & Store Status Confirmations Completed
+- Implemented status change confirmation dialogs in `StoreOrdersPage.tsx` using Radix `<Dialog>`.
+- Refactored `RiderOrdersPage.tsx` with filter tabs for PREPARING and OUT_FOR_DELIVERY orders, compact list-view cards (showing only items and delivery address landmark), and click-to-open overlay details modals featuring full buyer information, toggleable route maps, and status-updating action buttons.
+- Ensured body scroll locks when overlay detailed modals are active.
+- Completed full TDD cycle: verified RED state, implemented modifications, and ran full suite of web unit tests, typechecks, and lints (ensuring GREEN state).
+
+### Session 11 — 2026-06-11 — Tab Renaming and E2E Selector Collision Fixes Completed
+- Renamed the booking store dashboard's `"departed"` tab and status badge to `"on the way"` to align with quick commerce terminology and buyer confirmation screen configurations.
+- Resolved a critical E2E selector collision in `booking-journey.spec.ts` where `hasText: 'Approve'` was matching the `"approved"` tab button instead of the `"Approve Booking"` action button inside the modal. Updated selector to use exact getByRole query.
+- Aligned Vitest unit tests in `StoreBookingsPage.test.tsx` to search for `/on the way/i` tab instead of `/departed/i`.
+- Verified that all unit tests, eslint rules, and typescript compilations are completely green.
+
+### Session 8 — 2026-06-11 — Phase 5.6 Dual-Mode: Field Technician Completed
+- Implemented Dual-Mode capability for Delivery Riders and Field Technicians based on the store types and order configurations.
+- Integrated the database schema for `riderType` field on `DeliveryRider`.
+- Updated active orders feed controller (`GET /api/v1/rider/orders/active`) to return approved booking orders for `FIELD_TECHNICIAN` riders, while strictly filtering them out for normal `DELIVERY` riders.
+- Supported state transition flow for bookings (`APPROVED -> OUT_FOR_DELIVERY -> DELIVERED`) in the status updater service and emitted Socket.IO events to trigger real-time updates for buyers.
+- Created `BookingVisitCard` view in frontend to show scheduled date/timeslot, fasting warning, and buyer location map.
+- Verified backend and frontend test suites are passing with green results.
+
+### Session 9 — 2026-06-11 — Terminology Adjustments & Booking Flow Refinements
+- Modified Rider side bottom tab navigation, heading, lists, empty states, toasts, and dialogs to display "Services" instead of "Orders" when a rider is configured as a `FIELD_TECHNICIAN`.
+- Replaced "Out for Delivery" and "Ready for Pickup" terminology with "Departed" and "Ready for Visit" for field visits.
+- Updated the Store Bookings timeline log component to map raw `OUT_FOR_DELIVERY` status history events to `"DEPARTED"` label, matching the booking commerce vocabulary.
+- Configured dialog confirmations for both rider status transitions and store booking updates.
+- Updated unit test assertions in `RiderOrdersPage.test.tsx` to accommodate the revised text.
+- Re-run and confirmed all vitest suites, ESLint rules, and TypeScript compilation gates are 100% green.
+
+### Session 10 — 2026-06-11 — Status Capitalization Formatting & Receipt Page Adjustments
+- Implemented Title Case formatting (e.g. converting PENDING_APPROVAL to Pending Approval) for order/booking statuses displayed in the UI (Buyer's Order History page, Store Incoming Orders, and Bookings dashboards) by using the formatStatusLabel helper.
+- Removed the uppercase styling classes (uppercase, tracking-wider) from badges and order text across pages.
+- Removed the status badge entirely from the Booking Confirmation receipt page (`BookingConfirmationPage.tsx`), matching the layout of the quick commerce receipts (`OrderConfirmationPage.tsx`).
+- Removed the `uppercase` CSS class from the stepper step labels ("Placed", "Preparing", "On the way", "Delivered") and status badges on `OrderConfirmationPage.tsx` so they render in Title Case.
+- Updated failing vitest assertions in `StoreBookingsPage.test.tsx` and `StoreOrdersPage.test.tsx` to expect the correctly formatted status labels instead of the raw uppercase enums.
+- Successfully verified that all 383 frontend unit tests, TypeScript typechecks, and ESLint rule checks are fully passing.

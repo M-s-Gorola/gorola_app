@@ -6,6 +6,7 @@ import {
   MapPin,
   Phone,
   RefreshCw,
+  Truck,
   XCircle
 } from "lucide-react";
 import type { ReactElement } from "react";
@@ -13,7 +14,17 @@ import { useEffect, useState } from "react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { formatStatusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 
 type BookingStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "COMPLETED" | "CANCELLED";
@@ -105,11 +116,15 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
 
 export function StoreBookingsPage(): ReactElement {
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"PENDING" | "UPCOMING" | "HISTORY">("PENDING");
+  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "APPROVED" | "ON_THE_WAY" | "HISTORY">("ALL");
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const [confirmingBookingUpdate, setConfirmingBookingUpdate] = useState<{
+    orderId: string;
+    action: "APPROVE" | "DISPATCH" | "COMPLETE";
+  } | null>(null);
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -309,38 +324,61 @@ export function StoreBookingsPage(): ReactElement {
     }
   });
 
+  // Dispatch Booking Request Mutation
+  const dispatchMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      if (!api) throw new Error("API helper not initialized");
+      await api.put(`/api/v1/store/bookings/${orderId}/dispatch`);
+    },
+    onSuccess: () => {
+      toast.success("Appointment successfully marked on the way!");
+      void queryClient.invalidateQueries({ queryKey: ["store", "bookings"] });
+      void queryClient.invalidateQueries({ queryKey: ["store", "dashboard"] });
+    },
+    onError: (err: unknown) => {
+      const msg =
+        (err as { response?: { data?: { error?: { message?: string } } } })?.response?.data?.error?.message ||
+        "Failed to mark booking on the way";
+      toast.error(msg);
+    }
+  });
+
   // Tab Filtering & Sorting Logical Maps
   const pendingBookings = bookings.filter(
-    (b) => b.bookingOrder?.approvalStatus === "PENDING_APPROVAL"
+    (b) => b.status === "PENDING_APPROVAL"
   );
 
-  const upcomingBookings = bookings
-    .filter((b) => b.bookingOrder?.approvalStatus === "APPROVED")
+  const approvedBookings = bookings
+    .filter((b) => b.status === "APPROVED")
     .sort(
       (a, b) =>
         new Date(a.bookingOrder?.scheduledDate || "").getTime() -
         new Date(b.bookingOrder?.scheduledDate || "").getTime()
     );
 
+  const onTheWayBookings = bookings.filter(
+    (b) => b.status === "OUT_FOR_DELIVERY"
+  );
+
   const historyBookings = bookings.filter((b) =>
-    ["COMPLETED", "REJECTED", "CANCELLED"].includes(b.bookingOrder?.approvalStatus || "")
+    ["COMPLETED", "REJECTED", "CANCELLED"].includes(b.status)
   );
 
   const getActiveList = () => {
     switch (activeTab) {
+      case "ALL":
+        return bookings;
       case "PENDING":
         return pendingBookings;
-      case "UPCOMING":
-        return upcomingBookings;
+      case "APPROVED":
+        return approvedBookings;
+      case "ON_THE_WAY":
+        return onTheWayBookings;
       case "HISTORY":
         return historyBookings;
     }
   };
 
-  const handleApprove = (booking: Booking) => {
-    const orderId = booking.orderId || booking.id;
-    approveMutation.mutate(orderId);
-  };
 
   const openRejectModal = (booking: Booking) => {
     setRejectingBooking(booking);
@@ -387,12 +425,14 @@ export function StoreBookingsPage(): ReactElement {
       </div>
 
       {/* Modern High-End Tabs Navigation */}
-      <div className="flex bg-white border border-gorola-mint/15 rounded-2xl p-1.5 shadow-sm">
-        {(["PENDING", "UPCOMING", "HISTORY"] as const).map((tab) => {
+      <div className="flex bg-white border border-gorola-mint/15 rounded-2xl p-1.5 shadow-sm overflow-x-auto">
+        {(["ALL", "PENDING", "APPROVED", "ON_THE_WAY", "HISTORY"] as const).map((tab) => {
           const isActive = activeTab === tab;
           let count = 0;
+          if (tab === "ALL") count = bookings.length;
           if (tab === "PENDING") count = pendingBookings.length;
-          if (tab === "UPCOMING") count = upcomingBookings.length;
+          if (tab === "APPROVED") count = approvedBookings.length;
+          if (tab === "ON_THE_WAY") count = onTheWayBookings.length;
           if (tab === "HISTORY") count = historyBookings.length;
 
           return (
@@ -401,13 +441,13 @@ export function StoreBookingsPage(): ReactElement {
               role="tab"
               aria-selected={isActive}
               onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 ${
+              className={`flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 px-4 ${
                 isActive
                   ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
                   : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
               }`}
             >
-              {tab.toLowerCase()}
+              {tab === "ALL" ? "all requests" : tab === "ON_THE_WAY" ? "on the way" : tab.toLowerCase()}
               <span
                 className={`text-[10px] px-2 py-0.5 rounded-full ${
                   isActive ? "bg-white/20 text-white" : "bg-gorola-mint text-gorola-charcoal"
@@ -486,21 +526,28 @@ export function StoreBookingsPage(): ReactElement {
                     </span>
 
                     <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black uppercase border ${
-                        booking.bookingOrder?.approvalStatus === "APPROVED"
+                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border ${
+                        booking.status === "APPROVED"
+                          ? "bg-indigo-50 text-indigo-700 border-indigo-200/50"
+                          : booking.status === "OUT_FOR_DELIVERY"
+                          ? "bg-blue-50 text-blue-700 border-blue-200/50"
+                          : (booking.status === "COMPLETED" || booking.status === "DELIVERED")
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
-                          : (booking.bookingOrder?.approvalStatus === "REJECTED" || booking.bookingOrder?.approvalStatus === "CANCELLED")
+                          : (booking.status === "REJECTED" || booking.status === "CANCELLED")
                           ? "bg-rose-50 text-rose-700 border-rose-200/50"
                           : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
                       }`}
                     >
-                      {booking.bookingOrder?.approvalStatus === "APPROVED" ||
-                      booking.bookingOrder?.approvalStatus === "COMPLETED" ? (
+                      {booking.status === "APPROVED" ? (
+                        <CheckCircle2 className="h-3 w-3" />
+                      ) : booking.status === "OUT_FOR_DELIVERY" ? (
+                        <Truck className="h-3 w-3" />
+                      ) : (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? (
                         <CheckCircle2 className="h-3 w-3" />
                       ) : (
                         <XCircle className="h-3 w-3" />
                       )}
-                      {booking.bookingOrder?.approvalStatus?.replace("_", " ")}
+                      {formatStatusLabel(booking.status === "OUT_FOR_DELIVERY" ? "ON_THE_WAY" : booking.status === "DELIVERED" ? "COMPLETED" : booking.status)}
                     </span>
                   </div>
                 )}
@@ -549,17 +596,21 @@ export function StoreBookingsPage(): ReactElement {
             <div className="flex justify-between items-start gap-4">
               <div>
                 <span
-                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black uppercase tracking-wider border mb-3 ${
-                    selectedBooking.bookingOrder?.approvalStatus === "APPROVED"
+                  className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-black border mb-3 ${
+                    selectedBooking.status === "APPROVED"
+                      ? "bg-indigo-50 text-indigo-700 border-indigo-200/50"
+                      : selectedBooking.status === "OUT_FOR_DELIVERY"
+                      ? "bg-blue-50 text-blue-700 border-blue-200/50"
+                      : (selectedBooking.status === "COMPLETED" || selectedBooking.status === "DELIVERED")
                       ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
-                      : (selectedBooking.bookingOrder?.approvalStatus === "REJECTED" || selectedBooking.bookingOrder?.approvalStatus === "CANCELLED")
+                      : (selectedBooking.status === "REJECTED" || selectedBooking.status === "CANCELLED")
                       ? "bg-rose-50 text-rose-700 border-rose-200/50"
-                      : selectedBooking.bookingOrder?.approvalStatus === "PENDING_APPROVAL"
+                      : selectedBooking.status === "PENDING_APPROVAL"
                       ? "bg-amber-100 text-amber-800 border-amber-200/50"
                       : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
                   }`}
                 >
-                  {selectedBooking.bookingOrder?.approvalStatus?.replace("_", " ")}
+                  {formatStatusLabel(selectedBooking.status === "OUT_FOR_DELIVERY" ? "ON_THE_WAY" : selectedBooking.status === "DELIVERED" ? "COMPLETED" : selectedBooking.status)}
                 </span>
                 <h2 className="font-mono text-xl md:text-2xl font-black text-gorola-charcoal">
                   #{selectedBooking.id.toUpperCase()}
@@ -651,12 +702,16 @@ export function StoreBookingsPage(): ReactElement {
                               CANCELLED is written to statusHistory by rejectBooking() — when the
                               bookingOrder.approvalStatus is REJECTED, we surface it as REJECTED to
                               distinguish a store rejection from a buyer-initiated cancellation. */}
-                          {hist.status === "DELIVERED"
+                          {formatStatusLabel(
+                          hist.status === "DELIVERED"
                             ? "COMPLETED"
+                            : hist.status === "OUT_FOR_DELIVERY"
+                            ? "ON_THE_WAY"
                             : hist.status === "CANCELLED" &&
                               selectedBooking.bookingOrder?.approvalStatus === "REJECTED"
                             ? "REJECTED"
-                            : hist.status.replace(/_/g, " ")}
+                            : hist.status
+                        )}
                         </p>
                         <p className="text-[10px] text-gorola-slate mt-0.5">
                           By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}
@@ -763,13 +818,15 @@ export function StoreBookingsPage(): ReactElement {
             </div>
 
             {/* CTAs in Modal Footer */}
-            {selectedBooking.bookingOrder?.approvalStatus === "PENDING_APPROVAL" && (
+            {selectedBooking.status === "PENDING_APPROVAL" && (
               <div className="pt-4 border-t border-gorola-mint/10 flex gap-3">
                 <button
                   disabled={approveMutation.isPending || rejectMutation.isPending}
                   onClick={() => {
-                    handleApprove(selectedBooking);
-                    setSelectedBooking(null);
+                    setConfirmingBookingUpdate({
+                      orderId: selectedBooking.orderId || selectedBooking.id,
+                      action: "APPROVE"
+                    });
                   }}
                   className="flex-1 py-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-md transition-all disabled:opacity-50"
                 >
@@ -786,17 +843,52 @@ export function StoreBookingsPage(): ReactElement {
               </div>
             )}
 
-            {selectedBooking.bookingOrder?.approvalStatus === "APPROVED" && (
+            {selectedBooking.status === "APPROVED" && (
+              <div className="pt-4 border-t border-gorola-mint/10 flex gap-3">
+                <button
+                  disabled={dispatchMutation.isPending}
+                  onClick={() => {
+                    setConfirmingBookingUpdate({
+                      orderId: selectedBooking.orderId || selectedBooking.id,
+                      action: "DISPATCH"
+                    });
+                  }}
+                  className="flex-1 py-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-md transition-all disabled:opacity-50"
+                >
+                  {dispatchMutation.isPending ? "Updating..." : "Mark On The Way"}
+                </button>
+
+                <button
+                  disabled={dispatchMutation.isPending || rejectMutation.isPending}
+                  onClick={() => openRejectModal(selectedBooking)}
+                  className="flex-1 py-3 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold uppercase tracking-wide rounded-xl transition-all disabled:opacity-50"
+                >
+                  Cancel Booking
+                </button>
+              </div>
+            )}
+
+            {selectedBooking.status === "OUT_FOR_DELIVERY" && (
               <div className="pt-4 border-t border-gorola-mint/10 flex gap-3">
                 <button
                   disabled={completeMutation.isPending}
                   onClick={() => {
-                    completeMutation.mutate(selectedBooking.orderId || selectedBooking.id);
-                    setSelectedBooking(null);
+                    setConfirmingBookingUpdate({
+                      orderId: selectedBooking.orderId || selectedBooking.id,
+                      action: "COMPLETE"
+                    });
                   }}
                   className="flex-1 py-3 bg-gorola-pine text-white hover:bg-gorola-pine/90 text-xs font-bold uppercase tracking-wide rounded-xl shadow-md transition-all disabled:opacity-50"
                 >
                   {completeMutation.isPending ? "Completing..." : "Mark Completed"}
+                </button>
+
+                <button
+                  disabled={completeMutation.isPending || rejectMutation.isPending}
+                  onClick={() => openRejectModal(selectedBooking)}
+                  className="flex-1 py-3 bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 text-xs font-bold uppercase tracking-wide rounded-xl transition-all disabled:opacity-50"
+                >
+                  Cancel Booking
                 </button>
               </div>
             )}
@@ -818,7 +910,7 @@ export function StoreBookingsPage(): ReactElement {
             <div className="flex justify-between items-start">
               <div>
                 <h3 className="font-heading text-lg font-bold text-gorola-charcoal">
-                  Reject Booking Request
+                  {rejectingBooking.status === "PENDING_APPROVAL" ? "Reject Booking Request" : "Cancel Booking"}
                 </h3>
                 <p className="text-xs text-gorola-slate mt-1 font-medium">
                   Please provide a reason to inform the client why their schedule request is cancelled.
@@ -836,7 +928,7 @@ export function StoreBookingsPage(): ReactElement {
             {/* Input Body */}
             <div className="space-y-2">
               <label className="text-xs font-bold text-gorola-slate uppercase tracking-wider">
-                Rejection Reason
+                {rejectingBooking.status === "PENDING_APPROVAL" ? "Rejection Reason" : "Cancellation Reason"}
               </label>
               <textarea
                 value={rejectionReason}
@@ -854,7 +946,11 @@ export function StoreBookingsPage(): ReactElement {
                 onClick={handleConfirmReject}
                 className="flex-1 py-3 bg-red-600 text-white hover:bg-red-700 disabled:bg-gorola-slate/20 disabled:text-gorola-slate/60 text-xs font-bold uppercase tracking-wide rounded-xl shadow-md transition-all"
               >
-                {rejectMutation.isPending ? "Confirming..." : "Confirm Rejection"}
+                {rejectMutation.isPending
+                  ? "Confirming..."
+                  : rejectingBooking.status === "PENDING_APPROVAL"
+                  ? "Confirm Rejection"
+                  : "Confirm Cancellation"}
               </button>
 
               <button
@@ -866,6 +962,73 @@ export function StoreBookingsPage(): ReactElement {
             </div>
           </div>
         </div>
+      )}
+
+      {confirmingBookingUpdate && (
+        <Dialog
+          open={!!confirmingBookingUpdate}
+          onOpenChange={(open) => !open && setConfirmingBookingUpdate(null)}
+        >
+          <DialogContent className="sm:max-w-sm rounded-2xl p-6" showCloseButton={false}>
+            <DialogHeader className="gap-2">
+              <DialogTitle className="font-heading text-lg font-bold text-gorola-charcoal">
+                Confirm Status Update
+              </DialogTitle>
+              <DialogDescription className="font-sans text-sm text-muted-foreground">
+                Are you sure you want to mark this booking as{" "}
+                <span className="font-semibold text-gorola-charcoal">
+                  {confirmingBookingUpdate.action === "APPROVE"
+                    ? "APPROVED"
+                    : confirmingBookingUpdate.action === "DISPATCH"
+                    ? "ON THE WAY"
+                    : "COMPLETED"}
+                </span>
+                ?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto rounded-xl"
+                onClick={() => setConfirmingBookingUpdate(null)}
+                disabled={approveMutation.isPending || dispatchMutation.isPending || completeMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="w-full sm:w-auto bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl"
+                onClick={() => {
+                  const orderId = confirmingBookingUpdate.orderId;
+                  if (confirmingBookingUpdate.action === "APPROVE") {
+                    approveMutation.mutate(orderId, {
+                      onSuccess: () => {
+                        setConfirmingBookingUpdate(null);
+                        setSelectedBooking(null);
+                      }
+                    });
+                  } else if (confirmingBookingUpdate.action === "DISPATCH") {
+                    dispatchMutation.mutate(orderId, {
+                      onSuccess: () => {
+                        setConfirmingBookingUpdate(null);
+                        setSelectedBooking(null);
+                      }
+                    });
+                  } else {
+                    completeMutation.mutate(orderId, {
+                      onSuccess: () => {
+                        setConfirmingBookingUpdate(null);
+                        setSelectedBooking(null);
+                      }
+                    });
+                  }
+                }}
+                disabled={approveMutation.isPending || dispatchMutation.isPending || completeMutation.isPending}
+              >
+                {approveMutation.isPending || dispatchMutation.isPending || completeMutation.isPending ? "Updating..." : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );
