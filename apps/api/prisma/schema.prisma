@@ -279,6 +279,8 @@ model Order {
   addressLabel        String?
   flatRoom            String?
   deliveryNote        String?
+  deliveryLat         Decimal?             @db.Decimal(10, 7)
+  deliveryLng         Decimal?             @db.Decimal(10, 7)
   scheduledFor        DateTime?
   rating              Boolean?
   ratingComment       String?
@@ -475,3 +477,4 @@ model BookingOrder {
   updatedAt            DateTime              @updatedAt
   order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+

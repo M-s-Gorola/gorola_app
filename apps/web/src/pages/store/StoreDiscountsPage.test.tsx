@@ -87,8 +87,8 @@ describe("StoreDiscountsPage", () => {
         discountValue: 10,
         usedCount: 5,
         maxUsageCount: 100,
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isActive: true
       },
       {
@@ -98,8 +98,8 @@ describe("StoreDiscountsPage", () => {
         discountValue: 50,
         usedCount: 10,
         maxUsageCount: 10,
-        startsAt: "2026-06-11T00:00:00.000Z",
-        endsAt: "2026-06-20T00:00:00.000Z",
+        startsAt: "2036-06-11T00:00:00.000Z",
+        endsAt: "2036-06-20T00:00:00.000Z",
         isActive: false
       }
     ];
@@ -337,8 +337,8 @@ describe("StoreDiscountsPage", () => {
         discountValue: 10,
         usedCount: 5,
         maxUsageCount: 100,
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isActive: true
       }
     ];
@@ -397,8 +397,8 @@ describe("StoreDiscountsPage", () => {
         discountValue: 10,
         usedCount: 5,
         maxUsageCount: 100,
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isActive: false // deactivated
       }
     ];

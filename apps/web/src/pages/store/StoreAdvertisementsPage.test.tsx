@@ -83,8 +83,8 @@ describe("StoreAdvertisementsPage", () => {
         title: "Summer Sale Grocery",
         imageUrl: "https://example.com/grocery-sale.png",
         linkUrl: "https://store.gorola.com/grocery-sale",
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isApproved: false,
         isActive: true
       },
@@ -93,8 +93,8 @@ describe("StoreAdvertisementsPage", () => {
         title: "Approved Premium Repairs",
         imageUrl: "https://example.com/repair-sale.png",
         linkUrl: "https://store.gorola.com/repair-sale",
-        startsAt: "2026-06-11T00:00:00.000Z",
-        endsAt: "2026-06-20T00:00:00.000Z",
+        startsAt: "2036-06-11T00:00:00.000Z",
+        endsAt: "2036-06-20T00:00:00.000Z",
         isApproved: true,
         isActive: true
       }

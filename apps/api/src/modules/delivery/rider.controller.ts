@@ -197,7 +197,9 @@ export function registerRiderRoutes(
           quantity: i.quantity
         })),
         deliveryAddress: {
-          landmark: o.landmarkDescription
+          landmark: o.landmarkDescription,
+          lat: o.deliveryLat ? Number(o.deliveryLat) : null,
+          lng: o.deliveryLng ? Number(o.deliveryLng) : null
         },
         buyerMaskedPhone: maskPhone(o.user?.phone ?? ""),
         createdAt: o.createdAt
@@ -277,4 +279,6 @@ export function registerRiderRoutes(
       }
     };
   });
+
 }
+

@@ -13,10 +13,8 @@ test.describe('API Stubs', () => {
     const loginBody = await loginResponse.json();
     const token = loginBody.data.accessToken;
 
-    // 2. These are the remaining rider backend endpoints that are currently stubs
-    const stubs = [
-      { url: '/api/v1/rider/location', method: 'put' }
-    ];
+    // 2. All rider backend endpoints have been implemented. There are no remaining stubs.
+    const stubs: { url: string; method: 'get' | 'post' | 'put' | 'delete' }[] = [];
 
     for (const stub of stubs) {
       const response = await request[stub.method](stub.url, {

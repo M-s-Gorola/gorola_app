@@ -40,6 +40,8 @@ export type CreateOrderInput = {
   addressLabel?: string | null;
   flatRoom?: string | null;
   deliveryNote?: string | null;
+  deliveryLat?: string | number | null;
+  deliveryLng?: string | number | null;
   scheduledFor?: Date | null;
   appliedDiscountCode?: string | null;
   items: Array<{
@@ -101,6 +103,8 @@ export class OrderRepository {
           addressLabel: input.addressLabel ?? null,
           flatRoom: input.flatRoom ?? null,
           deliveryNote: input.deliveryNote ?? null,
+          deliveryLat: input.deliveryLat ? toDecimal(input.deliveryLat) : null,
+          deliveryLng: input.deliveryLng ? toDecimal(input.deliveryLng) : null,
           scheduledFor: input.scheduledFor ?? null,
           appliedDiscountCode: input.appliedDiscountCode ?? null,
           items: {

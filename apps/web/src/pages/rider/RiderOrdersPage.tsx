@@ -5,6 +5,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -31,6 +32,8 @@ type ActiveOrder = {
   buyerMaskedPhone: string;
   deliveryAddress: {
     landmark: string;
+    lat: number | null;
+    lng: number | null;
   };
   items: OrderItem[];
   createdAt: string;
@@ -49,6 +52,7 @@ export function RiderOrdersPage(): ReactElement {
     id: string;
     status: "OUT_FOR_DELIVERY" | "DELIVERED";
   } | null>(null);
+  const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -110,7 +114,7 @@ export function RiderOrdersPage(): ReactElement {
   const preparingOrders = orders.filter((o) => o.status === "PREPARING");
   const deliveringOrders = orders.filter((o) => o.status === "OUT_FOR_DELIVERY");
 
-  useRiderLocation(deliveringOrders[0]?.id);
+  const { coords: riderCoords } = useRiderLocation(deliveringOrders[0]?.id);
 
   function getElapsedTimeStr(createdAt: string): string {
     const elapsedMs = Date.now() - new Date(createdAt).getTime();
@@ -122,6 +126,8 @@ export function RiderOrdersPage(): ReactElement {
   }
 
   function renderOrderCard(order: ActiveOrder) {
+    const isExpanded = expandedOrderId === order.id;
+
     return (
       <div
         key={order.id}
@@ -170,6 +176,30 @@ export function RiderOrdersPage(): ReactElement {
             </div>
           </div>
         </div>
+
+        {/* Collapsible Map Section */}
+        {order.deliveryAddress.lat && order.deliveryAddress.lng && (
+          <div className="border-t border-gorola-fog pt-4 mt-2">
+            <button
+              onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
+              className="text-xs font-bold text-gorola-pine hover:text-gorola-pine-dark flex items-center gap-1 focus:outline-none select-none cursor-pointer"
+              data-testid={`toggle-map-${order.id}`}
+            >
+              <span>{isExpanded ? "Hide Map" : "Show Map"}</span>
+              <span className="text-[10px]">{isExpanded ? "▼" : "▶"}</span>
+            </button>
+
+            {isExpanded && (
+              <div className="mt-3 relative h-64 w-full rounded-xl border border-gorola-fog overflow-hidden shadow-inner animate-in fade-in slide-in-from-top-1 duration-200">
+                <OrderRouteMap
+                  buyerCoords={{ lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }}
+                  riderCoords={order.status === "OUT_FOR_DELIVERY" ? (riderCoords ?? null) : null}
+                  className="h-full w-full border-0 rounded-none min-h-[256px]"
+                />
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="mt-2 flex w-full border-t border-gorola-fog pt-4">
           {order.status === "PREPARING" ? (

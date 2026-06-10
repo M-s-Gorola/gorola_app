@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 
 export function useRiderLocation(activeOrderId?: string) {
   const [error, setError] = useState<string | null>(null);
+  const [coords, setCoords] = useState<{ lat: number; lng: number } | null>(null);
 
   useEffect(() => {
     if (!activeOrderId) {
@@ -16,11 +17,14 @@ export function useRiderLocation(activeOrderId?: string) {
     }
 
     const successHandler = async (position: GeolocationPosition) => {
+      const lat = position.coords.latitude;
+      const lng = position.coords.longitude;
+      setCoords({ lat, lng });
       try {
         if (api) {
           await api.put("/api/v1/rider/location", {
-            lat: position.coords.latitude,
-            lng: position.coords.longitude,
+            lat,
+            lng,
             orderId: activeOrderId
           });
         }
@@ -50,5 +54,5 @@ export function useRiderLocation(activeOrderId?: string) {
     };
   }, [activeOrderId]);
 
-  return { error };
+  return { error, coords };
 }

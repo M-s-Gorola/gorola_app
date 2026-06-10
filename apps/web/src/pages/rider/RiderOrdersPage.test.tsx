@@ -172,4 +172,39 @@ describe("RiderOrdersPage", () => {
       status: "OUT_FOR_DELIVERY"
     });
   });
+
+  it("renders map toggle button and displays OrderRouteMap when expanded", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            id: "order-1",
+            status: "PREPARING",
+            buyerMaskedPhone: "*********3210",
+            deliveryAddress: { landmark: "Near park", lat: 30.45, lng: 78.07 },
+            items: [{ productName: "Apple", variantLabel: "1kg", quantity: 2 }],
+            createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+          }
+        ]
+      }
+    });
+
+    renderRiderOrders();
+
+    // The map toggle button should be present
+    const toggleButton = await screen.findByTestId("toggle-map-order-1");
+    expect(toggleButton).toBeInTheDocument();
+    expect(toggleButton).toHaveTextContent(/Show Map/i);
+
+    // Map should not be visible initially
+    expect(screen.queryByLabelText(/order route map/i)).not.toBeInTheDocument();
+
+    // Toggle expansion
+    fireEvent.click(toggleButton);
+
+    // Now the map region should be present
+    expect(screen.getByRole("region", { name: /order route map/i })).toBeInTheDocument();
+    expect(toggleButton).toHaveTextContent(/Hide Map/i);
+  });
 });
