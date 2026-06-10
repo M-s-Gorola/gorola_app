@@ -268,6 +268,38 @@ describe("BookingOrderService (unit)", () => {
         NotFoundError
       );
     });
+
+    it("should successfully cancel order from APPROVED or OUT_FOR_DELIVERY status", async () => {
+      const mockBooking = {
+        id: "b1",
+        orderId: "ord1",
+        approvalStatus: "APPROVED",
+        order: { id: "ord1", storeId: "s1", status: "APPROVED" }
+      };
+      mockRepository.findById.mockResolvedValue(mockBooking);
+
+      mockOrder.update.mockResolvedValueOnce({ id: "ord1", status: "CANCELLED" });
+      mockBookingOrder.update.mockResolvedValueOnce({ id: "b1", approvalStatus: "REJECTED" });
+
+      await service.rejectBooking("s1", "ord1", "owner1", "Customer cancel");
+
+      expect(mockOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "ord1" },
+          data: { status: "CANCELLED" }
+        })
+      );
+    });
+
+    it("should throw ValidationError if order status is already DELIVERED", async () => {
+      mockRepository.findById.mockResolvedValueOnce({
+        order: { storeId: "s1", status: "DELIVERED" }
+      });
+
+      await expect(service.rejectBooking("s1", "ord1", "owner1", "Reason")).rejects.toBeInstanceOf(
+        ValidationError
+      );
+    });
   });
 
   describe("cancelBookingByBuyer", () => {
@@ -322,9 +354,9 @@ describe("BookingOrderService (unit)", () => {
       );
     });
 
-    it("should throw ValidationError if order status is not APPROVED", async () => {
+    it("should throw ValidationError if order status is not OUT_FOR_DELIVERY", async () => {
       mockRepository.findById.mockResolvedValueOnce({
-        order: { storeId: "s1", status: "PENDING_APPROVAL" }
+        order: { storeId: "s1", status: "APPROVED" }
       });
 
       await expect(service.completeBooking("s1", "ord1", "owner1")).rejects.toBeInstanceOf(
@@ -337,7 +369,7 @@ describe("BookingOrderService (unit)", () => {
         id: "b1",
         orderId: "ord1",
         approvalStatus: "APPROVED",
-        order: { id: "ord1", storeId: "s1", status: "APPROVED" }
+        order: { id: "ord1", storeId: "s1", status: "OUT_FOR_DELIVERY" }
       };
       mockRepository.findById.mockResolvedValueOnce(mockBooking);
 
@@ -363,6 +395,66 @@ describe("BookingOrderService (unit)", () => {
           data: expect.objectContaining({
             orderId: "ord1",
             status: "DELIVERED",
+            changedBy: "store-owner:owner1"
+          })
+        })
+      );
+    });
+  });
+
+  describe("dispatchBooking", () => {
+    it("should throw NotFoundError if booking order not found", async () => {
+      mockRepository.findById.mockResolvedValueOnce(null);
+
+      await expect(service.dispatchBooking("s1", "ord1", "owner1")).rejects.toBeInstanceOf(
+        NotFoundError
+      );
+    });
+
+    it("should throw ForbiddenError if store owner is not linked to order store", async () => {
+      mockRepository.findById.mockResolvedValueOnce({
+        order: { storeId: "other-store" }
+      });
+
+      await expect(service.dispatchBooking("s1", "ord1", "owner1")).rejects.toBeInstanceOf(
+        ForbiddenError
+      );
+    });
+
+    it("should throw ValidationError if order status is not APPROVED", async () => {
+      mockRepository.findById.mockResolvedValueOnce({
+        order: { storeId: "s1", status: "PENDING_APPROVAL" }
+      });
+
+      await expect(service.dispatchBooking("s1", "ord1", "owner1")).rejects.toBeInstanceOf(
+        ValidationError
+      );
+    });
+
+    it("should successfully update order status to OUT_FOR_DELIVERY and log status history", async () => {
+      const mockBooking = {
+        id: "b1",
+        orderId: "ord1",
+        approvalStatus: "APPROVED",
+        order: { id: "ord1", storeId: "s1", status: "APPROVED" }
+      };
+      mockRepository.findById.mockResolvedValueOnce(mockBooking);
+
+      mockOrder.update.mockResolvedValueOnce({ id: "ord1", status: "OUT_FOR_DELIVERY" });
+
+      await service.dispatchBooking("s1", "ord1", "owner1");
+
+      expect(mockOrder.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "ord1" },
+          data: { status: "OUT_FOR_DELIVERY" }
+        })
+      );
+      expect(mockOrderStatusHistory.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            orderId: "ord1",
+            status: "OUT_FOR_DELIVERY",
             changedBy: "store-owner:owner1"
           })
         })

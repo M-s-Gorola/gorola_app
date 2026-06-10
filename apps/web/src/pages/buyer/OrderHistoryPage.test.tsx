@@ -108,8 +108,8 @@ describe("OrderHistoryPage", () => {
     
     expect(screen.getByText("₹120.00")).toBeInTheDocument();
     expect(screen.getByText("₹230.00")).toBeInTheDocument();
-    expect(screen.getByText("DELIVERED")).toBeInTheDocument();
-    expect(screen.getByText("PLACED")).toBeInTheDocument();
+    expect(screen.getByText("Delivered")).toBeInTheDocument();
+    expect(screen.getByText("Placed")).toBeInTheDocument();
   });
 
   it("triggers reorder and opens cart drawer", async () => {
@@ -131,7 +131,7 @@ describe("OrderHistoryPage", () => {
     const user = userEvent.setup();
     renderComponent();
 
-    await waitFor(() => screen.getByText("DELIVERED"));
+    await waitFor(() => screen.getByText("Delivered"));
 
     // Rate thumbs up
     const thumbsUpBtns = screen.getAllByRole("button", { name: /Thumbs Up/i });
@@ -150,7 +150,7 @@ describe("OrderHistoryPage", () => {
   it("does not show rating buttons for non-delivered orders", async () => {
     renderComponent();
 
-    await waitFor(() => screen.getByText("PLACED"));
+    await waitFor(() => screen.getByText("Placed"));
     
     // Test Store 2 is PLACED, it shouldn't have rating buttons next to it
     // We can check by aria-label or just seeing if they are present in the list item
@@ -212,7 +212,7 @@ describe("OrderHistoryPage", () => {
     apiPutSpy.mockReturnValue(putPromise);
 
     renderComponent();
-    await waitFor(() => screen.getByText("DELIVERED"));
+    await waitFor(() => screen.getByText("Delivered"));
 
     // Click thumbs up on Order 1
     const thumbsUpBtns = screen.getAllByRole("button", { name: /Thumbs Up/i });

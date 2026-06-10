@@ -61,6 +61,8 @@ interface BookingOrderWithRelations {
     addressLabel: string | null;
     rating: boolean | null;
     ratingComment: string | null;
+    deliveryLat: { toString: () => string } | null;
+    deliveryLng: { toString: () => string } | null;
     store: {
       id: string;
       name: string;
@@ -99,11 +101,22 @@ function maskPhone(phone: string): string {
 
 function serializeBookingOrder(booking: BookingOrderWithRelations): Record<string, unknown> {
   const order = booking.order;
+
+  // Dynamically map status based on underlying order status
+  let serializedStatus = booking.approvalStatus;
+  if (order.status === "OUT_FOR_DELIVERY") {
+    serializedStatus = "OUT_FOR_DELIVERY";
+  } else if (order.status === "DELIVERED") {
+    serializedStatus = "COMPLETED";
+  } else if (order.status === "CANCELLED" && booking.approvalStatus !== "REJECTED") {
+    serializedStatus = "CANCELLED";
+  }
+
   return {
     id: order.id,
     storeId: order.storeId,
     userId: order.userId,
-    status: booking.approvalStatus,
+    status: serializedStatus,
     subtotal: order.subtotal.toString(),
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
@@ -119,6 +132,8 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     landmarkDescription: order.landmarkDescription,
     flatRoom: order.flatRoom,
     addressLabel: order.addressLabel,
+    deliveryLat: order.deliveryLat ? Number(order.deliveryLat) : null,
+    deliveryLng: order.deliveryLng ? Number(order.deliveryLng) : null,
     buyerMaskedPhone: order.user ? maskPhone(order.user.phone) : "",
     paymentMethod: "COD",
     store: {
@@ -377,6 +392,42 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
 
       const params = parseSafe(orderParamsSchema, request.params);
       await deps.bookingService.completeBooking(
+        owner.storeId,
+        params.orderId,
+        ownerId,
+        request.ip,
+        (request.headers["user-agent"] ?? "") as string
+      );
+
+      const booking = await deps.bookingService.repository.findById(params.orderId);
+      if (!booking) {
+        throw new NotFoundError("Booking order not found");
+      }
+
+      return success(request, reply, serializeBookingOrder(booking));
+    }
+  );
+
+  // PUT /api/v1/store/bookings/:orderId/dispatch
+  app.put(
+    "/api/v1/store/bookings/:orderId/dispatch",
+    { preHandler: ownerPreHandlers },
+    async (request, reply) => {
+      const ownerId = request.user?.sub;
+      if (!ownerId) {
+        throw new UnauthorizedError("Store owner subject missing");
+      }
+
+      const prisma = getPrismaClient();
+      const owner = await prisma.storeOwner.findUnique({
+        where: { id: ownerId }
+      });
+      if (!owner) {
+        throw new ForbiddenError("Store owner record not found");
+      }
+
+      const params = parseSafe(orderParamsSchema, request.params);
+      await deps.bookingService.dispatchBooking(
         owner.storeId,
         params.orderId,
         ownerId,

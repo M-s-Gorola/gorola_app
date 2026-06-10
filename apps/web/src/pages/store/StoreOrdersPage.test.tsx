@@ -167,8 +167,8 @@ describe("StoreOrdersPage", () => {
 
     // Verify filter tabs are rendered
     expect(screen.getByText("All Orders")).toBeInTheDocument();
-    expect(screen.getByText("PLACED")).toBeInTheDocument();
-    expect(screen.getByText("PREPARING")).toBeInTheDocument();
+    expect(screen.getByText("Placed")).toBeInTheDocument();
+    expect(screen.getByText("Preparing")).toBeInTheDocument();
 
     // Verify order cards are rendered
     expect(await screen.findByTestId("order-card-order-1")).toBeInTheDocument();

@@ -1,6 +1,6 @@
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { RiderLayout } from "./RiderLayout";
 
@@ -16,7 +16,28 @@ vi.mock("@/lib/subdomain-resolver", async () => {
   };
 });
 
+let mockRiderType = "DELIVERY";
+
+vi.mock("@tanstack/react-query", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@tanstack/react-query")>();
+  return {
+    ...actual,
+    useQuery: vi.fn(() => ({
+      data: {
+        data: {
+          riderType: mockRiderType
+        }
+      },
+      isLoading: false
+    }))
+  };
+});
+
 describe("RiderLayout", () => {
+  beforeEach(() => {
+    mockRiderType = "DELIVERY";
+  });
+
   it("renders bottom tab bar with 'Orders' and 'Account' tabs", () => {
     render(
       <MemoryRouter initialEntries={["/rider/orders"]}>
@@ -33,6 +54,21 @@ describe("RiderLayout", () => {
     expect(screen.getByRole("link", { name: /orders/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /account/i })).toBeInTheDocument();
   });
+
+  it("renders bottom tab bar with 'Services' and 'Account' tabs for FIELD_TECHNICIAN", () => {
+    mockRiderType = "FIELD_TECHNICIAN";
+    render(
+      <MemoryRouter initialEntries={["/rider/orders"]}>
+        <RiderLayout>
+          <div data-testid="child-content">Active Content</div>
+        </RiderLayout>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByRole("link", { name: /services/i })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: /orders/i })).not.toBeInTheDocument();
+  });
+
 
   it("'Orders' tab is active on /rider/orders; 'Account' tab active on /rider/account", () => {
     const { unmount } = render(

@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, fireEvent, waitForElementToBeRemoved, type RenderResult } from "@testing-library/react";
+import { render, screen, fireEvent, waitForElementToBeRemoved, within, type RenderResult } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -49,6 +49,25 @@ describe("RiderOrdersPage", () => {
       refreshToken: "fake-refresh-token",
       userId: "rider-123",
       storeId: "store-456"
+    });
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              riderType: "DELIVERY"
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: []
+        }
+      });
     });
   });
 
@@ -219,5 +238,87 @@ describe("RiderOrdersPage", () => {
     // Now the map region should be present
     expect(screen.getByRole("region", { name: /order route map/i })).toBeInTheDocument();
     expect(toggleButton).toHaveTextContent(/Hide Map/i);
+  });
+
+  it("renders booking orders and handles status transitions for field technician mode", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              riderType: "FIELD_TECHNICIAN"
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: [
+            {
+              id: "booking-1",
+              status: "APPROVED",
+              orderType: "BOOKING",
+              bookingOrder: {
+                scheduledDate: "2026-06-12T00:00:00.000Z",
+                timeslot: "09:00 - 11:00",
+                requiresFasting: true
+              },
+              buyerMaskedPhone: "*********3210",
+              deliveryAddress: { landmark: "Near park" },
+              items: [{ productName: "Thyroid Panel", variantLabel: "Single test", quantity: 1 }],
+              createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+            }
+          ]
+        }
+      });
+    });
+
+    putMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: { id: "booking-1", status: "OUT_FOR_DELIVERY" }
+      }
+    });
+
+    renderRiderOrders();
+
+    // Verify dynamic field technician text labels
+    expect(await screen.findByText("Shift Services")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Ready for Visit/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Departed/i })).toBeInTheDocument();
+
+    // Verify filter tab is rendered and the compact card is visible
+    expect(await screen.findByTestId("booking-order-card")).toBeInTheDocument();
+    expect(screen.getByText(/09:00 - 11:00/)).toBeInTheDocument();
+    expect(screen.getByText(/Patient must be fasting/)).toBeInTheDocument();
+
+    // Open detail modal
+    fireEvent.click(screen.getByTestId("booking-order-card"));
+
+    // Verify detailed modal elements
+    const modal = await screen.findByTestId("rider-order-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText(/Patient must be fasting/)).toBeInTheDocument();
+    
+    const departButton = within(modal).getByRole("button", { name: /Mark as Departed/i });
+    expect(departButton).toBeInTheDocument();
+
+    // Click Depart to show confirmation
+    fireEvent.click(departButton);
+    expect(screen.getByText(/Confirm Status Update/i)).toBeInTheDocument();
+    expect(screen.getByText(/Are you sure you want to mark this service/i)).toBeInTheDocument();
+
+    // Confirm action
+    const confirmButton = screen.getByRole("button", { name: /Confirm/i });
+    fireEvent.click(confirmButton);
+
+    await waitForElementToBeRemoved(() => screen.queryByText(/Confirm Status Update/i));
+
+    // Verify API is called with status OUT_FOR_DELIVERY
+    expect(putMock).toHaveBeenCalledWith("/api/v1/rider/orders/booking-1/status", {
+      status: "OUT_FOR_DELIVERY"
+    });
   });
 });

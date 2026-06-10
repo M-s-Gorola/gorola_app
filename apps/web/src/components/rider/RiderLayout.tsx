@@ -1,9 +1,12 @@
+import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, User } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
 import { GorolaMountainMark } from "@/components/shared/GorolaMountainMark";
+import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+import { useAuthStore } from "@/store/auth.store";
 
 type RiderLayoutProps = {
   children: ReactNode;
@@ -12,6 +15,17 @@ type RiderLayoutProps = {
 export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
   const location = useLocation();
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const { data: profileData } = useQuery<{ data: { riderType: string } }>({
+    queryKey: ["riderProfile"],
+    queryFn: async () => {
+      const res = await api!.get<{ data: { riderType: string } }>("/api/v1/rider/profile");
+      return res.data;
+    },
+    enabled: !!accessToken
+  });
+  const isFieldTechnician = profileData?.data?.riderType === "FIELD_TECHNICIAN";
 
   const ordersPath = getScopedPath("/rider/orders", "rider", isSubdomainMode);
   const accountPath = getScopedPath("/rider/account", "rider", isSubdomainMode);
@@ -51,10 +65,10 @@ export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
               ? "text-gorola-pine font-bold"
               : "text-muted-foreground hover:text-gorola-charcoal"
           }`}
-          aria-label="Orders"
+          aria-label={isFieldTechnician ? "Services" : "Orders"}
         >
           <ClipboardList className="h-5 w-5" />
-          <span className="text-[10px] tracking-wide">Orders</span>
+          <span className="text-[10px] tracking-wide">{isFieldTechnician ? "Services" : "Orders"}</span>
         </Link>
 
         <Link

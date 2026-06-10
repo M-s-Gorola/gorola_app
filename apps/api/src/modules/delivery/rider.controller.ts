@@ -182,16 +182,23 @@ export function registerRiderRoutes(
   // GET /api/v1/rider/orders/active
   app.get("/api/v1/rider/orders/active", { preHandler }, async (request, reply) => {
     const storeId = request.user?.storeId;
-    if (!storeId) {
-      return reply.code(400).send({ success: false, error: "Store context missing from session" });
+    const riderId = request.user?.sub;
+    if (!storeId || !riderId) {
+      return reply.code(400).send({ success: false, error: "Store or rider context missing from session" });
     }
 
-    const orders = await deps.riderOrderService.getActiveOrders(storeId);
+    const orders = await deps.riderOrderService.getActiveOrders(storeId, riderId);
     
     const mapped = orders.map((o) => {
       return {
         id: o.id,
         status: o.status,
+        orderType: o.orderType,
+        bookingOrder: o.bookingOrder ? {
+          scheduledDate: o.bookingOrder.scheduledDate,
+          timeslot: o.bookingOrder.timeslot,
+          requiresFasting: o.bookingOrder.requiresFasting
+        } : null,
         items: o.items.map((i) => ({
           productName: i.productName,
           variantLabel: i.variantLabel,

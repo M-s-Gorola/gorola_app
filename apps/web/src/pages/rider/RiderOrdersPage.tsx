@@ -27,7 +27,13 @@ type OrderItem = {
 
 type ActiveOrder = {
   id: string;
-  status: "PREPARING" | "OUT_FOR_DELIVERY";
+  status: "PREPARING" | "OUT_FOR_DELIVERY" | "APPROVED";
+  orderType: "QUICK" | "BOOKING";
+  bookingOrder: {
+    scheduledDate: string;
+    timeslot: string;
+    requiresFasting: boolean;
+  } | null;
   buyerMaskedPhone: string;
   deliveryAddress: {
     landmark: string;
@@ -41,6 +47,21 @@ type ActiveOrder = {
 type ActiveOrdersResponse = {
   success: boolean;
   data: ActiveOrder[];
+};
+
+type RiderProfileResponse = {
+  success: boolean;
+  data: {
+    id: string;
+    name: string;
+    email: string;
+    phone: string;
+    riderType: string;
+    store: {
+      id: string;
+      name: string;
+    };
+  };
 };
 
 export function RiderOrdersPage(): ReactElement {
@@ -57,6 +78,17 @@ export function RiderOrdersPage(): ReactElement {
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
+
+  const { data: profileData } = useQuery<RiderProfileResponse>({
+    queryKey: ["riderProfile"],
+    queryFn: async () => {
+      if (!api) throw new Error("API not configured");
+      const res = await api.get<RiderProfileResponse>("/api/v1/rider/profile");
+      return res.data;
+    },
+    enabled: !!accessToken
+  });
+  const isFieldTechnician = profileData?.data?.riderType === "FIELD_TECHNICIAN";
 
   useEffect(() => {
     if (selectedOrder) {
@@ -91,7 +123,7 @@ export function RiderOrdersPage(): ReactElement {
 
     socket.on("store:new_order", () => {
       triggerRefresh();
-      toast.success("🔔 New Order Received! Action required.");
+      toast.success(isFieldTechnician ? "🔔 New Service Received! Action required." : "🔔 New Order Received! Action required.");
     });
 
     socket.on("store:order_updated", () => {
@@ -101,7 +133,7 @@ export function RiderOrdersPage(): ReactElement {
     return () => {
       socket.disconnect();
     };
-  }, [storeId, accessToken, queryClient]);
+  }, [storeId, accessToken, queryClient, isFieldTechnician]);
 
   const updateStatusMutation = useMutation({
     mutationFn: async ({ orderId, status }: { orderId: string; status: "OUT_FOR_DELIVERY" | "DELIVERED" }) => {
@@ -111,8 +143,12 @@ export function RiderOrdersPage(): ReactElement {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["riderActiveOrders"] });
+      const isBooking = selectedOrder?.orderType === "BOOKING";
+      const statusText = variables.status === "OUT_FOR_DELIVERY"
+        ? (isBooking ? "Departed" : "Out for Delivery")
+        : (isBooking ? "Visit Complete" : "Delivered");
       toast.success(
-        `Order marked as ${variables.status === "OUT_FOR_DELIVERY" ? "Out for Delivery" : "Delivered"}!`
+        `${isBooking ? "Service" : "Order"} marked as ${statusText}!`
       );
       setConfirmingOrder(null);
       setSelectedOrder(null);
@@ -124,7 +160,7 @@ export function RiderOrdersPage(): ReactElement {
     },
     onError: (err: unknown) => {
       const ax = err as { response?: { data?: { error?: { message?: string } } } };
-      const errMsg = ax?.response?.data?.error?.message ?? "Failed to update order status.";
+      const errMsg = ax?.response?.data?.error?.message ?? (isFieldTechnician ? "Failed to update service status." : "Failed to update order status.");
       toast.error(errMsg);
     }
   });
@@ -150,7 +186,7 @@ export function RiderOrdersPage(): ReactElement {
   });
 
   const orders = data?.data ?? [];
-  const preparingOrders = orders.filter((o) => o.status === "PREPARING");
+  const preparingOrders = orders.filter((o) => o.status === "PREPARING" || o.status === "APPROVED");
   const deliveringOrders = orders.filter((o) => o.status === "OUT_FOR_DELIVERY");
 
   useEffect(() => {
@@ -175,16 +211,17 @@ export function RiderOrdersPage(): ReactElement {
   }
 
   function renderCompactOrderCard(order: ActiveOrder) {
+    const isBooking = order.orderType === "BOOKING";
     return (
       <div
         key={order.id}
-        data-testid={`order-card-${order.id}`}
+        data-testid={isBooking ? "booking-order-card" : `order-card-${order.id}`}
         onClick={() => setSelectedOrder(order)}
         className="flex flex-col gap-3 rounded-2xl border border-gorola-fog bg-white p-4 shadow-sm transition hover:shadow-md cursor-pointer hover:border-gorola-pine/20"
       >
         <div className="flex items-center justify-between border-b border-gorola-fog pb-2">
           <span className="font-heading text-xs font-semibold text-gorola-charcoal">
-            Order #{order.id.slice(-6).toUpperCase()}
+            {isBooking ? "Service" : "Order"} #{order.id.slice(-6).toUpperCase()}
           </span>
           <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Clock className="h-3 w-3" />
@@ -193,6 +230,20 @@ export function RiderOrdersPage(): ReactElement {
         </div>
 
         <div className="flex flex-col gap-2">
+          {isBooking && order.bookingOrder && (
+            <div className="flex flex-col gap-1 border-b border-gorola-fog/60 pb-2">
+              <div className="flex items-center gap-2 text-xs font-bold text-gorola-charcoal">
+                <span className="bg-gorola-pine/10 text-gorola-pine px-2 py-0.5 rounded text-[10px] uppercase">Slot</span>
+                {order.bookingOrder.timeslot}
+              </div>
+              {order.bookingOrder.requiresFasting && (
+                <div className="text-[11px] font-semibold text-gorola-saffron flex items-center gap-1">
+                  ⚠️ Patient must be fasting
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="flex items-start gap-2">
             <MapPin className="mt-0.5 h-3.5 w-3.5 text-gorola-pine shrink-0" />
             <div className="flex flex-col">
@@ -227,7 +278,9 @@ export function RiderOrdersPage(): ReactElement {
     <div className="flex flex-col gap-6 pb-20">
       {/* Header bar */}
       <div className="flex items-center justify-between border-b border-gorola-fog pb-4">
-        <h1 className="font-heading text-2xl font-bold text-gorola-charcoal">Shift Orders</h1>
+        <h1 className="font-heading text-2xl font-bold text-gorola-charcoal border-gorola-fog">
+          {isFieldTechnician ? "Shift Services" : "Shift Orders"}
+        </h1>
         <button
           onClick={() => refetch()}
           className="flex h-10 w-10 items-center justify-center rounded-full border border-gorola-fog bg-white hover:bg-gorola-fog transition focus:outline-none select-none cursor-pointer"
@@ -250,7 +303,7 @@ export function RiderOrdersPage(): ReactElement {
                 : "text-muted-foreground hover:text-gorola-charcoal hover:bg-gorola-fog/50"
             }`}
           >
-            Ready for Pickup
+            {isFieldTechnician ? "Ready for Visit" : "Ready for Pickup"}
           </button>
           <button
             type="button"
@@ -261,7 +314,7 @@ export function RiderOrdersPage(): ReactElement {
                 : "text-muted-foreground hover:text-gorola-charcoal hover:bg-gorola-fog/50"
             }`}
           >
-            Out for Delivery
+            {isFieldTechnician ? "Departed" : "Out for Delivery"}
           </button>
         </div>
       )}
@@ -292,9 +345,13 @@ export function RiderOrdersPage(): ReactElement {
             <div className="h-14 w-14 rounded-full bg-gorola-pine/10 flex items-center justify-center mb-2">
               <ShoppingBag className="h-7 w-7 text-gorola-pine" />
             </div>
-            <h2 className="font-heading text-lg font-bold text-gorola-charcoal">No active orders right now</h2>
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
+              {isFieldTechnician ? "No active services right now" : "No active orders right now"}
+            </h2>
             <p className="text-sm text-muted-foreground max-w-xs px-4">
-              When new orders are prepared for pickup at your store, they will appear here.
+              {isFieldTechnician
+                ? "When new booking requests are approved at your store, they will appear here."
+                : "When new orders are prepared for pickup at your store, they will appear here."}
             </p>
           </div>
         )}
@@ -303,7 +360,9 @@ export function RiderOrdersPage(): ReactElement {
           <div className="flex flex-col gap-4">
             {visibleOrders.length === 0 ? (
               <div className="rounded-2xl border border-dashed border-gorola-fog bg-white/50 p-6 text-center text-sm text-muted-foreground font-medium">
-                {activeTab === "PICKUP" ? "No orders ready for pickup." : "No orders currently in delivery."}
+                {isFieldTechnician
+                  ? (activeTab === "PICKUP" ? "No services ready for visit." : "No services currently departed.")
+                  : (activeTab === "PICKUP" ? "No orders ready for pickup." : "No orders currently in delivery.")}
               </div>
             ) : (
               visibleOrders.map(renderCompactOrderCard)
@@ -327,7 +386,7 @@ export function RiderOrdersPage(): ReactElement {
             <div className="flex justify-between items-start gap-4 border-b border-gorola-fog pb-4">
               <div>
                 <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-gorola-pine/10 text-gorola-pine border border-gorola-pine/20">
-                  Order #{selectedOrder.id.toUpperCase()}
+                  {selectedOrder.orderType === "BOOKING" ? "Service" : "Order"} #{selectedOrder.id.toUpperCase()}
                 </span>
                 <p className="text-xs text-muted-foreground mt-1">
                   Placed {getElapsedTimeStr(selectedOrder.createdAt)}
@@ -344,6 +403,29 @@ export function RiderOrdersPage(): ReactElement {
 
             {/* Content details */}
             <div className="flex flex-col gap-4">
+              {selectedOrder.orderType === "BOOKING" && selectedOrder.bookingOrder && (
+                <div className="flex flex-col gap-2 bg-gorola-fog/60 p-3.5 rounded-2xl border border-gorola-fog">
+                  <div className="flex items-center justify-between text-xs font-bold text-gorola-charcoal">
+                    <span>Scheduled Visit</span>
+                    <span className="bg-gorola-pine/10 text-gorola-pine px-2.5 py-1 rounded-full text-[10px] uppercase font-extrabold">
+                      {selectedOrder.bookingOrder.timeslot}
+                    </span>
+                  </div>
+                  <div className="text-xs text-muted-foreground font-semibold">
+                    Date: {new Date(selectedOrder.bookingOrder.scheduledDate).toLocaleDateString("en-IN", {
+                      weekday: "short",
+                      day: "numeric",
+                      month: "short"
+                    })}
+                  </div>
+                  {selectedOrder.bookingOrder.requiresFasting && (
+                    <div className="mt-1 text-xs font-semibold text-gorola-saffron flex items-center gap-1">
+                      ⚠️ Patient must be fasting
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex items-start gap-2.5">
                 <Phone className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
                 <div className="flex flex-col">
@@ -412,6 +494,15 @@ export function RiderOrdersPage(): ReactElement {
                 >
                   Mark as Out for Delivery
                 </Button>
+              ) : selectedOrder.status === "APPROVED" ? (
+                <Button
+                  className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
+                  onClick={() =>
+                    setConfirmingOrder({ id: selectedOrder.id, status: "OUT_FOR_DELIVERY" })
+                  }
+                >
+                  Mark as Departed
+                </Button>
               ) : selectedOrder.status === "OUT_FOR_DELIVERY" ? (
                 <Button
                   className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
@@ -419,7 +510,7 @@ export function RiderOrdersPage(): ReactElement {
                     setConfirmingOrder({ id: selectedOrder.id, status: "DELIVERED" })
                   }
                 >
-                  Mark as Delivered
+                  {selectedOrder.orderType === "BOOKING" ? "Mark Visit Complete" : "Mark as Delivered"}
                 </Button>
               ) : null}
             </div>
@@ -436,9 +527,11 @@ export function RiderOrdersPage(): ReactElement {
                 Confirm Status Update
               </DialogTitle>
               <DialogDescription className="font-sans text-sm text-muted-foreground">
-                Are you sure you want to mark this order as{" "}
+                Are you sure you want to mark this {selectedOrder?.orderType === "BOOKING" ? "service" : "order"} as{" "}
                 <span className="font-semibold text-gorola-charcoal">
-                  {confirmingOrder.status === "OUT_FOR_DELIVERY" ? "Out for Delivery" : "Delivered"}
+                  {confirmingOrder.status === "OUT_FOR_DELIVERY"
+                    ? (selectedOrder?.orderType === "BOOKING" ? "Departed" : "Out for Delivery")
+                    : (selectedOrder?.orderType === "BOOKING" ? "Visit Complete" : "Delivered")}
                 </span>
                 ?
               </DialogDescription>

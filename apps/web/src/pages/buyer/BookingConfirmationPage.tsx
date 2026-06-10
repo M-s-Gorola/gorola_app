@@ -1,11 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { CheckCircle2,Home, MessageSquare, ThumbsDown, ThumbsUp } from "lucide-react";
+import { CheckCircle2, Home, MessageSquare, ThumbsDown, ThumbsUp } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -39,7 +40,7 @@ type StoreOffer = {
 
 type BookingEnvelope = {
   id: string;
-  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "DELIVERED";
+  status: "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "CANCELLED" | "COMPLETED" | "DELIVERED" | "OUT_FOR_DELIVERY";
   subtotal: string;
   deliveryFee: string;
   total: string;
@@ -60,6 +61,8 @@ type BookingEnvelope = {
   discountCode?: string | null;
   rating?: boolean | null;
   ratingComment?: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
 };
 
 const statusConfig = {
@@ -68,7 +71,7 @@ const statusConfig = {
     shadowColor: "shadow-amber-100/10",
     badgeBg: "bg-amber-50 border border-amber-200 text-amber-800",
     badgeLabel: "Booking request sent. Waiting for store confirmation.",
-    title: "Booking Placed",
+    title: "Pending Approval",
     accentBorder: "border-l-4 border-l-amber-500",
     iconColor: "text-amber-500",
   },
@@ -98,6 +101,15 @@ const statusConfig = {
     title: "Service Done",
     accentBorder: "border-l-4 border-l-emerald-500",
     iconColor: "text-gorola-pine",
+  },
+  OUT_FOR_DELIVERY: {
+    borderColor: "border-blue-200 hover:border-blue-300",
+    shadowColor: "shadow-blue-100/10",
+    badgeBg: "bg-blue-50 border border-blue-200 text-blue-800",
+    badgeLabel: "🚴 Your technician is on the way! Live tracking is active.",
+    title: "Technician On The Way",
+    accentBorder: "border-l-4 border-l-blue-500",
+    iconColor: "text-blue-500",
   },
   REJECTED: {
     borderColor: "border-red-200 hover:border-red-300",
@@ -133,9 +145,9 @@ export function BookingConfirmationPage(): ReactElement {
 
   const rateMutation = useMutation({
     mutationFn: async ({ rating, comment }: { rating: boolean; comment?: string | undefined }) => {
-      const res = await api!.put(`/api/v1/orders/${id}/rate`, { 
+      const res = await api!.put(`/api/v1/orders/${id}/rate`, {
         rating,
-        ratingComment: comment 
+        ratingComment: comment
       });
       return res.data.data;
     },
@@ -304,7 +316,7 @@ export function BookingConfirmationPage(): ReactElement {
         }
       });
 
-      tl.to({}, { duration: 0.75 }) 
+      tl.to({}, { duration: 0.75 })
         .to(bloom, { autoAlpha: 0, duration: 1.1 })
         .to(
           ".occ-check-path",
@@ -318,6 +330,8 @@ export function BookingConfirmationPage(): ReactElement {
       ctx.revert();
     };
   }, [query.isSuccess, id, shouldShowBloom]);
+
+  const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   // Realtime update listener using standard Socket.IO hook
   const onStatusChanged = useCallback(
@@ -336,7 +350,11 @@ export function BookingConfirmationPage(): ReactElement {
     [id, queryClient]
   );
 
-  useOrderSocket(id, onStatusChanged);
+  const onLocationUpdated = useCallback((data: { lat: number; lng: number }) => {
+    setRiderLocation({ lat: data.lat, lng: data.lng });
+  }, []);
+
+  useOrderSocket(id, onStatusChanged, onLocationUpdated);
 
   if (query.isLoading) {
     return (
@@ -401,22 +419,8 @@ export function BookingConfirmationPage(): ReactElement {
             <h1 className="font-playfair text-3xl font-bold text-gorola-charcoal" id="occ-heading">
               {config.title}
             </h1>
-            <div className={cn("inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-bold uppercase tracking-wider ring-1 ring-inset",
-              booking.status === "PENDING_APPROVAL" ? "bg-amber-50 text-amber-700 ring-amber-600/20" :
-              booking.status === "APPROVED" ? "bg-indigo-50 text-indigo-700 ring-indigo-600/20" :
-              (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "bg-emerald-50 text-emerald-700 ring-emerald-600/20" :
-              (booking.status === "REJECTED" || booking.status === "CANCELLED") ? "bg-rose-50 text-rose-700 ring-rose-600/20" :
-              "bg-gray-50 text-gray-700 ring-gray-600/20"
-            )}>
-              {booking.status === "PENDING_APPROVAL" ? "Pending Approval" :
-               booking.status === "APPROVED" ? "Confirmed" :
-               (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? "Completed" :
-               booking.status === "REJECTED" ? "Rejected" :
-               booking.status === "CANCELLED" ? "Cancelled" :
-               (booking.status as string).replace("_", " ")}
-            </div>
           </div>
-          
+
           <p className="font-dm-sans text-sm text-gorola-slate">
             Booking{" "}
             <span
@@ -426,9 +430,10 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.id.length > 8 ? `…${booking.id.slice(-8)}` : booking.id}
             </span>{" "}
             {booking.status === "COMPLETED" || booking.status === "DELIVERED" ? "has been completed at" :
-             booking.status === "REJECTED" ? "has been rejected by" :
-             booking.status === "CANCELLED" ? "has been cancelled by" :
-             booking.status === "APPROVED" ? "is confirmed with" : "has been requested from"}{" "}
+              booking.status === "REJECTED" ? "has been rejected by" :
+                booking.status === "CANCELLED" ? "has been cancelled by" :
+                  booking.status === "OUT_FOR_DELIVERY" ? "is on the way from" :
+                    booking.status === "APPROVED" ? "is confirmed with" : "has been requested from"}{" "}
             <span className="font-semibold text-gorola-charcoal">{booking.store?.name}</span>.
           </p>
         </div>
@@ -576,16 +581,31 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.landmarkDescription}
             </p>
           </div>
+
+          {/* Section 4: Live Tracking Map */}
+          {booking.status === "OUT_FOR_DELIVERY" &&
+            booking.deliveryLat !== undefined &&
+            booking.deliveryLat !== null &&
+            booking.deliveryLng !== undefined &&
+            booking.deliveryLng !== null && (
+              <div className="border-t border-gorola-pine/10 pt-5 space-y-3" data-testid="live-tracking-section">
+                <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Live Route Tracking</p>
+                <OrderRouteMap
+                  buyerCoords={{ lat: booking.deliveryLat, lng: booking.deliveryLng }}
+                  riderCoords={riderLocation}
+                />
+              </div>
+            )}
         </div>
 
         {/* Clean Rate Your Service Section */}
         {(booking.status === "COMPLETED" || booking.status === "DELIVERED") && (
-          <div 
+          <div
             data-testid="rate-service-section"
             className="w-full bg-white border border-gorola-pine/10 rounded-2xl p-5 text-left shadow-sm font-dm-sans space-y-4"
           >
             <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Rate your service</h3>
-            
+
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm text-gorola-slate font-medium">
                 {booking.rating !== undefined && booking.rating !== null ? (
@@ -602,17 +622,16 @@ export function BookingConfirmationPage(): ReactElement {
                   "How was your overall experience?"
                 )}
               </div>
-              
+
               {(booking.rating === undefined || booking.rating === null) && (
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setActiveRating(activeRating === "up" ? null : "up")}
                     disabled={rateMutation.isPending}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                      activeRating === "up"
-                        ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' 
-                        : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                    } disabled:opacity-50`}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeRating === "up"
+                      ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm'
+                      : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                      } disabled:opacity-50`}
                     aria-label="Thumbs Up"
                   >
                     <ThumbsUp className="w-4 h-4" />
@@ -621,11 +640,10 @@ export function BookingConfirmationPage(): ReactElement {
                   <button
                     onClick={() => setActiveRating(activeRating === "down" ? null : "down")}
                     disabled={rateMutation.isPending}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                      activeRating === "down"
-                        ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm' 
-                        : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                    } disabled:opacity-50`}
+                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeRating === "down"
+                      ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm'
+                      : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
+                      } disabled:opacity-50`}
                     aria-label="Thumbs Down"
                   >
                     <ThumbsDown className="w-4 h-4" />
@@ -636,11 +654,10 @@ export function BookingConfirmationPage(): ReactElement {
 
               {booking.rating !== undefined && booking.rating !== null && (
                 <div className="flex items-center gap-3">
-                  <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${
-                    booking.rating === true 
-                      ? 'bg-green-50 text-green-700 border-green-200' 
-                      : 'bg-red-50 text-red-700 border-red-200'
-                  }`}>
+                  <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${booking.rating === true
+                    ? 'bg-green-50 text-green-700 border-green-200'
+                    : 'bg-red-50 text-red-700 border-red-200'
+                    }`}>
                     {booking.rating === true ? (
                       <>
                         <ThumbsUp className="w-4 h-4" />
@@ -671,8 +688,8 @@ export function BookingConfirmationPage(): ReactElement {
                 </div>
                 <div className="flex justify-end">
                   <button
-                    onClick={() => rateMutation.mutate({ 
-                      rating: activeRating === "up", 
+                    onClick={() => rateMutation.mutate({
+                      rating: activeRating === "up",
                       comment: ratingComment || undefined
                     })}
                     className="px-6 py-2 bg-gorola-pine text-white text-xs font-bold rounded-full hover:bg-gorola-pine/90 transition-all shadow-md shadow-gorola-pine/10 disabled:opacity-50"

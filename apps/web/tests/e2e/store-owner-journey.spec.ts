@@ -504,7 +504,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // approvalStatus uses BookingStatus which includes "COMPLETED" directly.
     // We check for any COMPLETED text in the bookings list.
     // If no completed bookings are seeded, this check is skipped gracefully.
-    const completedBadge = page.getByText("COMPLETED").first();
+    const completedBadge = page.getByText("Completed").first();
     const completedExists = await completedBadge.count() > 0;
     if (completedExists) {
       await expect(completedBadge).toBeVisible();

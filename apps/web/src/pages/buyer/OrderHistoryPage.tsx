@@ -8,6 +8,7 @@ import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
+import { formatStatusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
@@ -71,17 +72,17 @@ export function OrderHistoryPage() {
         case "CANCELLED":
           return { label: "Cancelled", classes: "bg-red-100 text-red-700 border border-red-200" };
         default:
-          return { label: status, classes: "bg-blue-100 text-blue-700 border border-blue-200" };
+          return { label: formatStatusLabel(status), classes: "bg-blue-100 text-blue-700 border border-blue-200" };
       }
     }
 
     if (order.status === "DELIVERED") {
-      return { label: "DELIVERED", classes: "bg-green-100 text-green-700" };
+      return { label: "Delivered", classes: "bg-green-100 text-green-700" };
     }
     if (order.status === "CANCELLED") {
-      return { label: "CANCELLED", classes: "bg-red-100 text-red-700" };
+      return { label: "Cancelled", classes: "bg-red-100 text-red-700" };
     }
-    return { label: order.status, classes: "bg-blue-100 text-blue-700" };
+    return { label: formatStatusLabel(order.status), classes: "bg-blue-100 text-blue-700" };
   };
 
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -288,7 +289,7 @@ export function OrderHistoryPage() {
                 <div className="space-y-1 min-w-0 w-full md:w-auto">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-sm sm:text-lg text-gorola-charcoal truncate">{order.store.name}</h3>
-                    <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${badge.classes} shrink-0`}>
+                    <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wider ${badge.classes} shrink-0`}>
                       {badge.label}
                     </span>
                   </div>
