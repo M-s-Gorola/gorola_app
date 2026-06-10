@@ -41,6 +41,13 @@ export function useRiderLocation(activeOrderId?: string) {
       }
     };
 
+    // Fetch current position immediately to fire the first location update instantly
+    navigator.geolocation.getCurrentPosition(successHandler, errorHandler, {
+      enableHighAccuracy: true,
+      timeout: 10000,
+      maximumAge: 0
+    });
+
     const watchId = navigator.geolocation.watchPosition(successHandler, errorHandler, {
       enableHighAccuracy: true,
       timeout: 10000,

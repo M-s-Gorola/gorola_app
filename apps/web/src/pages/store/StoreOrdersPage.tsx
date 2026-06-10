@@ -16,6 +16,15 @@ import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { api } from "@/lib/api";
 import { lenis } from "@/lib/lenis";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
@@ -105,6 +114,7 @@ export function StoreOrdersPage(): ReactElement {
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const [confirmingOrderUpdate, setConfirmingOrderUpdate] = useState<{ orderId: string; status: OrderStatus } | null>(null);
 
   useEffect(() => {
     if (selectedOrder) {
@@ -324,6 +334,7 @@ interface StoreOffer {
     },
     onSuccess: (res, variables) => {
       toast.success(`Order status updated to ${variables.status}`);
+      setConfirmingOrderUpdate(null);
       // Refresh order lists
       void queryClient.invalidateQueries({ queryKey: ["store", "orders"] });
       // Update local modal data
@@ -819,7 +830,7 @@ interface StoreOffer {
                       key={nextStatus}
                       disabled={updateStatusMutation.isPending}
                       onClick={() =>
-                        updateStatusMutation.mutate({ orderId: selectedOrder.id, status: nextStatus })
+                        setConfirmingOrderUpdate({ orderId: selectedOrder.id, status: nextStatus })
                       }
                       className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
                         isCancel
@@ -837,6 +848,50 @@ interface StoreOffer {
             )}
           </div>
         </div>
+      )}
+
+      {confirmingOrderUpdate && (
+        <Dialog
+          open={!!confirmingOrderUpdate}
+          onOpenChange={(open) => !open && setConfirmingOrderUpdate(null)}
+        >
+          <DialogContent className="sm:max-w-sm rounded-2xl p-6" showCloseButton={false}>
+            <DialogHeader className="gap-2">
+              <DialogTitle className="font-heading text-lg font-bold text-gorola-charcoal">
+                Confirm Status Update
+              </DialogTitle>
+              <DialogDescription className="font-sans text-sm text-muted-foreground">
+                Are you sure you want to mark this order as{" "}
+                <span className="font-semibold text-gorola-charcoal">
+                  {getTransitionButtonLabel(confirmingOrderUpdate.status)}
+                </span>
+                ?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto rounded-xl"
+                onClick={() => setConfirmingOrderUpdate(null)}
+                disabled={updateStatusMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="w-full sm:w-auto bg-gorola-pine text-white hover:bg-gorola-pine/90 rounded-xl"
+                onClick={() => {
+                  updateStatusMutation.mutate({
+                    orderId: confirmingOrderUpdate.orderId,
+                    status: confirmingOrderUpdate.status
+                  });
+                }}
+                disabled={updateStatusMutation.isPending}
+              >
+                {updateStatusMutation.isPending ? "Updating..." : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

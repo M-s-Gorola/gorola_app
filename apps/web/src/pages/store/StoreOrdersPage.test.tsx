@@ -233,6 +233,14 @@ describe("StoreOrdersPage", () => {
     putMock.mockResolvedValueOnce({ data: mockUpdatedOrder });
     fireEvent.click(prepBtn);
 
+    // Verify modal is shown and put endpoint is NOT immediately called
+    expect(screen.getByText(/Are you sure you want to mark this order/i)).toBeInTheDocument();
+    expect(putMock).not.toHaveBeenCalled();
+
+    // Click confirm inside confirmation dialog
+    const confirmButton = screen.getByRole("button", { name: /^Confirm$/i });
+    fireEvent.click(confirmButton);
+
     // Verify put endpoint was hit with correct payload
     await vi.waitFor(() => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/store/orders/order-1/status", {

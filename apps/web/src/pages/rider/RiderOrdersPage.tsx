@@ -44,16 +44,30 @@ type ActiveOrdersResponse = {
 };
 
 export function RiderOrdersPage(): ReactElement {
+  const [activeTab, setActiveTab] = useState<"PICKUP" | "DELIVERY">("PICKUP");
+  const [selectedOrder, setSelectedOrder] = useState<ActiveOrder | null>(null);
   const [confirmingOrder, setConfirmingOrder] = useState<{
     id: string;
     status: "OUT_FOR_DELIVERY" | "DELIVERED";
   } | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [activeTrackingId, setActiveTrackingId] = useState<string | undefined>(undefined);
 
   const queryClient = useQueryClient();
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
+
+  useEffect(() => {
+    if (selectedOrder) {
+      document.body.style.overflow = "hidden";
+    } else {
+      document.body.style.overflow = "";
+    }
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [selectedOrder]);
 
   useEffect(() => {
     if (!storeId || !accessToken) return;
@@ -101,6 +115,12 @@ export function RiderOrdersPage(): ReactElement {
         `Order marked as ${variables.status === "OUT_FOR_DELIVERY" ? "Out for Delivery" : "Delivered"}!`
       );
       setConfirmingOrder(null);
+      setSelectedOrder(null);
+      if (variables.status === "OUT_FOR_DELIVERY") {
+        setActiveTrackingId(variables.orderId);
+      } else if (variables.status === "DELIVERED") {
+        setActiveTrackingId(undefined);
+      }
     },
     onError: (err: unknown) => {
       const ax = err as { response?: { data?: { error?: { message?: string } } } };
@@ -133,7 +153,17 @@ export function RiderOrdersPage(): ReactElement {
   const preparingOrders = orders.filter((o) => o.status === "PREPARING");
   const deliveringOrders = orders.filter((o) => o.status === "OUT_FOR_DELIVERY");
 
-  const { coords: riderCoords } = useRiderLocation(deliveringOrders[0]?.id);
+  useEffect(() => {
+    if (deliveringOrders.length > 0) {
+      setActiveTrackingId(deliveringOrders[0]?.id);
+    } else {
+      if (!isFetching && !isLoading) {
+        setActiveTrackingId(undefined);
+      }
+    }
+  }, [deliveringOrders, isFetching, isLoading]);
+
+  const { coords: riderCoords } = useRiderLocation(activeTrackingId);
 
   function getElapsedTimeStr(createdAt: string): string {
     const elapsedMs = Date.now() - new Date(createdAt).getTime();
@@ -144,50 +174,42 @@ export function RiderOrdersPage(): ReactElement {
     return `${elapsedHours}h ago`;
   }
 
-  function renderOrderCard(order: ActiveOrder) {
-    const isExpanded = expandedOrderId === order.id;
-
+  function renderCompactOrderCard(order: ActiveOrder) {
     return (
       <div
         key={order.id}
-        className="flex flex-col gap-4 rounded-2xl border border-gorola-fog bg-white p-5 shadow-sm transition hover:shadow-md"
+        data-testid={`order-card-${order.id}`}
+        onClick={() => setSelectedOrder(order)}
+        className="flex flex-col gap-3 rounded-2xl border border-gorola-fog bg-white p-4 shadow-sm transition hover:shadow-md cursor-pointer hover:border-gorola-pine/20"
       >
-        <div className="flex items-center justify-between border-b border-gorola-fog pb-3">
-          <span className="font-heading text-sm font-semibold text-gorola-charcoal">
+        <div className="flex items-center justify-between border-b border-gorola-fog pb-2">
+          <span className="font-heading text-xs font-semibold text-gorola-charcoal">
             Order #{order.id.slice(-6).toUpperCase()}
           </span>
-          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
+          <div className="flex items-center gap-1 text-[11px] text-muted-foreground">
+            <Clock className="h-3 w-3" />
             <span>{getElapsedTimeStr(order.createdAt)}</span>
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
-          <div className="flex items-start gap-2.5">
-            <Phone className="mt-0.5 h-4 w-4 text-gorola-pine" />
+        <div className="flex flex-col gap-2">
+          <div className="flex items-start gap-2">
+            <MapPin className="mt-0.5 h-3.5 w-3.5 text-gorola-pine shrink-0" />
             <div className="flex flex-col">
-              <span className="text-xs text-muted-foreground font-medium">Buyer Contact</span>
-              <span className="text-sm font-semibold text-gorola-charcoal">{order.buyerMaskedPhone}</span>
-            </div>
-          </div>
-
-          <div className="flex items-start gap-2.5">
-            <MapPin className="mt-0.5 h-4 w-4 text-gorola-pine" />
-            <div className="flex flex-col">
-              <span className="text-xs text-muted-foreground font-medium">Delivery Landmark</span>
-              <span className="text-sm text-gorola-charcoal font-medium">
+              <span className="text-[10px] text-muted-foreground font-medium">Landmark</span>
+              <span className="text-xs text-gorola-charcoal font-semibold">
                 {order.deliveryAddress.landmark || "No landmark specified"}
               </span>
             </div>
           </div>
 
-          <div className="flex items-start gap-2.5">
-            <ShoppingBag className="mt-0.5 h-4 w-4 text-gorola-pine" />
+          <div className="flex items-start gap-2">
+            <ShoppingBag className="mt-0.5 h-3.5 w-3.5 text-gorola-pine shrink-0" />
             <div className="flex flex-col w-full">
-              <span className="text-xs text-muted-foreground font-medium mb-1">Items</span>
-              <ul className="flex flex-col gap-1 pl-1">
+              <span className="text-[10px] text-muted-foreground font-medium mb-0.5">Items</span>
+              <ul className="flex flex-col gap-0.5">
                 {order.items.map((item, idx) => (
-                  <li key={idx} className="text-sm font-medium text-gorola-charcoal">
+                  <li key={idx} className="text-xs font-semibold text-gorola-charcoal">
                     {item.productName} ({item.variantLabel}) x{item.quantity}
                   </li>
                 ))}
@@ -195,55 +217,11 @@ export function RiderOrdersPage(): ReactElement {
             </div>
           </div>
         </div>
-
-        {/* Collapsible Map Section */}
-        {order.deliveryAddress.lat && order.deliveryAddress.lng && (
-          <div className="border-t border-gorola-fog pt-4 mt-2">
-            <button
-              onClick={() => setExpandedOrderId(isExpanded ? null : order.id)}
-              className="text-xs font-bold text-gorola-pine hover:text-gorola-pine-dark flex items-center gap-1 focus:outline-none select-none cursor-pointer"
-              data-testid={`toggle-map-${order.id}`}
-            >
-              <span>{isExpanded ? "Hide Map" : "Show Map"}</span>
-              <span className="text-[10px]">{isExpanded ? "▼" : "▶"}</span>
-            </button>
-
-            {isExpanded && (
-              <div className="mt-3 relative h-64 w-full rounded-xl border border-gorola-fog overflow-hidden shadow-inner animate-in fade-in slide-in-from-top-1 duration-200">
-                <OrderRouteMap
-                  buyerCoords={{ lat: order.deliveryAddress.lat, lng: order.deliveryAddress.lng }}
-                  riderCoords={order.status === "OUT_FOR_DELIVERY" ? (riderCoords ?? null) : null}
-                  className="h-full w-full border-0 rounded-none min-h-[256px]"
-                />
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="mt-2 flex w-full border-t border-gorola-fog pt-4">
-          {order.status === "PREPARING" ? (
-            <Button
-              className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
-              onClick={() =>
-                setConfirmingOrder({ id: order.id, status: "OUT_FOR_DELIVERY" })
-              }
-            >
-              Mark as Out for Delivery
-            </Button>
-          ) : order.status === "OUT_FOR_DELIVERY" ? (
-            <Button
-              className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
-              onClick={() =>
-                setConfirmingOrder({ id: order.id, status: "DELIVERED" })
-              }
-            >
-              Mark as Delivered
-            </Button>
-          ) : null}
-        </div>
       </div>
     );
   }
+
+  const visibleOrders = activeTab === "PICKUP" ? preparingOrders : deliveringOrders;
 
   return (
     <div className="flex flex-col gap-6 pb-20">
@@ -259,6 +237,34 @@ export function RiderOrdersPage(): ReactElement {
           <RefreshCw className={`h-4 w-4 text-muted-foreground ${isFetching ? "animate-spin" : ""}`} />
         </button>
       </div>
+
+      {/* Top Filter Navigation Tabs */}
+      {!isLoading && !error && orders.length > 0 && (
+        <div className="flex bg-white border border-gorola-fog rounded-2xl p-1 gap-1 shadow-sm">
+          <button
+            type="button"
+            onClick={() => setActiveTab("PICKUP")}
+            className={`flex-1 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
+              activeTab === "PICKUP"
+                ? "bg-gorola-pine text-white shadow-sm"
+                : "text-muted-foreground hover:text-gorola-charcoal hover:bg-gorola-fog/50"
+            }`}
+          >
+            Ready for Pickup
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("DELIVERY")}
+            className={`flex-1 py-2.5 text-xs font-extrabold uppercase tracking-wider rounded-xl transition-all cursor-pointer ${
+              activeTab === "DELIVERY"
+                ? "bg-gorola-pine text-white shadow-sm"
+                : "text-muted-foreground hover:text-gorola-charcoal hover:bg-gorola-fog/50"
+            }`}
+          >
+            Out for Delivery
+          </button>
+        </div>
+      )}
 
       {/* Main feed content */}
       <div className="flex flex-col gap-6">
@@ -294,42 +300,134 @@ export function RiderOrdersPage(): ReactElement {
         )}
 
         {!isLoading && !error && orders.length > 0 && (
-          <div className="flex flex-col gap-8">
-            {/* Ready for Pickup section */}
-            <div className="flex flex-col gap-4">
-              <h2 className="font-heading text-sm font-bold tracking-wide text-gorola-charcoal uppercase px-1">
-                Ready for Pickup ({preparingOrders.length})
-              </h2>
-              {preparingOrders.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gorola-fog bg-white/50 p-6 text-center text-sm text-muted-foreground font-medium">
-                  No orders ready for pickup.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {preparingOrders.map(renderOrderCard)}
-                </div>
-              )}
-            </div>
-
-            {/* Out for Delivery section */}
-            <div className="flex flex-col gap-4">
-              <h2 className="font-heading text-sm font-bold tracking-wide text-gorola-charcoal uppercase px-1">
-                Out for Delivery ({deliveringOrders.length})
-              </h2>
-              {deliveringOrders.length === 0 ? (
-                <div className="rounded-2xl border border-dashed border-gorola-fog bg-white/50 p-6 text-center text-sm text-muted-foreground font-medium">
-                  No orders currently in delivery.
-                </div>
-              ) : (
-                <div className="flex flex-col gap-4">
-                  {deliveringOrders.map(renderOrderCard)}
-                </div>
-              )}
-            </div>
+          <div className="flex flex-col gap-4">
+            {visibleOrders.length === 0 ? (
+              <div className="rounded-2xl border border-dashed border-gorola-fog bg-white/50 p-6 text-center text-sm text-muted-foreground font-medium">
+                {activeTab === "PICKUP" ? "No orders ready for pickup." : "No orders currently in delivery."}
+              </div>
+            ) : (
+              visibleOrders.map(renderCompactOrderCard)
+            )}
           </div>
         )}
       </div>
 
+      {/* Detailed Overlay Modal */}
+      {selectedOrder && (
+        <div
+          data-testid="rider-order-modal"
+          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          onClick={() => setSelectedOrder(null)}
+        >
+          <div
+            className="bg-white rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6 animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-start gap-4 border-b border-gorola-fog pb-4">
+              <div>
+                <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wide bg-gorola-pine/10 text-gorola-pine border border-gorola-pine/20">
+                  Order #{selectedOrder.id.toUpperCase()}
+                </span>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Placed {getElapsedTimeStr(selectedOrder.createdAt)}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                className="h-8 w-8 rounded-full border border-gorola-fog hover:bg-gorola-fog flex items-center justify-center font-bold text-muted-foreground transition-all cursor-pointer"
+                aria-label="Close modal"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Content details */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-2.5">
+                <Phone className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground font-medium">Buyer Contact</span>
+                  <span className="text-sm font-semibold text-gorola-charcoal">{selectedOrder.buyerMaskedPhone}</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <MapPin className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground font-medium">Delivery Landmark</span>
+                  <span className="text-sm text-gorola-charcoal font-semibold">
+                    {selectedOrder.deliveryAddress.landmark || "No landmark specified"}
+                  </span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
+                <ShoppingBag className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
+                <div className="flex flex-col w-full">
+                  <span className="text-xs text-muted-foreground font-medium mb-1">Items</span>
+                  <ul className="flex flex-col gap-1 pl-1">
+                    {selectedOrder.items.map((item, idx) => (
+                      <li key={idx} className="text-sm font-semibold text-gorola-charcoal">
+                        {item.productName} ({item.variantLabel}) x{item.quantity}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+
+            {/* Collapsible Map Section */}
+            {selectedOrder.deliveryAddress.lat && selectedOrder.deliveryAddress.lng && (
+              <div className="border-t border-gorola-fog pt-4">
+                <button
+                  onClick={() => setExpandedOrderId(expandedOrderId === selectedOrder.id ? null : selectedOrder.id)}
+                  className="text-xs font-bold text-gorola-pine hover:text-gorola-pine-dark flex items-center gap-1 focus:outline-none select-none cursor-pointer"
+                  data-testid={`toggle-map-${selectedOrder.id}`}
+                >
+                  <span>{expandedOrderId === selectedOrder.id ? "Hide Map" : "Show Map"}</span>
+                  <span className="text-[10px]">{expandedOrderId === selectedOrder.id ? "▼" : "▶"}</span>
+                </button>
+
+                {expandedOrderId === selectedOrder.id && (
+                  <div className="mt-3 relative h-64 w-full rounded-xl border border-gorola-fog overflow-hidden shadow-inner animate-in fade-in slide-in-from-top-1 duration-200">
+                    <OrderRouteMap
+                      buyerCoords={{ lat: selectedOrder.deliveryAddress.lat, lng: selectedOrder.deliveryAddress.lng }}
+                      riderCoords={selectedOrder.status === "OUT_FOR_DELIVERY" ? (riderCoords ?? null) : null}
+                      className="h-full w-full border-0 rounded-none min-h-[256px]"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Action buttons footer */}
+            <div className="pt-4 border-t border-gorola-fog flex w-full">
+              {selectedOrder.status === "PREPARING" ? (
+                <Button
+                  className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
+                  onClick={() =>
+                    setConfirmingOrder({ id: selectedOrder.id, status: "OUT_FOR_DELIVERY" })
+                  }
+                >
+                  Mark as Out for Delivery
+                </Button>
+              ) : selectedOrder.status === "OUT_FOR_DELIVERY" ? (
+                <Button
+                  className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
+                  onClick={() =>
+                    setConfirmingOrder({ id: selectedOrder.id, status: "DELIVERED" })
+                  }
+                >
+                  Mark as Delivered
+                </Button>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Dialog */}
       {confirmingOrder && (
         <Dialog open={!!confirmingOrder} onOpenChange={(open) => !open && setConfirmingOrder(null)}>
           <DialogContent className="sm:max-w-sm rounded-2xl p-6" showCloseButton={false}>

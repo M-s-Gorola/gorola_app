@@ -551,4 +551,8 @@ _(Append new entries here — never delete old entries.)_
 - Ensured compliance with >= 44px mobile tap target accessibility guidelines and verified all vitest, eslint, and tsc quality gates are 100% green.
 - Clarified and mapped architectural plans for upcoming store status confirmation modals, rider order card list-view refactoring (click to open details modal), and status filtering tab menus.
 
-
+### Session 7 — 2026-06-11 — Phase 5.5.1 Rider Active Orders Refactoring & Store Status Confirmations Completed
+- Implemented status change confirmation dialogs in `StoreOrdersPage.tsx` using Radix `<Dialog>`.
+- Refactored `RiderOrdersPage.tsx` with filter tabs for PREPARING and OUT_FOR_DELIVERY orders, compact list-view cards (showing only items and delivery address landmark), and click-to-open overlay details modals featuring full buyer information, toggleable route maps, and status-updating action buttons.
+- Ensured body scroll locks when overlay detailed modals are active.
+- Completed full TDD cycle: verified RED state, implemented modifications, and ran full suite of web unit tests, typechecks, and lints (ensuring GREEN state).

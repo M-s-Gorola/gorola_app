@@ -70,49 +70,7 @@ describe("RiderOrdersPage", () => {
     expect(await screen.findByText(/No active orders right now/i)).toBeInTheDocument();
   });
 
-  it("renders active orders grouped by status (PREPARING and OUT_FOR_DELIVERY)", async () => {
-    getMock.mockResolvedValue({
-      data: {
-        success: true,
-        data: [
-          {
-            id: "order-1",
-            status: "PREPARING",
-            buyerMaskedPhone: "*********3210",
-            deliveryAddress: { landmark: "Near park" },
-            items: [{ productName: "Apple", variantLabel: "1kg", quantity: 2 }],
-            createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString() // 5 min ago
-          },
-          {
-            id: "order-2",
-            status: "OUT_FOR_DELIVERY",
-            buyerMaskedPhone: "*********9876",
-            deliveryAddress: { landmark: "Opposite mall" },
-            items: [{ productName: "Banana", variantLabel: "1 dozen", quantity: 1 }],
-            createdAt: new Date(Date.now() - 15 * 60 * 1000).toISOString() // 15 min ago
-          }
-        ]
-      }
-    });
-
-    renderRiderOrders();
-
-    // Verify status sections are rendered
-    expect(await screen.findByRole("heading", { name: /Ready for Pickup/i })).toBeInTheDocument();
-    expect(await screen.findByRole("heading", { name: /Out for Delivery/i })).toBeInTheDocument();
-
-    // Verify order 1 details
-    expect(screen.getByText("*********3210")).toBeInTheDocument();
-    expect(screen.getByText("Near park")).toBeInTheDocument();
-    expect(screen.getByText("Apple (1kg) x2")).toBeInTheDocument();
-
-    // Verify order 2 details
-    expect(screen.getByText("*********9876")).toBeInTheDocument();
-    expect(screen.getByText("Opposite mall")).toBeInTheDocument();
-    expect(screen.getByText("Banana (1 dozen) x1")).toBeInTheDocument();
-  });
-
-  it("renders status update action buttons and handles status transitions via confirmation modal", async () => {
+  it("renders active orders with status filter tabs and compact cards that open detail modals", async () => {
     getMock.mockResolvedValue({
       data: {
         success: true,
@@ -137,6 +95,59 @@ describe("RiderOrdersPage", () => {
       }
     });
 
+    renderRiderOrders();
+
+    // Verify filter tabs are rendered
+    expect(await screen.findByRole("button", { name: /Ready for Pickup/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Out for Delivery/i })).toBeInTheDocument();
+
+    // By default, "Ready for Pickup" tab is active. Verify order-1 is visible but order-2 is not
+    expect(await screen.findByText("Apple (1kg) x2")).toBeInTheDocument();
+    expect(screen.getByText("Near park")).toBeInTheDocument();
+    expect(screen.queryByText("Banana (1 dozen) x1")).not.toBeInTheDocument();
+
+    // Compact card should NOT show detailed fields or actions
+    expect(screen.queryByText("*********3210")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Mark as Out for Delivery/i })).not.toBeInTheDocument();
+
+    // Click the compact card to open the detail modal
+    fireEvent.click(screen.getByText("Near park"));
+
+    // Verify detail modal is rendered and shows full details
+    expect(await screen.findByTestId("rider-order-modal")).toBeInTheDocument();
+    expect(screen.getByText("*********3210")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Mark as Out for Delivery/i })).toBeInTheDocument();
+
+    // Close the modal
+    fireEvent.click(screen.getByLabelText("Close modal"));
+    expect(screen.queryByTestId("rider-order-modal")).not.toBeInTheDocument();
+
+    // Toggle filter tab to "Out for Delivery"
+    fireEvent.click(screen.getByRole("button", { name: /Out for Delivery/i }));
+
+    // Now order-2 (OUT_FOR_DELIVERY) is visible and order-1 is not
+    expect(await screen.findByText("Banana (1 dozen) x1")).toBeInTheDocument();
+    expect(screen.getByText("Opposite mall")).toBeInTheDocument();
+    expect(screen.queryByText("Apple (1kg) x2")).not.toBeInTheDocument();
+  });
+
+  it("handles status transitions via modal actions and confirmation dialogs", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            id: "order-1",
+            status: "PREPARING",
+            buyerMaskedPhone: "*********3210",
+            deliveryAddress: { landmark: "Near park" },
+            items: [{ productName: "Apple", variantLabel: "1kg", quantity: 2 }],
+            createdAt: new Date(Date.now() - 5 * 60 * 1000).toISOString()
+          }
+        ]
+      }
+    });
+
     putMock.mockResolvedValue({
       data: {
         success: true,
@@ -146,25 +157,24 @@ describe("RiderOrdersPage", () => {
 
     renderRiderOrders();
 
-    // Verify "Mark as Out for Delivery" button exists for PREPARING order
+    // Open detail modal
+    fireEvent.click(await screen.findByText("Near park"));
+
+    // Verify "Mark as Out for Delivery" button exists inside the modal
     const pickupButton = await screen.findByRole("button", { name: /Mark as Out for Delivery/i });
     expect(pickupButton).toBeInTheDocument();
 
-    // Verify "Mark as Delivered" button exists for OUT_FOR_DELIVERY order
-    const deliveredButton = await screen.findByRole("button", { name: /Mark as Delivered/i });
-    expect(deliveredButton).toBeInTheDocument();
-
-    // Click "Mark as Out for Delivery" to open confirmation modal
+    // Click it to open confirmation dialog
     fireEvent.click(pickupButton);
 
-    // Verify modal is shown
+    // Verify confirmation dialog is shown
     expect(screen.getByText(/Are you sure you want to mark this order/i)).toBeInTheDocument();
 
     // Click confirm
     const confirmButton = screen.getByRole("button", { name: /Confirm/i });
     fireEvent.click(confirmButton);
 
-    // Wait for the modal to close to avoid leaking DOM state
+    // Wait for the modal to close
     await waitForElementToBeRemoved(() => screen.queryByText(/Confirm Status Update/i));
 
     // Check api.put is called
@@ -173,7 +183,7 @@ describe("RiderOrdersPage", () => {
     });
   });
 
-  it("renders map toggle button and displays OrderRouteMap when expanded", async () => {
+  it("renders map toggle button and displays OrderRouteMap when expanded inside detailed modal", async () => {
     getMock.mockResolvedValue({
       data: {
         success: true,
@@ -192,7 +202,10 @@ describe("RiderOrdersPage", () => {
 
     renderRiderOrders();
 
-    // The map toggle button should be present
+    // Open detail modal
+    fireEvent.click(await screen.findByText("Near park"));
+
+    // The map toggle button should be present in the modal
     const toggleButton = await screen.findByTestId("toggle-map-order-1");
     expect(toggleButton).toBeInTheDocument();
     expect(toggleButton).toHaveTextContent(/Show Map/i);
