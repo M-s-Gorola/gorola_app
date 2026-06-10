@@ -5,12 +5,17 @@ import { Routes } from "react-router-dom";
 
 import { AdminRoutes } from "@/app/routes/admin";
 import { BuyerRoutes } from "@/app/routes/buyer";
+import { RiderRoutes } from "@/app/routes/rider";
 import { StoreRoutes } from "@/app/routes/store";
 import { DevWeatherToggle } from "@/components/shared/DevWeatherToggle";
 import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
 import { useWeatherSync } from "@/hooks/useWeatherSync";
-import { bootstrapAdminAuthSession, bootstrapBuyerAuthSession, bootstrapStoreOwnerAuthSession } from "@/lib/api";
+import {
+  bootstrapAdminAuthSession,
+  bootstrapBuyerAuthSession,
+  bootstrapRiderAuthSession,
+  bootstrapStoreOwnerAuthSession} from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 import { resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useWeatherStore } from "@/store/weather.store";
@@ -28,6 +33,8 @@ export function App(): ReactElement {
       void bootstrapAdminAuthSession();
     } else if (subdomain === "store" || (!isSubdomainMode && window.location.pathname.startsWith("/store") && !isBuyerStorePage)) {
       void bootstrapStoreOwnerAuthSession();
+    } else if (subdomain === "rider" || (!isSubdomainMode && window.location.pathname.startsWith("/rider"))) {
+      void bootstrapRiderAuthSession();
     } else {
       void bootstrapBuyerAuthSession();
     }
@@ -51,6 +58,8 @@ export function App(): ReactElement {
             StoreRoutes({ prefix: "" })
           ) : subdomain === "admin" ? (
             AdminRoutes({ prefix: "" })
+          ) : subdomain === "rider" ? (
+            RiderRoutes({ prefix: "" })
           ) : (
             BuyerRoutes()
           )
@@ -59,6 +68,7 @@ export function App(): ReactElement {
             {BuyerRoutes()}
             {StoreRoutes({ prefix: "/store" })}
             {AdminRoutes({ prefix: "/admin" })}
+            {RiderRoutes({ prefix: "/rider" })}
           </>
         )}
       </Routes>

@@ -21,7 +21,8 @@ export const orderRelationsInclude = {
   },
   statusHistory: { orderBy: { changedAt: "asc" as const } },
   store: { select: { id: true, name: true, phone: true, storeType: true } },
-  bookingOrder: true
+  bookingOrder: true,
+  user: { select: { phone: true, name: true } }
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -39,6 +40,8 @@ export type CreateOrderInput = {
   addressLabel?: string | null;
   flatRoom?: string | null;
   deliveryNote?: string | null;
+  deliveryLat?: string | number | null;
+  deliveryLng?: string | number | null;
   scheduledFor?: Date | null;
   appliedDiscountCode?: string | null;
   items: Array<{
@@ -100,6 +103,8 @@ export class OrderRepository {
           addressLabel: input.addressLabel ?? null,
           flatRoom: input.flatRoom ?? null,
           deliveryNote: input.deliveryNote ?? null,
+          deliveryLat: input.deliveryLat ? toDecimal(input.deliveryLat) : null,
+          deliveryLng: input.deliveryLng ? toDecimal(input.deliveryLng) : null,
           scheduledFor: input.scheduledFor ?? null,
           appliedDiscountCode: input.appliedDiscountCode ?? null,
           items: {
@@ -159,6 +164,22 @@ export class OrderRepository {
       where: { storeId }
     });
   }
+
+  public async findManyByStore(
+    storeId: string,
+    filters?: { status?: OrderStatus[] }
+  ): Promise<OrderWithRelations[]> {
+    const where: Prisma.OrderWhereInput = { storeId };
+    if (filters?.status) {
+      where.status = { in: filters.status };
+    }
+    return this.db.order.findMany({
+      include: orderRelationsInclude,
+      orderBy: { createdAt: "desc" },
+      where
+    });
+  }
+
 
   public async updateStatus(
     orderId: string,

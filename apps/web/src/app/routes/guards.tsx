@@ -70,3 +70,20 @@ export function AdminRoute({ children }: GuardProps): ReactElement {
   }
   return <>{children}</>;
 }
+
+export function RiderRoute({ children }: GuardProps): ReactElement {
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
+  const role = useAuthStore((s) => s.role);
+  const location = useLocation();
+
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+  if (isBootstrapPending) {
+    return <p className="font-dm-sans text-sm text-gorola-slate">Restoring your session...</p>;
+  }
+  if (!hasSession(accessToken) || role !== "RIDER") {
+    return <Navigate to={getScopedPath("/rider/login", "rider", isSubdomainMode)} replace state={{ from: location }} />;
+  }
+  return <>{children}</>;
+}

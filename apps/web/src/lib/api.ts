@@ -3,8 +3,10 @@ import axios, { type AxiosError, type InternalAxiosRequestConfig, isAxiosError, 
 import {
   adminBootstrapPromise,
   bootstrapPromise,
+  riderBootstrapPromise,
   setAdminBootstrapPromise,
   setBootstrapPromise,
+  setRiderBootstrapPromise,
   setStoreBootstrapPromise,
   storeBootstrapPromise
 } from "@/lib/bootstrap-state";
@@ -163,7 +165,9 @@ export function createApiClient(options: CreateApiClientOptions) {
       ? "/api/v1/auth/store-owner/refresh"
       : role === "ADMIN"
         ? "/api/v1/auth/admin/refresh"
-        : BUYER_REFRESH_PATH;
+        : role === "RIDER"
+          ? "/api/v1/rider/auth/refresh"
+          : BUYER_REFRESH_PATH;
 
     try {
       const res = await instance.post<unknown>(refreshPath, { refreshToken: refresh }, {
@@ -171,7 +175,7 @@ export function createApiClient(options: CreateApiClientOptions) {
       } as InternalAxiosRequestConfig & { _gorolaRefresh?: true });
       
       let nextAccessToken = "";
-      if (role === "STORE_OWNER" || role === "ADMIN") {
+      if (role === "STORE_OWNER" || role === "ADMIN" || role === "RIDER") {
         const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
         if (!body || body.success !== true || !body.data?.accessToken || !body.data?.refreshToken) {
           throw new Error("Invalid token refresh payload");
@@ -362,6 +366,52 @@ export async function bootstrapAdminAuthSession(): Promise<void> {
   return p;
 }
 
+/**
+ * Startup auth bootstrap for rider: try cookie-backed refresh once so reload keeps rider session.
+ */
+export async function bootstrapRiderAuthSession(): Promise<void> {
+  if (riderBootstrapPromise) {
+    return riderBootstrapPromise;
+  }
+
+  const p = (async () => {
+    if (api === null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    if (useAuthStore.getState().accessToken !== null) {
+      useAuthStore.getState().setBootstrapPending(false);
+      return;
+    }
+    useAuthStore.getState().setBootstrapPending(true);
+    try {
+      const res = await api.post<unknown>("/api/v1/rider/auth/refresh", {});
+      const body = res.data as { success: boolean; data: { accessToken: string; refreshToken: string } };
+      if (body?.success === true && body.data?.accessToken && body.data?.refreshToken) {
+        const tokenPart = body.data.accessToken.split(".")[1];
+        if (tokenPart) {
+          const payload = JSON.parse(atob(tokenPart)) as {
+            sub: string;
+            storeId: string;
+            role: "RIDER";
+          };
+          useAuthStore.getState().setRiderSession({
+            accessToken: body.data.accessToken,
+            refreshToken: body.data.refreshToken,
+            userId: payload.sub,
+            storeId: payload.storeId
+          });
+        }
+      }
+    } catch {
+      // No valid refresh cookie/token on startup
+    } finally {
+      useAuthStore.getState().setBootstrapPending(false);
+    }
+  })();
+  setRiderBootstrapPromise(p);
+  return p;
+}
 
 /**
  * Fetches a boolean feature flag value.

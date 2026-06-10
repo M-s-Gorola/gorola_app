@@ -51,6 +51,8 @@ describe("Admin Stores API Integration Tests", () => {
     await db.advertisement.deleteMany();
     await db.offer.deleteMany();
     await db.discount.deleteMany();
+    await db.riderLocation.deleteMany();
+    await db.deliveryRider.deleteMany();
     await db.store.deleteMany();
     await db.auditLog.deleteMany();
   });

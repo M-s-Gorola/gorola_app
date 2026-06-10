@@ -10,7 +10,7 @@ export type AuthTokens = {
   refreshToken: string;
 };
 
-export type UserRole = "BUYER" | "STORE_OWNER" | "ADMIN";
+export type UserRole = "BUYER" | "STORE_OWNER" | "ADMIN" | "RIDER";
 
 export type BuyerSession = AuthTokens & {
   userId: string;
@@ -29,6 +29,11 @@ export type AdminSession = AuthTokens & {
   twoFactorEnabled?: boolean;
 };
 
+export type RiderSession = AuthTokens & {
+  userId: string;
+  storeId: string;
+};
+
 type AuthState = {
   accessToken: string | null;
   refreshToken: string | null;
@@ -45,6 +50,7 @@ type AuthState = {
   setBuyerSession: (session: BuyerSession) => void;
   setStoreOwnerSession: (session: StoreOwnerSession) => void;
   setAdminSession: (session: AdminSession) => void;
+  setRiderSession: (session: RiderSession) => void;
   setRole: (role: UserRole | null) => void;
   setBootstrapPending: (pending: boolean) => void;
   clearSession: () => void;
@@ -114,6 +120,18 @@ export const useAuthStore = create<AuthState>((set) => ({
       storeId: null,
       twoFactorVerified: session.twoFactorVerified,
       twoFactorEnabled: session.twoFactorEnabled ?? true
+    }),
+  setRiderSession: (session) =>
+    set({
+      accessToken: session.accessToken,
+      name: null,
+      phone: null,
+      refreshToken: session.refreshToken,
+      role: "RIDER",
+      userId: session.userId,
+      storeId: session.storeId,
+      twoFactorVerified: null,
+      twoFactorEnabled: null
     }),
   setRole: (role) => set({ role }),
   setBootstrapPending: (pending) => set({ isBootstrapPending: pending }),

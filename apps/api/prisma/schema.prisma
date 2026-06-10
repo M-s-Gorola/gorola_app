@@ -279,6 +279,8 @@ model Order {
   addressLabel        String?
   flatRoom            String?
   deliveryNote        String?
+  deliveryLat         Decimal?             @db.Decimal(10, 7)
+  deliveryLng         Decimal?             @db.Decimal(10, 7)
   scheduledFor        DateTime?
   rating              Boolean?
   ratingComment       String?
@@ -432,17 +434,19 @@ model AuditLog {
 }
 
 model DeliveryRider {
-  id        String          @id @default(cuid())
-  name      String
-  phone     String
-  storeId   String
-  isActive  Boolean         @default(true)
-  riderType RiderType       @default(DELIVERY)
-  isDeleted Boolean         @default(false)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  store     Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  locations RiderLocation[]
+  id           String          @id @default(cuid())
+  name         String
+  phone        String
+  email        String          @unique
+  passwordHash String
+  storeId      String
+  isActive     Boolean         @default(true)
+  riderType    RiderType       @default(DELIVERY)
+  isDeleted    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  store        Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  locations    RiderLocation[]
 
   @@index([storeId, isActive, isDeleted])
 }
@@ -473,3 +477,4 @@ model BookingOrder {
   updatedAt            DateTime              @updatedAt
   order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+

@@ -1,3 +1,5 @@
+import "leaflet/dist/leaflet.css";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
 import { Bike, CheckCircle2, Home, MessageSquare,Package, ThumbsDown, ThumbsUp } from "lucide-react";
@@ -12,6 +14,7 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -48,6 +51,8 @@ export type BuyerOrderDetail = {
   landmarkDescription: string;
   addressLabel?: string | null;
   flatRoom?: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
   paymentMethod: string;
   rating: boolean | null;
   ratingComment: string | null;
@@ -164,9 +169,13 @@ function estimatedDeliveryCopy(
 function StatusStepper({
   history,
   status,
+  riderLocation,
+  order
 }: {
   history: StatusHistoryItem[];
   status: string;
+  riderLocation: { lat: number; lng: number } | null;
+  order: BuyerOrderDetail;
 }): ReactElement {
   const steps = [
     { icon: CheckCircle2, key: "PLACED", label: "Placed" },
@@ -242,14 +251,37 @@ function StatusStepper({
       </div>
 
       {status === "OUT_FOR_DELIVERY" ? (
-        <div className="mt-8 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+        <div className="mt-8 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+            </div>
+            <p className="font-dm-sans text-sm">
+              <strong>Rider location:</strong> Your rider is on the way with your order.
+            </p>
           </div>
-          <p className="font-dm-sans text-sm">
-            <strong>Rider location:</strong> Your rider is on the way with your order.
-          </p>
+
+          {/* Live Tracking Map Container */}
+          <div className="relative h-64 w-full rounded-lg border border-amber-200/60 overflow-hidden bg-amber-100/30 mt-1" data-testid="rider-location-map-container">
+            {riderLocation ? (
+              <OrderRouteMap
+                buyerCoords={{ lat: order.deliveryLat ?? 30.4598, lng: order.deliveryLng ?? 78.0664 }}
+                riderCoords={riderLocation}
+                className="h-full w-full border-0 rounded-none min-h-[256px]"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full w-full">
+                <p className="text-xs text-amber-800/80 italic animate-pulse">Waiting for rider GPS updates...</p>
+              </div>
+            )}
+          </div>
+
+          {riderLocation ? (
+            <div className="mt-1 text-xs font-mono bg-white/60 p-2 rounded-lg border border-amber-200/50" data-testid="rider-location-display">
+              Rider Coordinates: {riderLocation.lat.toFixed(5)}, {riderLocation.lng.toFixed(5)}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -267,6 +299,7 @@ export function OrderConfirmationPage(): ReactElement {
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
   const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
   const [ratingComment, setRatingComment] = useState("");
+  const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const queryClient = useQueryClient();
 
@@ -423,7 +456,14 @@ interface StoreOffer {
     [id, queryClient],
   );
 
-  useOrderSocket(id, onStatusChanged);
+  const onLocationUpdated = useCallback(
+    (data: { lat: number; lng: number }) => {
+      setRiderLocation({ lat: data.lat, lng: data.lng });
+    },
+    []
+  );
+
+  useOrderSocket(id, onStatusChanged, onLocationUpdated);
 
   const currentStatus = query.data?.status;
   const lastStatusRef = useRef<string | null>(null);
@@ -441,6 +481,7 @@ interface StoreOffer {
     entranceDoneRef.current = false;
     setAnimationFinished(false);
     setShowStatusTransitionBloom(false);
+    setRiderLocation(null);
   }, [id]);
 
   const isRecentlyPlaced = query.isSuccess && query.data.createdAt ? (
@@ -737,6 +778,8 @@ interface StoreOffer {
                   <StatusStepper
                     history={order.statusHistory ?? []}
                     status={order.status}
+                    riderLocation={riderLocation}
+                    order={order}
                   />
                   {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                     <p className="font-dm-sans text-xs text-gorola-slate">

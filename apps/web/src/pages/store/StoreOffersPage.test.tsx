@@ -86,8 +86,8 @@ describe("StoreOffersPage", () => {
         title: "Weekend Dairy Deal",
         discountType: "PERCENTAGE",
         discountValue: 10,
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isActive: true
       },
       {
@@ -95,8 +95,8 @@ describe("StoreOffersPage", () => {
         title: "Expired Grocery markdown",
         discountType: "FLAT",
         discountValue: 150,
-        startsAt: "2026-06-11T00:00:00.000Z",
-        endsAt: "2026-06-20T00:00:00.000Z",
+        startsAt: "2036-06-11T00:00:00.000Z",
+        endsAt: "2036-06-20T00:00:00.000Z",
         isActive: false
       }
     ];
@@ -228,8 +228,8 @@ describe("StoreOffersPage", () => {
         title: "Weekend Dairy Deal",
         discountType: "PERCENTAGE",
         discountValue: 10,
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isActive: true
       }
     ];
@@ -275,8 +275,8 @@ describe("StoreOffersPage", () => {
         title: "Weekend Dairy Deal",
         discountType: "PERCENTAGE",
         discountValue: 10,
-        startsAt: "2026-06-01T00:00:00.000Z",
-        endsAt: "2026-06-10T00:00:00.000Z",
+        startsAt: "2036-06-01T00:00:00.000Z",
+        endsAt: "2036-06-10T00:00:00.000Z",
         isActive: false // deactivated
       }
     ];

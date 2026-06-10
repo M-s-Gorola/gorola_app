@@ -63,6 +63,8 @@ function serializeOrderResponse(
     addressLabel: order.addressLabel,
     flatRoom: order.flatRoom,
     paymentMethod: order.paymentMethod,
+    deliveryLat: order.deliveryLat ? Number(order.deliveryLat) : null,
+    deliveryLng: order.deliveryLng ? Number(order.deliveryLng) : null,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
     status: order.status,
     discount: {

@@ -287,10 +287,13 @@ apps/api/src/modules/
 │   └── variants             ← GET /api/v1/products/:id (includes variants with allowedTimeslots/requiresFasting)
 │
 ├── booking/                 ← HYBRID BOOKING COMMERCE WORKFLOW (PHASE 7)
-│   ├── list timeslots       ← GET  /api/v1/booking/timeslots?storeId=&date=
-│   ├── place booking        ← POST /api/v1/orders (orderType = BOOKING)
-│   ├── list bookings        ← GET  /api/v1/booking/history (buyer appointment tracking)
-│   └── owner action         ← PUT  /api/v1/store/orders/:id/status (approval status transitions)
+│   ├── place booking request← POST /api/v1/bookings
+│   ├── list store bookings  ← GET  /api/v1/store/bookings
+│   ├── approve booking      ← PUT  /api/v1/store/bookings/:orderId/approve
+│   ├── reject booking       ← PUT  /api/v1/store/bookings/:orderId/reject
+│   ├── complete booking     ← PUT  /api/v1/store/bookings/:orderId/complete
+│   ├── cancel booking       ← DELETE /api/v1/bookings/:orderId
+│   └── get booking status   ← GET  /api/v1/bookings/:orderId
 │
 ├── cart/                    ← PER-USER, SESSION-LIKE
 │   ├── view cart            ← GET  /api/v1/cart
@@ -322,6 +325,8 @@ apps/api/src/modules/
 │   ├── update order status  ← PUT /api/v1/store/orders/:id/status
 │   ├── products             ← CRUD /api/v1/store/products
 │   ├── product variants     ← CRUD /api/v1/store/products/:id/variants
+│   ├── bulk products        ← POST /api/v1/store/bulk/products/validate | /confirm
+│   ├── bulk restock         ← POST /api/v1/store/bulk/restock/validate | /confirm
 │   ├── advertisements       ← CRUD /api/v1/store/advertisements
 │   ├── offers               ← CRUD /api/v1/store/offers
 │   └── discounts            ← CRUD /api/v1/store/discounts
@@ -337,6 +342,7 @@ apps/api/src/modules/
 │   ├── store management     ← CRUD /api/v1/admin/stores
 │   ├── user management      ← GET/PUT /api/v1/admin/users
 │   ├── category management  ← CRUD /api/v1/admin/categories
+│   ├── bulk categories      ← POST /api/v1/admin/bulk/categories/validate | /confirm
 │   ├── feature flags        ← GET/PUT /api/v1/admin/feature-flags
 │   ├── ad approval          ← PUT /api/v1/admin/advertisements/:id/approve
 │   └── audit logs           ← GET /api/v1/admin/audit-logs
@@ -347,9 +353,9 @@ apps/api/src/modules/
 ├── audit/                   ← INTERNAL — NO PUBLIC ROUTES
 │   └── Called by service layer after any state-changing admin/store-owner action
 │
-├── delivery/                ← STUB — ALL ROUTES RETURN 501
-│   ├── rider auth           ← POST /api/v1/rider/auth/login → 501
-│   ├── active order         ← GET  /api/v1/rider/orders/active → 501
+├── delivery/                ← IN PROGRESS (PARTIALLY IMPLEMENTED)
+│   ├── rider auth           ← POST /api/v1/rider/auth/login (Implemented)
+│   ├── active orders        ← GET  /api/v1/rider/orders/active (Implemented)
 │   ├── update order status  ← PUT  /api/v1/rider/orders/:id/status → 501
 │   └── update location      ← PUT  /api/v1/rider/location → 501
 │
@@ -365,6 +371,7 @@ apps/api/src/modules/
 User (buyer)
   │
   ├── has many → Address
+  ├── has many  → ConsentLog (givenAt, purpose, isWithdrawn, withdrawnAt)
   ├── has one  → Cart
   │               └── has many → CartItem → ProductVariant
   └── has many → Order (orderType = QUICK | BOOKING)
@@ -395,7 +402,7 @@ FeatureFlag (key-value store, admin-controlled)
 
 AuditLog (append-only, references actorId by string — not FK, so log survives deletion)
 
-DeliveryRider [STUB] (riderType = DELIVERY | FIELD_TECHNICIAN)
+DeliveryRider (riderType = DELIVERY | FIELD_TECHNICIAN)
   └── has many → RiderLocation [STUB]
 ```
 
@@ -571,6 +578,7 @@ Used for: physical inventory count correction, damaged goods write-off
 otp:{phone}                 → { hash: string, attempts: number }  TTL: 300s (5 min)
 otp_rate:{phone}            → count (number)                      TTL: 900s (15 min)
 refresh:{token}             → userId                              TTL: 604800s (7 days)
+user_sessions:${userId}      → Set of active refresh tokens        TTL: 604800s (7 days)
 jti:{jwtId}                 → '1'                                 TTL: matches access token (900s)
                               (JWT allowlist — if key missing, token is revoked)
 feature_flags               → JSON object of all flags            TTL: 60s (reloaded every minute)
@@ -674,7 +682,7 @@ admin           |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 promotion       |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 feature-flag    |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 audit           |     ✓     |   ✗   |    ✗    |    ✗    |     ✗
-delivery [STUB] |     ✓*    |   ✗   |    ✗    |    ✗    |     ✗
+delivery        |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 health          |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 
 * = flag-gated, not active in v1
