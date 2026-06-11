@@ -353,7 +353,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenVerifier: tokenService,
     riderAuthService,
     riderOrderService,
-    riderLocationService
+    riderLocationService,
+    riderRepository
   });
 
   void app.register(socketPlugin, {

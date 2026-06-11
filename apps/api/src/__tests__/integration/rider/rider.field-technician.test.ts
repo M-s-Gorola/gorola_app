@@ -11,6 +11,7 @@ import { createServer } from "../../../server.js";
 async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<void> {
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
+  await db.riderStore.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.bookingOrder.deleteMany();
@@ -97,9 +98,16 @@ describe("Rider Field Technician Route Integration", () => {
         phone: "+919000000001",
         email: "tech1@gorola.in",
         passwordHash,
-        storeId: storeId1,
         isActive: true,
         riderType: "FIELD_TECHNICIAN"
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: technicianRider.id,
+        storeId: storeId1,
+        isPrimary: true
       }
     });
 
@@ -109,9 +117,16 @@ describe("Rider Field Technician Route Integration", () => {
         phone: "+919000000002",
         email: "delivery1@gorola.in",
         passwordHash,
-        storeId: storeId1,
         isActive: true,
         riderType: "DELIVERY"
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: deliveryRider.id,
+        storeId: storeId1,
+        isPrimary: true
       }
     });
 
@@ -166,7 +181,7 @@ describe("Rider Field Technician Route Integration", () => {
       }
     });
 
-    // Create a BOOKING order with status APPROVED
+    // Create a BOOKING order with status APPROVED scheduled for today
     const bookingOrder = await db.order.create({
       data: {
         userId: buyer.id,
@@ -190,9 +205,40 @@ describe("Rider Field Technician Route Integration", () => {
         },
         bookingOrder: {
           create: {
-            scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000), // tomorrow
+            scheduledDate: new Date(), // today
             timeslot: "09:00-11:00",
             requiresFasting: true,
+            approvalStatus: "APPROVED"
+          }
+        }
+      }
+    });
+
+    // Create a BOOKING order with status APPROVED scheduled 3 days from now (noise)
+    await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeId1,
+        status: "APPROVED",
+        orderType: "BOOKING",
+        subtotal: 800.00,
+        deliveryFee: 50.00,
+        total: 850.00,
+        landmarkDescription: "Near Picture Palace",
+        items: {
+          create: {
+            productVariantId: variant.id,
+            productName: "Thyroid Panel",
+            variantLabel: "Single test",
+            price: 800.00,
+            quantity: 1
+          }
+        },
+        bookingOrder: {
+          create: {
+            scheduledDate: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000), // 3 days from now
+            timeslot: "11:00-13:00",
+            requiresFasting: false,
             approvalStatus: "APPROVED"
           }
         }

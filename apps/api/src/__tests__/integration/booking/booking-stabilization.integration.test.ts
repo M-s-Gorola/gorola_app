@@ -199,33 +199,59 @@ describe("Booking Stabilization (TDD Integration)", () => {
       registerRoutes: registerAppRoutes
     });
 
-    const buyerToken = await signTestToken(buyerUser.id, "BUYER");
     const ownerToken = await signTestToken(owner.id, "STORE_OWNER");
-    const addr = await db.address.create({
+
+    const today = new Date();
+    const tomorrow = new Date();
+    tomorrow.setDate(today.getDate() + 1);
+
+    // 1. Seed Booking Order 1: Scheduled tomorrow, Pending, placed today (total = 250)
+    const order1 = await db.order.create({
       data: {
         userId: buyerUser.id,
-        label: "Home",
-        landmarkDescription: "Near Clock Tower landmark area min ten"
+        storeId: store.id,
+        status: "PENDING_APPROVAL",
+        orderType: "BOOKING",
+        subtotal: 250.0,
+        deliveryFee: 0.0,
+        total: 250.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Test landmark",
+        createdAt: today
+      }
+    });
+    await db.bookingOrder.create({
+      data: {
+        orderId: order1.id,
+        scheduledDate: tomorrow,
+        timeslot: "09:00-12:00",
+        approvalStatus: "PENDING_APPROVAL"
       }
     });
 
-    const tomorrow = new Date();
-    tomorrow.setDate(tomorrow.getDate() + 1);
-
-    // Create 1 booking request
-    const placeRes = await server.inject({
-      headers: { authorization: `Bearer ${buyerToken}` },
-      method: "POST",
-      payload: {
+    // 2. Seed Booking Order 2: Scheduled today, Approved, placed today (total = 250)
+    const order2 = await db.order.create({
+      data: {
+        userId: buyerUser.id,
         storeId: store.id,
-        items: [{ productId: product.id, variantId: variantStandard.id }],
-        scheduledDate: tomorrow.toISOString(),
-        timeslot: "09:00-12:00",
-        addressId: addr.id
-      },
-      url: "/api/v1/bookings"
+        status: "APPROVED",
+        orderType: "BOOKING",
+        subtotal: 250.0,
+        deliveryFee: 0.0,
+        total: 250.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Test landmark",
+        createdAt: today
+      }
     });
-    expect(placeRes.statusCode).toBe(201);
+    await db.bookingOrder.create({
+      data: {
+        orderId: order2.id,
+        scheduledDate: today,
+        timeslot: "09:00-12:00",
+        approvalStatus: "APPROVED"
+      }
+    });
 
     // Call store owner dashboard
     const dashboardRes = await server.inject({
@@ -250,6 +276,6 @@ describe("Booking Stabilization (TDD Integration)", () => {
     // Since it's a booking store, the aggregate counts should correctly find the BookingOrder
     expect(envelope.data.todayOrderCount).toBe(1);
     expect(envelope.data.pendingOrdersCount).toBe(1);
-    expect(envelope.data.todayRevenue).toBe(250);
+    expect(envelope.data.todayRevenue).toBe(500);
   });
 });

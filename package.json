@@ -52,7 +52,8 @@
       "zod": "^4.3.6",
       "react-router": "^7.15.0",
       "react-router-dom": "^7.15.0",
-      "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz"
+      "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz",
+      "@grpc/grpc-js": "^1.14.4"
     }
   },
   "_pnpm_overrides_comments": {
@@ -71,6 +72,7 @@
     "zod": "Overridden to ensure single Zod version across workspace and resolve react-hook-form type mismatches in hoisted linker mode",
     "react-router": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0",
     "react-router-dom": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0",
-    "xlsx": "Overridden due to high security vulnerabilities (Prototype Pollution, ReDoS) in <0.20.2"
+    "xlsx": "Overridden due to high security vulnerabilities (Prototype Pollution, ReDoS) in <0.20.2",
+    "@grpc/grpc-js": "Overridden due to high security vulnerabilities (server crash, malformed compression message crash) in <1.14.4"
   }
 }

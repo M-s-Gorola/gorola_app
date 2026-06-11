@@ -15,27 +15,33 @@ export class RiderOrderService {
     private readonly emitter?: RiderOrderEventEmitter
   ) {}
 
-  public async getActiveOrders(storeId: string, riderId: string): Promise<OrderWithRelations[]> {
+  public async getActiveOrders(storeIds: string[], riderId: string): Promise<OrderWithRelations[]> {
     const rider = await this.riders.findById(riderId);
     if (!rider) {
       throw new NotFoundError("Rider not found");
     }
 
     if (rider.riderType === "FIELD_TECHNICIAN") {
-      return this.orders.findManyByStore(storeId, {
+      const now = new Date();
+      const startOfToday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 0, 0, 0));
+      const startOfTomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0, 0));
+
+      return this.orders.findManyByStore(storeIds, {
         status: ["APPROVED", "OUT_FOR_DELIVERY"],
-        orderType: "BOOKING"
+        orderType: "BOOKING",
+        scheduledDateFrom: startOfToday,
+        scheduledDateTo: startOfTomorrow
       });
     }
 
-    return this.orders.findManyByStore(storeId, {
+    return this.orders.findManyByStore(storeIds, {
       status: ["PREPARING", "OUT_FOR_DELIVERY"],
       orderType: "QUICK"
     });
   }
 
   public async updateOrderStatus(
-    storeId: string,
+    storeIds: string | string[],
     orderId: string,
     newStatus: OrderStatus,
     changedBy: string
@@ -45,7 +51,8 @@ export class RiderOrderService {
       throw new NotFoundError("Order not found");
     }
 
-    if (order.storeId !== storeId) {
+    const isAuthorized = Array.isArray(storeIds) ? storeIds.includes(order.storeId) : order.storeId === storeIds;
+    if (!isAuthorized) {
       throw new ForbiddenError("You are not authorized to update this order");
     }
 

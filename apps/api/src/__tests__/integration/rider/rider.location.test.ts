@@ -11,6 +11,7 @@ import { createServer } from "../../../server.js";
 async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<void> {
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
+  await db.riderStore.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
@@ -78,8 +79,14 @@ describe("Rider Geolocation Tracking Integration", () => {
         phone: "+919000000011",
         email: "fastrider@gorola.in",
         passwordHash: "hash",
-        storeId: storeId1,
         isActive: true
+      }
+    });
+    await db.riderStore.create({
+      data: {
+        riderId: rider.id,
+        storeId: storeId1,
+        isPrimary: true
       }
     });
     riderId1 = rider.id;

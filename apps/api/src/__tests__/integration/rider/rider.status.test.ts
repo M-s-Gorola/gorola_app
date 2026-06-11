@@ -11,6 +11,7 @@ import { createServer } from "../../../server.js";
 async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<void> {
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
+  await db.riderStore.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
@@ -108,19 +109,33 @@ describe("Rider Order Status Update Integration", () => {
         phone: "+919000000001",
         email: "rider1@gorola.in",
         passwordHash,
-        storeId: storeId1,
         isActive: true
       }
     });
 
-    await db.deliveryRider.create({
+    await db.riderStore.create({
+      data: {
+        riderId: rider1.id,
+        storeId: storeId1,
+        isPrimary: true
+      }
+    });
+
+    const rider2 = await db.deliveryRider.create({
       data: {
         name: "Rider Two",
         phone: "+919000000002",
         email: "rider2@gorola.in",
         passwordHash,
-        storeId: storeId2,
         isActive: true
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: rider2.id,
+        storeId: storeId2,
+        isPrimary: true
       }
     });
 

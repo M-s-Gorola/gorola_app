@@ -697,14 +697,14 @@ export function AdminCategoriesPage(): ReactElement {
     <div className="space-y-6">
       {/* Header */}
       <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div>
+        <div className="max-w-xl">
           <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">Category Management</h1>
           <p className="text-sm text-gorola-slate font-dm-sans">
             Add, reorder, edit, and configure commerce types for categories and subcategories.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 md:justify-end shrink-0">
           <button
             onClick={() => void refetch()}
             disabled={isFetching}
@@ -722,14 +722,14 @@ export function AdminCategoriesPage(): ReactElement {
             Import Categories
           </button>
 
-          <Button
+          <button
             data-testid="add-category-button"
             onClick={handleOpenAddCategory}
             className="px-3 py-2 sm:px-4 sm:py-2.5 bg-gorola-pine hover:bg-gorola-pine-dark text-white rounded-xl text-[10px] sm:text-xs font-bold uppercase tracking-wider flex items-center gap-1.5 sm:gap-2 shadow-sm transition-all font-dm-sans"
           >
             <Plus className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
             Add Category
-          </Button>
+          </button>
         </div>
       </header>
 

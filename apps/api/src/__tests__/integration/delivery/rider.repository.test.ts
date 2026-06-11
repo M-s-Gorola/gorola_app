@@ -8,6 +8,7 @@ import { RiderRepository } from "../../../modules/delivery/rider.repository.js";
 async function cleanStoreGraph(db: PrismaClient): Promise<void> {
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
+  await db.riderStore.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();

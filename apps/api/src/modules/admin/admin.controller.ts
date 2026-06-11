@@ -833,6 +833,82 @@ export function registerAdminRoutes(
       .send(csv);
   });
 
+  const createRiderSchema = z.object({
+    name: z.string().min(1, "Name is required"),
+    phone: z.string().min(1, "Phone is required"),
+    email: z.string().email("Invalid email"),
+    password: z.string().min(6, "Password must be at least 6 characters"),
+    riderType: z.enum(["DELIVERY", "FIELD_TECHNICIAN"]),
+    storeIds: z.array(z.string()).min(1, "At least one store must be assigned"),
+    primaryStoreId: z.string().min(1, "Primary store must be specified")
+  });
+
+  const updateRiderSchema = z.object({
+    isActive: z.boolean().optional(),
+    storeIds: z.array(z.string()).min(1, "At least one store must be assigned").optional(),
+    primaryStoreId: z.string().min(1, "Primary store must be specified").optional()
+  });
+
+  app.get("/api/v1/admin/riders", { preHandler }, async (request, reply) => {
+    const riders = await adminService.listRiders();
+    return {
+      success: true,
+      data: riders,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.post("/api/v1/admin/riders", { preHandler }, async (request, reply) => {
+    const parsed = createRiderSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid rider creation payload", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const rider = await adminService.createRider(parsed.data, adminId, ip, userAgent);
+    return {
+      success: true,
+      data: rider,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/riders/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = updateRiderSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid rider update payload", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const rider = await adminService.updateRider(id, cleanUndefined(parsed.data), adminId, ip, userAgent);
+    return {
+      success: true,
+      data: rider,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
   // Read-only method restrictions (returning 405 Method Not Allowed)
   app.put("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);
   app.post("/api/v1/admin/audit-logs", { preHandler }, methodNotAllowedHandler);

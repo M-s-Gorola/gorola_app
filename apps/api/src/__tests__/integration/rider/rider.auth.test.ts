@@ -11,6 +11,7 @@ import { createServer } from "../../../server.js";
 async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<void> {
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
+  await db.riderStore.deleteMany();
   await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
@@ -72,8 +73,15 @@ describe("RiderAuth Route Integration", () => {
         phone: "+919000000001",
         email: "rider@test.com",
         passwordHash,
-        storeId,
         isActive: true
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: rider.id,
+        storeId,
+        isPrimary: true
       }
     });
 
@@ -104,14 +112,21 @@ describe("RiderAuth Route Integration", () => {
   it("POST /api/v1/rider/auth/login with wrong password → HTTP 401 AUTH_FAILED", async () => {
     const passwordHash = await hash("correct_pass", 8);
 
-    await db.deliveryRider.create({
+    const rider = await db.deliveryRider.create({
       data: {
         name: "Test Rider",
         phone: "+919000000001",
         email: "rider@test.com",
         passwordHash,
-        storeId,
         isActive: true
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: rider.id,
+        storeId,
+        isPrimary: true
       }
     });
 
@@ -133,14 +148,21 @@ describe("RiderAuth Route Integration", () => {
   it("POST /api/v1/rider/auth/login for inactive rider (isActive: false) → HTTP 403 ACCOUNT_SUSPENDED", async () => {
     const passwordHash = await hash("correct_pass", 8);
 
-    await db.deliveryRider.create({
+    const rider = await db.deliveryRider.create({
       data: {
         name: "Suspended Rider",
         phone: "+919000000002",
         email: "rider.suspended@test.com",
         passwordHash,
-        storeId,
         isActive: false
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: rider.id,
+        storeId,
+        isPrimary: true
       }
     });
 
@@ -168,8 +190,15 @@ describe("RiderAuth Route Integration", () => {
         phone: "+919000000003",
         email: "rider.profile@test.com",
         passwordHash,
-        storeId,
         isActive: true
+      }
+    });
+
+    await db.riderStore.create({
+      data: {
+        riderId: rider.id,
+        storeId,
+        isPrimary: true
       }
     });
 

@@ -52,6 +52,7 @@ export function AdminLayout({ children }: AdminLayoutProps): ReactElement {
     { label: "Dashboard", path: getScopedPath("/admin/dashboard", "admin", isSubdomainMode) },
     { label: "Orders", path: getScopedPath("/admin/orders", "admin", isSubdomainMode) },
     { label: "Users", path: getScopedPath("/admin/users", "admin", isSubdomainMode) },
+    { label: "Riders", path: getScopedPath("/admin/riders", "admin", isSubdomainMode) },
     { label: "Stores", path: getScopedPath("/admin/stores", "admin", isSubdomainMode) },
     { label: "Categories", path: getScopedPath("/admin/categories", "admin", isSubdomainMode) },
     { label: "Feature Flags", path: getScopedPath("/admin/feature-flags", "admin", isSubdomainMode) },

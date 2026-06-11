@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. Earnings page and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. 5.6.1 (Steps A, B, C, D) are complete. Earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-06-11
-- **Session Summary:** Implemented Title Case formatting (removing underscores, capitalizing the first letter of every word) for order/booking statuses shown across the Buyer Order History page, Store Incoming Orders and Bookings dashboards. Removed the status badge from the Booking Confirmation receipt page (matching quick commerce receipts), and removed the uppercase transform from the Order Confirmation stepper labels and delivery badge. All 383 unit tests are fully passing.
-- **Next Session Must Start With:** Phase 5.7 — Rider Earnings Page.
+- **Session Summary:** Completed Phase 5.6.1-D (Store Dashboard Clickable KPI Cards, Split Offers/Discounts, and Orders/Bookings Date Filters). Refactored StoreDashboardPage to support 6 clickable KPI cards with smooth scrolling and distinct headers for scheduled appointments vs today's booking revenue, updated StoreOrdersPage and StoreBookingsPage to parse search parameters, updated backend services and controllers with date range query support, and verified that typecheck, lint, and build tasks are clean.
+- **Next Session Must Start With:** Phase 5.6.2 — Rider Earnings & Completed Orders Page.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -401,6 +401,304 @@ When Phase 7 goes live, booking orders (`orderType: BOOKING`) will be assigned t
 
 ---
 
+### 5.6.1 — Platform Improvements: Rider Feed, Booking Filters, Admin Riders Page, Dashboard KPI Navigation
+
+**Root cause / Goal:**
+Five distinct but related UX improvements are needed, all identified after Phase 5.6:
+
+1. **Rider feed shows all future approved bookings** — a field technician sees bookings scheduled for next week on today's shift, creating noise and confusion. The feed should only show bookings scheduled for *today*.
+2. **Store Bookings page has no date filter** — a store owner managing 50+ bookings has no way to narrow the list to "just today" or "this week." The status tabs exist, but no time dimension filter does.
+3. **Admin cannot create Rider accounts from the UI** — riders are seeded via scripts. No Admin Riders page exists. Additionally, the current schema hard-codes one `storeId` per rider; to support multi-store assignment in the future, the model must be migrated to a `RiderStore` junction table now, while the Admin Riders page is being built.
+4. **Store Dashboard KPI cards are not clickable** — the "Pending Orders" and "Today's Orders / Today's Bookings" cards display numbers but navigating to the relevant filtered list requires the user to manually find the tab. Clicking a card should deep-link to the correct page with the correct filter pre-applied.
+5. **"Today's Bookings" counts bookings *placed* today, not bookings *scheduled* for today** — the dashboard metric is semantically wrong for a booking-commerce store; it should count `approvalStatus = APPROVED` bookings whose `scheduledDate` falls on today's calendar date.
+
+**Fix / Approach (high-level per improvement):**
+
+1. **Rider feed date filter (backend + frontend):** Update `RiderOrderService.getActiveOrders` to additionally filter `bookingOrder.scheduledDate` to `[startOfToday, endOfToday)` for `FIELD_TECHNICIAN` riders. Update `RiderOrdersPage` header title to "Today's Bookings."
+2. **Booking date filter (frontend only):** Add a `scheduledDateFilter` state to `StoreBookingsPage`. Render a dropdown/date control on the right of the tab bar. All existing data is already in memory — apply a second client-side filter on top of the status tab filter. No backend change required.
+3. **Admin Riders page (schema + backend + frontend):**
+   - Migrate `DeliveryRider.storeId String` to a new `RiderStore` junction model (`riderId`, `storeId`, `isPrimary`). Remove the direct `storeId` FK from `DeliveryRider`. The rider JWT `storeId` becomes the **primary** store from the junction table.
+   - Add three backend endpoints to `admin.controller.ts`: `GET /api/v1/admin/riders`, `POST /api/v1/admin/riders`, `PUT /api/v1/admin/riders/:id`.
+   - Create `AdminRidersPage.tsx` with a rider table and a "Create Rider" modal (name, email, phone, password, multi-store picker filtered by `riderType`, rider type select).
+   - Add "Riders" nav item to `AdminLayout.tsx` and a route to `admin.tsx`.
+4. **Dashboard KPI click-through (frontend only):** Wrap each KPI card `<div>` in a `<button onClick={() => navigate(...)}>`. `StoreOrdersPage` and `StoreBookingsPage` read `useSearchParams()` on mount to pre-select the correct tab and date filter.
+5. **Fix "Today's Bookings" metric (backend):** In `StoreOwnerService.getDashboard`, for `BOOKING_COMMERCE` stores, change `todayOrderCount` to count `BookingOrder` rows where `scheduledDate >= startOfToday AND scheduledDate < startOfTomorrow AND approvalStatus = 'APPROVED'`.
+
+> ⚠️ **Schema migration note:** The `RiderStore` junction table migration (step 3) will break `rider.auth.test.ts`, `rider.orders.test.ts`, `rider.field-technician.test.ts`, `rider.status.test.ts`, and `rider.location.test.ts` because they all seed a `DeliveryRider` with a direct `storeId`. **Update all those test seed helpers first (mark them RED), then do the migration, then fix the service to query via the junction table.**
+
+---
+
+#### A. Rider Feed — Today-Only Scheduled Bookings
+
+- [x] **RED — Integration (`rider.field-technician.test.ts` — update existing tests):**
+  - [x] Add a new seed: a `BookingOrder` with `scheduledDate = 3 days from now`, `approvalStatus: APPROVED`, attached to an `Order` with `status: APPROVED`. Seed it alongside the existing "tomorrow" booking already in the file.
+  - [x] Test: `GET /api/v1/rider/orders/active` with a `FIELD_TECHNICIAN` JWT → the response array contains **only** the booking with `scheduledDate = today`; the booking scheduled 3 days from now is **absent**.
+  - [x] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → response still contains only `QUICK` orders in `PREPARING` or `OUT_FOR_DELIVERY` status — behaviour unchanged.
+  - [x] **Run — confirm RED (currently all APPROVED booking orders appear regardless of date).**
+
+- [x] **GREEN — Backend (Service only):**
+  - [x] [Service] In `rider-order.service.ts`, inside the `getActiveOrders` method, in the `FIELD_TECHNICIAN` branch: compute `startOfToday` and `startOfTomorrow` as UTC midnight boundaries. Pass them as `scheduledDateFrom` and `scheduledDateTo` options to `this.orders.findManyByStore`.
+  - [x] [Repository] In `order.repository.ts`, update `findManyByStore` to accept optional `scheduledDateFrom?: Date` and `scheduledDateTo?: Date` parameters. When provided, add a Prisma `where: { bookingOrder: { scheduledDate: { gte: scheduledDateFrom, lt: scheduledDateTo } } }` clause.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`RiderOrdersPage.test.tsx` — update existing):**
+  - [x] Test: When `profileData.riderType === 'FIELD_TECHNICIAN'`, the page `<h1>` element contains the text `"Today's Bookings"` (not `"Shift Services"`).
+  - [x] Test: When `profileData.riderType === 'DELIVERY'`, the `<h1>` still contains `"Shift Orders"`.
+  - [x] **Run — confirm RED (header currently reads "Shift Services" for FIELD_TECHNICIAN).**
+
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] In `RiderOrdersPage.tsx`, change the `<h1>` text: when `isFieldTechnician === true` render `"Today's Bookings"` instead of `"Shift Services"`. Add a `<p>` subtitle: `"Scheduled for today"`.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Field technician logs into rider app → `/rider/orders` header reads **"Today's Bookings — Scheduled for today"** → feed shows only bookings whose `scheduledDate` is today's calendar date → a booking scheduled for next week is not visible → ✅ Done.
+
+---
+
+#### B. Store Bookings Page — Scheduled Date Filter
+
+- [x] **RED — Integration (N/A):**
+  - N/A: No backend change required. The existing `GET /api/v1/store/bookings?status=ALL` endpoint already returns all bookings including `bookingOrder.scheduledDate`. The filter is client-side only.
+
+- [x] **RED — Unit / Component (`StoreBookingsPage.test.tsx` — update existing):**
+  - [x] Test: The bookings page renders a date filter control with `data-testid="booking-date-filter"` in the tab bar row.
+  - [x] Test: The date filter dropdown contains options: `"All Dates"`, `"Today"`, `"Tomorrow"`, `"This Week"`, `"This Month"`, `"Custom Range"`.
+  - [x] Test: When `dateFilter = "Today"` is selected and two bookings are present — one with `scheduledDate = today`, one with `scheduledDate = tomorrow` — `getActiveList()` returns only the booking scheduled for today.
+  - [x] Test: When `dateFilter = "Custom Range"` is selected, two date inputs appear with `data-testid="date-from-input"` and `data-testid="date-to-input"`.
+  - [x] Test: When `dateFilter = "All Dates"` (default), `getActiveList()` returns all bookings unfiltered.
+  - [x] **Run — confirm RED (no date filter control exists today).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] Add `type DateFilter = "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM"` in `StoreBookingsPage.tsx`.
+  - [x] [Component] Add `const [dateFilter, setDateFilter] = useState<DateFilter>("ALL")` and `const [customFrom, setCustomFrom] = useState("")` and `const [customTo, setCustomTo] = useState("")` to `StoreBookingsPage`.
+  - [x] [Component] Add a `filterByDate(bookings: Booking[]): Booking[]` helper that compares `booking.bookingOrder.scheduledDate` against the selected filter range using `new Date()` for today/tomorrow/week/month boundaries.
+  - [x] [Component] Update `getActiveList()` to pipe its result through `filterByDate(...)` before returning.
+  - [x] [Component] Render a `<select data-testid="booking-date-filter">` dropdown to the right of the tab bar (inside the same flex row). When `dateFilter === "CUSTOM"`, render two `<input type="date">` elements (`data-testid="date-from-input"` and `data-testid="date-to-input"`).
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store owner opens Bookings page → sees date filter dropdown on the right of the tabs → selects **"Today"** → only bookings whose `scheduledDate` is today's date remain in the grid → selects **"This Week"** → this week's bookings appear → selects **"Custom Range"** → two date inputs appear → enters a range → list narrows accordingly → ✅ Done.
+
+---
+
+#### C. Admin Riders Page — Multi-Store Junction Table + Full CRUD
+
+> ⚠️ **This section has two sub-steps. Complete C.1 (schema migration) fully before starting C.2 (admin endpoints) and C.3 (frontend). The migration will break multiple existing rider test files — fix them as part of C.1's RED step.**
+
+---
+
+##### C.1 — Schema Migration: RiderStore Junction Table
+
+- [x] **RED — Integration (update ALL existing rider test files before migrating):**
+  - [x] In `rider.auth.test.ts`: find every `prisma.deliveryRider.create({ data: { storeId: ... } })` seed call. Add a comment `// TODO-C1: update after junction migration` — do NOT change the code yet. Run the file and confirm it still passes GREEN (baseline).
+  - [x] In `rider.orders.test.ts`, `rider.field-technician.test.ts`, `rider.status.test.ts`, `rider.location.test.ts`: same — locate every `prisma.deliveryRider.create` seed and add `// TODO-C1` comments.
+  - [x] Now update every `// TODO-C1` seed: remove the `storeId` field from `prisma.deliveryRider.create` and instead add a `prisma.riderStore.create({ data: { riderId: <id>, storeId: <id>, isPrimary: true } })` call immediately after.
+  - [x] **Run all five rider integration test files — confirm RED (schema does not have `RiderStore` yet; `prisma.riderStore` is undefined).**
+
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] [Schema] In `schema.prisma`:
+    - Remove `storeId String` and `store Store @relation(...)` from `DeliveryRider`.
+    - Remove `deliveryRiders DeliveryRider[]` from `Store`.
+    - Add new model:
+      ```prisma
+      model RiderStore {
+        id        String        @id @default(cuid())
+        riderId   String
+        storeId   String
+        isPrimary Boolean       @default(false)
+        createdAt DateTime      @default(now())
+        rider     DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+        store     Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+        @@unique([riderId, storeId])
+        @@index([riderId])
+        @@index([storeId])
+      }
+      ```
+    - Add `stores RiderStore[]` back-relation to `DeliveryRider`.
+    - Add `riders RiderStore[]` back-relation to `Store`.
+    - Run: `pnpm --filter @gorola/api prisma migrate dev --name add_rider_store_junction`. Apply to test DB.
+  - [x] [Repository] In `rider.repository.ts`, update `findById` to include `stores: { include: { store: true } }`. Add helper `getPrimaryStoreId(riderId: string): Promise<string | null>` that queries `prisma.riderStore.findFirst({ where: { riderId, isPrimary: true } })`.
+  - [x] [Service] In `rider-auth.service.ts`, update login to call `riderRepository.getPrimaryStoreId(rider.id)` to resolve `storeId` for JWT payload instead of reading `rider.storeId`.
+  - [x] [Service] In `rider-order.service.ts`, update `getActiveOrders(storeIds: string[], riderId: string)` — change first argument from a single `storeId` to `storeIds: string[]`. Update the `findManyByStore` call to use `storeId: { in: storeIds }`.
+  - [x] [Controller] In `rider.controller.ts`, update the `GET /api/v1/rider/orders/active` handler: after verifying the rider, call `riderRepository.getAllStoreIds(riderId)` (new method returning all `storeId[]` from junction) and pass the array to `riderOrderService.getActiveOrders`.
+  - [x] [Repository] Add `getAllStoreIds(riderId: string): Promise<string[]>` to `rider.repository.ts` that returns all `storeId` values from `RiderStore` where `riderId` matches.
+  - [x] Run all five rider integration test files — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] A rider seeded with 2 `RiderStore` rows (storeA + storeB, storeA = primary) logs in → JWT contains `storeId = storeA.id` → `GET /api/v1/rider/orders/active` returns orders from **both** storeA and storeB → a rider with only one `RiderStore` row sees orders from that one store only → ✅ Done.
+
+---
+
+##### C.2 — Admin Backend Endpoints for Riders
+
+- [x] **RED — Integration (`admin.riders.test.ts` — new file):**
+  - [x] Test setup: seed 1 Admin, 2 Stores (one `QUICK_COMMERCE`, one `BOOKING_COMMERCE`), 1 existing `DeliveryRider` with a `RiderStore` linking to the QUICK_COMMERCE store.
+  - [x] Test: `GET /api/v1/admin/riders` with valid ADMIN JWT → HTTP 200; response shape `{ success: true, data: [{ id, name, email, phone, riderType, isActive, stores: [{ storeId, storeName, isPrimary }] }] }`; array contains exactly 1 rider.
+  - [x] Test: `GET /api/v1/admin/riders` with STORE_OWNER JWT → HTTP 403.
+  - [x] Test: `POST /api/v1/admin/riders` with body `{ name: "Raju", email: "raju@gorola.in", phone: "9876543210", password: "Rider#456", riderType: "DELIVERY", storeIds: [<quickStoreId>], primaryStoreId: <quickStoreId> }` with ADMIN JWT → HTTP 201; response contains `{ id, name, email, riderType, stores: [{ storeId, isPrimary: true }] }`; `DeliveryRider` row exists in DB; one `RiderStore` row exists in DB with `isPrimary: true`.
+  - [x] Test: `POST /api/v1/admin/riders` with `email` already in use → HTTP 409 with `error.code = "CONFLICT"`.
+  - [x] Test: `POST /api/v1/admin/riders` with `storeIds` containing a `BOOKING_COMMERCE` storeId but `riderType: "DELIVERY"` → HTTP 400 with `error.code = "VALIDATION_ERROR"` (type-store mismatch).
+  - [x] Test: `PUT /api/v1/admin/riders/:id` with body `{ isActive: false, storeIds: [<quickStoreId>], primaryStoreId: <quickStoreId> }` → HTTP 200; `DeliveryRider.isActive = false` in DB.
+  - [x] Test: `PUT /api/v1/admin/riders/:id` for a non-existent rider id → HTTP 404.
+  - [x] **Run — confirm RED (routes do not exist; all return 404).**
+
+- [x] **GREEN — Backend (Service → Controller → Routes):**
+  - [x] [Service] In `admin.service.ts`, add three methods:
+    - `listRiders(): Promise<RiderWithStores[]>` — `prisma.deliveryRider.findMany({ where: { isDeleted: false }, include: { stores: { include: { store: { select: { id: true, name: true } } } } } })`.
+    - `createRider(data: { name, email, phone, password, riderType, storeIds, primaryStoreId }): Promise<RiderWithStores>` — hash password with `bcryptjs`, create `DeliveryRider`, then create `RiderStore` rows in a Prisma transaction; validate that each `storeId` store type matches `riderType` (DELIVERY → QUICK_COMMERCE, FIELD_TECHNICIAN → BOOKING_COMMERCE). Throw 409 on duplicate email, 400 on type mismatch.
+    - `updateRider(riderId, data: { isActive?, storeIds?, primaryStoreId? }): Promise<RiderWithStores>` — update `DeliveryRider.isActive`; if `storeIds` provided, delete all existing `RiderStore` rows for this rider and re-create them in a transaction.
+  - [x] [Controller] In `admin.controller.ts`, add three routes inside `registerAdminRoutes`:
+    - `GET /api/v1/admin/riders` — calls `adminService.listRiders()`.
+    - `POST /api/v1/admin/riders` — Zod validates body (`name` min 1, `email` valid email, `phone` 10-digit string, `password` min 8 chars, `riderType` enum, `storeIds` array min 1, `primaryStoreId` string). Calls `adminService.createRider(...)`. Returns HTTP 201.
+    - `PUT /api/v1/admin/riders/:id` — Zod validates body (all fields optional). Calls `adminService.updateRider(params.id, ...)`. Returns HTTP 200.
+  - [x] All three routes use `preHandler: [requireAuth(deps.tokenVerifier), requireRole(['ADMIN'])]`.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin hits `POST /api/v1/admin/riders` with two `storeIds` → 201 response → `DeliveryRider` row exists → two `RiderStore` rows exist, one with `isPrimary: true` → `GET /api/v1/admin/riders` lists the new rider with both stores → ✅ Done.
+
+---
+
+##### C.3 — AdminRidersPage Frontend
+
+- [x] **RED — Unit / Component (`AdminRidersPage.test.tsx` — new file):**
+  - [x] Test: component renders a table with columns Name, Email, Phone, Type, Stores, Status, Actions (assert header cells by text).
+  - [x] Test: when API returns 2 riders, 2 `<tr>` rows with `data-testid="rider-row-<id>"` are rendered.
+  - [x] Test: a "Create Rider" button with `id="create-rider-btn"` is visible; clicking it opens a modal with `data-testid="create-rider-modal"`.
+  - [x] Test: the create modal contains fields with `id="rider-name"`, `id="rider-email"`, `id="rider-phone"`, `id="rider-password"`, `id="rider-type-select"`, and a multi-store picker with `data-testid="store-picker"`.
+  - [x] Test: submitting the create form calls `POST /api/v1/admin/riders` with `{ name, email, phone, password, riderType, storeIds, primaryStoreId }`.
+  - [x] Test: when `riderType = "DELIVERY"`, the store picker only shows stores with `storeType = "QUICK_COMMERCE"`.
+  - [x] Test: when `riderType = "FIELD_TECHNICIAN"`, the store picker only shows stores with `storeType = "BOOKING_COMMERCE"`.
+  - [x] Test: clicking the "Suspend" action button on an active rider calls `PUT /api/v1/admin/riders/:id` with `{ isActive: false }`.
+  - [x] Test: clicking "Edit Stores" for a rider opens the edit modal pre-populated with the rider's current stores.
+  - [x] **Run — confirm RED (file does not exist).**
+
+- [x] **GREEN — Frontend (Types → Component → Routes → Nav):**
+  - [x] [Types] In `AdminRidersPage.tsx`, define:
+    ```typescript
+    type RiderStore = { storeId: string; storeName: string; isPrimary: boolean };
+    type AdminRider = { id: string; name: string; email: string; phone: string; riderType: "DELIVERY" | "FIELD_TECHNICIAN"; isActive: boolean; stores: RiderStore[] };
+    type StoreOption = { id: string; name: string; storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE" };
+    ```
+  - [x] [Component] Create `apps/web/src/pages/admin/AdminRidersPage.tsx`:
+    - Fetch `GET /api/v1/admin/riders` with `useQuery(['admin', 'riders'])`.
+    - Fetch `GET /api/v1/admin/stores` with `useQuery(['admin', 'stores'])` to populate the store picker (reuse existing endpoint).
+    - Render a table (same style as `AdminUsersPage`) with one row per rider.
+    - "Create Rider" button opens a `Dialog` modal. The modal has a `riderType` select that drives which stores appear in the multi-checkbox store picker. On submit, call `POST /api/v1/admin/riders` via `useMutation`; on success, invalidate `['admin', 'riders']` and close modal.
+    - Each row has a "Suspend/Unsuspend" button (`data-testid="rider-toggle-<id>"`) that calls `PUT /api/v1/admin/riders/:id` with `{ isActive: !current }`, and an "Edit Stores" button that opens the same modal pre-populated.
+    - Use `toast.success` / `toast.error` for feedback (matching other Admin pages).
+  - [x] [Routes] In `apps/web/src/app/routes/admin.tsx`: add `import { AdminRidersPage }` and a new `<Route key="admin-riders" path={\`${prefix}/riders\`} element={<AdminRoute><AdminLayout><AdminRidersPage /></AdminLayout></AdminRoute>} />`.
+  - [x] [Nav] In `apps/web/src/components/admin/AdminLayout.tsx`: add `{ label: "Riders", path: getScopedPath("/admin/riders", "admin", isSubdomainMode) }` to `navItems` array (after "Stores").
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin logs in → sidebar shows "Riders" nav item → navigates to `/admin/riders` → table lists all existing riders with their store assignments → clicks "Create Rider" → fills form, selects type "DELIVERY", picks a QUICK_COMMERCE store as primary → submits → new rider appears in the table → Admin clicks "Edit Stores" on that rider → changes to two stores → saves → rider row now shows two store names → Admin clicks "Suspend" → rider `isActive` flips to false → rider can no longer log in → ✅ Done.
+
+---
+
+#### D. Store Dashboard — Clickable KPI Cards, Split Active Offers/Discounts, and Quick Commerce Date Filters
+
+**Root cause / Goal:**
+Store owners need a seamless way to navigate from high-level dashboard metrics to itemized lists with corresponding filters pre-applied. The current dashboard cards are passive, requiring manual navigation.
+Additionally:
+1. "Today's Bookings" metric counts bookings placed today, not scheduled for today (incorrect semantics).
+2. "Active Offers" merges offers (campaigns) and discount codes into one card. They need to be separate cards navigating to their respective pages.
+3. Quick commerce store owner needs to filter incoming orders by date range (Today, Tomorrow, This Week, This Month, Custom Range) just like bookings, and the "Today's Orders" dashboard card should link directly to the Today-filtered orders list.
+
+**Fix / Approach:**
+1. [Backend - KPI Metrics] Update `StoreOwnerService.getDashboard` to:
+   - For `BOOKING_COMMERCE` stores, calculate `todayOrderCount` by counting `BookingOrder` rows where `scheduledDate` is today's calendar date and `approvalStatus` is `APPROVED`.
+   - Return both `activeOffersCount` (from `offer` table) and a new `activeDiscountsCount` (from `discount` table) to separate them.
+2. [Backend - Orders Query] Update `StoreOwnerService.getOrders` and `store-owner.controller.ts` to support optional query parameters: `dateFilter`, `customFrom`, `customTo`.
+   - Compute start/end date ranges on the backend based on `dateFilter` and apply a `createdAt` Prisma filter.
+3. [Frontend - Dashboard] Wrap each KPI card in a button/clickable container (with subtle hover shadow and cursor-pointer transitions) and wire to navigation:
+   - Today's Orders card -> `/store/orders?dateFilter=TODAY`
+   - Today's Bookings card -> `/store/bookings?tab=APPROVED&dateFilter=TODAY`
+   - Today's Revenue / Today's Booking Revenue -> Smooth scroll to `#revenue-chart` on the dashboard page.
+   - Pending Orders card -> `/store/orders?status=PLACED`
+   - Pending Approvals card -> `/store/bookings?tab=PENDING`
+   - Active Ads card -> `/store/advertisements`
+   - Active Offers card -> `/store/offers`
+   - Active Discount Codes card -> `/store/discounts` (The new split card, making 6 KPI cards total. Change grid style to `lg:grid-cols-6`).
+4. [Frontend - Orders Page] In `StoreOrdersPage.tsx`:
+   - Initialize selected tab and date filter states from `useSearchParams()`.
+   - Add a `<select data-testid="order-date-filter">` dropdown for date filtering on the right of the tab bar, and custom date inputs when `"CUSTOM"` range is selected (matching bookings filter layout).
+   - Invalidate/re-fetch orders by adding these params to the `useQuery` query key and endpoint URL.
+5. [Frontend - Bookings Page] In `StoreBookingsPage.tsx`:
+   - Read `useSearchParams()` on mount to pre-fill the selected status tab and date filter parameters.
+
+---
+
+- [x] **RED — Integration (`store-owner.dashboard.test.ts`):**
+  - [x] Setup: Seed 1 `BOOKING_COMMERCE` store, 1 store owner, 1 user buyer. Seed 2 `BookingOrder` rows with `scheduledDate = today` and `approvalStatus = APPROVED`. Seed 1 `BookingOrder` with `scheduledDate = tomorrow` and `approvalStatus = APPROVED`.
+  - [x] Test: `GET /api/v1/store/dashboard` -> response contains `{success: true, data: { todayOrderCount: 2, activeOffersCount: number, activeDiscountsCount: number }}`.
+  - [x] Test: Seed 2 active `Discount` rows and 1 active `Offer` row. `GET /api/v1/store/dashboard` returns `activeOffersCount = 1` and `activeDiscountsCount = 2`.
+  - [x] **Run — confirm RED (todayOrderCount is incorrect, activeDiscountsCount is missing/undefined).**
+
+- [x] **RED — Integration (`store-owner.orders.test.ts`):**
+  - [x] Setup: Seed 1 store, 1 store owner, 1 user buyer. Seed 3 orders: one placed today, one placed yesterday, one placed 3 days ago.
+  - [x] Test: `GET /api/v1/store/orders?dateFilter=TODAY` -> returns exactly 1 order (the one created today).
+  - [x] Test: `GET /api/v1/store/orders?dateFilter=CUSTOM&customFrom=<yesterday>&customTo=<today>` -> returns exactly 2 orders.
+  - [x] **Run — confirm RED (dateFilter query params are ignored, all orders returned).**
+
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `store-owner.service.ts`, update `DashboardKpiSummary` type and `getDashboard` method:
+    - Add `activeDiscountsCount` to `DashboardKpiSummary`.
+    - If `storeType === "BOOKING_COMMERCE"`, query `todayOrderCount` using `this.db.bookingOrder.count` with `scheduledDate` between start of today and end of today, and `approvalStatus: "APPROVED"`.
+    - Query `activeDiscountsCount` count from `this.db.discount.count` where `storeId` matches and `isActive: true`.
+  - [x] [Service] In `store-owner.service.ts`, update `getOrders(storeId, filters)` signature to support `dateFilter?: string; customFrom?: string; customTo?: string`.
+    - Compute `createdAt` range:
+      - `TODAY`: start of today to end of today.
+      - `TOMORROW`: start of tomorrow to end of tomorrow.
+      - `THIS_WEEK`: start of current week to end of current week.
+      - `THIS_MONTH`: start of current month to end of current month.
+      - `CUSTOM`: `customFrom` (start of day) to `customTo` (end of day).
+    - Add `createdAt` range condition to Prisma `where` object inside `getOrders`.
+  - [x] [Controller] In `store-owner.controller.ts`, inside the `GET /api/v1/store/orders` handler:
+    - Parse `dateFilter`, `customFrom`, `customTo` from query parameters and pass to `storeOwnerService.getOrders`.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`StoreDashboardPage.test.tsx`):**
+  - [x] Test: Renders 6 KPI cards for QUICK_COMMERCE, including a new card with text `"Active Discount Codes"`.
+  - [x] Test: clicking the card with `data-testid="kpi-pending-orders"` navigates to `/store/orders?status=PLACED`.
+  - [x] Test: clicking the card with `data-testid="kpi-today-orders"` navigates to `/store/orders?dateFilter=TODAY`.
+  - [x] Test: clicking the card with `data-testid="kpi-revenue"` calls smooth scroll to element `#revenue-chart`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-offers"` navigates to `/store/offers`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-discounts"` navigates to `/store/discounts`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-ads"` navigates to `/store/advertisements`.
+  - [x] **Run — confirm RED (missing click handlers, missing discount card, assertions fail).**
+
+- [x] **RED — Unit / Component (`StoreOrdersPage.test.tsx`):**
+  - [x] Test: Orders page renders a date filter dropdown with `data-testid="order-date-filter"`.
+  - [x] Test: Changing date filter to TODAY calls `api.get` with `/api/v1/store/orders?dateFilter=TODAY`.
+  - [x] Test: Changing date filter to CUSTOM renders `data-testid="date-from-input"` and `data-testid="date-to-input"`.
+  - [x] Test: Initializing route with `?dateFilter=TODAY` automatically sets the default select value to `"TODAY"`.
+  - [x] **Run — confirm RED (date filter UI controls and query wiring are absent).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `StoreDashboardPage.tsx`, update `DashboardData` type to include `activeDiscountsCount: number`.
+  - [x] [Component] In `StoreDashboardPage.tsx`:
+    - Add `id="revenue-chart"` to the Weekly Revenue Trend Chart container `div`.
+    - Change KPI grid columns to `lg:grid-cols-6` and add the sixth card: `"Active Discount Codes"` displaying `dashboard.activeDiscountsCount`.
+    - Change KPI cards `div` structures to `<button>` elements (or add `role="button"` and tabIndex) with hover shadow/cursor-pointer transition styles and navigation click handlers.
+  - [x] [Component] In `StoreOrdersPage.tsx`:
+    - Import `useSearchParams` from `react-router-dom`.
+    - Add state variables for `dateFilter`, `customFrom`, `customTo`. Read them from search parameters on mount.
+    - Render a `<select data-testid="order-date-filter">` on the right side of the tab bar row. When `dateFilter === "CUSTOM"`, render start and end `<input type="date">` elements.
+    - Wire `useQuery` queryKey and api request URL to pass `dateFilter`, `customFrom`, and `customTo` query parameters.
+  - [x] [Component] In `StoreBookingsPage.tsx`:
+    - Import `useSearchParams` from `react-router-dom`.
+    - Initialize `activeTab` from `searchParams.get("tab")` and `dateFilter` from `searchParams.get("dateFilter")` on component mount.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store owner (QUICK_COMMERCE) goes to dashboard → clicks "Today's Orders" card → navigates to `/store/orders?dateFilter=TODAY` → orders page loads showing only today's orders, and date filter dropdown pre-selects "Today" → ✅.
+  - [x] Store owner clicks "Active Discount Codes" card → navigates to `/store/discounts` → ✅.
+  - [x] Store owner clicks "Today's Revenue" card → page scrolls smoothly down to the revenue chart → ✅ Done.
+
+---
+
 ### 5.7 — Rider Earnings Page
 
 **Root cause / Goal:**
@@ -588,3 +886,32 @@ _(Append new entries here — never delete old entries.)_
 - Removed the `uppercase` CSS class from the stepper step labels ("Placed", "Preparing", "On the way", "Delivered") and status badges on `OrderConfirmationPage.tsx` so they render in Title Case.
 - Updated failing vitest assertions in `StoreBookingsPage.test.tsx` and `StoreOrdersPage.test.tsx` to expect the correctly formatted status labels instead of the raw uppercase enums.
 - Successfully verified that all 383 frontend unit tests, TypeScript typechecks, and ESLint rule checks are fully passing.
+
+### Session 12 — 2026-06-11 — Phase 5.6.1-A Today-Only Bookings Completed
+- Completed Phase 5.6.1-A platform improvements for today-only bookings filtering on the rider feed.
+- Updated `findManyByStore` in `order.repository.ts` to support `scheduledDate` filters, and modified `rider-order.service.ts` to compute and pass UTC midnight range limits for the current day.
+- Updated `RiderOrdersPage.tsx` to show "Today's Bookings" heading and "Scheduled for today" subtitle for field technician riders.
+- Wrote new integration tests in `rider.field-technician.test.ts` and updated unit tests in `RiderOrdersPage.test.tsx`.
+- Confirmed full test suites (619 backend + 385 frontend) build, typecheck, lint, and execute completely green.
+
+### Session 13 — 2026-06-11 — Phase 5.6.1-B Store Bookings Date Filter Completed
+- Completed Phase 5.6.1-B store bookings schedule date dropdown filtering.
+- Implemented state management, local-timezone based string comparisons for robustness, client-side list filtering, and tab counts.
+- Rendered UI dropdown options along with dynamic custom date input fields.
+- Verified test suite executes completely green (389 passing in web workspace) and production builds pass cleanly.
+
+### Session 14 — 2026-06-11 — Phase 5.6.1-C Admin Riders Page & Multi-Store Junction Table Completed
+- Migrated database model to replace the single `storeId` on `DeliveryRider` with a modern `RiderStore` junction table.
+- Updated backend services, auth logic, and repositories to query stores via the junction table.
+- Added comprehensive Admin Riders CRUD endpoints (`GET /api/v1/admin/riders`, `POST /api/v1/admin/riders`, `PUT /api/v1/admin/riders/:id`) with validation and type checks.
+- Implemented the frontend `AdminRidersPage` with Add/Edit modals, type-scoped store checkbox pickers, and suspension toggles.
+- Fixed all ESLint imports and TypeScript compilation errors. Verified that the typecheck and lint tasks run completely clean across the entire repository workspace.
+
+### Session 15 — 2026-06-11 — Phase 5.6.1-D Store Dashboard & Orders/Bookings Date Filters Completed
+- Implemented clickable KPI cards on the store dashboard and wired deep-links to correspond with orders, bookings, active ads, offers, and discounts.
+- Split Active Offers and Active Discounts into two separate KPI cards, expanding the layout to 6 columns.
+- Implemented smooth scrolling on Today's Revenue card clicks down to the Weekly Revenue trend chart.
+- Wired Store Orders and Store Bookings pages to initialize active tabs, date filters, and custom ranges from URL search parameters on mount, invalidating and refetching data reactively.
+- Clarified dashboard card headings for booking commerce: `"Appointments Scheduled Today"` and `"Revenue from Bookings Made Today"` (with subtext `"From bookings made today"`) to clearly distinguish scheduling vs booking-creation dates.
+- Verified all Vitest frontend unit tests, integration test suites, TypeScript type compilation, and ESLint check tasks run completely green.
+
