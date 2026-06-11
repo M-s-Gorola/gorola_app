@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
@@ -117,11 +118,24 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
 }
 
 export function StoreBookingsPage(): ReactElement {
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "APPROVED" | "ON_THE_WAY" | "HISTORY">("ALL");
-  const [dateFilter, setDateFilter] = useState<DateFilter>("ALL");
-  const [customFrom, setCustomFrom] = useState("");
-  const [customTo, setCustomTo] = useState("");
+  const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "APPROVED" | "ON_THE_WAY" | "HISTORY">(() => {
+    const tabParam = searchParams.get("tab");
+    if (tabParam && ["ALL", "PENDING", "APPROVED", "ON_THE_WAY", "HISTORY"].includes(tabParam)) {
+      return tabParam as "ALL" | "PENDING" | "APPROVED" | "ON_THE_WAY" | "HISTORY";
+    }
+    return "ALL";
+  });
+  const [dateFilter, setDateFilter] = useState<DateFilter>(() => {
+    const filterParam = searchParams.get("dateFilter");
+    if (filterParam && ["ALL", "TODAY", "TOMORROW", "THIS_WEEK", "THIS_MONTH", "CUSTOM"].includes(filterParam)) {
+      return filterParam as DateFilter;
+    }
+    return "ALL";
+  });
+  const [customFrom, setCustomFrom] = useState(() => searchParams.get("customFrom") || "");
+  const [customTo, setCustomTo] = useState(() => searchParams.get("customTo") || "");
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);

@@ -41,6 +41,7 @@ type DashboardData = {
   lowStockItems: LowStockItem[];
   activeAdvertisementsCount: number;
   activeOffersCount: number;
+  activeDiscountsCount: number;
 };
 
 type DashboardEnvelope = {
@@ -312,12 +313,22 @@ export function StoreDashboardPage(): ReactElement {
       )}
 
       {/* KPI Cards Grid */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-6">
         {/* Today's Orders / Bookings */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+        <button
+          data-testid="kpi-today-orders"
+          onClick={() => {
+            if (isBooking) {
+              navigate(getScopedPath("/store/bookings", "store", isSubdomainMode) + "?tab=APPROVED&dateFilter=TODAY");
+            } else {
+              navigate(getScopedPath("/store/orders", "store", isSubdomainMode) + "?dateFilter=TODAY");
+            }
+          }}
+          className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-gorola-pine/20 cursor-pointer text-left transition-all duration-300"
+        >
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
-              {isBooking ? "Today's Bookings" : "Today's Orders"}
+              {isBooking ? "Appointments Scheduled Today" : "Today's Orders"}
             </span>
             <div className="h-8 w-8 bg-gorola-pine/10 rounded-xl flex items-center justify-center text-gorola-pine">
               <ShoppingBag className="h-4 w-4" />
@@ -329,13 +340,19 @@ export function StoreDashboardPage(): ReactElement {
               {isBooking ? "Appointments today" : "Orders placed today"}
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Today's Revenue */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+        <button
+          data-testid="kpi-revenue"
+          onClick={() => {
+            document.getElementById("revenue-chart")?.scrollIntoView({ behavior: "smooth" });
+          }}
+          className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-gorola-pine/20 cursor-pointer text-left transition-all duration-300"
+        >
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
-              {isBooking ? "Today's Booking Revenue" : "Today's Revenue"}
+              {isBooking ? "Revenue from Bookings Made Today" : "Today's Revenue"}
             </span>
             <div className="h-8 w-8 bg-green-100 rounded-xl flex items-center justify-center text-green-700">
               <TrendingUp className="h-4 w-4" />
@@ -346,13 +363,23 @@ export function StoreDashboardPage(): ReactElement {
               {formatCurrency(dashboard.todayRevenue)}
             </h3>
             <p className="text-xs text-gorola-slate mt-1">
-              {isBooking ? "Confirmed today" : "Confirmed + placed today"}
+              {isBooking ? "From bookings made today" : "Confirmed + placed today"}
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Pending Orders / Approvals */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+        <button
+          data-testid="kpi-pending-orders"
+          onClick={() => {
+            if (isBooking) {
+              navigate(getScopedPath("/store/bookings", "store", isSubdomainMode) + "?tab=PENDING");
+            } else {
+              navigate(getScopedPath("/store/orders", "store", isSubdomainMode) + "?status=PLACED");
+            }
+          }}
+          className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-gorola-pine/20 cursor-pointer text-left transition-all duration-300"
+        >
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
               {isBooking ? "Pending Approvals" : "Pending Orders"}
@@ -367,10 +394,16 @@ export function StoreDashboardPage(): ReactElement {
               {isBooking ? "Requiring approval" : "Requiring action"}
             </p>
           </div>
-        </div>
+        </button>
 
         {/* Active Ads */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+        <button
+          data-testid="kpi-active-ads"
+          onClick={() => {
+            navigate(getScopedPath("/store/advertisements", "store", isSubdomainMode));
+          }}
+          className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-gorola-pine/20 cursor-pointer text-left transition-all duration-300"
+        >
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
               Active Ads
@@ -385,10 +418,16 @@ export function StoreDashboardPage(): ReactElement {
             </h3>
             <p className="text-xs text-gorola-slate mt-1">Promotional campaigns</p>
           </div>
-        </div>
+        </button>
 
         {/* Active Offers */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md transition-all duration-300">
+        <button
+          data-testid="kpi-active-offers"
+          onClick={() => {
+            navigate(getScopedPath("/store/offers", "store", isSubdomainMode));
+          }}
+          className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-gorola-pine/20 cursor-pointer text-left transition-all duration-300"
+        >
           <div className="flex justify-between items-start">
             <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
               Active Offers
@@ -401,13 +440,35 @@ export function StoreDashboardPage(): ReactElement {
             <h3 className="text-2xl font-black text-gorola-charcoal">{dashboard.activeOffersCount}</h3>
             <p className="text-xs text-gorola-slate mt-1">Discounts & campaigns</p>
           </div>
-        </div>
+        </button>
+
+        {/* Active Discount Codes */}
+        <button
+          data-testid="kpi-active-discounts"
+          onClick={() => {
+            navigate(getScopedPath("/store/discounts", "store", isSubdomainMode));
+          }}
+          className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 flex flex-col justify-between shadow-sm hover:shadow-md hover:border-gorola-pine/20 cursor-pointer text-left transition-all duration-300"
+        >
+          <div className="flex justify-between items-start">
+            <span className="text-xs font-bold uppercase tracking-widest text-gorola-slate/60">
+              Active Discount Codes
+            </span>
+            <div className="h-8 w-8 bg-gorola-pine/10 rounded-xl flex items-center justify-center text-gorola-pine">
+              <Percent className="h-4 w-4" />
+            </div>
+          </div>
+          <div className="mt-4">
+            <h3 className="text-2xl font-black text-gorola-charcoal">{dashboard.activeDiscountsCount}</h3>
+            <p className="text-xs text-gorola-slate mt-1">Discount codes</p>
+          </div>
+        </button>
       </div>
 
       {/* Main Panel layout Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Weekly Revenue Trend Chart */}
-        <div className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden`}>
+        <div id="revenue-chart" className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden`}>
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
               {range === "TODAY"

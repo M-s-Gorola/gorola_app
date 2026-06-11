@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. 5.61 (Steps A, B, C) are complete. Step D, Earnings page, and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. 5.6.1 (Steps A, B, C, D) are complete. Earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-06-11
-- **Session Summary:** Completed Phase 5.6.1-C (Admin Riders Page & Multi-Store Junction Table + Full CRUD). Migrated database with RiderStore junction model, updated auth logic and repository mapping, added CRUD services/controller, created AdminRidersPage component, and confirmed clean linting and typechecking.
-- **Next Session Must Start With:** 5.6.1-D — Store Dashboard Clickable KPI Cards, Split Active Offers/Discounts, and Quick Commerce Date Filters.
+- **Session Summary:** Completed Phase 5.6.1-D (Store Dashboard Clickable KPI Cards, Split Offers/Discounts, and Orders/Bookings Date Filters). Refactored StoreDashboardPage to support 6 clickable KPI cards with smooth scrolling and distinct headers for scheduled appointments vs today's booking revenue, updated StoreOrdersPage and StoreBookingsPage to parse search parameters, updated backend services and controllers with date range query support, and verified that typecheck, lint, and build tasks are clean.
+- **Next Session Must Start With:** Phase 5.6.2 — Rider Earnings & Completed Orders Page.
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -630,24 +630,24 @@ Additionally:
 
 ---
 
-- [ ] **RED — Integration (`store-owner.dashboard.test.ts`):**
-  - [ ] Setup: Seed 1 `BOOKING_COMMERCE` store, 1 store owner, 1 user buyer. Seed 2 `BookingOrder` rows with `scheduledDate = today` and `approvalStatus = APPROVED`. Seed 1 `BookingOrder` with `scheduledDate = tomorrow` and `approvalStatus = APPROVED`.
-  - [ ] Test: `GET /api/v1/store/dashboard` -> response contains `{success: true, data: { todayOrderCount: 2, activeOffersCount: number, activeDiscountsCount: number }}`.
-  - [ ] Test: Seed 2 active `Discount` rows and 1 active `Offer` row. `GET /api/v1/store/dashboard` returns `activeOffersCount = 1` and `activeDiscountsCount = 2`.
-  - [ ] **Run — confirm RED (todayOrderCount is incorrect, activeDiscountsCount is missing/undefined).**
+- [x] **RED — Integration (`store-owner.dashboard.test.ts`):**
+  - [x] Setup: Seed 1 `BOOKING_COMMERCE` store, 1 store owner, 1 user buyer. Seed 2 `BookingOrder` rows with `scheduledDate = today` and `approvalStatus = APPROVED`. Seed 1 `BookingOrder` with `scheduledDate = tomorrow` and `approvalStatus = APPROVED`.
+  - [x] Test: `GET /api/v1/store/dashboard` -> response contains `{success: true, data: { todayOrderCount: 2, activeOffersCount: number, activeDiscountsCount: number }}`.
+  - [x] Test: Seed 2 active `Discount` rows and 1 active `Offer` row. `GET /api/v1/store/dashboard` returns `activeOffersCount = 1` and `activeDiscountsCount = 2`.
+  - [x] **Run — confirm RED (todayOrderCount is incorrect, activeDiscountsCount is missing/undefined).**
 
-- [ ] **RED — Integration (`store-owner.orders.test.ts`):**
-  - [ ] Setup: Seed 1 store, 1 store owner, 1 user buyer. Seed 3 orders: one placed today, one placed yesterday, one placed 3 days ago.
-  - [ ] Test: `GET /api/v1/store/orders?dateFilter=TODAY` -> returns exactly 1 order (the one created today).
-  - [ ] Test: `GET /api/v1/store/orders?dateFilter=CUSTOM&customFrom=<yesterday>&customTo=<today>` -> returns exactly 2 orders.
-  - [ ] **Run — confirm RED (dateFilter query params are ignored, all orders returned).**
+- [x] **RED — Integration (`store-owner.orders.test.ts`):**
+  - [x] Setup: Seed 1 store, 1 store owner, 1 user buyer. Seed 3 orders: one placed today, one placed yesterday, one placed 3 days ago.
+  - [x] Test: `GET /api/v1/store/orders?dateFilter=TODAY` -> returns exactly 1 order (the one created today).
+  - [x] Test: `GET /api/v1/store/orders?dateFilter=CUSTOM&customFrom=<yesterday>&customTo=<today>` -> returns exactly 2 orders.
+  - [x] **Run — confirm RED (dateFilter query params are ignored, all orders returned).**
 
-- [ ] **GREEN — Backend (Service → Controller):**
-  - [ ] [Service] In `store-owner.service.ts`, update `DashboardKpiSummary` type and `getDashboard` method:
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `store-owner.service.ts`, update `DashboardKpiSummary` type and `getDashboard` method:
     - Add `activeDiscountsCount` to `DashboardKpiSummary`.
     - If `storeType === "BOOKING_COMMERCE"`, query `todayOrderCount` using `this.db.bookingOrder.count` with `scheduledDate` between start of today and end of today, and `approvalStatus: "APPROVED"`.
     - Query `activeDiscountsCount` count from `this.db.discount.count` where `storeId` matches and `isActive: true`.
-  - [ ] [Service] In `store-owner.service.ts`, update `getOrders(storeId, filters)` signature to support `dateFilter?: string; customFrom?: string; customTo?: string`.
+  - [x] [Service] In `store-owner.service.ts`, update `getOrders(storeId, filters)` signature to support `dateFilter?: string; customFrom?: string; customTo?: string`.
     - Compute `createdAt` range:
       - `TODAY`: start of today to end of today.
       - `TOMORROW`: start of tomorrow to end of tomorrow.
@@ -655,47 +655,47 @@ Additionally:
       - `THIS_MONTH`: start of current month to end of current month.
       - `CUSTOM`: `customFrom` (start of day) to `customTo` (end of day).
     - Add `createdAt` range condition to Prisma `where` object inside `getOrders`.
-  - [ ] [Controller] In `store-owner.controller.ts`, inside the `GET /api/v1/store/orders` handler:
+  - [x] [Controller] In `store-owner.controller.ts`, inside the `GET /api/v1/store/orders` handler:
     - Parse `dateFilter`, `customFrom`, `customTo` from query parameters and pass to `storeOwnerService.getOrders`.
-  - [ ] Run integration tests — **confirm GREEN.**
+  - [x] Run integration tests — **confirm GREEN.**
 
-- [ ] **RED — Unit / Component (`StoreDashboardPage.test.tsx`):**
-  - [ ] Test: Renders 6 KPI cards for QUICK_COMMERCE, including a new card with text `"Active Discount Codes"`.
-  - [ ] Test: clicking the card with `data-testid="kpi-pending-orders"` navigates to `/store/orders?status=PLACED`.
-  - [ ] Test: clicking the card with `data-testid="kpi-today-orders"` navigates to `/store/orders?dateFilter=TODAY`.
-  - [ ] Test: clicking the card with `data-testid="kpi-revenue"` calls smooth scroll to element `#revenue-chart`.
-  - [ ] Test: clicking the card with `data-testid="kpi-active-offers"` navigates to `/store/offers`.
-  - [ ] Test: clicking the card with `data-testid="kpi-active-discounts"` navigates to `/store/discounts`.
-  - [ ] Test: clicking the card with `data-testid="kpi-active-ads"` navigates to `/store/advertisements`.
-  - [ ] **Run — confirm RED (missing click handlers, missing discount card, assertions fail).**
+- [x] **RED — Unit / Component (`StoreDashboardPage.test.tsx`):**
+  - [x] Test: Renders 6 KPI cards for QUICK_COMMERCE, including a new card with text `"Active Discount Codes"`.
+  - [x] Test: clicking the card with `data-testid="kpi-pending-orders"` navigates to `/store/orders?status=PLACED`.
+  - [x] Test: clicking the card with `data-testid="kpi-today-orders"` navigates to `/store/orders?dateFilter=TODAY`.
+  - [x] Test: clicking the card with `data-testid="kpi-revenue"` calls smooth scroll to element `#revenue-chart`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-offers"` navigates to `/store/offers`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-discounts"` navigates to `/store/discounts`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-ads"` navigates to `/store/advertisements`.
+  - [x] **Run — confirm RED (missing click handlers, missing discount card, assertions fail).**
 
-- [ ] **RED — Unit / Component (`StoreOrdersPage.test.tsx`):**
-  - [ ] Test: Orders page renders a date filter dropdown with `data-testid="order-date-filter"`.
-  - [ ] Test: Changing date filter to TODAY calls `api.get` with `/api/v1/store/orders?dateFilter=TODAY`.
-  - [ ] Test: Changing date filter to CUSTOM renders `data-testid="date-from-input"` and `data-testid="date-to-input"`.
-  - [ ] Test: Initializing route with `?dateFilter=TODAY` automatically sets the default select value to `"TODAY"`.
-  - [ ] **Run — confirm RED (date filter UI controls and query wiring are absent).**
+- [x] **RED — Unit / Component (`StoreOrdersPage.test.tsx`):**
+  - [x] Test: Orders page renders a date filter dropdown with `data-testid="order-date-filter"`.
+  - [x] Test: Changing date filter to TODAY calls `api.get` with `/api/v1/store/orders?dateFilter=TODAY`.
+  - [x] Test: Changing date filter to CUSTOM renders `data-testid="date-from-input"` and `data-testid="date-to-input"`.
+  - [x] Test: Initializing route with `?dateFilter=TODAY` automatically sets the default select value to `"TODAY"`.
+  - [x] **Run — confirm RED (date filter UI controls and query wiring are absent).**
 
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Types] In `StoreDashboardPage.tsx`, update `DashboardData` type to include `activeDiscountsCount: number`.
-  - [ ] [Component] In `StoreDashboardPage.tsx`:
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `StoreDashboardPage.tsx`, update `DashboardData` type to include `activeDiscountsCount: number`.
+  - [x] [Component] In `StoreDashboardPage.tsx`:
     - Add `id="revenue-chart"` to the Weekly Revenue Trend Chart container `div`.
     - Change KPI grid columns to `lg:grid-cols-6` and add the sixth card: `"Active Discount Codes"` displaying `dashboard.activeDiscountsCount`.
     - Change KPI cards `div` structures to `<button>` elements (or add `role="button"` and tabIndex) with hover shadow/cursor-pointer transition styles and navigation click handlers.
-  - [ ] [Component] In `StoreOrdersPage.tsx`:
+  - [x] [Component] In `StoreOrdersPage.tsx`:
     - Import `useSearchParams` from `react-router-dom`.
     - Add state variables for `dateFilter`, `customFrom`, `customTo`. Read them from search parameters on mount.
     - Render a `<select data-testid="order-date-filter">` on the right side of the tab bar row. When `dateFilter === "CUSTOM"`, render start and end `<input type="date">` elements.
     - Wire `useQuery` queryKey and api request URL to pass `dateFilter`, `customFrom`, and `customTo` query parameters.
-  - [ ] [Component] In `StoreBookingsPage.tsx`:
+  - [x] [Component] In `StoreBookingsPage.tsx`:
     - Import `useSearchParams` from `react-router-dom`.
     - Initialize `activeTab` from `searchParams.get("tab")` and `dateFilter` from `searchParams.get("dateFilter")` on component mount.
-  - [ ] Run unit tests — **confirm GREEN.**
+  - [x] Run unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Store owner (QUICK_COMMERCE) goes to dashboard → clicks "Today's Orders" card → navigates to `/store/orders?dateFilter=TODAY` → orders page loads showing only today's orders, and date filter dropdown pre-selects "Today" → ✅.
-  - [ ] Store owner clicks "Active Discount Codes" card → navigates to `/store/discounts` → ✅.
-  - [ ] Store owner clicks "Today's Revenue" card → page scrolls smoothly down to the revenue chart → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Store owner (QUICK_COMMERCE) goes to dashboard → clicks "Today's Orders" card → navigates to `/store/orders?dateFilter=TODAY` → orders page loads showing only today's orders, and date filter dropdown pre-selects "Today" → ✅.
+  - [x] Store owner clicks "Active Discount Codes" card → navigates to `/store/discounts` → ✅.
+  - [x] Store owner clicks "Today's Revenue" card → page scrolls smoothly down to the revenue chart → ✅ Done.
 
 ---
 
@@ -906,3 +906,12 @@ _(Append new entries here — never delete old entries.)_
 - Added comprehensive Admin Riders CRUD endpoints (`GET /api/v1/admin/riders`, `POST /api/v1/admin/riders`, `PUT /api/v1/admin/riders/:id`) with validation and type checks.
 - Implemented the frontend `AdminRidersPage` with Add/Edit modals, type-scoped store checkbox pickers, and suspension toggles.
 - Fixed all ESLint imports and TypeScript compilation errors. Verified that the typecheck and lint tasks run completely clean across the entire repository workspace.
+
+### Session 15 — 2026-06-11 — Phase 5.6.1-D Store Dashboard & Orders/Bookings Date Filters Completed
+- Implemented clickable KPI cards on the store dashboard and wired deep-links to correspond with orders, bookings, active ads, offers, and discounts.
+- Split Active Offers and Active Discounts into two separate KPI cards, expanding the layout to 6 columns.
+- Implemented smooth scrolling on Today's Revenue card clicks down to the Weekly Revenue trend chart.
+- Wired Store Orders and Store Bookings pages to initialize active tabs, date filters, and custom ranges from URL search parameters on mount, invalidating and refetching data reactively.
+- Clarified dashboard card headings for booking commerce: `"Appointments Scheduled Today"` and `"Revenue from Bookings Made Today"` (with subtext `"From bookings made today"`) to clearly distinguish scheduling vs booking-creation dates.
+- Verified all Vitest frontend unit tests, integration test suites, TypeScript type compilation, and ESLint check tasks run completely green.
+

@@ -384,4 +384,81 @@ describe("StoreOwner Orders Integration Tests", () => {
     expect(response.json().success).toBe(false);
     expect(response.json().error.code).toBe("FORBIDDEN");
   });
+
+  describe("Order filtering by date", () => {
+    it("should return correct orders filtered by TODAY and CUSTOM date ranges", async () => {
+      const store = await storeRepo.create({
+        name: "Date Filter Store",
+        description: "Organic Groceries",
+        phone: "+919999999908",
+        address: "Date Filter Street"
+      });
+
+      const owner = await ownerRepo.create({
+        email: "owner.date@gorola.in",
+        passwordHash: "dummy-hash",
+        storeId: store.id
+      });
+
+      const buyer = await db.user.create({
+        data: {
+          name: "Date Filter Buyer",
+          phone: "+919876543208",
+          isVerified: true
+        }
+      });
+
+      const today = new Date();
+      const yesterday = new Date();
+      yesterday.setDate(today.getDate() - 1);
+      const threeDaysAgo = new Date();
+      threeDaysAgo.setDate(today.getDate() - 3);
+
+      const createOrderAt = async (createdAt: Date, total: number) => {
+        return db.order.create({
+          data: {
+            userId: buyer.id,
+            storeId: store.id,
+            status: "PLACED",
+            subtotal: total - 10,
+            deliveryFee: 10,
+            total,
+            paymentMethod: "COD",
+            landmarkDescription: "Some landmark",
+            createdAt
+          }
+        });
+      };
+
+      const orderToday = await createOrderAt(today, 100);
+      const orderYesterday = await createOrderAt(yesterday, 200);
+      const orderThreeDaysAgo = await createOrderAt(threeDaysAgo, 300);
+
+      const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+
+      // 1. GET with dateFilter=TODAY -> returns 1 order (today)
+      const resToday = await server.inject({
+        method: "GET",
+        url: "/api/v1/store/orders?dateFilter=TODAY",
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(resToday.statusCode).toBe(200);
+      expect(resToday.json().data).toHaveLength(1);
+      expect(resToday.json().data[0].id).toBe(orderToday.id);
+
+      // 2. GET with dateFilter=CUSTOM from yesterday to today -> returns 2 orders
+      const ymd = (d: Date) => d.toISOString().split("T")[0];
+      const resCustom = await server.inject({
+        method: "GET",
+        url: `/api/v1/store/orders?dateFilter=CUSTOM&customFrom=${ymd(yesterday)}&customTo=${ymd(today)}`,
+        headers: { authorization: `Bearer ${token}` }
+      });
+      expect(resCustom.statusCode).toBe(200);
+      expect(resCustom.json().data).toHaveLength(2);
+      const ids = resCustom.json().data.map(({ id }: { id: string }) => id);
+      expect(ids).toContain(orderToday.id);
+      expect(ids).toContain(orderYesterday.id);
+      expect(ids).not.toContain(orderThreeDaysAgo.id);
+    });
+  });
 });

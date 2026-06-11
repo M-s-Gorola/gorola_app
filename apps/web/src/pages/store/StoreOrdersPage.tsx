@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
@@ -110,8 +110,28 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
 
 export function StoreOrdersPage(): ReactElement {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
-  const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "ALL">("ALL");
+
+  const [selectedStatus, setSelectedStatus] = useState<OrderStatus | "ALL">(() => {
+    const statusParam = searchParams.get("status");
+    if (statusParam && ["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"].includes(statusParam)) {
+      return statusParam as OrderStatus;
+    }
+    return "ALL";
+  });
+
+  const [dateFilter, setDateFilter] = useState<"ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM">(() => {
+    const filterParam = searchParams.get("dateFilter");
+    if (filterParam && ["ALL", "TODAY", "TOMORROW", "THIS_WEEK", "THIS_MONTH", "CUSTOM"].includes(filterParam)) {
+      return filterParam as "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM";
+    }
+    return "ALL";
+  });
+
+  const [customFrom, setCustomFrom] = useState(() => searchParams.get("customFrom") || "");
+  const [customTo, setCustomTo] = useState(() => searchParams.get("customTo") || "");
+
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
@@ -311,13 +331,20 @@ interface StoreOffer {
     isFetching,
     refetch
   } = useQuery({
-    queryKey: ["store", "orders", { status: selectedStatus, page }],
+    queryKey: ["store", "orders", { status: selectedStatus, page, dateFilter, customFrom, customTo }],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const url =
-        selectedStatus === "ALL"
-          ? `/api/v1/store/orders?page=${page}&limit=${limit}`
-          : `/api/v1/store/orders?status=${selectedStatus}&page=${page}&limit=${limit}`;
+      let url = `/api/v1/store/orders?page=${page}&limit=${limit}`;
+      if (selectedStatus !== "ALL") {
+        url += `&status=${selectedStatus}`;
+      }
+      if (dateFilter && dateFilter !== "ALL") {
+        url += `&dateFilter=${dateFilter}`;
+        if (dateFilter === "CUSTOM") {
+          if (customFrom) url += `&customFrom=${customFrom}`;
+          if (customTo) url += `&customTo=${customTo}`;
+        }
+      }
       const res = await api.get<OrdersEnvelope>(url);
       return res.data;
     }
@@ -455,24 +482,64 @@ interface StoreOffer {
         </button>
       </div>
 
-      {/* Tabs */}
-      <div className="flex bg-white border border-gorola-mint/15 rounded-2xl p-1.5 overflow-x-auto gap-1 shadow-sm scrollbar-none">
-        {(["ALL", "PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] as const).map((tab) => {
-          const isActive = selectedStatus === tab;
-          return (
-            <button
-              key={tab}
-              onClick={() => handleTabChange(tab)}
-              className={`px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide whitespace-nowrap transition-all ${
-                isActive
-                  ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/15"
-                  : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-              }`}
-            >
-              {tab === "ALL" ? "All Orders" : formatStatusLabel(tab)}
-            </button>
-          );
-        })}
+      {/* Tabs and Date Filter Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        {/* Modern High-End Tabs Navigation */}
+        <div className="flex-1 flex bg-white border border-gorola-mint/15 rounded-2xl p-1.5 overflow-x-auto gap-1 shadow-sm scrollbar-none">
+          {(["ALL", "PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED"] as const).map((tab) => {
+            const isActive = selectedStatus === tab;
+            return (
+              <button
+                key={tab}
+                onClick={() => handleTabChange(tab)}
+                className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide whitespace-nowrap transition-all ${
+                  isActive
+                    ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/15"
+                    : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
+                }`}
+              >
+                {tab === "ALL" ? "All Orders" : formatStatusLabel(tab)}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Date Filter Dropdown and Custom Inputs */}
+        <div className="flex items-center gap-3 self-end lg:self-auto">
+          {dateFilter === "CUSTOM" && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
+              <input
+                type="date"
+                data-testid="date-from-input"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-gorola-mint/20 focus:border-gorola-pine outline-none bg-white text-gorola-charcoal shadow-sm"
+              />
+              <span className="text-xs font-bold text-gorola-slate">to</span>
+              <input
+                type="date"
+                data-testid="date-to-input"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-gorola-mint/20 focus:border-gorola-pine outline-none bg-white text-gorola-charcoal shadow-sm"
+              />
+            </div>
+          )}
+
+          <select
+            data-testid="order-date-filter"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as typeof dateFilter)}
+            className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl transition-all shadow-sm focus:outline-none text-gorola-pine cursor-pointer"
+          >
+            <option value="ALL">All Dates</option>
+            <option value="TODAY">Today</option>
+            <option value="TOMORROW">Tomorrow</option>
+            <option value="THIS_WEEK">This Week</option>
+            <option value="THIS_MONTH">This Month</option>
+            <option value="CUSTOM">Custom Range</option>
+          </select>
+        </div>
       </div>
 
       {/* Main Order Queue Grid */}

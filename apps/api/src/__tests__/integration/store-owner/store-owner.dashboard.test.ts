@@ -491,5 +491,126 @@ describe("StoreOwner Dashboard Integration Tests", () => {
       expect(yearlyDayTrend.length).toBe(7);
     });
   });
+
+  describe("Booking Commerce Dashboard metrics", () => {
+    it("should return correct metrics (todayOrderCount as scheduled approved bookings today, activeDiscountsCount and activeOffersCount separated)", async () => {
+      // 1. Setup Store, Owner, and Buyer
+      const store = await storeRepo.create({
+        name: "Booking Store",
+        description: "Booking commerce shop",
+        phone: "+919999999906",
+        address: "Booking Street",
+        storeType: "BOOKING_COMMERCE"
+      });
+
+      const owner = await ownerRepo.create({
+        email: "owner.booking@gorola.in",
+        passwordHash: "dummy-hash",
+        storeId: store.id
+      });
+
+      const buyer = await db.user.create({
+        data: {
+          name: "Booking Buyer",
+          phone: "+919876543206",
+          isVerified: true
+        }
+      });
+
+      // Helper to create booking orders
+      const createBookingOrder = async (scheduledDate: Date, approvalStatus: "APPROVED" | "PENDING_APPROVAL", createdAt: Date = new Date()) => {
+        const order = await db.order.create({
+          data: {
+            userId: buyer.id,
+            storeId: store.id,
+            status: "PLACED",
+            orderType: "BOOKING",
+            subtotal: 500.0,
+            deliveryFee: 50.0,
+            total: 550.0,
+            paymentMethod: "COD",
+            landmarkDescription: "Test landmark",
+            createdAt
+          }
+        });
+
+        await db.bookingOrder.create({
+          data: {
+            orderId: order.id,
+            scheduledDate,
+            timeslot: "09:00-11:00",
+            approvalStatus
+          }
+        });
+      };
+
+      const today = new Date();
+      const tomorrow = new Date();
+      tomorrow.setDate(today.getDate() + 1);
+
+      // Seed 2 BookingOrders with scheduledDate = today, approvalStatus = APPROVED
+      await createBookingOrder(today, "APPROVED");
+      await createBookingOrder(today, "APPROVED");
+
+      // Seed 1 BookingOrder with scheduledDate = tomorrow, approvalStatus = APPROVED
+      await createBookingOrder(tomorrow, "APPROVED");
+
+      // Seed 1 BookingOrder scheduled today, but approvalStatus = PENDING_APPROVAL (should not be in todayOrderCount)
+      await createBookingOrder(today, "PENDING_APPROVAL");
+
+      // Seed 2 active Discount rows
+      await db.discount.create({
+        data: {
+          storeId: store.id,
+          code: "DEAL1",
+          discountType: "FLAT",
+          discountValue: 10.0,
+          startsAt: new Date(Date.now() - 3600000),
+          endsAt: new Date(Date.now() + 3600000),
+          isActive: true
+        }
+      });
+      await db.discount.create({
+        data: {
+          storeId: store.id,
+          code: "DEAL2",
+          discountType: "PERCENTAGE",
+          discountValue: 15.0,
+          startsAt: new Date(Date.now() - 3600000),
+          endsAt: new Date(Date.now() + 3600000),
+          isActive: true
+        }
+      });
+
+      // Seed 1 active Offer row
+      await db.offer.create({
+        data: {
+          storeId: store.id,
+          title: "Offer 1",
+          description: "Details 1",
+          discountType: "PERCENTAGE",
+          discountValue: 10,
+          startsAt: new Date(Date.now() - 3600000),
+          endsAt: new Date(Date.now() + 3600000),
+          isActive: true
+        }
+      });
+
+      const token = await generateAccessToken(owner.id, "STORE_OWNER", store.id);
+
+      const res = await server.inject({
+        method: "GET",
+        url: "/api/v1/store/dashboard",
+        headers: { authorization: `Bearer ${token}` }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const data = res.json().data;
+      // Count of approved bookings scheduled for today = 2
+      expect(data.todayOrderCount).toBe(2);
+      expect(data.activeOffersCount).toBe(1);
+      expect(data.activeDiscountsCount).toBe(2);
+    });
+  });
 });
 

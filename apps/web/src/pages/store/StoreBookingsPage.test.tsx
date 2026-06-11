@@ -1121,4 +1121,61 @@ describe("StoreBookingsPage TDD", () => {
     expect(screen.getByText("Today Test")).toBeInTheDocument();
     expect(screen.queryByText("Tomorrow Test")).not.toBeInTheDocument();
   });
+
+  it("initializes activeTab and dateFilter state automatically from search parameters", async () => {
+    const mockBookings = [
+      {
+        id: "booking-search-param-test",
+        orderId: "order-search-param-test",
+        status: "APPROVED",
+        createdAt: new Date().toISOString(),
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-search-param",
+            productName: "Search Param Test",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: new Date().toISOString(),
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+          refetchOnWindowFocus: false
+        }
+      }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/store/bookings?tab=APPROVED&dateFilter=TODAY"]}>
+        <QueryClientProvider client={queryClient}>
+          <StoreBookingsPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    expect(approvedTab).toHaveAttribute("aria-selected", "true");
+
+    const filterSelect = await screen.findByTestId("booking-date-filter");
+    expect(filterSelect).toHaveValue("TODAY");
+
+    expect(await screen.findByText("Search Param Test")).toBeInTheDocument();
+  });
 });

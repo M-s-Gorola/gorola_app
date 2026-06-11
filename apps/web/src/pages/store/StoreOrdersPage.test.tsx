@@ -433,4 +433,79 @@ describe("StoreOrdersPage", () => {
     // Assert scroll lock is released
     expect(document.body.style.overflow).toBe("");
   });
+
+  it("renders a date filter dropdown and triggers API queries on selection", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [],
+      meta: { total: 0, page: 1, limit: 10, hasMore: false }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderStoreOrders();
+
+    // Verify date filter is rendered
+    const dateFilter = await screen.findByTestId("order-date-filter");
+    expect(dateFilter).toBeInTheDocument();
+    expect(dateFilter).toHaveValue("ALL");
+
+    // Change to TODAY
+    fireEvent.change(dateFilter, { target: { value: "TODAY" } });
+    expect(dateFilter).toHaveValue("TODAY");
+    expect(getMock).toHaveBeenCalledWith(expect.stringContaining("dateFilter=TODAY"));
+
+    // Change to CUSTOM -> should show custom inputs
+    fireEvent.change(dateFilter, { target: { value: "CUSTOM" } });
+    expect(dateFilter).toHaveValue("CUSTOM");
+    expect(screen.getByTestId("date-from-input")).toBeInTheDocument();
+    expect(screen.getByTestId("date-to-input")).toBeInTheDocument();
+
+    // Input custom dates
+    const fromInput = screen.getByTestId("date-from-input");
+    const toInput = screen.getByTestId("date-to-input");
+    fireEvent.change(fromInput, { target: { value: "2026-06-10" } });
+    fireEvent.change(toInput, { target: { value: "2026-06-11" } });
+
+    expect(getMock).toHaveBeenCalledWith(expect.stringContaining("dateFilter=CUSTOM"));
+    expect(getMock).toHaveBeenCalledWith(expect.stringContaining("customFrom=2026-06-10"));
+    expect(getMock).toHaveBeenCalledWith(expect.stringContaining("customTo=2026-06-11"));
+  });
+
+  it("initializes dateFilter state automatically from search parameters", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [],
+      meta: { total: 0, page: 1, limit: 10, hasMore: false }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderStoreOrders(["/store/orders?dateFilter=TODAY"]);
+
+    const dateFilter = await screen.findByTestId("order-date-filter");
+    expect(dateFilter).toHaveValue("TODAY");
+  });
 });
