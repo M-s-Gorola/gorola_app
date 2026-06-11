@@ -139,7 +139,8 @@ test.describe('Booking Journey Pipeline E2E', () => {
     // Now the Approve button in the modal should be visible
     const approveBtn = storePage.getByRole("button", { name: "Approve Booking" }).first();
     await expect(approveBtn).toBeVisible({ timeout: 15000 });
-    await approveBtn.click({ force: true });
+    await approveBtn.scrollIntoViewIfNeeded();
+    await approveBtn.click();
 
     // Confirm the status update dialog
     const confirmApproveBtn = storePage.getByRole("button", { name: "Confirm" }).first();
@@ -158,7 +159,8 @@ test.describe('Booking Journey Pipeline E2E', () => {
     // 5. Store Owner marks the booking as On The Way
     const markOnTheWayBtn = storePage.locator('button', { hasText: 'Mark On The Way' }).first();
     await expect(markOnTheWayBtn).toBeVisible({ timeout: 15000 });
-    await markOnTheWayBtn.click({ force: true });
+    await markOnTheWayBtn.scrollIntoViewIfNeeded();
+    await markOnTheWayBtn.click();
 
     // Confirm the status update dialog for dispatch
     const confirmDispatchBtn = storePage.getByRole("button", { name: "Confirm" }).first();
@@ -177,7 +179,8 @@ test.describe('Booking Journey Pipeline E2E', () => {
     // Store Owner completes the booking (Phase 7.8.1 completion button)
     const markCompletedBtn = storePage.locator('button', { hasText: 'Mark Completed' }).first();
     await expect(markCompletedBtn).toBeVisible({ timeout: 15000 });
-    await markCompletedBtn.click({ force: true });
+    await markCompletedBtn.scrollIntoViewIfNeeded();
+    await markCompletedBtn.click();
 
     // Confirm the status update dialog for completion
     const confirmCompleteBtn = storePage.getByRole("button", { name: "Confirm" }).first();
@@ -254,7 +257,8 @@ test.describe('Booking Journey Pipeline E2E', () => {
 
     const rejectBtn = storePage.locator('button', { hasText: 'Reject' }).first();
     await expect(rejectBtn).toBeVisible({ timeout: 15000 });
-    await rejectBtn.click({ force: true });
+    await rejectBtn.scrollIntoViewIfNeeded();
+    await rejectBtn.click();
 
     // Input rejection reason
     const reasonTextarea = storePage.locator('textarea[placeholder*="reason"]');

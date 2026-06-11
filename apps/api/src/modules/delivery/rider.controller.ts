@@ -6,6 +6,7 @@ import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { RiderAuthService } from "../auth/rider-auth.service.js";
+import type { RiderRepository } from "./rider.repository.js";
 import type { RiderLocationService } from "./rider-location.service.js";
 import type { RiderOrderService } from "./rider-order.service.js";
 
@@ -116,6 +117,7 @@ export function registerRiderRoutes(
     riderAuthService: RiderAuthService;
     riderOrderService: RiderOrderService;
     riderLocationService: RiderLocationService;
+    riderRepository: RiderRepository;
   }
 ): void {
   const preHandler = [requireAuth(deps.tokenVerifier), requireRole(["RIDER"])];
@@ -181,13 +183,23 @@ export function registerRiderRoutes(
 
   // GET /api/v1/rider/orders/active
   app.get("/api/v1/rider/orders/active", { preHandler }, async (request, reply) => {
-    const storeId = request.user?.storeId;
     const riderId = request.user?.sub;
-    if (!storeId || !riderId) {
-      return reply.code(400).send({ success: false, error: "Store or rider context missing from session" });
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Rider context missing from session" });
     }
 
-    const orders = await deps.riderOrderService.getActiveOrders(storeId, riderId);
+    const storeIds = await deps.riderRepository.getAllStoreIds(riderId);
+    if (storeIds.length === 0) {
+      return {
+        success: true,
+        data: [],
+        meta: {
+          requestId: getRequestId(request, reply)
+        }
+      };
+    }
+
+    const orders = await deps.riderOrderService.getActiveOrders(storeIds, riderId);
     
     const mapped = orders.map((o) => {
       return {
@@ -235,14 +247,18 @@ export function registerRiderRoutes(
       throw new ValidationError("Invalid status transition payload", bodyParsed.error.flatten());
     }
 
-    const storeId = request.user?.storeId;
     const changedBy = request.user?.sub;
-    if (!storeId || !changedBy) {
+    if (!changedBy) {
       return reply.code(400).send({ success: false, error: "Authentication context missing" });
     }
 
+    const storeIds = await deps.riderRepository.getAllStoreIds(changedBy);
+    if (storeIds.length === 0) {
+      return reply.code(403).send({ success: false, error: "You are not authorized to update this order" });
+    }
+
     const order = await deps.riderOrderService.updateOrderStatus(
-      storeId,
+      storeIds,
       paramsParsed.data.id,
       bodyParsed.data.status,
       changedBy
@@ -298,11 +314,22 @@ export function registerRiderRoutes(
     const prisma = getPrismaClient();
     const rider = await prisma.deliveryRider.findFirst({
       where: { id: riderId, isDeleted: false },
-      include: { store: true }
+      include: {
+        stores: {
+          include: {
+            store: true
+          }
+        }
+      }
     });
 
     if (!rider) {
       return reply.code(404).send({ success: false, error: "Rider profile not found" });
+    }
+
+    const primaryRiderStore = rider.stores.find((s) => s.isPrimary) || rider.stores[0];
+    if (!primaryRiderStore) {
+      return reply.code(404).send({ success: false, error: "Rider is not assigned to any store" });
     }
 
     return {
@@ -314,8 +341,8 @@ export function registerRiderRoutes(
         phone: rider.phone,
         riderType: rider.riderType,
         store: {
-          id: rider.store.id,
-          name: rider.store.name
+          id: primaryRiderStore.store.id,
+          name: primaryRiderStore.store.name
         }
       },
       meta: {

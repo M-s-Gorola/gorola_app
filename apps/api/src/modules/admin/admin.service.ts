@@ -1644,6 +1644,229 @@ export class AdminService {
       skippedNames
     };
   }
+
+  public async listRiders(): Promise<
+    Prisma.DeliveryRiderGetPayload<{
+      include: {
+        stores: {
+          include: {
+            store: {
+              select: {
+                id: true;
+                name: true;
+                storeType: true;
+              };
+            };
+          };
+        };
+      };
+    }>[]
+  > {
+    return this.db.deliveryRider.findMany({
+      where: { isDeleted: false },
+      orderBy: { createdAt: "desc" },
+      include: {
+        stores: {
+          include: {
+            store: {
+              select: {
+                id: true,
+                name: true,
+                storeType: true
+              }
+            }
+          }
+        }
+      }
+    });
+  }
+
+  public async createRider(
+    dto: {
+      name: string;
+      phone: string;
+      email: string;
+      password: string;
+      riderType: "DELIVERY" | "FIELD_TECHNICIAN";
+      storeIds: string[];
+      primaryStoreId: string;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    if (dto.storeIds.length === 0) {
+      throw new ValidationError("Rider must be assigned to at least one store", { field: "storeIds" });
+    }
+
+    if (!dto.storeIds.includes(dto.primaryStoreId)) {
+      throw new ValidationError("Primary store must be in the assigned store list", { field: "primaryStoreId" });
+    }
+
+    const stores = await this.db.store.findMany({
+      where: { id: { in: dto.storeIds }, isDeleted: false },
+      select: { id: true, storeType: true }
+    });
+
+    if (stores.length !== dto.storeIds.length) {
+      throw new ValidationError("One or more assigned stores do not exist", { field: "storeIds" });
+    }
+
+    for (const store of stores) {
+      if (dto.riderType === "DELIVERY" && store.storeType !== "QUICK_COMMERCE") {
+        throw new ValidationError("Delivery riders can only be assigned to Quick Commerce stores", { field: "storeIds" });
+      }
+      if (dto.riderType === "FIELD_TECHNICIAN" && store.storeType !== "BOOKING_COMMERCE") {
+        throw new ValidationError("Field technicians can only be assigned to Booking Commerce stores", { field: "storeIds" });
+      }
+    }
+
+    const existing = await this.db.deliveryRider.findFirst({
+      where: { email: dto.email, isDeleted: false }
+    });
+    if (existing) {
+      throw new ConflictError("Rider with this email already exists", { field: "email" });
+    }
+
+    const passwordHash = await hash(dto.password, 8);
+
+    return this.db.$transaction(async (tx) => {
+      const rider = await tx.deliveryRider.create({
+        data: {
+          name: dto.name,
+          phone: dto.phone,
+          email: dto.email,
+          passwordHash,
+          riderType: dto.riderType,
+          isActive: true,
+          isDeleted: false
+        }
+      });
+
+      const riderStoresData = dto.storeIds.map((storeId) => ({
+        riderId: rider.id,
+        storeId,
+        isPrimary: storeId === dto.primaryStoreId
+      }));
+
+      await tx.riderStore.createMany({
+        data: riderStoresData
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_RIDER_CREATE",
+          entityType: "DeliveryRider",
+          entityId: rider.id,
+          oldValue: Prisma.JsonNull,
+          newValue: {
+            name: rider.name,
+            email: rider.email,
+            riderType: rider.riderType,
+            storeIds: dto.storeIds,
+            primaryStoreId: dto.primaryStoreId
+          },
+          ip,
+          userAgent
+        }
+      });
+
+      return rider;
+    });
+  }
+
+  public async updateRider(
+    riderId: string,
+    dto: {
+      isActive?: boolean;
+      storeIds?: string[];
+      primaryStoreId?: string;
+    },
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ) {
+    const rider = await this.db.deliveryRider.findFirst({
+      where: { id: riderId, isDeleted: false }
+    });
+    if (!rider) {
+      throw new NotFoundError("Rider not found");
+    }
+
+    return this.db.$transaction(async (tx) => {
+      const updatedData: Prisma.DeliveryRiderUpdateInput = {};
+      if (dto.isActive !== undefined) {
+        updatedData.isActive = dto.isActive;
+      }
+
+      const updatedRider = await tx.deliveryRider.update({
+        where: { id: riderId },
+        data: updatedData
+      });
+
+      if (dto.storeIds !== undefined && dto.primaryStoreId !== undefined) {
+        if (dto.storeIds.length === 0) {
+          throw new ValidationError("Rider must be assigned to at least one store", { field: "storeIds" });
+        }
+        if (!dto.storeIds.includes(dto.primaryStoreId)) {
+          throw new ValidationError("Primary store must be in the assigned store list", { field: "primaryStoreId" });
+        }
+
+        const stores = await tx.store.findMany({
+          where: { id: { in: dto.storeIds }, isDeleted: false },
+          select: { id: true, storeType: true }
+        });
+        if (stores.length !== dto.storeIds.length) {
+          throw new ValidationError("One or more assigned stores do not exist", { field: "storeIds" });
+        }
+
+        for (const store of stores) {
+          if (rider.riderType === "DELIVERY" && store.storeType !== "QUICK_COMMERCE") {
+            throw new ValidationError("Delivery riders can only be assigned to Quick Commerce stores", { field: "storeIds" });
+          }
+          if (rider.riderType === "FIELD_TECHNICIAN" && store.storeType !== "BOOKING_COMMERCE") {
+            throw new ValidationError("Field technicians can only be assigned to Booking Commerce stores", { field: "storeIds" });
+          }
+        }
+
+        await tx.riderStore.deleteMany({
+          where: { riderId }
+        });
+
+        await tx.riderStore.createMany({
+          data: dto.storeIds.map((storeId) => ({
+            riderId,
+            storeId,
+            isPrimary: storeId === dto.primaryStoreId
+          }))
+        });
+      }
+
+      await tx.auditLog.create({
+        data: {
+          actorId: adminId,
+          actorRole: "ADMIN",
+          action: "ADMIN_RIDER_UPDATE",
+          entityType: "DeliveryRider",
+          entityId: riderId,
+          oldValue: {
+            isActive: rider.isActive
+          },
+          newValue: {
+            isActive: dto.isActive !== undefined ? dto.isActive : rider.isActive,
+            storeIds: dto.storeIds,
+            primaryStoreId: dto.primaryStoreId
+          },
+          ip,
+          userAgent
+        }
+      });
+
+      return updatedRider;
+    });
+  }
 }
 
 export type BulkCategoryRow = {

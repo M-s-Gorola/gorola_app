@@ -166,15 +166,30 @@ export class OrderRepository {
   }
 
   public async findManyByStore(
-    storeId: string,
-    filters?: { status?: OrderStatus[]; orderType?: Prisma.OrderWhereInput["orderType"] }
+    storeId: string | string[],
+    filters?: {
+      status?: OrderStatus[];
+      orderType?: Prisma.OrderWhereInput["orderType"];
+      scheduledDateFrom?: Date;
+      scheduledDateTo?: Date;
+    }
   ): Promise<OrderWithRelations[]> {
-    const where: Prisma.OrderWhereInput = { storeId };
+    const where: Prisma.OrderWhereInput = {
+      storeId: Array.isArray(storeId) ? { in: storeId } : storeId
+    };
     if (filters?.status) {
       where.status = { in: filters.status };
     }
     if (filters?.orderType) {
       where.orderType = filters.orderType;
+    }
+    if (filters?.scheduledDateFrom || filters?.scheduledDateTo) {
+      where.bookingOrder = {
+        scheduledDate: {
+          ...(filters.scheduledDateFrom ? { gte: filters.scheduledDateFrom } : {}),
+          ...(filters.scheduledDateTo ? { lt: filters.scheduledDateTo } : {})
+        }
+      };
     }
     return this.db.order.findMany({
       include: orderRelationsInclude,

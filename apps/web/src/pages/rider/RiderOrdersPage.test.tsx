@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, fireEvent, waitForElementToBeRemoved, within, type RenderResult } from "@testing-library/react";
+import { render, screen, fireEvent, waitFor, waitForElementToBeRemoved, within, type RenderResult } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -87,6 +87,7 @@ describe("RiderOrdersPage", () => {
     renderRiderOrders();
 
     expect(await screen.findByText(/No active orders right now/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { level: 1 })).toHaveTextContent("Shift Orders");
   });
 
   it("renders active orders with status filter tabs and compact cards that open detail modals", async () => {
@@ -285,7 +286,10 @@ describe("RiderOrdersPage", () => {
     renderRiderOrders();
 
     // Verify dynamic field technician text labels
-    expect(await screen.findByText("Shift Services")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("Today's Bookings");
+      expect(screen.getByText("Scheduled for today")).toBeInTheDocument();
+    });
     expect(screen.getByRole("button", { name: /Ready for Visit/i })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /Departed/i })).toBeInTheDocument();
 

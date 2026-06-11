@@ -278,9 +278,14 @@ export function RiderOrdersPage(): ReactElement {
     <div className="flex flex-col gap-6 pb-20">
       {/* Header bar */}
       <div className="flex items-center justify-between border-b border-gorola-fog pb-4">
-        <h1 className="font-heading text-2xl font-bold text-gorola-charcoal border-gorola-fog">
-          {isFieldTechnician ? "Shift Services" : "Shift Orders"}
-        </h1>
+        <div className="flex flex-col gap-1">
+          <h1 className="font-heading text-2xl font-bold text-gorola-charcoal border-gorola-fog">
+            {isFieldTechnician ? "Today's Bookings" : "Shift Orders"}
+          </h1>
+          {isFieldTechnician && (
+            <p className="text-xs text-muted-foreground font-medium">Scheduled for today</p>
+          )}
+        </div>
         <button
           onClick={() => refetch()}
           className="flex h-10 w-10 items-center justify-center rounded-full border border-gorola-fog bg-white hover:bg-gorola-fog transition focus:outline-none select-none cursor-pointer"

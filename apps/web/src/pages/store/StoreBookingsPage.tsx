@@ -29,6 +29,8 @@ import { useAuthStore } from "@/store/auth.store";
 
 type BookingStatus = "PENDING_APPROVAL" | "APPROVED" | "REJECTED" | "COMPLETED" | "CANCELLED";
 
+type DateFilter = "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM";
+
 type BookingItem = {
   id: string;
   productName: string;
@@ -117,6 +119,9 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
 export function StoreBookingsPage(): ReactElement {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<"ALL" | "PENDING" | "APPROVED" | "ON_THE_WAY" | "HISTORY">("ALL");
+  const [dateFilter, setDateFilter] = useState<DateFilter>("ALL");
+  const [customFrom, setCustomFrom] = useState("");
+  const [customTo, setCustomTo] = useState("");
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
@@ -343,6 +348,64 @@ export function StoreBookingsPage(): ReactElement {
     }
   });
 
+  // Date Filtering helper
+  const filterByDate = (list: Booking[]) => {
+    if (dateFilter === "ALL") return list;
+
+    const getLocalYMD = (date: Date) => {
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, "0");
+      const day = String(date.getDate()).padStart(2, "0");
+      return `${year}-${month}-${day}`;
+    };
+
+    const now = new Date();
+    const todayStr = getLocalYMD(now);
+
+    const tom = new Date(now);
+    tom.setDate(tom.getDate() + 1);
+    const tomorrowStr = getLocalYMD(tom);
+
+    const dayOfWeek = now.getDay();
+    const startOfWeek = new Date(now);
+    startOfWeek.setDate(now.getDate() - dayOfWeek);
+    const startOfWeekStr = getLocalYMD(startOfWeek);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 6);
+    const endOfWeekStr = getLocalYMD(endOfWeek);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const startOfMonthStr = getLocalYMD(startOfMonth);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    const endOfMonthStr = getLocalYMD(endOfMonth);
+
+    return list.filter((b) => {
+      const scheduledDateStr = b.bookingOrder?.scheduledDate;
+      if (!scheduledDateStr) return false;
+
+      const bookingDate = new Date(scheduledDateStr);
+      const bookingYMD = getLocalYMD(bookingDate);
+
+      switch (dateFilter) {
+        case "TODAY":
+          return bookingYMD === todayStr;
+        case "TOMORROW":
+          return bookingYMD === tomorrowStr;
+        case "THIS_WEEK":
+          return bookingYMD >= startOfWeekStr && bookingYMD <= endOfWeekStr;
+        case "THIS_MONTH":
+          return bookingYMD >= startOfMonthStr && bookingYMD <= endOfMonthStr;
+        case "CUSTOM": {
+          if (customFrom && bookingYMD < customFrom) return false;
+          if (customTo && bookingYMD > customTo) return false;
+          return true;
+        }
+        default:
+          return true;
+      }
+    });
+  };
+
   // Tab Filtering & Sorting Logical Maps
   const pendingBookings = bookings.filter(
     (b) => b.status === "PENDING_APPROVAL"
@@ -365,18 +428,25 @@ export function StoreBookingsPage(): ReactElement {
   );
 
   const getActiveList = () => {
+    let list: Booking[] = [];
     switch (activeTab) {
       case "ALL":
-        return bookings;
+        list = bookings;
+        break;
       case "PENDING":
-        return pendingBookings;
+        list = pendingBookings;
+        break;
       case "APPROVED":
-        return approvedBookings;
+        list = approvedBookings;
+        break;
       case "ON_THE_WAY":
-        return onTheWayBookings;
+        list = onTheWayBookings;
+        break;
       case "HISTORY":
-        return historyBookings;
+        list = historyBookings;
+        break;
     }
+    return filterByDate(list);
   };
 
 
@@ -424,40 +494,80 @@ export function StoreBookingsPage(): ReactElement {
         </button>
       </div>
 
-      {/* Modern High-End Tabs Navigation */}
-      <div className="flex bg-white border border-gorola-mint/15 rounded-2xl p-1.5 shadow-sm overflow-x-auto">
-        {(["ALL", "PENDING", "APPROVED", "ON_THE_WAY", "HISTORY"] as const).map((tab) => {
-          const isActive = activeTab === tab;
-          let count = 0;
-          if (tab === "ALL") count = bookings.length;
-          if (tab === "PENDING") count = pendingBookings.length;
-          if (tab === "APPROVED") count = approvedBookings.length;
-          if (tab === "ON_THE_WAY") count = onTheWayBookings.length;
-          if (tab === "HISTORY") count = historyBookings.length;
+      {/* Tabs and Date Filter Section */}
+      <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        {/* Modern High-End Tabs Navigation */}
+        <div className="flex-1 flex bg-white border border-gorola-mint/15 rounded-2xl p-1.5 shadow-sm overflow-x-auto">
+          {(["ALL", "PENDING", "APPROVED", "ON_THE_WAY", "HISTORY"] as const).map((tab) => {
+            const isActive = activeTab === tab;
+            let count = 0;
+            if (tab === "ALL") count = filterByDate(bookings).length;
+            if (tab === "PENDING") count = filterByDate(pendingBookings).length;
+            if (tab === "APPROVED") count = filterByDate(approvedBookings).length;
+            if (tab === "ON_THE_WAY") count = filterByDate(onTheWayBookings).length;
+            if (tab === "HISTORY") count = filterByDate(historyBookings).length;
 
-          return (
-            <button
-              key={tab}
-              role="tab"
-              aria-selected={isActive}
-              onClick={() => setActiveTab(tab)}
-              className={`flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 px-4 ${
-                isActive
-                  ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
-                  : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-              }`}
-            >
-              {tab === "ALL" ? "all requests" : tab === "ON_THE_WAY" ? "on the way" : tab.toLowerCase()}
-              <span
-                className={`text-[10px] px-2 py-0.5 rounded-full ${
-                  isActive ? "bg-white/20 text-white" : "bg-gorola-mint text-gorola-charcoal"
+            return (
+              <button
+                key={tab}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => setActiveTab(tab)}
+                className={`flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 px-4 ${
+                  isActive
+                    ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
+                    : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
                 }`}
               >
-                {count}
-              </span>
-            </button>
-          );
-        })}
+                {tab === "ALL" ? "all requests" : tab === "ON_THE_WAY" ? "on the way" : tab.toLowerCase()}
+                <span
+                  className={`text-[10px] px-2 py-0.5 rounded-full ${
+                    isActive ? "bg-white/20 text-white" : "bg-gorola-mint text-gorola-charcoal"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Date Filter Dropdown and Custom Inputs */}
+        <div className="flex items-center gap-3 self-end lg:self-auto">
+          {dateFilter === "CUSTOM" && (
+            <div className="flex items-center gap-2 animate-in fade-in slide-in-from-right-4 duration-200">
+              <input
+                type="date"
+                data-testid="date-from-input"
+                value={customFrom}
+                onChange={(e) => setCustomFrom(e.target.value)}
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-gorola-mint/20 focus:border-gorola-pine outline-none bg-white text-gorola-charcoal shadow-sm"
+              />
+              <span className="text-xs font-bold text-gorola-slate">to</span>
+              <input
+                type="date"
+                data-testid="date-to-input"
+                value={customTo}
+                onChange={(e) => setCustomTo(e.target.value)}
+                className="px-3 py-2 text-xs font-semibold rounded-xl border border-gorola-mint/20 focus:border-gorola-pine outline-none bg-white text-gorola-charcoal shadow-sm"
+              />
+            </div>
+          )}
+
+          <select
+            data-testid="booking-date-filter"
+            value={dateFilter}
+            onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+            className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl transition-all shadow-sm focus:outline-none text-gorola-pine cursor-pointer"
+          >
+            <option value="ALL">All Dates</option>
+            <option value="TODAY">Today</option>
+            <option value="TOMORROW">Tomorrow</option>
+            <option value="THIS_WEEK">This Week</option>
+            <option value="THIS_MONTH">This Month</option>
+            <option value="CUSTOM">Custom Range</option>
+          </select>
+        </div>
       </div>
 
       {/* Dynamic Main Body Content Grid */}

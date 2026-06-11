@@ -142,9 +142,14 @@ async function main(): Promise<void> {
       phone: "+919000000001",
       email: "rider1@gorola.in",
       passwordHash: riderPwHash,
-      storeId: storeA.id,
       riderType: "DELIVERY",
-      isActive: true
+      isActive: true,
+      stores: {
+        create: {
+          storeId: storeA.id,
+          isPrimary: true
+        }
+      }
     }
   });
 
@@ -156,9 +161,14 @@ async function main(): Promise<void> {
       phone: "+919000000002",
       email: "rider2@gorola.in",
       passwordHash: riderPwHash,
-      storeId: storeC.id,
       riderType: "FIELD_TECHNICIAN",
-      isActive: true
+      isActive: true,
+      stores: {
+        create: {
+          storeId: storeC.id,
+          isPrimary: true
+        }
+      }
     }
   });
 
