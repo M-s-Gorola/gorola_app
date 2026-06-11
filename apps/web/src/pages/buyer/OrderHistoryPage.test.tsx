@@ -133,16 +133,16 @@ describe("OrderHistoryPage", () => {
 
     await waitFor(() => screen.getByText("Delivered"));
 
-    // Rate thumbs up
-    const thumbsUpBtns = screen.getAllByRole("button", { name: /Thumbs Up/i });
-    await user.click(thumbsUpBtns[0]!);
+    // Rate star rating
+    const starBtn = screen.getAllByRole("button", { name: /Rate 4.5 stars/i })[0]!;
+    await user.click(starBtn);
 
     const submitBtn = screen.getByRole("button", { name: /Submit Feedback/i });
     await user.click(submitBtn);
 
     await waitFor(() => {
       expect(apiPutSpy).toHaveBeenCalledWith("/api/v1/orders/order1/rate", expect.objectContaining({
-        rating: true
+        rating: 4.5
       }));
     });
   });
@@ -152,10 +152,8 @@ describe("OrderHistoryPage", () => {
 
     await waitFor(() => screen.getByText("Placed"));
     
-    // Test Store 2 is PLACED, it shouldn't have rating buttons next to it
-    // We can check by aria-label or just seeing if they are present in the list item
     const order2Container = screen.getByText("Test Store 2").closest("div");
-    expect(order2Container).not.toContainElement(screen.queryByRole("button", { name: /Thumbs Up/i }));
+    expect(order2Container).not.toContainElement(screen.queryByRole("button", { name: /Rate 5.0 stars/i }));
   });
 
   it("renders empty state when no orders exist", async () => {
@@ -211,23 +209,6 @@ describe("OrderHistoryPage", () => {
     });
     apiPutSpy.mockReturnValue(putPromise);
 
-    renderComponent();
-    await waitFor(() => screen.getByText("Delivered"));
-
-    // Click thumbs up on Order 1
-    const thumbsUpBtns = screen.getAllByRole("button", { name: /Thumbs Up/i });
-    await user.click(thumbsUpBtns[0]!);
-
-    // Submit feedback
-    const submitBtn = screen.getByRole("button", { name: /Submit Feedback/i });
-    await user.click(submitBtn);
-
-    // Order 1's rating buttons should be disabled
-    expect(thumbsUpBtns[0]).toBeDisabled();
-    
-    // Order 2 is not delivered so it doesn't have rating buttons in this test setup,
-    // but if we had another delivered order, its buttons should remain enabled.
-    // Let's update the mock to have two delivered orders for a better test.
     apiGetSpy.mockResolvedValue({
       data: {
         data: {
@@ -240,19 +221,17 @@ describe("OrderHistoryPage", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } as any);
     
-    // Re-render with two delivered orders
-    queryClient.clear();
     renderComponent();
     await waitFor(() => screen.getByText("S1"));
     
-    const s1ThumbsUp = screen.getAllByRole("button", { name: /Thumbs Up/i })[0]!;
-    const s2ThumbsUp = screen.getAllByRole("button", { name: /Thumbs Up/i })[1]!;
+    const s1Star = screen.getAllByRole("button", { name: /Rate 4.5 stars/i })[0]!;
+    const s2Star = screen.getAllByRole("button", { name: /Rate 4.5 stars/i })[1]!;
     
-    await user.click(s1ThumbsUp);
+    await user.click(s1Star);
     await user.click(screen.getAllByRole("button", { name: /Submit Feedback/i })[0]!);
     
-    expect(s1ThumbsUp).toBeDisabled();
-    expect(s2ThumbsUp).not.toBeDisabled();
+    expect(s1Star).toBeDisabled();
+    expect(s2Star).not.toBeDisabled();
 
     // Cleanup
     resolvePut!({ data: { data: { id: "ok" } } });
@@ -473,7 +452,7 @@ describe("OrderHistoryPage", () => {
               status: "DELIVERED",
               createdAt: "2026-05-01T10:00:00Z",
               items: [],
-              rating: true,
+              rating: 4.5,
               ratingComment: "Awesome honey!"
             }
           ]
@@ -487,9 +466,9 @@ describe("OrderHistoryPage", () => {
     expect(await screen.findByText("Test Store")).toBeInTheDocument();
 
     expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText("4.5 / 5")).toBeInTheDocument();
     expect(screen.getByText('"Awesome honey!"')).toBeInTheDocument();
 
-    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Thumbs Down/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
 });

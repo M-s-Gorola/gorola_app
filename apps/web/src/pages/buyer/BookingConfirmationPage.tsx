@@ -1,12 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { CheckCircle2, Home, MessageSquare, ThumbsDown, ThumbsUp } from "lucide-react";
+import { CheckCircle2, Home, MessageSquare } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
+import { StarRating } from "@/components/shared/StarRating";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -59,7 +60,7 @@ type BookingEnvelope = {
   bookingOrder: BookingOrderDetails;
   discountAmount?: string;
   discountCode?: string | null;
-  rating?: boolean | null;
+  rating?: number | null;
   ratingComment?: string | null;
   deliveryLat?: number | null;
   deliveryLng?: number | null;
@@ -140,11 +141,11 @@ export function BookingConfirmationPage(): ReactElement {
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
-  const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
+  const [activeRating, setActiveRating] = useState<number | null>(null);
   const [ratingComment, setRatingComment] = useState("");
 
   const rateMutation = useMutation({
-    mutationFn: async ({ rating, comment }: { rating: boolean; comment?: string | undefined }) => {
+    mutationFn: async ({ rating, comment }: { rating: number; comment?: string | undefined }) => {
       const res = await api!.put(`/api/v1/orders/${id}/rate`, {
         rating,
         ratingComment: comment
@@ -609,11 +610,15 @@ export function BookingConfirmationPage(): ReactElement {
             <div className="flex items-center justify-between gap-4">
               <div className="text-sm text-gorola-slate font-medium">
                 {booking.rating !== undefined && booking.rating !== null ? (
-                  <div className="space-y-1">
+                  <div className="space-y-1.5">
                     <span className="flex items-center gap-1.5 text-green-600 font-bold">
                       <CheckCircle2 className="w-4 h-4" />
                       Rating submitted
                     </span>
+                    <div className="flex items-center gap-2">
+                      <StarRating rating={booking.rating} disabled={true} />
+                      <span className="text-sm font-bold text-gorola-charcoal">{booking.rating} / 5</span>
+                    </div>
                     {booking.ratingComment && (
                       <p className="text-xs text-gorola-slate italic">"{booking.ratingComment}"</p>
                     )}
@@ -625,51 +630,12 @@ export function BookingConfirmationPage(): ReactElement {
 
               {(booking.rating === undefined || booking.rating === null) && (
                 <div className="flex items-center gap-3">
-                  <button
-                    onClick={() => setActiveRating(activeRating === "up" ? null : "up")}
+                  <StarRating
+                    rating={activeRating ?? 0}
+                    interactive={true}
+                    onChange={setActiveRating}
                     disabled={rateMutation.isPending}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeRating === "up"
-                      ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm'
-                      : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                      } disabled:opacity-50`}
-                    aria-label="Thumbs Up"
-                  >
-                    <ThumbsUp className="w-4 h-4" />
-                    Liked
-                  </button>
-                  <button
-                    onClick={() => setActiveRating(activeRating === "down" ? null : "down")}
-                    disabled={rateMutation.isPending}
-                    className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${activeRating === "down"
-                      ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm'
-                      : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                      } disabled:opacity-50`}
-                    aria-label="Thumbs Down"
-                  >
-                    <ThumbsDown className="w-4 h-4" />
-                    Disliked
-                  </button>
-                </div>
-              )}
-
-              {booking.rating !== undefined && booking.rating !== null && (
-                <div className="flex items-center gap-3">
-                  <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${booking.rating === true
-                    ? 'bg-green-50 text-green-700 border-green-200'
-                    : 'bg-red-50 text-red-700 border-red-200'
-                    }`}>
-                    {booking.rating === true ? (
-                      <>
-                        <ThumbsUp className="w-4 h-4" />
-                        Liked
-                      </>
-                    ) : (
-                      <>
-                        <ThumbsDown className="w-4 h-4" />
-                        Disliked
-                      </>
-                    )}
-                  </div>
+                  />
                 </div>
               )}
             </div>
@@ -689,7 +655,7 @@ export function BookingConfirmationPage(): ReactElement {
                 <div className="flex justify-end">
                   <button
                     onClick={() => rateMutation.mutate({
-                      rating: activeRating === "up",
+                      rating: activeRating!,
                       comment: ratingComment || undefined
                     })}
                     className="px-6 py-2 bg-gorola-pine text-white text-xs font-bold rounded-full hover:bg-gorola-pine/90 transition-all shadow-md shadow-gorola-pine/10 disabled:opacity-50"
