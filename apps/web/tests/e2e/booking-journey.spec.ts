@@ -27,7 +27,7 @@ test.describe('Booking Journey Pipeline E2E', () => {
     
     // Wait for bootstrap/hydration to finish
     await expect(page.locator('text=/Restoring your session/i')).not.toBeVisible({ timeout: 15000 });
-    await expect(page.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
   }
 
   async function loginAsStoreOwner(page: any, email: string) {

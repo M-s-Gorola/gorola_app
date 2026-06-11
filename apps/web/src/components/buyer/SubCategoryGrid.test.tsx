@@ -67,13 +67,28 @@ describe("SubCategoryGrid", () => {
 
     renderGrid("groceries");
 
-    expect(await screen.findByRole("button", { name: /snacks/i })).toBeInTheDocument();
+    const snacksBtn = await screen.findByRole("button", { name: /snacks/i });
+    expect(snacksBtn).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /beverages/i })).toBeInTheDocument();
 
     expect(screen.getByAltText(/snacks sub-category/i)).toHaveAttribute("src", "https://example.com/snack.jpg");
     expect(screen.getByAltText(/beverages sub-category/i)).toHaveAttribute("src", "https://example.com/bev.jpg");
 
-    fireEvent.click(screen.getByRole("button", { name: /snacks/i }));
+    // Verify sub-category card uses vertical flex layout
+    const cards = screen.getAllByTestId("subcategory-card");
+    expect(cards[0]).toHaveClass("flex-col");
+
+    // Verify sub-category card has standard aspect-square image wrapper styling (non-circular)
+    const imgWrapper = screen.getByAltText(/snacks sub-category/i).parentElement;
+    expect(imgWrapper).toHaveClass("aspect-square");
+    expect(imgWrapper).toHaveClass("w-full");
+    expect(imgWrapper).toHaveClass("rounded-xl");
+    expect(imgWrapper).not.toHaveClass("rounded-full");
+
+    // Ensure the image itself is also not circular
+    expect(screen.getByAltText(/snacks sub-category/i)).not.toHaveClass("rounded-full");
+
+    fireEvent.click(snacksBtn);
     expect(navigateMock).toHaveBeenCalledWith("/categories/groceries/snacks");
   });
 

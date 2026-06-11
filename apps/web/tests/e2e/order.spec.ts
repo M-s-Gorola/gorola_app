@@ -21,7 +21,7 @@ test.describe('Order Management', () => {
     await expect(page).toHaveURL(/\/$/, { timeout: 10000 });
     // Wait for bootstrap to finish
     await expect(page.locator('text=/Restoring your session/i')).not.toBeVisible();
-    await expect(page.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 10000 });
+    await expect(page.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 10000 });
   });
 
   test('E2E-009: Order Status Machine (All 4 States)', async ({ page }) => {
@@ -57,7 +57,7 @@ test.describe('Order Management', () => {
     await expect(orderCards.first()).toBeVisible();
 
     // 1. Capture initial count (if badge exists)
-    const cartBadge = page.locator('[data-testid="cart-badge"]');
+    const cartBadge = page.locator('[data-testid$="cart-badge"]:visible');
     let initialCount = 0;
     if (await cartBadge.isVisible()) {
       const txt = await cartBadge.textContent();
