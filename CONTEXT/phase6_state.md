@@ -20,15 +20,16 @@
 | Phase 6.8 | E2E Test Suite Alignment | COMPLETE | Aligned category segregation homepage assertions and E2E test routes. |
 | Phase 6.9 | Booking Commerce Feature Parity & Discount Integration | COMPLETE | Standardized discount pipelines, collapsible itemized detail modals, and transparent maximum discount disclosure rules. |
 | Phase 6.10 | Bulk Insert & Bulk Restock | COMPLETE | Two-phase validate/confirm pattern. Admin bulk category/subcategory import (Phase 6.10.1), store owner bulk product import (Phase 6.10.2), and bulk restock (Phase 6.10.3) are fully complete with comprehensive testing. |
+| Phase 6.11 | Star Rating System | 🟡 IN PROGRESS | Upgrade thumbs up/down feedback to 0-5 decimal stars. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-08
-- **Session Summary:** Completed Phase 6.10 (Bulk Insert & Bulk Restock) fully. Implemented and tested: (1) Admin Bulk Category & Subcategory Import, (2) Store Owner Bulk Product/Variant Import, and (3) Store Owner Bulk Restock. All backend integration tests (all 99 tests pass) and frontend component tests (all 17 tests pass) are fully green.
-- **Next Session Must Start With:** Next planned maintenance or feature phase.
-- **In Progress Right Now:** None. All Phase 6.10 features complete.
+- **Date:** 2026-06-11
+- **Session Summary:** Created TDD plan for Phase 6.11 (Star Rating System) to upgrade thumbs up/down feedback to 0–5 decimal stars across buyer order/booking pages.
+- **Next Session Must Start With:** Implementing integration tests for numeric rating and DB schema migration.
+- **In Progress Right Now:** Phase 6.11 (Star Rating System).
 - **Current Blocker:** None.
 
 ---
@@ -750,6 +751,53 @@ The two-phase validate/confirm API is thoroughly covered by **integration tests*
 **The one E2E consideration:** If a future session decides to add E2E coverage, the correct Playwright approach is `page.setInputFiles('input[data-testid="bulk-file-input"]', '/path/to/fixture/sample.xlsx')` — not interacting with the OS file dialog. This is noted here so the decision is conscious and documented.
 
 **What IS verified at E2E level as a side effect:** The existing E2E tests that assert product counts, category listings, and stock levels will naturally catch regressions in bulk-inserted data if seeded into the test fixture — but no new E2E spec files are needed for Phase 6.10.
+
+---
+
+## Phase 6.11 Checklist — Buyer Order & Booking Rating to 0–5 Stars
+
+**Root Cause / Goal:**
+Currently, `rules_and_spec.md` and the existing database schema use `rating Boolean?` to represent thumbs up/down feedback in the buyer's window. We want to upgrade this to a detailed 0–5 star decimal rating with 1 decimal precision, visually filled matching the brand's saffron orange color (`#e8833a`), standardized across both Quick Commerce and Booking Commerce pages.
+
+**Fix / Approach:**
+1. Update Prisma schema to alter the `rating` field of `Order` to `Decimal? @db.Decimal(2, 1)`.
+2. Update the backend repository types, schema validations, and serialization.
+3. Build a React `StarRating` component with dynamic filled widths (e.g. `4.3` fills the fifth star by `30%` using absolute overlay and `--gorola-saffron` color).
+4. Replace the old thumbs buttons in the confirmation and history pages.
+
+---
+
+- [ ] **RED — Integration (`order.rate.test.ts`):**
+  - [ ] Test: Update integration tests in `order.rate.test.ts` to send a numeric rating: `PUT /api/v1/orders/:id/rate` with `{ rating: 4.5, ratingComment: "Awesome!" }` should return 200 and serialize rating back as `4.5`.
+  - [ ] Test: Verify validation rejects invalid ratings: `PUT /api/v1/orders/:id/rate` with `{ rating: 5.5 }` or `{ rating: -1.0 }` returns 400.
+  - [ ] **Run — confirm RED (test fails compilation/validation due to Zod validating boolean, or DB failing to store decimal).**
+
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] In `schema.prisma`, update `rating Boolean?` to `rating Decimal? @db.Decimal(2, 1)`.
+  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name change_rating_to_decimal` to apply migration to local test DB and update client types.
+  - [ ] [Repository] In `order.repository.ts`, update `updateRating` signature to accept `rating: Prisma.Decimal | number | null`.
+  - [ ] [Controller] In `order.controller.ts`:
+    - Update `rateBodySchema` to `rating: z.number().min(0).max(5).nullable().optional()`.
+    - Update `serializeOrderResponse` to return `rating: order.rating ? Number(order.rating) : null`.
+  - [ ] Run integration test — **confirm GREEN**.
+
+- [ ] **RED — Unit / Component (`OrderConfirmationPage.test.tsx`, `BookingConfirmationPage.test.tsx`, `OrderHistoryPage.test.tsx`):**
+  - [ ] Test: In `OrderConfirmationPage.test.tsx`, assert that a delivered order displays a read-only 5-star rating view showing the selected stars when `rating` is `4.5`.
+  - [ ] Test: Click a star rating during submission (e.g., clicking the 4th star) triggers `rateMutation.mutate` with `rating: 4.0`.
+  - [ ] Test: Repeat assertions for `BookingConfirmationPage.test.tsx` and `OrderHistoryPage.test.tsx`.
+  - [ ] **Run — confirm RED (since components currently search for "Thumbs Up" / "Thumbs Down" buttons and send boolean values).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] In `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, and `OrderHistoryPage.tsx`, update types `BuyerOrderDetail`, `BookingEnvelope`, and `Order` to have `rating: number | null`.
+  - [ ] [Star Component] Create a reusable `StarRating.tsx` component (or add local rendering logic) that displays 5 stars:
+    - Background: 5 outline star SVGs.
+    - Foreground: 5 filled star SVGs in `--gorola-saffron` (`#e8833a`), wrapped in relative divs with `overflow-hidden` and `width: fillPercentage%` where `fillPercentage = Math.min(Math.max(rating - i, 0), 1) * 100` for star index `i`.
+    - Interactive State: Handle `onMouseMove`, `onMouseLeave`, and `onClick` to determine the hover/click values in 0.5 increments.
+  - [ ] [Component] Replace `ThumbsUp`/`ThumbsDown` UI with the `StarRating` in `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, and `OrderHistoryPage.tsx`.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Buyer places order → Order is delivered → Confirmation Page displays a 5-star rating input → Buyer hovers over stars (saffron color fills dynamically) and clicks 4.5 stars → Buyer types comment and submits → "Rating submitted" appears, rendering exactly 4.5 stars filled (4 fully filled, the 5th filled to 50% with saffron orange) → ✅ Done.
 
 ---
 
