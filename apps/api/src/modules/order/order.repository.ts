@@ -275,13 +275,14 @@ export class OrderRepository {
 
   public async updateRating(
     orderId: string,
-    rating: boolean | null,
+    rating: Prisma.Decimal | number | null,
     ratingComment: string | null
   ): Promise<OrderWithRelations> {
     try {
+      const dbRating = rating !== null ? new Prisma.Decimal(rating) : null;
       await this.db.order.update({
         where: { id: orderId },
-        data: { rating, ratingComment }
+        data: { rating: dbRating, ratingComment }
       });
       return getOrderWithRelations(this.db, orderId);
     } catch (error: unknown) {

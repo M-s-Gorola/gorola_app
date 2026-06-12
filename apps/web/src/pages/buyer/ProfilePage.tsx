@@ -2,11 +2,11 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { isAxiosError } from "axios";
 import gsap from "gsap";
-import { Clock, MapPin, UserRound } from "lucide-react";
+import { Clock, LogOut, MapPin, UserRound } from "lucide-react";
 import type { ReactElement } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { z } from "zod";
 
@@ -23,7 +23,8 @@ const profileSchema = z.object({
 type ProfileFormValues = z.infer<typeof profileSchema>;
 
 export function ProfilePage(): ReactElement {
-  const { name, phone, setBuyerSession, accessToken, refreshToken, userId } = useAuthStore();
+  const { name, phone, setBuyerSession, accessToken, refreshToken, userId, clearSession } = useAuthStore();
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -50,6 +51,20 @@ export function ProfilePage(): ReactElement {
     }, containerRef);
     return () => ctx.revert();
   }, []);
+
+  const logoutBuyer = async (): Promise<void> => {
+    try {
+      if (api !== null && refreshToken !== null && refreshToken.length > 0) {
+        await api.post("/api/v1/auth/buyer/logout", { refreshToken });
+      }
+    } catch (error) {
+      console.error("Logout failed:", error);
+    } finally {
+      clearSession();
+      sessionStorage.removeItem("gorola_subdomain_override");
+      navigate("/", { replace: true });
+    }
+  };
 
   const onSubmit = async (data: ProfileFormValues): Promise<void> => {
     if (!api) return;
@@ -165,6 +180,23 @@ export function ProfilePage(): ReactElement {
                </div>
                <div className="text-gorola-slate transition-transform group-hover:translate-x-1">→</div>
              </Link>
+
+             <button
+               type="button"
+               onClick={logoutBuyer}
+               className="group flex w-full items-center justify-between rounded-2xl bg-red-500/10 p-6 shadow-sm backdrop-blur-md border border-red-500/20 transition-all hover:bg-red-500/20 text-red-600 text-left"
+             >
+               <div className="flex items-center gap-3">
+                 <div className="rounded-full bg-red-500/10 p-2 text-red-600">
+                   <LogOut size={20} />
+                 </div>
+                 <div>
+                   <h3 className="font-heading font-semibold text-gorola-charcoal">Logout</h3>
+                   <p className="text-xs text-red-500/80">Sign out of your account.</p>
+                 </div>
+               </div>
+               <div className="text-red-600 transition-transform group-hover:translate-x-1">→</div>
+             </button>
           </section>
         </div>
       </div>

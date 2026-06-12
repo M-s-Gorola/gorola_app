@@ -207,7 +207,7 @@ export function ProductDetailPage(): ReactElement {
               ))}
             </div>
             <div className="text-right flex-shrink-0">
-              <p className="font-dm-sans text-2xl sm:text-3xl font-bold text-gorola-charcoal">
+              <p className="font-dm-sans text-2xl sm:text-3xl font-bold text-gorola-charcoal" data-testid="product-price">
                 Rs {selected?.price ?? "0.00"}
               </p>
               {query.data.store.storeType !== "BOOKING_COMMERCE" && activeQuantity > 1 && (

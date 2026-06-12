@@ -196,4 +196,15 @@ describe("BuyerNav", () => {
     expect(branding).toHaveClass("hidden", "sm:block");
     expect(locationPill).toHaveClass("hidden", "sm:flex");
   });
+
+  it("hides cart and profile buttons container on mobile screens", () => {
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+    const rightContainer = screen.getByRole("button", { name: /cart/i }).parentElement;
+    expect(rightContainer).toHaveClass("hidden", "sm:flex");
+  });
 });
+

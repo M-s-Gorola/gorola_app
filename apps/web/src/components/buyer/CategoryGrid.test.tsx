@@ -67,13 +67,30 @@ describe("CategoryGrid", () => {
 
     renderGrid();
 
-    expect(await screen.findByRole("button", { name: /groceries/i })).toBeInTheDocument();
+    const groceriesBtn = await screen.findByRole("button", { name: /groceries/i });
+    expect(groceriesBtn).toBeInTheDocument();
     expect(screen.getByRole("button", { name: /medical/i })).toBeInTheDocument();
 
+    // Verify product counts are NOT rendered on the card
+    expect(screen.queryByText(/12 Products/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/7 Products/i)).not.toBeInTheDocument();
+
+    // Verify image sources
     expect(screen.getByAltText(/groceries category/i)).toHaveAttribute("src", "https://example.com/groc.jpg");
     expect(screen.getByAltText(/medical category/i)).toHaveAttribute("src", "https://example.com/med.jpg");
 
-    fireEvent.click(screen.getByRole("button", { name: /groceries/i }));
+    // Verify card styling matches product grid consistency (vertical layout, no horizontal flex)
+    const cards = screen.getAllByTestId("category-card");
+    expect(cards[0]).toHaveClass("flex-col");
+    expect(cards[0]).not.toHaveClass("sm:flex-row");
+
+    // Verify image wrapper has the aspect-square styling classes
+    const imgWrapper = screen.getByAltText(/groceries category/i).parentElement;
+    expect(imgWrapper).toHaveClass("aspect-square");
+    expect(imgWrapper).toHaveClass("w-full");
+    expect(imgWrapper).toHaveClass("rounded-xl");
+
+    fireEvent.click(groceriesBtn);
     expect(navigateMock).toHaveBeenCalledWith("/categories/groceries");
   });
 

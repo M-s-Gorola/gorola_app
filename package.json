@@ -53,7 +53,8 @@
       "react-router": "^7.15.0",
       "react-router-dom": "^7.15.0",
       "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz",
-      "@grpc/grpc-js": "^1.14.4"
+      "@grpc/grpc-js": "^1.14.4",
+      "esbuild": "^0.28.1"
     }
   },
   "_pnpm_overrides_comments": {
@@ -66,13 +67,14 @@
     "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0",
     "minimatch@10>brace-expansion": "Overridden due to moderate security vulnerability (DoS) in <5.0.6",
     "ws": "Overridden due to moderate security vulnerability (uninitialized memory leak) in <8.20.1",
-    "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.1",
+    "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.2",
     "axios": "Overridden due to high security vulnerabilities (NO_PROXY bypass CVE-2025-62718, MitM via prototype pollution) in <1.16.0",
     "vitest": "Overridden due to critical security vulnerability (arbitrary file read/execution in Vitest UI server) in <4.1.0",
     "zod": "Overridden to ensure single Zod version across workspace and resolve react-hook-form type mismatches in hoisted linker mode",
     "react-router": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0",
     "react-router-dom": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0",
     "xlsx": "Overridden due to high security vulnerabilities (Prototype Pollution, ReDoS) in <0.20.2",
-    "@grpc/grpc-js": "Overridden due to high security vulnerabilities (server crash, malformed compression message crash) in <1.14.4"
+    "@grpc/grpc-js": "Overridden due to high security vulnerabilities (server crash, malformed compression message crash) in <1.14.4",
+    "esbuild": "Overridden due to high security vulnerability (remote code execution via NPM_CONFIG_REGISTRY in Deno module) in <0.28.1"
   }
 }

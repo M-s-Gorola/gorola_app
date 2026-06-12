@@ -41,7 +41,7 @@ export function AdvertisementBanner(): ReactElement | null {
   if (isLoading) {
     return (
       <div className="px-6 sm:px-10" data-testid="ads-skeleton">
-        <Skeleton className="aspect-[21/9] w-full rounded-2xl sm:aspect-[3/1]" />
+        <Skeleton className="aspect-[16/9] w-full rounded-2xl sm:aspect-[3/1]" />
       </div>
     );
   }
@@ -56,7 +56,7 @@ export function AdvertisementBanner(): ReactElement | null {
         <div className="embla__container flex">
           {data.map((ad) => {
             const content = (
-              <div className="relative aspect-[21/9] w-full overflow-hidden rounded-2xl sm:aspect-[3/1]">
+              <div className="relative aspect-[16/9] w-full overflow-hidden rounded-2xl sm:aspect-[3/1]">
                 <img
                   src={ad.imageUrl}
                   alt={ad.title}
@@ -70,7 +70,7 @@ export function AdvertisementBanner(): ReactElement | null {
             );
 
             return (
-              <div key={ad.id} data-testid="ad-slide" className="embla__slide min-w-0 flex-[0_0_85%] sm:flex-[0_0_90%] px-2 sm:px-3">
+              <div key={ad.id} data-testid="ad-slide" className="embla__slide min-w-0 flex-[0_0_92%] sm:flex-[0_0_94%] px-2 sm:px-3">
                 {ad.linkUrl ? (
                   <Link to={ad.linkUrl} className="block outline-none ring-gorola-saffron focus-visible:ring-2">
                     {content}
