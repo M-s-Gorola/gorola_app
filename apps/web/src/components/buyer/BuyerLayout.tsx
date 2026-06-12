@@ -80,7 +80,7 @@ export function BuyerLayout({ children }: BuyerLayoutProps): ReactElement {
 
         <button
           type="button"
-          data-testid="cart-button"
+          data-testid="mobile-cart-button"
           onClick={openCart}
           className="flex flex-col items-center justify-center gap-0.5 w-16 h-16 transition-all select-none text-muted-foreground hover:text-gorola-charcoal relative"
           aria-label="Cart"

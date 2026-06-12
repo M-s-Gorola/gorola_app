@@ -15,7 +15,7 @@ test.describe('Cart & Discounts', () => {
     await expect(cartBadge).toHaveText('1');
 
     // Click cart button
-    await page.locator('[data-testid="cart-button"]:visible').click();
+    await page.locator('[data-testid$="cart-button"]:visible').click();
     
     // Assert cart drawer opens
     const cartDrawer = page.locator('aside', { hasText: /Your cart/i });
@@ -49,7 +49,7 @@ test.describe('Cart & Discounts', () => {
     await addBtn.click({ force: true });
 
     // Open cart drawer
-    await page.locator('[data-testid="cart-button"]:visible').click();
+    await page.locator('[data-testid$="cart-button"]:visible').click();
 
     // Find discount code input — type "TESTDEAL10" — click "Apply"
     const discountInput = page.locator('input[placeholder*="Discount"]');

@@ -50,6 +50,14 @@ type Order = {
   bookingOrder: BookingOrderDetails | null;
 };
 
+function parseScheduledDate(dateStr: string): Date {
+  const parts = dateStr.substring(0, 10).split("-").map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+  return new Date(year, month - 1, day);
+}
+
 export function OrderHistoryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -308,7 +316,7 @@ export function OrderHistoryPage() {
                     <div className="mt-1 space-y-0.5 text-xs text-gorola-charcoal/60 bg-gorola-charcoal/[0.02] p-2 rounded-xl border border-gorola-charcoal/5">
                       <div className="flex items-center gap-1.5 font-semibold text-gorola-charcoal">
                         <Clock className="w-3.5 h-3.5 text-gorola-pine shrink-0" />
-                        <span className="truncate">Scheduled: {format(new Date(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
+                        <span className="truncate">Scheduled: {format(parseScheduledDate(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
                       </div>
                       <div className="pl-5 text-[11px]">
                         Slot: {order.bookingOrder.timeslot}

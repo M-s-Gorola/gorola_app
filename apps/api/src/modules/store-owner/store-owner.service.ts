@@ -75,13 +75,19 @@ export class StoreOwnerService {
       } else if (dateFilter === "CUSTOM" && (customFrom || customTo)) {
         const range: { gte?: Date; lte?: Date } = {};
         if (customFrom) {
-          const start = new Date(customFrom);
-          start.setHours(0, 0, 0, 0);
+          const parts = customFrom.split("-").map(Number);
+          const year = parts[0] ?? 0;
+          const month = parts[1] ?? 1;
+          const day = parts[2] ?? 1;
+          const start = new Date(year, month - 1, day, 0, 0, 0, 0);
           range.gte = start;
         }
         if (customTo) {
-          const end = new Date(customTo);
-          end.setHours(23, 59, 59, 999);
+          const parts = customTo.split("-").map(Number);
+          const year = parts[0] ?? 0;
+          const month = parts[1] ?? 1;
+          const day = parts[2] ?? 1;
+          const end = new Date(year, month - 1, day, 23, 59, 59, 999);
           range.lte = end;
         }
         createdAtRange = range;

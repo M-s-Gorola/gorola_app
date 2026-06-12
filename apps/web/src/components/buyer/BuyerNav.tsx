@@ -3,7 +3,6 @@ import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
-import { GorolaMountainMark } from "@/components/shared/GorolaMountainMark";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +17,8 @@ import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { useWeatherStore } from "@/store/weather.store";
 
-import goRolaTextImg from "../shared/GoRola_text_without_bg-Photoroom.png";
+import logoBigScreen from "../shared/logo_big_screen_new_cropped.png";
+import logoSmallScreen from "../shared/logo_small_screen_new_cropped.png";
 
 export function BuyerNav(): ReactElement {
   const navigate = useNavigate();
@@ -56,7 +56,7 @@ export function BuyerNav(): ReactElement {
   return (
     <nav
       className={cn(
-        "sticky top-0 z-50 border-b border-white/10 px-4 py-3 backdrop-blur",
+        "sticky top-0 z-50 border-b border-white/10 px-4 h-[68px] flex items-center backdrop-blur",
         isWeatherMode ? "bg-gorola-slate/95" : "bg-gorola-pine/95"
       )}
       data-weather={isWeatherMode ? "on" : "off"}
@@ -66,15 +66,22 @@ export function BuyerNav(): ReactElement {
         {/* Left: Logo & Location */}
         <div className="flex shrink-0 items-center gap-3">
           <Link to="/" className={cn("flex items-center gap-2", isWeatherMode ? "text-gorola-fog" : "text-gorola-charcoal")}>
-            <span aria-label="GoRola mountain logo">
-              <GorolaMountainMark color={isWeatherMode ? "var(--gorola-fog)" : "var(--gorola-charcoal)"} secondaryColor="var(--gorola-saffron)" />
+            <span aria-label="GoRola mountain logo" className="flex items-center h-[68px] overflow-visible">
+              <img
+                src={logoBigScreen}
+                alt="GoRola"
+                data-testid="gorola-mountain-mark"
+                className="object-contain hidden sm:block max-w-none"
+                style={{ height: "55px", width: "auto" }}
+              />
+              <img
+                src={logoSmallScreen}
+                alt="GoRola Mobile"
+                data-testid="gorola-mountain-mark"
+                className="object-contain block sm:hidden max-w-none"
+                style={{ height: "40px", width: "auto" }}
+              />
             </span>
-            <img
-              src={goRolaTextImg}
-              alt="GoRola"
-              className="object-contain hidden sm:block"
-              style={{ height: "32px", width: "auto" }}
-            />
           </Link>
 
           <div className={cn(
