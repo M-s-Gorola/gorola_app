@@ -26,13 +26,13 @@ test.describe('Checkout & Account', () => {
     await expect(page).toHaveURL(/\/$/, { timeout: 15000 });
     // Wait for bootstrap to finish
     await expect(page.locator('text=/Restoring your session/i')).not.toBeVisible();
-    await expect(page.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(page.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
   }
 
   test('E2E-008: Checkout -> Order Confirmation', async ({ page }) => {
     await loginAs(page, '9876543211');
     // Verify login
-    await expect(page.locator('[data-testid="cart-button"]')).toBeVisible();
+    await expect(page.locator('[data-testid="cart-button"]:visible')).toBeVisible();
 
     // Add item to cart via UI navigation for stability
     await page.goto('/');
@@ -51,7 +51,7 @@ test.describe('Checkout & Account', () => {
     await cartSavePromise;
 
     // Open cart -> Proceed to Checkout
-    await page.locator('[data-testid="cart-button"]').click();
+    await page.locator('[data-testid="cart-button"]:visible').click();
     await expect(page.locator('aside', { hasText: /Your cart/i })).toBeVisible();
     
     await page.locator('button', { hasText: /Proceed to Checkout/i }).click();
@@ -100,8 +100,10 @@ test.describe('Checkout & Account', () => {
   test('E2E-011: Profile Page Flow', async ({ page }) => {
     await loginAs(page, '9876543212');
     // Navigate to Profile
-    await page.locator('button[aria-label="Profile"]').click();
-    await page.locator('text=/Profile/i').first().click();
+    await page.locator('[aria-label="Profile"]:visible').click();
+    if (!page.url().includes('/profile')) {
+      await page.locator('text=/Profile/i').first().click();
+    }
 
     await expect(page).toHaveURL(/\/profile/);
 
@@ -127,8 +129,10 @@ test.describe('Checkout & Account', () => {
     const uniqueLabel = `Home-${testInfo.project.name}-${testInfo.retry}`;
 
     // Navigate to Profile then Saved Addresses
-    await page.locator('button[aria-label="Profile"]').click();
-    await page.locator('text=/Profile/i').first().click();
+    await page.locator('[aria-label="Profile"]:visible').click();
+    if (!page.url().includes('/profile')) {
+      await page.locator('text=/Profile/i').first().click();
+    }
     await expect(page.locator('h1')).toHaveText(/Your Profile/i, { timeout: 10000 });
     await page.locator('a:has-text("Saved Addresses")').click();
     await expect(page).toHaveURL(/\/account\/addresses/);

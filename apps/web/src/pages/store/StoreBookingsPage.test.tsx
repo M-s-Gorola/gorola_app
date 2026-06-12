@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -1113,9 +1113,12 @@ describe("StoreBookingsPage TDD", () => {
     expect(dateTo).toBeInTheDocument();
 
     // Set custom range that covers today only
-    const todayYMD = new Date().toISOString().split("T")[0]!;
-    await user.type(dateFrom, todayYMD);
-    await user.type(dateTo, todayYMD);
+    // NOTE: Must use LOCAL date, not toISOString().split("T")[0] which gives UTC date.
+    // The component filters using getLocalYMD() (local timezone), so this must match.
+    const _now = new Date();
+    const todayYMD = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+    fireEvent.change(dateFrom, { target: { value: todayYMD } });
+    fireEvent.change(dateTo, { target: { value: todayYMD } });
 
     // Should only show today's test
     expect(screen.getByText("Today Test")).toBeInTheDocument();

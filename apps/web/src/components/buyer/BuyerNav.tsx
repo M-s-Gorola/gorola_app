@@ -107,7 +107,7 @@ export function BuyerNav(): ReactElement {
         </form>
 
         {/* Right: Cart & Profile */}
-        <div className="flex shrink-0 items-center gap-3">
+        <div className="hidden sm:flex shrink-0 items-center gap-3">
           <button
             type="button"
             aria-label="Cart"
