@@ -282,7 +282,7 @@ model Order {
   deliveryLat         Decimal?             @db.Decimal(10, 7)
   deliveryLng         Decimal?             @db.Decimal(10, 7)
   scheduledFor        DateTime?
-  rating              Boolean?
+  rating              Decimal?             @db.Decimal(2, 1)
   ratingComment       String?
   appliedDiscountCode String?
   createdAt           DateTime             @default(now())

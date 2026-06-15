@@ -15,7 +15,7 @@ export function DevWeatherToggle() {
     <button
       onClick={toggleWeather}
       data-testid="dev-weather-toggle"
-      className="fixed bottom-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-gorola-charcoal text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
+      className="fixed bottom-20 sm:bottom-4 right-4 z-50 flex h-10 w-10 items-center justify-center rounded-full bg-gorola-charcoal text-white shadow-lg transition-transform hover:scale-110 active:scale-95"
       title={`Switch to ${isWeatherMode ? "Normal" : "Weather"} Mode`}
     >
       {isWeatherMode ? (

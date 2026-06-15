@@ -1,4 +1,5 @@
 import { ForbiddenError, NotFoundError, UnauthorizedError, ValidationError } from "@gorola/shared";
+import { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
@@ -59,7 +60,7 @@ interface BookingOrderWithRelations {
     landmarkDescription: string;
     flatRoom: string | null;
     addressLabel: string | null;
-    rating: boolean | null;
+    rating: Prisma.Decimal | null;
     ratingComment: string | null;
     deliveryLat: { toString: () => string } | null;
     deliveryLng: { toString: () => string } | null;
@@ -125,7 +126,7 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     // Serialized here so both the buyer receipt and store booking dashboard
     // can display itemized coupon breakdowns instead of falling back to "Discount".
     discountCode: order.appliedDiscountCode ?? null,
-    rating: order.rating,
+    rating: order.rating ? Number(order.rating) : null,
     ratingComment: order.ratingComment,
     createdAt: order.createdAt.toISOString(),
     updatedAt: order.updatedAt.toISOString(),

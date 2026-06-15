@@ -447,7 +447,11 @@ describe("StoreOwner Orders Integration Tests", () => {
       expect(resToday.json().data[0].id).toBe(orderToday.id);
 
       // 2. GET with dateFilter=CUSTOM from yesterday to today -> returns 2 orders
-      const ymd = (d: Date) => d.toISOString().split("T")[0];
+      // NOTE: Must use LOCAL date components, not toISOString().split("T")[0] which gives UTC date.
+      // The API calls setHours() in local timezone on parsed date strings, so UTC date would
+      // set the wrong ceiling after midnight IST (UTC+5:30).
+      const ymd = (d: Date) =>
+        `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
       const resCustom = await server.inject({
         method: "GET",
         url: `/api/v1/store/orders?dateFilter=CUSTOM&customFrom=${ymd(yesterday)}&customTo=${ymd(today)}`,

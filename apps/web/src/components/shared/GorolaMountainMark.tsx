@@ -1,6 +1,6 @@
 import type { ReactElement } from "react";
 
-import logoImg from "./Logo_without_bg.png";
+import logoImg from "./logo_small_screen_new_cropped.png";
 
 export type GorolaMountainMarkProps = {
   width?: number;
@@ -12,11 +12,11 @@ export type GorolaMountainMarkProps = {
 };
 
 /**
- * GoRola brand logo component, rendering the custom Logo_without_bg.png image.
+ * GoRola brand logo component, rendering the custom logo_small_screen_new_cropped.png image.
  */
 export function GorolaMountainMark({
   width,
-  height = 44,
+  height = 40,
   className
 }: GorolaMountainMarkProps): ReactElement {
   return (

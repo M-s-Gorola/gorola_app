@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Edit2, Plus, RefreshCw, UserCheck, UserX } from "lucide-react";
+import { AlertTriangle, Edit2, Eye, EyeOff, Plus, RefreshCw, UserCheck, UserX } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
@@ -70,6 +70,7 @@ export function AdminRidersPage(): ReactElement {
   const [storeIds, setStoreIds] = useState<string[]>([]);
   const [primaryStoreId, setPrimaryStoreId] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Fetch riders list
   const { data: riders, isLoading, isError, isFetching, refetch } = useQuery<Rider[]>({
@@ -486,14 +487,24 @@ export function AdminRidersPage(): ReactElement {
 
             <label className="block space-y-1">
               <span className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Password</span>
-              <input
-                data-testid="rider-password-input"
-                type="password"
-                className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 6 characters"
-              />
+              <div className="relative">
+                <input
+                  data-testid="rider-password-input"
+                  type={showPassword ? "text" : "password"}
+                  className="w-full rounded-lg border border-gorola-pine/20 px-3 py-2 pr-10 font-dm-sans text-sm"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Minimum 6 characters"
+                />
+                <button
+                  type="button"
+                  aria-label={showPassword ? "Hide password" : "Show password"}
+                  onClick={() => setShowPassword((v) => !v)}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-gorola-slate hover:text-gorola-pine transition-colors"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
             </label>
 
             <div className="space-y-1.5">

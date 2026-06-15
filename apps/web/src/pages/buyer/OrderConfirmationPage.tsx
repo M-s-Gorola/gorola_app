@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { Bike, CheckCircle2, Home, MessageSquare,Package, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Bike, CheckCircle2, Home, MessageSquare, Package } from "lucide-react";
 import {
   type ReactElement,
   useCallback,
@@ -15,6 +15,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
+import { StarRating } from "@/components/shared/StarRating";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -54,7 +55,7 @@ export type BuyerOrderDetail = {
   deliveryLat?: number | null;
   deliveryLng?: number | null;
   paymentMethod: string;
-  rating: boolean | null;
+  rating: number | null;
   ratingComment: string | null;
   scheduledFor?: string | null;
   status: string;
@@ -297,14 +298,14 @@ export function OrderConfirmationPage(): ReactElement {
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
-  const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
+  const [activeRating, setActiveRating] = useState<number | null>(null);
   const [ratingComment, setRatingComment] = useState("");
   const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const queryClient = useQueryClient();
 
   const rateMutation = useMutation({
-    mutationFn: async ({ rating, comment }: { rating: boolean; comment?: string | undefined }) => {
+    mutationFn: async ({ rating, comment }: { rating: number; comment?: string | undefined }) => {
       const res = await api!.put(`/api/v1/orders/${id}/rate`, { 
         rating,
         ratingComment: comment 
@@ -801,11 +802,15 @@ interface StoreOffer {
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-sm text-gorola-slate font-medium">
                       {order.rating !== null ? (
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <span className="flex items-center gap-1.5 text-green-600 font-bold">
                             <CheckCircle2 className="w-4 h-4" />
                             Rating submitted
                           </span>
+                          <div className="flex items-center gap-2">
+                            <StarRating rating={order.rating} disabled={true} />
+                            <span className="text-sm font-bold text-gorola-charcoal">{order.rating} / 5</span>
+                          </div>
                           {order.ratingComment && (
                             <p className="text-xs text-gorola-slate italic">"{order.ratingComment}"</p>
                           )}
@@ -817,54 +822,12 @@ interface StoreOffer {
                     
                     {order.rating === null && (
                       <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setActiveRating(activeRating === "up" ? null : "up")}
+                        <StarRating
+                          rating={activeRating ?? 0}
+                          interactive={true}
+                          onChange={setActiveRating}
                           disabled={rateMutation.isPending}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                            activeRating === "up"
-                              ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' 
-                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                          } disabled:opacity-50`}
-                          aria-label="Thumbs Up"
-                        >
-                          <ThumbsUp className="w-4 h-4" />
-                          Liked
-                        </button>
-                        <button
-                          onClick={() => setActiveRating(activeRating === "down" ? null : "down")}
-                          disabled={rateMutation.isPending}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                            activeRating === "down"
-                              ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm' 
-                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                          } disabled:opacity-50`}
-                          aria-label="Thumbs Down"
-                        >
-                          <ThumbsDown className="w-4 h-4" />
-                          Disliked
-                        </button>
-                      </div>
-                    )}
-
-                    {order.rating !== null && (
-                      <div className="flex items-center gap-3">
-                        <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${
-                          order.rating === true 
-                            ? 'bg-green-50 text-green-700 border-green-200' 
-                            : 'bg-red-50 text-red-700 border-red-200'
-                        }`}>
-                          {order.rating === true ? (
-                            <>
-                              <ThumbsUp className="w-4 h-4" />
-                              Liked
-                            </>
-                          ) : (
-                            <>
-                              <ThumbsDown className="w-4 h-4" />
-                              Disliked
-                            </>
-                          )}
-                        </div>
+                        />
                       </div>
                     )}
                   </div>
@@ -884,7 +847,7 @@ interface StoreOffer {
                       <div className="flex justify-end">
                         <button
                           onClick={() => rateMutation.mutate({ 
-                            rating: activeRating === "up", 
+                            rating: activeRating!, 
                             comment: ratingComment || undefined
                           })}
                           className="px-6 py-2 bg-gorola-pine text-white text-xs font-bold rounded-full hover:bg-gorola-pine/90 transition-all shadow-md shadow-gorola-pine/10 disabled:opacity-50"

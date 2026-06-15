@@ -349,8 +349,8 @@ describe("OrderConfirmationPage", () => {
     expect(screen.getByTestId("rate-order-section")).toBeInTheDocument();
     expect(screen.getByText("Rate your order")).toBeInTheDocument();
     expect(screen.getByText("How was your overall experience?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Thumbs Up/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Thumbs Down/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Rate 4.5 stars/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Rate 5.0 stars/i })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Any feedback for the store/i)).not.toBeInTheDocument();
   });
 
@@ -365,7 +365,7 @@ describe("OrderConfirmationPage", () => {
           data: {
             ...baseEnvelope().data,
             status: "DELIVERED",
-            rating: true,
+            rating: 4.5,
             ratingComment: "Super awesome service!",
           },
         },
@@ -377,7 +377,8 @@ describe("OrderConfirmationPage", () => {
     
     expect(screen.getByTestId("rate-order-section")).toBeInTheDocument();
     expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText(/4.5 \/ 5/i)).toBeInTheDocument();
     expect(screen.getByText(/"Super awesome service!"/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
 });

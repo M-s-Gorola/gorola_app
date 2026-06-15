@@ -48,6 +48,13 @@ test.describe('Catalog & Search', () => {
   });
 
   test('E2E-003: Product Detail Page Navigation', async ({ page }) => {
+    page.on('console', msg => console.log('BROWSER LOG:', msg.text(), msg.type()));
+    page.on('requestfailed', request => console.log('REQUEST FAILED:', request.url(), request.failure()?.errorText));
+    page.on('response', response => {
+      if (response.status() >= 400) {
+        console.log('HTTP ERROR:', response.url(), response.status());
+      }
+    });
     await page.goto('/categories/groceries/rice-atta');
 
     // From sub-category product grid, click the product card image or name link
@@ -65,20 +72,28 @@ test.describe('Catalog & Search', () => {
     const variantPills = page.locator('[data-testid="variant-pill"]').filter({ visible: true });
     await expect(variantPills.first()).toBeVisible();
 
-    // Click a variant pill — assert price display updates to a non-zero value
-    await variantPills.first().click({ force: true });
+    // Scroll variant pill to center of the viewport to ensure it is not obscured by the fixed bottom navigation bar on mobile
+    await variantPills.first().evaluate(node => node.scrollIntoView({ block: 'center' }));
+    await variantPills.first().click();
     await page.waitForTimeout(1000); // Give state a moment to propagate
-    const priceDisplay = page.locator('[data-testid="product-price"]').first();
-    await expect(priceDisplay).toHaveText(/Rs\s*\d+/);
+    let priceDisplay;
+    try {
+      priceDisplay = page.locator('[data-testid="product-price"]:visible').first();
+      await expect(priceDisplay).toHaveText(/Rs\s*\d+/);
+    } catch (err) {
+      console.log("DEBUG PAGE CONTENT:", await page.content());
+      throw err;
+    }
 
     // Assert "Add to Cart" button is visible and enabled
     const addToCartBtn = page.locator('button', { hasText: /Add to Cart/i });
     await expect(addToCartBtn).toBeVisible();
     await expect(addToCartBtn).toBeEnabled({ timeout: 15000 });
 
-    // Click "Add to Cart" — assert nav cart badge shows count >= 1
-    await addToCartBtn.click({ force: true });
-    const cartBadge = page.locator('[data-testid="cart-badge"]');
+    // Scroll to center and click "Add to Cart"
+    await addToCartBtn.evaluate(node => node.scrollIntoView({ block: 'center' }));
+    await addToCartBtn.click();
+    const cartBadge = page.locator('[data-testid$="cart-badge"]:visible');
     await expect(cartBadge).toBeVisible();
     const count = await cartBadge.textContent();
     expect(parseInt(count || '0')).toBeGreaterThanOrEqual(1);

@@ -17,15 +17,16 @@ export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
 
   const accessToken = useAuthStore((s) => s.accessToken);
-  const { data: profileData } = useQuery<{ data: { riderType: string } }>({
+  const { data: profileData } = useQuery<{ data: { riderType: string; name: string } }>({
     queryKey: ["riderProfile"],
     queryFn: async () => {
-      const res = await api!.get<{ data: { riderType: string } }>("/api/v1/rider/profile");
+      const res = await api!.get<{ data: { riderType: string; name: string } }>("/api/v1/rider/profile");
       return res.data;
     },
     enabled: !!accessToken
   });
   const isFieldTechnician = profileData?.data?.riderType === "FIELD_TECHNICIAN";
+  const riderName = profileData?.data?.name;
 
   const ordersPath = getScopedPath("/rider/orders", "rider", isSubdomainMode);
   const accountPath = getScopedPath("/rider/account", "rider", isSubdomainMode);
@@ -42,10 +43,16 @@ export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
         <div className="flex items-center gap-3">
           <Link className="flex items-center gap-2 shrink-0 animate-in fade-in duration-300 h-12" to={ordersPath} aria-label="GoRola Rider Logo Link">
             <GorolaMountainMark color="var(--gorola-pine)" secondaryColor="var(--gorola-charcoal)" />
-            <span className="font-heading text-xl font-bold text-gorola-charcoal">
-              GoRola <span className="text-gorola-pine font-black">Rider</span>
-            </span>
+            <span className="text-lg font-bold text-gorola-pine">Rider</span>
           </Link>
+          {riderName && (
+            <>
+              <span className="text-gorola-mint/30 font-light">|</span>
+              <span className="text-lg font-bold text-gorola-charcoal truncate">
+                {riderName}
+              </span>
+            </>
+          )}
         </div>
       </header>
 
