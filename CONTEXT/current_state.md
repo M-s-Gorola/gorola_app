@@ -61,6 +61,8 @@ _(None currently)_
 | RAZORPAY_KEY_SECRET    | ❌ Not set       | Phase 3+ — not needed yet                                                                   |
 | CORS_ALLOWED_ORIGINS   | ✅ Railway       | Prod includes Vercel web origin; dev = `http://localhost:5173`                              |
 | OTEL_EXPORTER_ENDPOINT | ❌ Not set       | `http://localhost:4318/v1/traces` for dev; optional                                         |
+| VITE_MAP_PROVIDER      | ✅ Dev/Defaults  | 'leaflet' (default) or 'ola'                                                                |
+| VITE_OLA_MAPS_API_KEY  | ❌ Not set       | Needed for Ola Maps integration                                                             |
 
 ---
 

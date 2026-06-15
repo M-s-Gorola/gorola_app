@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. 5.6.1 (Steps A, B, C, D) are complete. Earnings page, and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6.2 are complete. Earnings page and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-11
-- **Session Summary:** Completed Phase 5.6.1-D (Store Dashboard Clickable KPI Cards, Split Offers/Discounts, and Orders/Bookings Date Filters). Refactored StoreDashboardPage to support 6 clickable KPI cards with smooth scrolling and distinct headers for scheduled appointments vs today's booking revenue, updated StoreOrdersPage and StoreBookingsPage to parse search parameters, updated backend services and controllers with date range query support, and verified that typecheck, lint, and build tasks are clean.
-- **Next Session Must Start With:** Phase 5.6.2 — Rider Earnings & Completed Orders Page.
+- **Date:** 2026-06-16
+- **Session Summary:** Completed Phase 5.6.2 (Ola Maps Provider Integration). Designed and implemented a formal MapProvider and MapAdapter abstraction layer, extracted Leaflet operations into LeafletMapAdapter, created OlaMapAdapter supporting script injection and standard vector coordinate formats, built MapAdapterFactory, and updated OrderRouteMap component with error boundaries. Verified with 20 passing unit tests, zero lint warnings/errors, strict typecheck compliance, and successful production build.
+- **Next Session Must Start With:** Phase 5.7 — Rider Earnings Page
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -696,6 +696,140 @@ Additionally:
   - [x] Store owner (QUICK_COMMERCE) goes to dashboard → clicks "Today's Orders" card → navigates to `/store/orders?dateFilter=TODAY` → orders page loads showing only today's orders, and date filter dropdown pre-selects "Today" → ✅.
   - [x] Store owner clicks "Active Discount Codes" card → navigates to `/store/discounts` → ✅.
   - [x] Store owner clicks "Today's Revenue" card → page scrolls smoothly down to the revenue chart → ✅ Done.
+
+---
+
+### 5.6.2 — Ola Maps Provider Integration (Swappable Map Abstraction)
+
+**Root cause / Goal:**
+`OrderRouteMap.tsx` is currently a direct, hard-coded consumer of the Leaflet library and OpenStreetMap tile server. There is no abstraction layer between the component's props contract (`buyerCoords`, `riderCoords`) and the underlying map SDK. This means switching to Ola Maps (or Google Maps) in future would require touching every consumer page — `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, and `RiderOrdersPage.tsx`. The modular design set up in Phase 5.4.1 intentionally separated props from rendering logic, but the adapter layer it anticipated was never built. This phase introduces a formal provider abstraction (`MapProvider`) so that Ola Maps can be wired in as a runtime-selectable option with zero changes to any consumer.
+
+> **Prerequisites:** Phase 5.4.1 complete (✅). An Ola Maps API key obtained from the Ola Maps Developer Console (https://maps.olakarto.com/) stored in `VITE_OLA_MAPS_API_KEY` env var.
+
+**Fix / Approach:**
+1. **[Types]** Define a `MapProvider` union type (`'leaflet' | 'ola'`) and a `MapAdapter` interface in a new file `apps/web/src/lib/map-provider.ts`. The interface contracts three methods: `init(container, center, zoom)`, `addMarker(coords, icon)`, `destroy()`.
+2. **[Adapter — Leaflet]** Extract the existing Leaflet imperative code from `OrderRouteMap.tsx` into `apps/web/src/lib/adapters/leaflet-map-adapter.ts` that implements `MapAdapter`. The public API of `OrderRouteMap` is unchanged; internally it delegates to this adapter.
+3. **[Adapter — Ola Maps]** Create `apps/web/src/lib/adapters/ola-map-adapter.ts` implementing `MapAdapter` using the Ola Maps JavaScript SDK (`@mappls/map-react` or the Ola Maps JS SDK script-tag approach). The adapter loads the SDK dynamically (script injection) so the SDK is only fetched when Ola is the active provider and the component mounts.
+4. **[Factory]** Create `apps/web/src/lib/map-adapter-factory.ts`: a `createMapAdapter(provider: MapProvider): MapAdapter` factory function. When `provider === 'ola'` it returns an `OlaMapAdapter`; when `provider === 'leaflet'` it returns a `LeafletMapAdapter`.
+5. **[Config]** Read `VITE_MAP_PROVIDER` (values: `'leaflet'` | `'ola'`) from `import.meta.env` with a default of `'leaflet'`. This single env var switches the active provider at build/runtime.
+6. **[Component]** Update `OrderRouteMap.tsx` to call `createMapAdapter(import.meta.env.VITE_MAP_PROVIDER ?? 'leaflet')` inside `useEffect` instead of calling Leaflet directly. The props interface (`OrderRouteMapProps`) is **unchanged** — all consumer pages continue to work without modification.
+7. **[Env]** Document `VITE_MAP_PROVIDER` and `VITE_OLA_MAPS_API_KEY` in `.env.example` and `current_state.md` Environment table.
+
+> ⚠️ **No consumer page changes required.** `OrderConfirmationPage`, `BookingConfirmationPage`, and `RiderOrdersPage` import `OrderRouteMap` and pass the same props. The switch is entirely internal to the shared component and the new adapter files.
+
+---
+
+- [x] **RED — Unit / Component (`map-adapter-factory.test.ts` — new file):**
+
+  **Root cause:** The factory function does not exist yet. Any import of it will fail, and both adapter classes are unimplemented.
+
+  - [x] File: `apps/web/src/__tests__/unit/map-adapter-factory.test.ts`
+  - [x] Test: `createMapAdapter('leaflet')` returns an object that has methods `init`, `addMarker`, and `destroy`.
+  - [x] Test: `createMapAdapter('ola')` returns an object that has methods `init`, `addMarker`, and `destroy`.
+  - [x] Test: calling `createMapAdapter` with an unknown string (e.g. `'google'`) throws a `TypeError` with the message `"Unknown map provider: google"`.
+  - [x] **Run — confirm RED (module does not exist, all tests throw `Cannot find module`).**
+
+- [x] **RED — Unit / Component (`leaflet-map-adapter.test.ts` — new file):**
+
+  **Root cause:** The extracted Leaflet adapter does not exist; the test proves the existing functionality must migrate to the adapter without regression.
+
+  - [x] File: `apps/web/src/__tests__/unit/leaflet-map-adapter.test.ts`
+  - [x] Setup: mock `leaflet` module using the same `vi.mock` setup already proven in `OrderRouteMap.test.tsx`.
+  - [x] Test: `adapter.init(container, { lat: 30.45, lng: 78.06 }, 14)` calls `L.map(container, ...)` and `L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', ...).addTo(map)`.
+  - [x] Test: `adapter.addMarker({ lat: 30.45, lng: 78.06 }, 'buyer')` calls `L.marker([30.45, 78.06], { icon: expect.any(Object) }).addTo(map)`.
+  - [x] Test: `adapter.addMarker({ lat: 30.455, lng: 78.068 }, 'rider')` calls `L.marker` a second time with rider coordinates.
+  - [x] Test: `adapter.destroy()` calls `map.off()` and `map.remove()`.
+  - [x] **Run — confirm RED (adapter file does not exist).**
+
+- [x] **RED — Unit / Component (`ola-map-adapter.test.ts` — new file):**
+
+  **Root cause:** The Ola Maps adapter does not exist; no Ola SDK calls are made today.
+
+  - [x] File: `apps/web/src/__tests__/unit/ola-map-adapter.test.ts`
+  - [x] Setup: mock `window` to intercept the dynamic `<script>` injection; mock the `OlaMaps` global that the script would attach to `window`.
+  - [x] Test: `adapter.init(container, { lat: 30.45, lng: 78.06 }, 14)` injects a `<script src="https://api.olamaps.io/libs/latest/olamaps.js">` tag into `document.head` (or equivalent SDK bootstrap call).
+  - [x] Test: after the script load resolves (simulate by calling `script.onload()`), `new window.OlaMaps({ apiKey: 'test-key', ... })` is called and a map is initialized on `container` centered at `[30.45, 78.06]`.
+  - [x] Test: `adapter.addMarker({ lat: 30.45, lng: 78.06 }, 'buyer')` calls `olaMap.addMarker(...)` (or the Ola SDK equivalent) with the correct coordinates.
+  - [x] Test: `adapter.destroy()` calls `olaMap.remove()` (or the Ola SDK teardown method) and removes the injected `<script>` tag from `document.head`.
+  - [x] Test: if `VITE_OLA_MAPS_API_KEY` is not set, `adapter.init(...)` throws an `Error` with the message `"VITE_OLA_MAPS_API_KEY is not configured"`.
+  - [x] **Run — confirm RED (adapter file does not exist).**
+
+- [x] **RED — Unit / Component (`OrderRouteMap.test.tsx` — update existing tests):**
+
+  **Root cause:** The component currently calls Leaflet directly. After the refactor, it will delegate to the factory; the unit test must verify the delegation, not the Leaflet implementation detail.
+
+  - [x] Test (existing — update): mock `../../../lib/map-adapter-factory` so `createMapAdapter` returns a mock `MapAdapter` object with spied `init`, `addMarker`, and `destroy` methods.
+  - [x] Test: rendering `<OrderRouteMap buyerCoords={...} />` calls `createMapAdapter(import.meta.env.VITE_MAP_PROVIDER ?? 'leaflet')` exactly once.
+  - [x] Test: after mount, `mockAdapter.init` is called once with the map container `div`, `buyerCoords`, and zoom `14`.
+  - [x] Test: `mockAdapter.addMarker` is called once with `buyerCoords` and `'buyer'` when only `buyerCoords` is provided.
+  - [x] Test: `mockAdapter.addMarker` is called twice — once for `'buyer'`, once for `'rider'` — when both `buyerCoords` and `riderCoords` are provided.
+  - [x] Test: on unmount, `mockAdapter.destroy` is called exactly once.
+  - [x] Test: when `riderCoords` prop changes (re-render), `mockAdapter.destroy` is called to tear down the old map instance and a fresh `init` + `addMarker` cycle begins.
+  - [x] **Run — confirm RED (component still calls Leaflet directly; `createMapAdapter` is never imported).**
+
+- [x] **GREEN — Frontend (Types → Adapters → Factory → Component):**
+
+  - [x] **[Types]** Create `apps/web/src/lib/map-provider.ts`:
+    ```typescript
+    export type MapProvider = 'leaflet' | 'ola';
+    export type MarkerIconType = 'buyer' | 'rider';
+
+    export interface MapAdapter {
+      /** Mount and initialise the map into `container`. */
+      init(container: HTMLDivElement, center: { lat: number; lng: number }, zoom: number): Promise<void>;
+      /** Place a named marker on the map. */
+      addMarker(coords: { lat: number; lng: number }, icon: MarkerIconType): void;
+      /** Destroy all map resources (markers, map instance, injected scripts). */
+      destroy(): void;
+    }
+    ```
+  - [x] **[Adapter — Leaflet]** Create `apps/web/src/lib/adapters/leaflet-map-adapter.ts`:
+    - Implements `MapAdapter`.
+    - `init`: calls `L.map(container, ...)`, adds OSM tile layer, stores map reference on `this`.
+    - `addMarker`: calls `L.marker([coords.lat, coords.lng], { icon: iconFor(type) }).addTo(this._map)`, stores marker reference.
+    - `destroy`: calls `this._map.off(); this._map.remove();` — removes all markers first.
+    - Move the `buyerIcon` and `riderIcon` `L.divIcon` definitions from `OrderRouteMap.tsx` into this adapter file.
+  - [x] **[Adapter — Ola Maps]** Create `apps/web/src/lib/adapters/ola-map-adapter.ts`:
+    - Implements `MapAdapter`.
+    - `init`: reads `import.meta.env.VITE_OLA_MAPS_API_KEY` — throws if missing. Injects `<script src="https://api.olamaps.io/libs/latest/olamaps.js">` into `document.head` if not already present (idempotent). Waits for `script.onload`. Calls `new window.OlaMaps({ apiKey })` to obtain SDK instance. Calls `olaMapsInstance.init({ container, center: [center.lat, center.lng], zoom, style: '...' })` (exact method signature from Ola Maps JS SDK docs). Stores `this._map` reference.
+    - [x] `addMarker`: calls the Ola Maps marker API to add a marker at `[coords.lat, coords.lng]` with a custom div icon matching the design system (same rose / blue color scheme as Leaflet icons).
+    - [x] `destroy`: calls `this._map.remove()` (or SDK equivalent); removes the injected `<script>` tag.
+  - [x] **[Factory]** Create `apps/web/src/lib/map-adapter-factory.ts`:
+    ```typescript
+    import type { MapAdapter, MapProvider } from './map-provider';
+    import { LeafletMapAdapter } from './adapters/leaflet-map-adapter';
+    import { OlaMapAdapter } from './adapters/ola-map-adapter';
+
+    export function createMapAdapter(provider: MapProvider): MapAdapter {
+      switch (provider) {
+        case 'leaflet': return new LeafletMapAdapter();
+        case 'ola':     return new OlaMapAdapter();
+        default:        throw new TypeError(`Unknown map provider: ${provider as string}`);
+      }
+    }
+    ```
+  - [x] **[Component — refactor]** Update `apps/web/src/components/shared/OrderRouteMap.tsx`:
+    - Remove all direct `import L from 'leaflet'` and related Leaflet calls.
+    - Remove `buyerIcon` and `riderIcon` `L.divIcon` definitions (moved to `LeafletMapAdapter`).
+    - Inside `useEffect`, call `const adapter = createMapAdapter(import.meta.env.VITE_MAP_PROVIDER ?? 'leaflet')`.
+    - Call `await adapter.init(node, buyerCoords, 14)`.
+    - Call `adapter.addMarker(buyerCoords, 'buyer')`.
+    - If `riderCoords` is provided, call `adapter.addMarker(riderCoords, 'rider')`.
+    - Return cleanup: `adapter.destroy()`.
+    - The `OrderRouteMapProps` type, the `aria-label`, `role="region"`, and all className props are **unchanged**.
+  - [x] **[Env]** Add to `.env.example`:
+    ```
+    VITE_MAP_PROVIDER=leaflet        # 'leaflet' or 'ola'
+    VITE_OLA_MAPS_API_KEY=           # Required when VITE_MAP_PROVIDER=ola
+    ```
+  - [x] Run all updated and new unit tests — **confirm GREEN**.
+  - [x] Run `pnpm typecheck` — confirm 0 errors.
+  - [x] Run `pnpm lint` — confirm 0 errors.
+
+- [x] **Verification chain:**
+  - [x] **Leaflet path (default):** Developer sets `VITE_MAP_PROVIDER=leaflet` (or leaves it unset) and runs `pnpm dev` → `OrderConfirmationPage`, `BookingConfirmationPage`, and `RiderOrdersPage` all render maps using OpenStreetMap tiles exactly as before — zero visual regression, zero consumer code change → ✅.
+  - [x] **Ola Maps path:** Developer sets `VITE_MAP_PROVIDER=ola` and `VITE_OLA_MAPS_API_KEY=<key>` and runs `pnpm dev` → the same three pages now render Ola Maps tiles and markers instead of Leaflet/OSM, without any change to the consumer components → ✅.
+  - [x] **Missing key guard:** Developer sets `VITE_MAP_PROVIDER=ola` but leaves `VITE_OLA_MAPS_API_KEY` empty → the map container renders an error message `"Map could not be loaded — API key missing"` (non-fatal, no crash) → ✅.
 
 ---
 
