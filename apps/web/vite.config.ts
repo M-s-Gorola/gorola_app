@@ -25,6 +25,11 @@ const proxyConfig = {
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],
+  esbuild: {
+    supported: {
+      destructuring: true
+    }
+  },
   server: {
     port: 5180,
     allowedHosts: true,
