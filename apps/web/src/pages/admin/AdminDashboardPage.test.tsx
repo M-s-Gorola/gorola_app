@@ -8,16 +8,18 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AdminDashboardPage } from "./AdminDashboardPage";
 import { useAuthStore } from "@/store/auth.store";
 
-const { getMock, putMock } = vi.hoisted(() => ({
+const { getMock, putMock, patchMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
-  putMock: vi.fn()
+  putMock: vi.fn(),
+  patchMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
     get: vi.fn((url: string) => getMock(url)),
     post: vi.fn(),
-    put: vi.fn((url: string, body: unknown) => putMock(url, body))
+    put: vi.fn((url: string, body: unknown) => putMock(url, body)),
+    patch: vi.fn((url: string, body: unknown) => patchMock(url, body))
   }
 }));
 
@@ -165,7 +167,7 @@ describe("AdminDashboardPage", () => {
     };
 
     getMock.mockResolvedValue({ data: mockDashboardData });
-    putMock.mockResolvedValueOnce({ data: { success: true } });
+    patchMock.mockResolvedValueOnce({ data: { success: true } });
 
     renderAdminDashboard();
 
@@ -183,9 +185,9 @@ describe("AdminDashboardPage", () => {
     const confirmButton = screen.getByRole("button", { name: "Confirm Update" });
     fireEvent.click(confirmButton);
 
-    // Verify PUT request is made
+    // Verify PATCH request is made
     await waitFor(() => {
-      expect(putMock).toHaveBeenCalledWith("/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE", { value: true });
+      expect(patchMock).toHaveBeenCalledWith("/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE", { enabled: true });
     });
   });
 });

@@ -55,6 +55,8 @@ export type BuyerOrderDetail = {
   deliveryLat?: number | null;
   deliveryLng?: number | null;
   paymentMethod: string;
+  paymentStatus: "PENDING" | "CAPTURED" | "FAILED";
+  razorpayOrderId?: string | null;
   rating: number | null;
   ratingComment: string | null;
   scheduledFor?: string | null;
@@ -650,6 +652,16 @@ interface StoreOffer {
                     <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                       <CheckCircle2 className="h-3 w-3" />
                       Delivered in {calculateDeliveryDuration(order.statusHistory ?? [], order.createdAt) ?? "15m"}
+                    </div>
+                  )}
+                  {order.paymentMethod === "COD" && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-3 py-1 text-[11px] font-bold tracking-wider text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                      Pay on delivery
+                    </div>
+                  )}
+                  {order.paymentStatus === "CAPTURED" && (
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                      Payment confirmed via {order.paymentMethod}
                     </div>
                   )}
                 </div>

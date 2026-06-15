@@ -13,7 +13,8 @@ const { getMock } = vi.hoisted(() => ({
 vi.mock("@/lib/api", () => ({
   api: {
     get: getMock
-  }
+  },
+  getFeatureFlag: vi.fn().mockResolvedValue(false)
 }));
 
 describe("BuyerCartHydration", () => {

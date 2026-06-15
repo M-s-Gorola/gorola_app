@@ -350,4 +350,182 @@ describe("CheckoutPage", () => {
     expect(screen.getByText("Total:")).toBeInTheDocument();
     expect(screen.getByText(/Rs\s*130\.00/)).toBeInTheDocument();
   });
+
+  it("places order via POST /api/v1/orders with paymentMethod COD when selectedPaymentMethod is COD", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "order-cod-store",
+          status: "PLACED"
+        },
+        success: true
+      }
+    });
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({ selectedPaymentMethod: "COD" });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/orders", expect.objectContaining({
+        paymentMethod: "COD"
+      }));
+    });
+    expect(await screen.findByTestId("confirmation")).toBeInTheDocument();
+  });
+
+  it("initiates, verifies, and navigates on happy path UPI flow", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "order-upi-123"
+        },
+        success: true
+      }
+    });
+
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          razorpayOrderId: "rp_order_mock_order-upi-123",
+          amount: 13000,
+          currency: "INR"
+        },
+        success: true
+      }
+    });
+
+    postMock.mockResolvedValueOnce({
+      data: {
+        success: true
+      }
+    });
+
+    const razorpayConstructorMock = vi.fn();
+    function RazorpayMock(this: { open: () => void }, options: { handler: (res: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => void }) {
+      razorpayConstructorMock(options);
+      this.open = () => {
+        options.handler({
+          razorpay_order_id: "rp_order_mock_order-upi-123",
+          razorpay_payment_id: "pay_mock_123",
+          razorpay_signature: "mock_sig"
+        });
+      };
+    }
+    vi.stubGlobal("Razorpay", RazorpayMock);
+
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({ selectedPaymentMethod: "UPI" });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenNthCalledWith(1, "/api/v1/orders", expect.objectContaining({
+        paymentMethod: "UPI"
+      }));
+    });
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenNthCalledWith(2, "/api/v1/payments/initiate", {
+        orderId: "order-upi-123",
+        paymentMethod: "UPI"
+      });
+    });
+
+    await waitFor(() => {
+      expect(razorpayConstructorMock).toHaveBeenCalled();
+    });
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenNthCalledWith(3, "/api/v1/payments/verify", {
+        orderId: "order-upi-123",
+        razorpayPaymentId: "pay_mock_123",
+        razorpaySignature: "mock_sig"
+      });
+    });
+
+    expect(await screen.findByTestId("confirmation")).toBeInTheDocument();
+    
+    vi.unstubAllGlobals();
+  });
+
+  it("shows error and does not navigate when payment verification fails", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "order-upi-fail"
+        },
+        success: true
+      }
+    });
+
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          razorpayOrderId: "rp_order_mock_order-upi-fail",
+          amount: 13000,
+          currency: "INR"
+        },
+        success: true
+      }
+    });
+
+    postMock.mockRejectedValueOnce(new Error("Verification failed"));
+
+    const razorpayConstructorMock = vi.fn();
+    function RazorpayMock(this: { open: () => void }, options: { handler: (res: { razorpay_order_id: string; razorpay_payment_id: string; razorpay_signature: string }) => void }) {
+      razorpayConstructorMock(options);
+      this.open = () => {
+        options.handler({
+          razorpay_order_id: "rp_order_mock_order-upi-fail",
+          razorpay_payment_id: "pay_mock_123",
+          razorpay_signature: "mock_sig"
+        });
+      };
+    }
+    vi.stubGlobal("Razorpay", RazorpayMock);
+
+    const user = userEvent.setup();
+    act(() => {
+      useCartStore.setState({ selectedPaymentMethod: "UPI" });
+    });
+
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenNthCalledWith(1, "/api/v1/orders", expect.objectContaining({
+        paymentMethod: "UPI"
+      }));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText(/Payment could not be verified/i)).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("confirmation")).not.toBeInTheDocument();
+
+    vi.unstubAllGlobals();
+  });
 });
+

@@ -211,4 +211,77 @@ describe("Admin Feature Flags Integration Tests", () => {
       expect(JSON.stringify(auditLog?.newValue)).toBe(JSON.stringify({ value: true }));
     });
   });
+
+  describe("PATCH /api/v1/admin/feature-flags/:key", () => {
+    it("should return 401 Unauthorized when token is missing", async () => {
+      const response = await server.inject({
+        method: "PATCH",
+        url: "/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE",
+        payload: { enabled: true }
+      });
+
+      expect(response.statusCode).toBe(401);
+    });
+
+    it("should return 403 Forbidden when user is a STORE_OWNER", async () => {
+      const token = await generateAccessToken("owner-123", "STORE_OWNER", "store-123");
+      const response = await server.inject({
+        method: "PATCH",
+        url: "/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE",
+        headers: {
+          authorization: `Bearer ${token}`
+        },
+        payload: { enabled: true }
+      });
+
+      expect(response.statusCode).toBe(403);
+    });
+
+    it("should return 404 Not Found when flag key does not exist", async () => {
+      const token = await generateAccessToken("admin-123", "ADMIN");
+      const response = await server.inject({
+        method: "PATCH",
+        url: "/api/v1/admin/feature-flags/NONEXISTENT_KEY",
+        headers: {
+          authorization: `Bearer ${token}`
+        },
+        payload: { enabled: true }
+      });
+
+      expect(response.statusCode).toBe(404);
+      expect(response.json().success).toBe(false);
+    });
+
+    it("should return 200 and update database value on successful PATCH", async () => {
+      await db.featureFlag.create({
+        data: {
+          key: "WEATHER_MODE_ACTIVE",
+          value: false,
+          updatedBy: "system",
+          description: "Controls weather overlay"
+        }
+      });
+
+      const token = await generateAccessToken("admin-123", "ADMIN");
+      const response = await server.inject({
+        method: "PATCH",
+        url: "/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE",
+        headers: {
+          authorization: `Bearer ${token}`
+        },
+        payload: { enabled: true }
+      });
+
+      expect(response.statusCode).toBe(200);
+      const body = response.json();
+      expect(body.success).toBe(true);
+      expect(body.data.key).toBe("WEATHER_MODE_ACTIVE");
+      expect(body.data.value).toBe(true);
+
+      const dbFlag = await db.featureFlag.findUnique({
+        where: { key: "WEATHER_MODE_ACTIVE" }
+      });
+      expect(dbFlag?.value).toBe(true);
+    });
+  });
 });

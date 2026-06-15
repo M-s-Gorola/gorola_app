@@ -633,6 +633,10 @@ export function registerAdminRoutes(
     value: z.boolean()
   });
 
+  const updateFlagPatchBodySchema = z.object({
+    enabled: z.boolean()
+  });
+
   app.put("/api/v1/admin/feature-flags/:key", { preHandler }, async (request, reply) => {
     const { key } = request.params as { key: string };
     const parsed = updateFlagBodySchema.safeParse(request.body);
@@ -651,6 +655,38 @@ export function registerAdminRoutes(
     const result = await adminService.updateFlag(
       key,
       parsed.data.value,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.patch("/api/v1/admin/feature-flags/:key", { preHandler }, async (request, reply) => {
+    const { key } = request.params as { key: string };
+    const parsed = updateFlagPatchBodySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid flag value", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.updateFlag(
+      key,
+      parsed.data.enabled,
       adminId,
       ip,
       userAgent

@@ -4,7 +4,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-import { api } from "@/lib/api";
+import { api, getFeatureFlag } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { lenis } from "@/lib/lenis";
@@ -13,7 +13,6 @@ import { useCartStore } from "@/store/cart.store";
 import { useFeatureFlagsStore } from "@/store/feature-flags.store";
 
 const DELIVERY_FEE = 30;
-type PaymentMethod = "COD" | "UPI" | "CARD";
 
 export function CartDrawer(): ReactElement | null {
   const navigate = useNavigate();
@@ -29,13 +28,27 @@ export function CartDrawer(): ReactElement | null {
   const accessToken = useAuthStore((s) => s.accessToken);
   const storeId = useCartStore((s) => s.storeId);
 
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("COD");
+  const selectedPaymentMethod = useCartStore((s) => s.selectedPaymentMethod);
+  const setSelectedPaymentMethod = useCartStore((s) => s.setSelectedPaymentMethod);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
-  const upiEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_UPI_ENABLED"));
-  const cardEnabled = useFeatureFlagsStore((s) => s.getFlag("PAYMENT_CARD_ENABLED"));
+  const upiEnabled = useFeatureFlagsStore((s) => s.flags["PAYMENT_UPI_ENABLED"] ?? false);
+  const cardEnabled = useFeatureFlagsStore((s) => s.flags["PAYMENT_CARD_ENABLED"] ?? false);
 
   const drawerRef = useRef<HTMLElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const fetchFlags = () => {
+      void getFeatureFlag("UPI_PAYMENT_ENABLED").then((val) => {
+        useFeatureFlagsStore.getState().setFlag("PAYMENT_UPI_ENABLED", val);
+      });
+      void getFeatureFlag("CARD_PAYMENT_ENABLED").then((val) => {
+        useFeatureFlagsStore.getState().setFlag("PAYMENT_CARD_ENABLED", val);
+      });
+    };
+
+    fetchFlags();
+  }, [isOpen]);
 
   useEffect(() => {
     if (isOpen) {
@@ -449,16 +462,16 @@ export function CartDrawer(): ReactElement | null {
                   { id: 'CARD', label: 'Card', enabled: cardEnabled }
                 ].map((method) => (
                   <label key={method.id} className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                    paymentMethod === method.id 
+                    selectedPaymentMethod === method.id 
                       ? 'border-gorola-pine bg-gorola-pine/[0.03] text-gorola-pine' 
                       : 'border-gorola-pine/10 text-gorola-charcoal hover:border-gorola-pine/30'
                   } ${!method.enabled ? 'opacity-40 cursor-not-allowed' : ''}`}>
                     <input
                       type="radio"
                       name="payment-method"
-                      checked={paymentMethod === method.id}
+                      checked={selectedPaymentMethod === method.id}
                       disabled={!method.enabled}
-                      onChange={() => setPaymentMethod(method.id as PaymentMethod)}
+                      onChange={() => setSelectedPaymentMethod(method.id as "COD" | "UPI" | "CARD")}
                       className="accent-gorola-pine"
                     />
                     <span className="font-dm-sans text-sm font-medium">{method.label}</span>
