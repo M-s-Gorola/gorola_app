@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import React from "react";
 import { MemoryRouter } from "react-router-dom";
@@ -121,6 +121,8 @@ describe("StoreBookingsPage TDD", () => {
     });
 
     await user.click(approveBtn);
+    const confirmBtn = await screen.findByRole("button", { name: /confirm/i });
+    await user.click(confirmBtn);
 
     await waitFor(() => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/store/bookings/order-1/approve");
@@ -248,10 +250,10 @@ describe("StoreBookingsPage TDD", () => {
 
     renderWithProviders(<StoreBookingsPage />);
 
-    // Click on Upcoming tab
+    // Click on approved tab
     const user = userEvent.setup();
-    const upcomingTab = await screen.findByRole("tab", { name: /upcoming/i });
-    await user.click(upcomingTab);
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    await user.click(approvedTab);
 
     expect(await screen.findByText("CBC Panel")).toBeInTheDocument();
     expect(screen.getByText("Thyroid (TSH)")).toBeInTheDocument();
@@ -259,22 +261,21 @@ describe("StoreBookingsPage TDD", () => {
     // Verify ordering is chronological by finding them in order
     const listItems = screen.getAllByRole("heading", { level: 3 });
     const productNames = listItems.map((item) => item.textContent);
-
     expect(productNames[0]).toContain("CBC Panel");
     expect(productNames[1]).toContain("Thyroid (TSH)");
   });
 
-  it("Upcoming tab renders 'Mark Completed' button for APPROVED bookings and triggers completion mutation", async () => {
+  it("Approved tab renders 'Mark On The Way' and 'Cancel Booking' buttons for APPROVED bookings", async () => {
     const mockBookings = [
       {
-        id: "booking-upcoming-complete",
-        orderId: "order-upcoming-complete",
+        id: "booking-upcoming-dispatch",
+        orderId: "order-upcoming-dispatch",
         status: "APPROVED",
         createdAt: "2026-05-21T22:00:00.000Z",
         customerPhone: "+919876543210",
         items: [
           {
-            id: "item-upcoming-complete",
+            id: "item-upcoming-dispatch",
             productName: "Thyroid (TSH)",
             variantLabel: "Standard"
           }
@@ -298,25 +299,153 @@ describe("StoreBookingsPage TDD", () => {
     renderWithProviders(<StoreBookingsPage />);
 
     const user = userEvent.setup();
-    const upcomingTab = await screen.findByRole("tab", { name: /upcoming/i });
-    await user.click(upcomingTab);
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    await user.click(approvedTab);
 
     expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
 
-    const card = screen.getByTestId("booking-card-booking-upcoming-complete");
+    const card = screen.getByTestId("booking-card-booking-upcoming-dispatch");
+    await user.click(card);
+
+    const onTheWayBtn = screen.getByRole("button", { name: /mark on the way/i });
+    const cancelBtn = screen.getByRole("button", { name: /cancel booking/i });
+    expect(onTheWayBtn).toBeInTheDocument();
+    expect(cancelBtn).toBeInTheDocument();
+
+    putMock.mockResolvedValue({
+      data: { success: true }
+    });
+
+    await user.click(onTheWayBtn);
+    const confirmBtn = await screen.findByRole("button", { name: /confirm/i });
+    await user.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/bookings/order-upcoming-dispatch/dispatch");
+    });
+  });
+
+  it("Approved tab allows canceling an approved booking with a reason", async () => {
+    const mockBookings = [
+      {
+        id: "booking-upcoming-cancel",
+        orderId: "order-upcoming-cancel",
+        status: "APPROVED",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-upcoming-cancel",
+            productName: "Thyroid (TSH)",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-24T09:00:00.000Z",
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    await user.click(approvedTab);
+
+    const card = screen.getByTestId("booking-card-booking-upcoming-cancel");
+    await user.click(card);
+
+    const cancelBtn = screen.getByRole("button", { name: /cancel booking/i });
+    await user.click(cancelBtn);
+
+    // Cancel modal should open with dynamic title
+    expect(screen.getByRole("heading", { name: "Cancel Booking" })).toBeInTheDocument();
+    
+    const reasonInput = screen.getByPlaceholderText(/Enter reason/i);
+    await user.type(reasonInput, "Client changed mind");
+
+    const confirmCancelBtn = screen.getByRole("button", { name: /Confirm Cancellation/i });
+    
+    putMock.mockResolvedValue({
+      data: { success: true }
+    });
+
+    await user.click(confirmCancelBtn);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/bookings/order-upcoming-cancel/reject", {
+        reason: "Client changed mind"
+      });
+    });
+  });
+
+  it("On the Way tab renders 'Mark Completed' and 'Cancel Booking' buttons and completes OUT_FOR_DELIVERY bookings", async () => {
+    const mockBookings = [
+      {
+        id: "booking-way-complete",
+        orderId: "order-way-complete",
+        status: "OUT_FOR_DELIVERY",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-way-complete",
+            productName: "Thyroid (TSH)",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-24T09:00:00.000Z",
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const activeTab = await screen.findByRole("tab", { name: /on the way/i });
+    await user.click(activeTab);
+
+    expect(await screen.findByText("Thyroid (TSH)")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-way-complete");
     await user.click(card);
 
     const completeBtn = screen.getByRole("button", { name: /mark completed/i });
+    const cancelBtn = screen.getByRole("button", { name: /cancel booking/i });
     expect(completeBtn).toBeInTheDocument();
+    expect(cancelBtn).toBeInTheDocument();
 
     putMock.mockResolvedValue({
       data: { success: true }
     });
 
     await user.click(completeBtn);
+    const confirmBtn = await screen.findByRole("button", { name: /confirm/i });
+    await user.click(confirmBtn);
 
     await waitFor(() => {
-      expect(putMock).toHaveBeenCalledWith("/api/v1/store/bookings/order-upcoming-complete/complete");
+      expect(putMock).toHaveBeenCalledWith("/api/v1/store/bookings/order-way-complete/complete");
     });
   });
 
@@ -427,9 +556,9 @@ describe("StoreBookingsPage TDD", () => {
 
     const historyList = screen.getByTestId("status-history-list");
     // The raw "DELIVERED" entry in the log must display as "COMPLETED" for booking commerce clarity
-    expect(within(historyList).getByText("COMPLETED")).toBeInTheDocument();
+    expect(within(historyList).getByText("Completed")).toBeInTheDocument();
     // "DELIVERED" raw string must NOT appear
-    expect(within(historyList).queryByText("DELIVERED")).not.toBeInTheDocument();
+    expect(within(historyList).queryByText("Delivered")).not.toBeInTheDocument();
   });
 
 
@@ -490,9 +619,9 @@ describe("StoreBookingsPage TDD", () => {
 
     const historyList = screen.getByTestId("status-history-list");
     // The "CANCELLED" statusHistory entry must render as "REJECTED" when approvalStatus is REJECTED
-    expect(within(historyList).getAllByText("REJECTED").length).toBeGreaterThan(0);
+    expect(within(historyList).getAllByText("Rejected").length).toBeGreaterThan(0);
     // The raw "CANCELLED" string must NOT appear in the log entries
-    expect(within(historyList).queryByText("CANCELLED")).not.toBeInTheDocument();
+    expect(within(historyList).queryByText("Cancelled")).not.toBeInTheDocument();
   });
 
 
@@ -677,8 +806,203 @@ describe("StoreBookingsPage TDD", () => {
     renderWithProviders(<StoreBookingsPage />);
 
     const user = userEvent.setup();
-    const upcomingTab = await screen.findByRole("tab", { name: /upcoming/i });
-    await user.click(upcomingTab);
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    await user.click(approvedTab);
+
+    expect(await screen.findByText("Blood Glucose Test")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-timeline-test");
+    await user.click(card);
+
+    // Verify timeline logs are displayed
+    expect(screen.getByText("Status Transition Log")).toBeInTheDocument();
+    
+  });
+
+
+  it("Navigation link Bookings in StoreLayout is hidden when storeType is QUICK_COMMERCE, shown when BOOKING_COMMERCE", async () => {
+    // 1. Mock QUICK_COMMERCE store profile
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "store-123",
+          name: "Mountain Medico",
+          storeType: "QUICK_COMMERCE"
+        }
+      }
+    });
+
+    renderWithProviders(
+      <StoreLayout>
+        <div>Content</div>
+      </StoreLayout>
+    );
+
+    // Wait for the profile to fetch
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith("/api/v1/store/profile");
+    });
+
+    // Bookings nav link should NOT be present in either sidebar or mobile menu
+    expect(screen.queryAllByRole("link", { name: /bookings/i })).toHaveLength(0);
+
+    // Reset layout for second render
+    vi.restoreAllMocks();
+    getMock.mockReset();
+
+    // 2. Mock BOOKING_COMMERCE store profile
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          id: "store-123",
+          name: "Aarna Diagnostic Centre",
+          storeType: "BOOKING_COMMERCE"
+        }
+      }
+    });
+
+    renderWithProviders(
+      <StoreLayout>
+        <div>Content</div>
+      </StoreLayout>
+    );
+
+    // Wait for profile fetch and confirm nav link renders in sidebar and/or header
+    await waitFor(() => {
+      const links = screen.getAllByRole("link", { name: /bookings/i });
+      expect(links.length).toBeGreaterThan(0);
+    });
+  });
+
+  it("displays collapsible discount breakdown inside the detailed bookings modal", async () => {
+    const mockBookings = [
+      {
+        id: "booking-discount-test",
+        orderId: "order-discount-test",
+        status: "PENDING_APPROVAL",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-discount",
+            productName: "Full Body Checkup",
+            variantLabel: "Premium",
+            price: 1500,
+            quantity: 1
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-23T08:00:00.000Z",
+          timeslot: "06:00-09:00",
+          requiresFasting: true,
+          approvalStatus: "PENDING_APPROVAL"
+        },
+        subtotal: 1500,
+        deliveryFee: 50,
+        discountAmount: 200,
+        discountCode: "WELCOME200",
+        total: 1350,
+        statusHistory: [
+          { id: "hist-1", status: "PENDING_APPROVAL", changedBy: "system", changedAt: "2026-05-21T22:00:00.000Z" }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    expect(await screen.findByText("Full Body Checkup")).toBeInTheDocument();
+
+    const card = screen.getByTestId("booking-card-booking-discount-test");
+    await user.click(card);
+
+    // Verify detailed modal details are displayed
+    const modal = screen.getByTestId("booking-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText("Buyer & Appointment")).toBeInTheDocument();
+    expect(within(modal).getAllByText("Rs 1500.00")[0]).toBeInTheDocument();
+    expect(within(modal).getByText("Rs 50.00")).toBeInTheDocument();
+    expect(within(modal).getByText("Rs 1350.00")).toBeInTheDocument();
+
+    // Verify discount is visible in its initial collapsed state
+    const discountRow = screen.getByTestId("store-booking-discount");
+    expect(discountRow).toBeInTheDocument();
+    expect(within(discountRow).getByText("-Rs 200.00")).toBeInTheDocument();
+
+    // Verify discount list detail is not rendered initially
+    expect(screen.queryByTestId("store-booking-discount-list")).not.toBeInTheDocument();
+
+    // Click toggle button to expand discount list details
+    const toggleButton = screen.getByTestId("store-booking-discount-toggle");
+    await user.click(toggleButton);
+
+    // Verify discount list detail is now visible and contains promo info
+    const discountList = screen.getByTestId("store-booking-discount-list");
+    expect(discountList).toBeInTheDocument();
+    expect(within(discountList).getByText(/• WELCOME200/)).toBeInTheDocument();
+    expect(within(discountList).getByText("-Rs 200.00")).toBeInTheDocument();
+
+    // Click toggle again to collapse
+    await user.click(toggleButton);
+    expect(screen.queryByTestId("store-booking-discount-list")).not.toBeInTheDocument();
+  });
+
+  it("renders status transition logs in the detailed modal", async () => {
+    const mockBookings = [
+      {
+        id: "booking-timeline-test",
+        orderId: "order-timeline-test",
+        status: "APPROVED",
+        createdAt: "2026-05-21T22:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-timeline",
+            productName: "Blood Glucose Test",
+            variantLabel: "Standard",
+            price: 300,
+            quantity: 1
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-05-23T08:00:00.000Z",
+          timeslot: "06:00-09:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        },
+        subtotal: 300,
+        deliveryFee: 30,
+        discountAmount: 0,
+        discountCode: "",
+        total: 330,
+        statusHistory: [
+          { id: "hist-1", status: "PENDING_APPROVAL", changedBy: "system", changedAt: "2026-05-21T22:00:00.000Z" },
+          { id: "hist-2", status: "APPROVED", changedBy: "system", changedAt: "2026-05-21T23:00:00.000Z" }
+        ]
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    const user = userEvent.setup();
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    await user.click(approvedTab);
 
     expect(await screen.findByText("Blood Glucose Test")).toBeInTheDocument();
 
@@ -689,7 +1013,172 @@ describe("StoreBookingsPage TDD", () => {
     expect(screen.getByText("Status Transition Log")).toBeInTheDocument();
     
     const historyList = screen.getByTestId("status-history-list");
-    expect(within(historyList).getByText("PENDING APPROVAL")).toBeInTheDocument();
-    expect(within(historyList).getByText("APPROVED")).toBeInTheDocument();
+    expect(within(historyList).getByText("Pending Approval")).toBeInTheDocument();
+    expect(within(historyList).getByText("Approved")).toBeInTheDocument();
+  });
+
+  it("renders five tabs: ALL, PENDING, APPROVED, ON_THE_WAY, and HISTORY", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: []
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    expect(await screen.findByRole("tab", { name: /all/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /pending/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /approved/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /on the way/i })).toBeInTheDocument();
+    expect(screen.getByRole("tab", { name: /history/i })).toBeInTheDocument();
+  });
+
+  it("supports scheduled date filters including today, tomorrow, and custom ranges", async () => {
+    const todayStr = new Date().toISOString();
+    const tomorrowStr = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    const mockBookings = [
+      {
+        id: "booking-today",
+        orderId: "order-today",
+        status: "APPROVED",
+        createdAt: todayStr,
+        customerPhone: "+919876543210",
+        items: [{ id: "item-today", productName: "Today Test", variantLabel: "Standard" }],
+        bookingOrder: {
+          scheduledDate: todayStr,
+          timeslot: "06:00-09:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      },
+      {
+        id: "booking-tomorrow",
+        orderId: "order-tomorrow",
+        status: "APPROVED",
+        createdAt: todayStr,
+        customerPhone: "+919876543210",
+        items: [{ id: "item-tomorrow", productName: "Tomorrow Test", variantLabel: "Standard" }],
+        bookingOrder: {
+          scheduledDate: tomorrowStr,
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+    const user = userEvent.setup();
+
+    // Verify filter dropdown is rendered with standard options
+    const filterSelect = await screen.findByTestId("booking-date-filter");
+    expect(filterSelect).toBeInTheDocument();
+    expect(within(filterSelect).getByRole("option", { name: /All Dates/i })).toBeInTheDocument();
+    expect(within(filterSelect).getByRole("option", { name: /Today/i })).toBeInTheDocument();
+    expect(within(filterSelect).getByRole("option", { name: /Tomorrow/i })).toBeInTheDocument();
+    expect(within(filterSelect).getByRole("option", { name: /This Week/i })).toBeInTheDocument();
+    expect(within(filterSelect).getByRole("option", { name: /This Month/i })).toBeInTheDocument();
+    expect(within(filterSelect).getByRole("option", { name: /Custom Range/i })).toBeInTheDocument();
+
+    // By default (All Dates), both today and tomorrow bookings should be visible
+    expect(await screen.findByText("Today Test")).toBeInTheDocument();
+    expect(screen.getByText("Tomorrow Test")).toBeInTheDocument();
+
+    // Select Today filter
+    await user.selectOptions(filterSelect, "TODAY");
+    expect(screen.getByText("Today Test")).toBeInTheDocument();
+    expect(screen.queryByText("Tomorrow Test")).not.toBeInTheDocument();
+
+    // Select Tomorrow filter
+    await user.selectOptions(filterSelect, "TOMORROW");
+    expect(screen.queryByText("Today Test")).not.toBeInTheDocument();
+    expect(screen.getByText("Tomorrow Test")).toBeInTheDocument();
+
+    // Select Custom Range and check date inputs appear
+    expect(screen.queryByTestId("date-from-input")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("date-to-input")).not.toBeInTheDocument();
+
+    await user.selectOptions(filterSelect, "CUSTOM");
+    const dateFrom = screen.getByTestId("date-from-input");
+    const dateTo = screen.getByTestId("date-to-input");
+    expect(dateFrom).toBeInTheDocument();
+    expect(dateTo).toBeInTheDocument();
+
+    // Set custom range that covers today only
+    // NOTE: Must use LOCAL date, not toISOString().split("T")[0] which gives UTC date.
+    // The component filters using getLocalYMD() (local timezone), so this must match.
+    const _now = new Date();
+    const todayYMD = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+    fireEvent.change(dateFrom, { target: { value: todayYMD } });
+    fireEvent.change(dateTo, { target: { value: todayYMD } });
+
+    // Should only show today's test
+    expect(screen.getByText("Today Test")).toBeInTheDocument();
+    expect(screen.queryByText("Tomorrow Test")).not.toBeInTheDocument();
+  });
+
+  it("initializes activeTab and dateFilter state automatically from search parameters", async () => {
+    const mockBookings = [
+      {
+        id: "booking-search-param-test",
+        orderId: "order-search-param-test",
+        status: "APPROVED",
+        createdAt: new Date().toISOString(),
+        customerPhone: "+919876543210",
+        items: [
+          {
+            id: "item-search-param",
+            productName: "Search Param Test",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: new Date().toISOString(),
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: {
+        queries: {
+          retry: false,
+          refetchOnWindowFocus: false
+        }
+      }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/store/bookings?tab=APPROVED&dateFilter=TODAY"]}>
+        <QueryClientProvider client={queryClient}>
+          <StoreBookingsPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const approvedTab = await screen.findByRole("tab", { name: /approved/i });
+    expect(approvedTab).toHaveAttribute("aria-selected", "true");
+
+    const filterSelect = await screen.findByTestId("booking-date-filter");
+    expect(filterSelect).toHaveValue("TODAY");
+
+    expect(await screen.findByText("Search Param Test")).toBeInTheDocument();
   });
 });

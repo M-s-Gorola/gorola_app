@@ -8,10 +8,19 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { StoreDashboardPage } from "./StoreDashboardPage";
 import { useAuthStore } from "@/store/auth.store";
 
-const { getMock, getProfileMock } = vi.hoisted(() => ({
+const { getMock, getProfileMock, mockNavigate } = vi.hoisted(() => ({
   getMock: vi.fn(),
-  getProfileMock: vi.fn()
+  getProfileMock: vi.fn(),
+  mockNavigate: vi.fn()
 }));
+
+vi.mock("react-router-dom", async () => {
+  const actual = await vi.importActual<typeof import("react-router-dom")>("react-router-dom");
+  return {
+    ...actual,
+    useNavigate: () => mockNavigate
+  };
+});
 
 vi.mock("@/lib/api", () => ({
   api: {
@@ -109,7 +118,8 @@ describe("StoreDashboardPage", () => {
           { productName: "Whole Milk", variantLabel: "1 Gallon", stockQty: 4 }
         ],
         activeAdvertisementsCount: 2,
-        activeOffersCount: 3
+        activeOffersCount: 3,
+        activeDiscountsCount: 5
       }
     };
 
@@ -123,6 +133,8 @@ describe("StoreDashboardPage", () => {
     expect(screen.getByText("4")).toBeInTheDocument(); // pending orders
     expect(screen.getByText("2")).toBeInTheDocument(); // active ads
     expect(screen.getByText("3")).toBeInTheDocument(); // active offers
+    expect(screen.getByText("5")).toBeInTheDocument(); // active discounts
+    expect(screen.getByText("Active Discount Codes")).toBeInTheDocument();
 
     // Verify Low Stock alerts
     expect(screen.getByText("Avocados")).toBeInTheDocument();
@@ -151,7 +163,8 @@ describe("StoreDashboardPage", () => {
         topProducts: [],
         lowStockItems: [],
         activeAdvertisementsCount: 2,
-        activeOffersCount: 3
+        activeOffersCount: 3,
+        activeDiscountsCount: 5
       }
     };
 
@@ -230,7 +243,8 @@ describe("StoreDashboardPage", () => {
         ],
         lowStockItems: [],
         activeAdvertisementsCount: 1,
-        activeOffersCount: 2
+        activeOffersCount: 2,
+        activeDiscountsCount: 4
       }
     };
 
@@ -239,7 +253,7 @@ describe("StoreDashboardPage", () => {
     renderStoreDashboard();
 
     // Verify booking specific labels are present
-    expect(await screen.findByText("Today's Bookings")).toBeInTheDocument();
+    expect(await screen.findByText("Appointments Scheduled Today")).toBeInTheDocument();
     expect(screen.getByText("Pending Approvals")).toBeInTheDocument();
     expect(screen.getByText("Top Performing Services")).toBeInTheDocument();
     expect(screen.getByText("Times Booked")).toBeInTheDocument();
@@ -274,7 +288,8 @@ describe("StoreDashboardPage", () => {
         topProducts: [],
         lowStockItems: [],
         activeAdvertisementsCount: 2,
-        activeOffersCount: 3
+        activeOffersCount: 3,
+        activeDiscountsCount: 5
       }
     };
     getMock.mockResolvedValue({ data: mockDashboardData });
@@ -314,7 +329,8 @@ describe("StoreDashboardPage", () => {
           topProducts: [],
           lowStockItems: [],
           activeAdvertisementsCount: 2,
-          activeOffersCount: 3
+          activeOffersCount: 3,
+          activeDiscountsCount: 5
         }
       };
 
@@ -357,6 +373,103 @@ describe("StoreDashboardPage", () => {
         expect(getMock).toHaveBeenCalledWith(expect.stringContaining("groupBy=DAILY"));
       });
     });
+  });
+
+  it("navigates to appropriate routes or scrolls when KPI cards are clicked", async () => {
+    const scrollIntoViewMock = vi.fn();
+    window.HTMLElement.prototype.scrollIntoView = scrollIntoViewMock;
+
+    const mockDashboardData = {
+      success: true,
+      data: {
+        todayOrderCount: 15,
+        todayRevenue: 1250.5,
+        pendingOrdersCount: 4,
+        weeklyRevenue: [],
+        topProducts: [],
+        lowStockItems: [],
+        activeAdvertisementsCount: 2,
+        activeOffersCount: 3,
+        activeDiscountsCount: 5
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockDashboardData });
+    mockNavigate.mockReset();
+
+    renderStoreDashboard();
+
+    // Click Pending Orders card
+    const pendingOrdersCard = await screen.findByTestId("kpi-pending-orders");
+    fireEvent.click(pendingOrdersCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/orders?status=PLACED");
+
+    // Click Today's Orders card
+    const todayOrdersCard = screen.getByTestId("kpi-today-orders");
+    fireEvent.click(todayOrdersCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/orders?dateFilter=TODAY");
+
+    // Click Active Ads card
+    const activeAdsCard = screen.getByTestId("kpi-active-ads");
+    fireEvent.click(activeAdsCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/advertisements");
+
+    // Click Active Offers card
+    const activeOffersCard = screen.getByTestId("kpi-active-offers");
+    fireEvent.click(activeOffersCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/offers");
+
+    // Click Active Discounts card
+    const activeDiscountsCard = screen.getByTestId("kpi-active-discounts");
+    fireEvent.click(activeDiscountsCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/discounts");
+
+    // Click Revenue card
+    const revenueCard = screen.getByTestId("kpi-revenue");
+    fireEvent.click(revenueCard);
+    expect(scrollIntoViewMock).toHaveBeenCalledWith({ behavior: "smooth" });
+  });
+
+  it("navigates to booking routes when KPI cards are clicked for BOOKING_COMMERCE", async () => {
+    getProfileMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          storeType: "BOOKING_COMMERCE",
+          isAcceptingOrders: true
+        }
+      }
+    });
+
+    const mockDashboardData = {
+      success: true,
+      data: {
+        todayOrderCount: 8,
+        todayRevenue: 2400.0,
+        pendingOrdersCount: 3,
+        weeklyRevenue: [],
+        topProducts: [],
+        lowStockItems: [],
+        activeAdvertisementsCount: 1,
+        activeOffersCount: 2,
+        activeDiscountsCount: 4
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockDashboardData });
+    mockNavigate.mockReset();
+
+    renderStoreDashboard();
+
+    // Today's Bookings card
+    const todayBookingsCard = await screen.findByTestId("kpi-today-orders");
+    fireEvent.click(todayBookingsCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/bookings?tab=APPROVED&dateFilter=TODAY");
+
+    // Pending Approvals card
+    const pendingApprovalsCard = screen.getByTestId("kpi-pending-orders");
+    fireEvent.click(pendingApprovalsCard);
+    expect(mockNavigate).toHaveBeenCalledWith("/store/bookings?tab=PENDING");
   });
 });
 

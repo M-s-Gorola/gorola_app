@@ -14,6 +14,7 @@ export type DashboardKpiSummary = {
   lowStockItems: { productName: string; variantLabel: string; stockQty: number }[];
   activeAdvertisementsCount: number;
   activeOffersCount: number;
+  activeDiscountsCount: number;
 };
 
 function maskPhone(phone: string): string {
@@ -27,15 +28,76 @@ export class StoreOwnerService {
 
   public async getOrders(
     storeId: string,
-    filters: { status?: OrderStatus; page: number; limit: number }
+    filters: {
+      status?: OrderStatus;
+      page: number;
+      limit: number;
+      dateFilter?: string | undefined;
+      customFrom?: string | undefined;
+      customTo?: string | undefined;
+    }
   ) {
-    const { status, page, limit } = filters;
+    const { status, page, limit, dateFilter, customFrom, customTo } = filters;
     const skip = (page - 1) * limit;
     const take = limit;
 
+    let createdAtRange: { gte?: Date; lte?: Date } | undefined;
+
+    if (dateFilter) {
+      const now = new Date();
+      if (dateFilter === "TODAY") {
+        const start = new Date(now);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now);
+        end.setHours(23, 59, 59, 999);
+        createdAtRange = { gte: start, lte: end };
+      } else if (dateFilter === "TOMORROW") {
+        const start = new Date(now);
+        start.setDate(now.getDate() + 1);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(now);
+        end.setDate(now.getDate() + 1);
+        end.setHours(23, 59, 59, 999);
+        createdAtRange = { gte: start, lte: end };
+      } else if (dateFilter === "THIS_WEEK") {
+        const dayOfWeek = now.getDay();
+        const start = new Date(now);
+        start.setDate(now.getDate() - dayOfWeek);
+        start.setHours(0, 0, 0, 0);
+        const end = new Date(start);
+        end.setDate(start.getDate() + 6);
+        end.setHours(23, 59, 59, 999);
+        createdAtRange = { gte: start, lte: end };
+      } else if (dateFilter === "THIS_MONTH") {
+        const start = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0, 0);
+        const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+        createdAtRange = { gte: start, lte: end };
+      } else if (dateFilter === "CUSTOM" && (customFrom || customTo)) {
+        const range: { gte?: Date; lte?: Date } = {};
+        if (customFrom) {
+          const parts = customFrom.split("-").map(Number);
+          const year = parts[0] ?? 0;
+          const month = parts[1] ?? 1;
+          const day = parts[2] ?? 1;
+          const start = new Date(year, month - 1, day, 0, 0, 0, 0);
+          range.gte = start;
+        }
+        if (customTo) {
+          const parts = customTo.split("-").map(Number);
+          const year = parts[0] ?? 0;
+          const month = parts[1] ?? 1;
+          const day = parts[2] ?? 1;
+          const end = new Date(year, month - 1, day, 23, 59, 59, 999);
+          range.lte = end;
+        }
+        createdAtRange = range;
+      }
+    }
+
     const where: Prisma.OrderWhereInput = {
       storeId,
-      ...(status ? { status } : {})
+      ...(status ? { status } : {}),
+      ...(createdAtRange ? { createdAt: createdAtRange } : {})
     };
 
     const [total, orders] = await Promise.all([
@@ -155,17 +217,18 @@ export class StoreOwnerService {
     });
     const isBooking = store?.storeType === "BOOKING_COMMERCE";
 
-    // 1. Today's Order Count (all orders/bookings placed today regardless of status)
+    // 1. Today's Order Count (approved bookings scheduled today for BOOKING_COMMERCE, or orders placed today for QUICK_COMMERCE)
     const todayOrderCount = isBooking
       ? await this.db.bookingOrder.count({
           where: {
             order: {
-              storeId,
-              createdAt: {
-                gte: startOfToday,
-                lte: endOfToday
-              }
-            }
+              storeId
+            },
+            scheduledDate: {
+              gte: startOfToday,
+              lte: endOfToday
+            },
+            approvalStatus: "APPROVED"
           }
         })
       : await this.db.order.count({
@@ -472,6 +535,14 @@ export class StoreOwnerService {
       }
     });
 
+    // 9. Active discounts count
+    const activeDiscountsCount = await this.db.discount.count({
+      where: {
+        storeId,
+        isActive: true
+      }
+    });
+
     return {
       todayOrderCount,
       todayRevenue,
@@ -480,7 +551,8 @@ export class StoreOwnerService {
       topProducts,
       lowStockItems,
       activeAdvertisementsCount,
-      activeOffersCount
+      activeOffersCount,
+      activeDiscountsCount
     };
   }
 

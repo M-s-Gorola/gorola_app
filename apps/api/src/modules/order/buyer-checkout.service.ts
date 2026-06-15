@@ -40,6 +40,8 @@ export class BuyerCheckoutService {
     let landmarkDescription: string;
     let addressLabel: string | null = null;
     let flatRoom: string | null = null;
+    let deliveryLat: number | null = null;
+    let deliveryLng: number | null = null;
 
     if (body.addressMode === "saved") {
       const addr = await this.addressRepo.findByIdForBuyer(userId, body.addressId);
@@ -49,10 +51,14 @@ export class BuyerCheckoutService {
       landmarkDescription = addr.landmarkDescription;
       addressLabel = addr.label;
       flatRoom = addr.flatRoom;
+      deliveryLat = addr.lat ? Number(addr.lat) : null;
+      deliveryLng = addr.lng ? Number(addr.lng) : null;
     } else {
       landmarkDescription = body.landmarkDescription;
       addressLabel = body.addressLabel ?? null;
       flatRoom = body.flatRoom ?? null;
+      deliveryLat = body.lat ?? null;
+      deliveryLng = body.lng ?? null;
     }
 
     const variantIds = cart.items.map((i) => i.productVariantId);
@@ -191,6 +197,8 @@ export class BuyerCheckoutService {
       changedBy: `buyer:${userId}`,
       deliveryFee: deliveryFee.toString(),
       deliveryNote: body.deliveryNote ?? null,
+      deliveryLat,
+      deliveryLng,
       items: lineItems.map((line) => ({
         price: line.price.toString(),
         productName: line.productName,

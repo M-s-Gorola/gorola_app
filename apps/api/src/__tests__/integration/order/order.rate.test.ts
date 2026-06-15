@@ -33,6 +33,10 @@ async function cleanRateGraph(db: PrismaClient): Promise<void> {
   await db.advertisement.deleteMany();
   await db.offer.deleteMany();
   await db.discount.deleteMany();
+  await db.riderLocation.deleteMany();
+
+  await db.deliveryRider.deleteMany();
+
   await db.store.deleteMany();
   await db.address.deleteMany();
   await db.user.deleteMany();
@@ -81,13 +85,14 @@ describe("PUT /api/v1/orders/:id/rate", () => {
       headers: { authorization: `Bearer ${token}` },
       method: "PUT",
       url: `/api/v1/orders/${order.id}/rate`,
-      payload: { rating: true, ratingComment: "Great service!" }
+      payload: { rating: 4.5, ratingComment: "Great service!" }
     });
 
     expect(res.statusCode).toBe(200);
 
     const updated = await db.order.findUnique({ where: { id: order.id } });
-    expect(updated?.rating).toBe(true);
+    expect(updated?.rating).not.toBeNull();
+    expect(Number(updated?.rating)).toBe(4.5);
     expect(updated?.ratingComment).toBe("Great service!");
   });
 
@@ -108,14 +113,38 @@ describe("PUT /api/v1/orders/:id/rate", () => {
       headers: { authorization: `Bearer ${token}` },
       method: "PUT",
       url: `/api/v1/orders/${order.id}/rate`,
-      payload: { rating: false }
+      payload: { rating: 3.0 }
     });
 
     expect(res.statusCode).toBe(200);
 
     const updated = await db.order.findUnique({ where: { id: order.id } });
-    expect(updated?.rating).toBe(false);
+    expect(updated?.rating).not.toBeNull();
+    expect(Number(updated?.rating)).toBe(3.0);
     expect(updated?.ratingComment).toBeNull();
+  });
+
+  it("returns 400 if rating is invalid (outside [0, 5])", async () => {
+    const order = await db.order.create({
+      data: {
+        deliveryFee: 10,
+        landmarkDescription: "lm",
+        storeId: store.id,
+        subtotal: 50,
+        total: 60,
+        userId: user.id,
+        status: "DELIVERED"
+      }
+    });
+
+    const res = await server.inject({
+      headers: { authorization: `Bearer ${token}` },
+      method: "PUT",
+      url: `/api/v1/orders/${order.id}/rate`,
+      payload: { rating: 5.5 }
+    });
+
+    expect(res.statusCode).toBe(400);
   });
 
   it("returns 400 if order is not DELIVERED", async () => {
@@ -135,7 +164,7 @@ describe("PUT /api/v1/orders/:id/rate", () => {
       headers: { authorization: `Bearer ${token}` },
       method: "PUT",
       url: `/api/v1/orders/${order.id}/rate`,
-      payload: { rating: true }
+      payload: { rating: 4.0 }
     });
 
     expect(res.statusCode).toBe(400);
@@ -161,7 +190,7 @@ describe("PUT /api/v1/orders/:id/rate", () => {
       headers: { authorization: `Bearer ${token}` },
       method: "PUT",
       url: `/api/v1/orders/${order.id}/rate`,
-      payload: { rating: true }
+      payload: { rating: 4.0 }
     });
 
     expect(res.statusCode).toBe(404);
@@ -177,7 +206,7 @@ describe("PUT /api/v1/orders/:id/rate", () => {
         total: 60,
         userId: user.id,
         status: "DELIVERED",
-        rating: true,
+        rating: 4.0,
         ratingComment: "Already rated"
       }
     });
@@ -186,7 +215,7 @@ describe("PUT /api/v1/orders/:id/rate", () => {
       headers: { authorization: `Bearer ${token}` },
       method: "PUT",
       url: `/api/v1/orders/${order.id}/rate`,
-      payload: { rating: false }
+      payload: { rating: 3.0 }
     });
 
     expect(res.statusCode).toBe(400);

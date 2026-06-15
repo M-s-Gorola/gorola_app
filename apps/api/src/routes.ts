@@ -1,6 +1,5 @@
 import { randomBytes, randomUUID } from "node:crypto";
 
-import { NotImplementedError } from "@gorola/shared";
 import type { FastifyInstance } from "fastify";
 import { SignJWT } from "jose";
 import { generateSecret, generateURI, verifySync } from "otplib";
@@ -17,6 +16,7 @@ import { AuthService } from "./modules/auth/auth.service.js";
 import { createBuyerTokenService } from "./modules/auth/buyer-token.service.js";
 import { resolveBuyerJwtKeyPair } from "./modules/auth/jwt-keys.js";
 import { createNoopOtpProvider } from "./modules/auth/noop-otp-provider.js";
+import { RiderAuthService } from "./modules/auth/rider-auth.service.js";
 import { StoreOwnerAuthService } from "./modules/auth/store-owner-auth.service.js";
 import { registerBookingRoutes } from "./modules/booking/booking.controller.js";
 import { BookingOrderRepository } from "./modules/booking/booking-order.repository.js";
@@ -28,6 +28,10 @@ import { registerProductRoutes } from "./modules/catalog/product.controller.js";
 import { registerSearchRoutes } from "./modules/catalog/search.controller.js";
 import { registerSubCategoryRoutes } from "./modules/catalog/sub-category.controller.js";
 import { ProductVariantRepository } from "./modules/catalog/variant.repository.js";
+import { registerRiderRoutes } from "./modules/delivery/rider.controller.js";
+import { RiderRepository } from "./modules/delivery/rider.repository.js";
+import { RiderLocationService } from "./modules/delivery/rider-location.service.js";
+import { RiderOrderService } from "./modules/delivery/rider-order.service.js";
 import { registerFeatureFlagRoutes } from "./modules/feature-flag/feature-flag.controller.js";
 import { FeatureFlagRepository } from "./modules/feature-flag/feature-flag.repository.js";
 import { FeatureFlagService } from "./modules/feature-flag/feature-flag.service.js";
@@ -66,17 +70,6 @@ function getRuntimeRedis(app: FastifyInstance): RedisLikeRuntime {
     return runtimeRedis as unknown as RedisLikeRuntime;
   }
   return createInMemoryRedisLike();
-}
-
-function registerRiderStubRoutes(app: FastifyInstance): void {
-  const handler = async () => {
-    throw new NotImplementedError("Rider interface deferred to Phase 5");
-  };
-
-  app.post("/api/v1/rider/auth/login", handler);
-  app.get("/api/v1/rider/orders/active", handler);
-  app.put("/api/v1/rider/orders/:id/status", handler);
-  app.put("/api/v1/rider/location", handler);
 }
 
 export function registerAppRoutes(app: FastifyInstance): void {
@@ -282,6 +275,46 @@ export function registerAppRoutes(app: FastifyInstance): void {
     totpProvider
   });
 
+  const riderRepository = new RiderRepository(prisma);
+
+  const riderTokenService = {
+    issueTokens: async (input: { role: "RIDER"; storeId: string; sub: string }) => {
+      const refreshRaw = randomBytes(32).toString("hex");
+      const key = `rt:rider:${refreshRaw}`;
+      const stored = JSON.stringify({
+        role: "RIDER",
+        storeId: input.storeId,
+        userId: input.sub
+      });
+      await redis.set(key, stored, "EX", 7 * 24 * 60 * 60);
+
+      const accessToken = await new SignJWT({
+        role: "RIDER",
+        storeId: input.storeId
+      })
+        .setProtectedHeader({ alg: "RS256" })
+        .setSubject(input.sub)
+        .setJti(randomUUID())
+        .setIssuedAt()
+        .setExpirationTime("15m")
+        .sign(keys.privateKey);
+
+      return {
+        accessToken,
+        refreshToken: refreshRaw
+      };
+    }
+  };
+
+  const riderAuthService = new RiderAuthService({
+    redis,
+    riderRepository,
+    tokenService: riderTokenService
+  });
+
+  const riderOrderService = new RiderOrderService(orderRepoOrders, riderRepository, orderEmitter);
+  const riderLocationService = new RiderLocationService(riderRepository, () => app.io);
+
   registerAuthRoutes(app, {
     adminAuthService,
     authService,
@@ -316,7 +349,13 @@ export function registerAppRoutes(app: FastifyInstance): void {
     return { success: true, data: store };
   });
 
-  registerRiderStubRoutes(app);
+  registerRiderRoutes(app, {
+    tokenVerifier: tokenService,
+    riderAuthService,
+    riderOrderService,
+    riderLocationService,
+    riderRepository
+  });
 
   void app.register(socketPlugin, {
     tokenVerifier: tokenService,

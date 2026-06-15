@@ -7,13 +7,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfilePage } from "./ProfilePage";
 import { useAuthStore } from "@/store/auth.store";
 
-const { putMock } = vi.hoisted(() => ({
-  putMock: vi.fn()
+const { putMock, postMock } = vi.hoisted(() => ({
+  putMock: vi.fn(),
+  postMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
-    put: putMock
+    put: putMock,
+    post: postMock
   }
 }));
 
@@ -43,6 +45,7 @@ function renderProfile(): void {
 describe("ProfilePage", () => {
   beforeEach(() => {
     putMock.mockReset();
+    postMock.mockReset();
     act(() => {
       useAuthStore.getState().setBuyerSession({
         userId: "u123",
@@ -101,4 +104,24 @@ describe("ProfilePage", () => {
     // The component should handle errors gracefully
     expect(useAuthStore.getState().name).toBe("Old Name"); // Not updated
   });
+
+  it("renders a Logout button and triggers logout flow on click", async () => {
+    postMock.mockResolvedValueOnce({ data: { success: true } });
+    const removeSpy = vi.spyOn(Storage.prototype, "removeItem");
+
+    renderProfile();
+    const logoutBtn = screen.getByRole("button", { name: /logout/i });
+    expect(logoutBtn).toBeInTheDocument();
+
+    fireEvent.click(logoutBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/auth/buyer/logout", {
+        refreshToken: "refresh"
+      });
+      expect(useAuthStore.getState().accessToken).toBeNull();
+      expect(removeSpy).toHaveBeenCalledWith("gorola_subdomain_override");
+    });
+  });
 });
+

@@ -74,11 +74,17 @@ export function registerStoreOwnerRoutes(
     const page = query.page ? parseInt(query.page, 10) : 1;
     const limit = query.limit ? parseInt(query.limit, 10) : 10;
     const status = query.status as import("@prisma/client").OrderStatus | undefined;
+    const dateFilter = query.dateFilter;
+    const customFrom = query.customFrom;
+    const customTo = query.customTo;
 
     const data = await storeOwnerService.getOrders(storeId, {
       ...(status ? { status } : {}),
       page,
-      limit
+      limit,
+      dateFilter,
+      customFrom,
+      customTo
     });
 
     return {

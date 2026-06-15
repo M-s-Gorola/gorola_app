@@ -31,7 +31,7 @@ test.describe('Authentication', () => {
     await expect(page).toHaveURL(/\/$/, { timeout: 10000 });
 
     // Assert nav shows Profile icon (not Login text)
-    await expect(page.locator('button[aria-label="Profile"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Profile"]:visible')).toBeVisible();
     await expect(page.locator('a[aria-label="Login"]')).not.toBeVisible();
   });
 
@@ -56,7 +56,7 @@ test.describe('Authentication', () => {
     await page.waitForLoadState('networkidle');
 
     // Assert nav STILL shows Profile icon
-    await expect(page.locator('button[aria-label="Profile"]')).toBeVisible();
+    await expect(page.locator('[aria-label="Profile"]:visible')).toBeVisible();
     
     // New incognito context for unauth check is handled by Playwright by default in each test,
     // but let's just test a direct hit to /checkout without previous login in this test's scope if possible.

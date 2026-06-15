@@ -131,6 +131,47 @@ async function main(): Promise<void> {
     }
   });
 
+  // ── Delivery Rider / Field Technician Accounts ───────────────────────────
+  const riderPwHash = await hash("Rider#123", 10);
+
+  await prisma.deliveryRider.upsert({
+    where: { email: "rider1@gorola.in" },
+    update: { passwordHash: riderPwHash },
+    create: {
+      name: "Hillside Rider",
+      phone: "+919000000001",
+      email: "rider1@gorola.in",
+      passwordHash: riderPwHash,
+      riderType: "DELIVERY",
+      isActive: true,
+      stores: {
+        create: {
+          storeId: storeA.id,
+          isPrimary: true
+        }
+      }
+    }
+  });
+
+  await prisma.deliveryRider.upsert({
+    where: { email: "rider2@gorola.in" },
+    update: { passwordHash: riderPwHash },
+    create: {
+      name: "Aarna Technician",
+      phone: "+919000000002",
+      email: "rider2@gorola.in",
+      passwordHash: riderPwHash,
+      riderType: "FIELD_TECHNICIAN",
+      isActive: true,
+      stores: {
+        create: {
+          storeId: storeC.id,
+          isPrimary: true
+        }
+      }
+    }
+  });
+
   // ── System Admin Account ──────────────────────────────────────────────────
   // Created once. If the row already exists it is left untouched.
   // On first login the admin is redirected to /admin/setup-2fa for TOTP setup.

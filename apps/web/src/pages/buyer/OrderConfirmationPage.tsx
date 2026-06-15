@@ -1,6 +1,8 @@
+import "leaflet/dist/leaflet.css";
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { Bike, CheckCircle2, Home, MessageSquare,Package, ThumbsDown, ThumbsUp } from "lucide-react";
+import { Bike, CheckCircle2, Home, MessageSquare, Package } from "lucide-react";
 import {
   type ReactElement,
   useCallback,
@@ -12,6 +14,8 @@ import {
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
+import { StarRating } from "@/components/shared/StarRating";
 import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -48,8 +52,10 @@ export type BuyerOrderDetail = {
   landmarkDescription: string;
   addressLabel?: string | null;
   flatRoom?: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
   paymentMethod: string;
-  rating: boolean | null;
+  rating: number | null;
   ratingComment: string | null;
   scheduledFor?: string | null;
   status: string;
@@ -164,9 +170,13 @@ function estimatedDeliveryCopy(
 function StatusStepper({
   history,
   status,
+  riderLocation,
+  order
 }: {
   history: StatusHistoryItem[];
   status: string;
+  riderLocation: { lat: number; lng: number } | null;
+  order: BuyerOrderDetail;
 }): ReactElement {
   const steps = [
     { icon: CheckCircle2, key: "PLACED", label: "Placed" },
@@ -221,7 +231,7 @@ function StatusStepper({
               <div className="text-center">
                 <p
                   className={cn(
-                    "text-[11px] font-bold uppercase tracking-wider",
+                    "text-[11px] font-bold tracking-wider",
                     isActive || isCompleted ? "text-gorola-pine" : "text-gorola-slate",
                   )}
                 >
@@ -242,14 +252,37 @@ function StatusStepper({
       </div>
 
       {status === "OUT_FOR_DELIVERY" ? (
-        <div className="mt-8 flex items-center gap-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="relative flex h-3 w-3">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-            <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+        <div className="mt-8 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
+          <div className="flex items-center gap-3">
+            <div className="relative flex h-3 w-3">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+              <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
+            </div>
+            <p className="font-dm-sans text-sm">
+              <strong>Rider location:</strong> Your rider is on the way with your order.
+            </p>
           </div>
-          <p className="font-dm-sans text-sm">
-            <strong>Rider location:</strong> Your rider is on the way with your order.
-          </p>
+
+          {/* Live Tracking Map Container */}
+          <div className="relative h-64 w-full rounded-lg border border-amber-200/60 overflow-hidden bg-amber-100/30 mt-1" data-testid="rider-location-map-container">
+            {riderLocation ? (
+              <OrderRouteMap
+                buyerCoords={{ lat: order.deliveryLat ?? 30.4598, lng: order.deliveryLng ?? 78.0664 }}
+                riderCoords={riderLocation}
+                className="h-full w-full border-0 rounded-none min-h-[256px]"
+              />
+            ) : (
+              <div className="flex items-center justify-center h-full w-full">
+                <p className="text-xs text-amber-800/80 italic animate-pulse">Waiting for rider GPS updates...</p>
+              </div>
+            )}
+          </div>
+
+          {riderLocation ? (
+            <div className="mt-1 text-xs font-mono bg-white/60 p-2 rounded-lg border border-amber-200/50" data-testid="rider-location-display">
+              Rider Coordinates: {riderLocation.lat.toFixed(5)}, {riderLocation.lng.toFixed(5)}
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>
@@ -265,13 +298,14 @@ export function OrderConfirmationPage(): ReactElement {
   const [animationFinished, setAnimationFinished] = useState(false);
   const [showStatusTransitionBloom, setShowStatusTransitionBloom] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
-  const [activeRating, setActiveRating] = useState<"up" | "down" | null>(null);
+  const [activeRating, setActiveRating] = useState<number | null>(null);
   const [ratingComment, setRatingComment] = useState("");
+  const [riderLocation, setRiderLocation] = useState<{ lat: number; lng: number } | null>(null);
 
   const queryClient = useQueryClient();
 
   const rateMutation = useMutation({
-    mutationFn: async ({ rating, comment }: { rating: boolean; comment?: string | undefined }) => {
+    mutationFn: async ({ rating, comment }: { rating: number; comment?: string | undefined }) => {
       const res = await api!.put(`/api/v1/orders/${id}/rate`, { 
         rating,
         ratingComment: comment 
@@ -423,7 +457,14 @@ interface StoreOffer {
     [id, queryClient],
   );
 
-  useOrderSocket(id, onStatusChanged);
+  const onLocationUpdated = useCallback(
+    (data: { lat: number; lng: number }) => {
+      setRiderLocation({ lat: data.lat, lng: data.lng });
+    },
+    []
+  );
+
+  useOrderSocket(id, onStatusChanged, onLocationUpdated);
 
   const currentStatus = query.data?.status;
   const lastStatusRef = useRef<string | null>(null);
@@ -441,6 +482,7 @@ interface StoreOffer {
     entranceDoneRef.current = false;
     setAnimationFinished(false);
     setShowStatusTransitionBloom(false);
+    setRiderLocation(null);
   }, [id]);
 
   const isRecentlyPlaced = query.isSuccess && query.data.createdAt ? (
@@ -605,7 +647,7 @@ interface StoreOffer {
                      order.status === "CANCELLED" ? "Order Cancelled" : "Order Status"}
                   </h1>
                   {order.status === "DELIVERED" && (
-                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold uppercase tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                    <div className="inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-bold tracking-wider text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
                       <CheckCircle2 className="h-3 w-3" />
                       Delivered in {calculateDeliveryDuration(order.statusHistory ?? [], order.createdAt) ?? "15m"}
                     </div>
@@ -737,6 +779,8 @@ interface StoreOffer {
                   <StatusStepper
                     history={order.statusHistory ?? []}
                     status={order.status}
+                    riderLocation={riderLocation}
+                    order={order}
                   />
                   {order.status !== "DELIVERED" && order.status !== "CANCELLED" && (
                     <p className="font-dm-sans text-xs text-gorola-slate">
@@ -758,11 +802,15 @@ interface StoreOffer {
                   <div className="flex items-center justify-between gap-4">
                     <div className="text-sm text-gorola-slate font-medium">
                       {order.rating !== null ? (
-                        <div className="space-y-1">
+                        <div className="space-y-1.5">
                           <span className="flex items-center gap-1.5 text-green-600 font-bold">
                             <CheckCircle2 className="w-4 h-4" />
                             Rating submitted
                           </span>
+                          <div className="flex items-center gap-2">
+                            <StarRating rating={order.rating} disabled={true} />
+                            <span className="text-sm font-bold text-gorola-charcoal">{order.rating} / 5</span>
+                          </div>
                           {order.ratingComment && (
                             <p className="text-xs text-gorola-slate italic">"{order.ratingComment}"</p>
                           )}
@@ -774,54 +822,12 @@ interface StoreOffer {
                     
                     {order.rating === null && (
                       <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setActiveRating(activeRating === "up" ? null : "up")}
+                        <StarRating
+                          rating={activeRating ?? 0}
+                          interactive={true}
+                          onChange={setActiveRating}
                           disabled={rateMutation.isPending}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                            activeRating === "up"
-                              ? 'bg-green-100 text-green-700 border border-green-200 shadow-sm' 
-                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                          } disabled:opacity-50`}
-                          aria-label="Thumbs Up"
-                        >
-                          <ThumbsUp className="w-4 h-4" />
-                          Liked
-                        </button>
-                        <button
-                          onClick={() => setActiveRating(activeRating === "down" ? null : "down")}
-                          disabled={rateMutation.isPending}
-                          className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold transition-all ${
-                            activeRating === "down"
-                              ? 'bg-red-100 text-red-700 border border-red-200 shadow-sm' 
-                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                          } disabled:opacity-50`}
-                          aria-label="Thumbs Down"
-                        >
-                          <ThumbsDown className="w-4 h-4" />
-                          Disliked
-                        </button>
-                      </div>
-                    )}
-
-                    {order.rating !== null && (
-                      <div className="flex items-center gap-3">
-                        <div className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-bold border ${
-                          order.rating === true 
-                            ? 'bg-green-50 text-green-700 border-green-200' 
-                            : 'bg-red-50 text-red-700 border-red-200'
-                        }`}>
-                          {order.rating === true ? (
-                            <>
-                              <ThumbsUp className="w-4 h-4" />
-                              Liked
-                            </>
-                          ) : (
-                            <>
-                              <ThumbsDown className="w-4 h-4" />
-                              Disliked
-                            </>
-                          )}
-                        </div>
+                        />
                       </div>
                     )}
                   </div>
@@ -841,7 +847,7 @@ interface StoreOffer {
                       <div className="flex justify-end">
                         <button
                           onClick={() => rateMutation.mutate({ 
-                            rating: activeRating === "up", 
+                            rating: activeRating!, 
                             comment: ratingComment || undefined
                           })}
                           className="px-6 py-2 bg-gorola-pine text-white text-xs font-bold rounded-full hover:bg-gorola-pine/90 transition-all shadow-md shadow-gorola-pine/10 disabled:opacity-50"

@@ -175,7 +175,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.locator('button', { hasText: /Verify/i }).click();
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
     await expect(buyerPage.locator('text=/Restoring your session/i')).not.toBeVisible();
-    await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(buyerPage.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
 
     // Navigate to Store A
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
@@ -187,7 +187,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       .click();
 
     // Open Cart Drawer
-    await buyerPage.locator('[data-testid="cart-button"]').click();
+    await buyerPage.locator('[data-testid$="cart-button"]:visible').click();
     await buyerPage.getByRole("button", { name: "Proceed to Checkout" }).click();
 
     await expect(buyerPage).toHaveURL(/\/checkout/, { timeout: 15000 });
@@ -252,6 +252,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(markPreparingBtn).toBeEnabled({ timeout: 15000 });
     await markPreparingBtn.dispatchEvent('click');
 
+    // Click Confirm on the confirmation Dialog
+    const confirmBtn1 = page.getByRole("button", { name: "Confirm" });
+    await expect(confirmBtn1).toBeVisible({ timeout: 10000 });
+    await confirmBtn1.click();
+
     // Buyer sees PREPARING in real-time — #occ-heading changes to "Store is picking items"
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('Store is picking items', { timeout: 20000 });
@@ -263,6 +268,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(dispatchOrderBtn).toBeEnabled({ timeout: 15000 });
     await dispatchOrderBtn.dispatchEvent('click');
 
+    // Click Confirm on the confirmation Dialog
+    const confirmBtn2 = page.getByRole("button", { name: "Confirm" });
+    await expect(confirmBtn2).toBeVisible({ timeout: 10000 });
+    await confirmBtn2.click();
+
     // Buyer sees On the way — #occ-heading changes to "On the way" (unique element avoids strict mode)
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('On the way', { timeout: 20000 });
@@ -273,6 +283,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(markDeliveredBtn).toBeVisible({ timeout: 15000 });
     await expect(markDeliveredBtn).toBeEnabled({ timeout: 15000 });
     await markDeliveredBtn.dispatchEvent('click');
+
+    // Click Confirm on the confirmation Dialog
+    const confirmBtn3 = page.getByRole("button", { name: "Confirm" });
+    await expect(confirmBtn3).toBeVisible({ timeout: 10000 });
+    await confirmBtn3.click();
 
     // Buyer sees Order Delivered — #occ-heading changes to "Order Delivered"
     await buyerPage.bringToFront();
@@ -419,7 +434,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.locator('button', { hasText: /Verify/i }).click();
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
     await expect(buyerPage.locator('text=/Restoring your session/i')).not.toBeVisible();
-    await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(buyerPage.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
 
     // Go to Store A (Hillside Mart)
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
@@ -432,7 +447,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await addButton.click();
 
     // Open Cart Drawer
-    await buyerPage.locator('[data-testid="cart-button"]').click();
+    await buyerPage.locator('[data-testid$="cart-button"]:visible').click();
     await buyerPage.locator('aside').getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
     await buyerPage.locator('aside').getByRole("button", { name: /Increase Premium Basmati Rice quantity/i }).click();
 
@@ -489,7 +504,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // approvalStatus uses BookingStatus which includes "COMPLETED" directly.
     // We check for any COMPLETED text in the bookings list.
     // If no completed bookings are seeded, this check is skipped gracefully.
-    const completedBadge = page.getByText("COMPLETED").first();
+    const completedBadge = page.getByText("Completed").first();
     const completedExists = await completedBadge.count() > 0;
     if (completedExists) {
       await expect(completedBadge).toBeVisible();
@@ -664,7 +679,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.locator('button', { hasText: /Verify/i }).click();
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
     await expect(buyerPage.locator('text=/Restoring your session/i')).not.toBeVisible();
-    await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(buyerPage.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
 
     // Go to Store A
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_hillside_mart`);
@@ -677,7 +692,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       .filter({ hasText: "Premium Basmati Rice" })
       .getByRole('button', { name: /Add/i })
       .click();
-    await buyerPage.locator('[data-testid="cart-button"]').click();
+    await buyerPage.locator('[data-testid$="cart-button"]:visible').click();
 
     // Increase quantity
     await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
@@ -702,7 +717,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Buyer reloads or updates cart — offer no longer applies
     await buyerPage.bringToFront();
     await buyerPage.reload();
-    await buyerPage.locator('[data-testid="cart-button"]').click();
+    await buyerPage.locator('[data-testid$="cart-button"]:visible').click();
     await expect(buyerPage.locator('[data-testid="cart-discount-summary"]')).not.toBeVisible({ timeout: 10000 });
     await buyerContext.close();
   });
@@ -793,7 +808,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.locator('button', { hasText: /Verify/i }).click();
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
     await expect(buyerPage.locator('text=/Restoring your session/i')).not.toBeVisible();
-    await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(buyerPage.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
 
     // Go to Aarna Diagnostic (Booking Store)
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/store/store_gorola_aarna_diagnostic`);

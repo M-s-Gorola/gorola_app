@@ -11,17 +11,17 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | NOT STARTED | Stubs registered (W-015). Start any time after Phase 2. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6 are complete. 5.6.1 (Steps A, B, C, D) are complete. Earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** NOT STARTED
-- **Session Summary:** Not started yet. Full 6-section TDD plan drafted (5.1–5.6).
-- **Next Session Must Start With:** Phase 5.1 — Rider Auth. Replace the 501 stub in `delivery/rider.controller.ts` with real `RiderAuthService.login`. Seed a `DeliveryRider` row in the test DB.
-- **In Progress Right Now:** Nothing — Phase 5 has not started. Begin at Phase 5.1.
-- **Current Blocker:** None. Can start independently of Phase 3 & 4.
+- **Date:** 2026-06-11
+- **Session Summary:** Completed Phase 5.6.1-D (Store Dashboard Clickable KPI Cards, Split Offers/Discounts, and Orders/Bookings Date Filters). Refactored StoreDashboardPage to support 6 clickable KPI cards with smooth scrolling and distinct headers for scheduled appointments vs today's booking revenue, updated StoreOrdersPage and StoreBookingsPage to parse search parameters, updated backend services and controllers with date range query support, and verified that typecheck, lint, and build tasks are clean.
+- **Next Session Must Start With:** Phase 5.6.2 — Rider Earnings & Completed Orders Page.
+- **In Progress Right Now:** None.
+- **Current Blocker:** None.
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 5 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
 
@@ -94,38 +94,38 @@ navigate(getScopedPath("/rider/orders", "rider", isSubdomainMode));
 
 ---
 
-- [ ] **RED — Integration (`rider.auth.test.ts`):**
-  - [ ] Test setup: seed 1 `DeliveryRider` row with email `rider@test.com`, hashed password, `storeId`
-  - [ ] Test: `POST /api/v1/rider/auth/login` with `{ email: 'rider@test.com', password: 'correct' }` → HTTP 200 (not 501) with `{ success: true, data: { accessToken, refreshToken } }`; JWT payload contains `{ role: 'RIDER', riderId, storeId }`
-  - [ ] Test: `POST /api/v1/rider/auth/login` with wrong password → HTTP 401 `AUTH_FAILED`
-  - [ ] Test: `POST /api/v1/rider/auth/login` for inactive rider (`isActive: false`) → HTTP 403 `ACCOUNT_SUSPENDED`
-  - [ ] **Run — confirm RED (currently returns 501)**
+- [x] **RED — Integration (`rider.auth.test.ts`):**
+  - [x] Test setup: seed 1 `DeliveryRider` row with email `rider@test.com`, hashed password, `storeId`
+  - [x] Test: `POST /api/v1/rider/auth/login` with `{ email: 'rider@test.com', password: 'correct' }` → HTTP 200 (not 501) with `{ success: true, data: { accessToken, refreshToken } }`; JWT payload contains `{ role: 'RIDER', riderId, storeId }`
+  - [x] Test: `POST /api/v1/rider/auth/login` with wrong password → HTTP 401 `AUTH_FAILED`
+  - [x] Test: `POST /api/v1/rider/auth/login` for inactive rider (`isActive: false`) → HTTP 403 `ACCOUNT_SUSPENDED`
+  - [x] **Run — confirm RED (currently returns 501)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Schema] Verify `DeliveryRider` model in `schema.prisma` has all required fields; run migration if needed
-  - [ ] [Service] Create `RiderAuthService.login(email, password)` in `delivery/rider-auth.service.ts`: find rider by email, compare password hash (`bcryptjs`), check `isActive`, issue JWT with `role: 'RIDER'`
-  - [ ] [Controller] Replace stub in `delivery/rider.controller.ts`: `POST /api/v1/rider/auth/login` calls `RiderAuthService.login`
-  - [ ] [Routes] Update `registerRiderRoutes` in `routes.ts` — remove the 501 stub handler, wire real controller
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Schema] Verify `DeliveryRider` model in `schema.prisma` has all required fields; run migration if needed
+  - [x] [Service] Create `RiderAuthService.login(email, password)` in `delivery/rider-auth.service.ts`: find rider by email, compare password hash (`bcryptjs`), check `isActive`, issue JWT with `role: 'RIDER'`
+  - [x] [Controller] Replace stub in `delivery/rider.controller.ts`: `POST /api/v1/rider/auth/login` calls `RiderAuthService.login`
+  - [x] [Routes] Update `registerRiderRoutes` in `routes.ts` — remove the 501 stub handler, wire real controller
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`RiderLoginPage.test.tsx`):**
-  - [ ] Test: renders email + password inputs with `id="rider-email"` and `id="rider-password"`
-  - [ ] Test: on success, `setRiderSession` called with `{ accessToken, refreshToken, riderId, storeId }` and `navigate` goes to `/rider/orders`
-  - [ ] Test: on 401, shows "Invalid credentials" error
+- [x] **RED — Unit/Component (`RiderLoginPage.test.tsx`):**
+  - [x] Test: renders email + password inputs with `id="rider-email"` and `id="rider-password"`
+  - [x] Test: on success, `setRiderSession` called with `{ accessToken, refreshToken, riderId, storeId }` and `navigate` goes to `/rider/orders`
+  - [x] Test: on 401, shows "Invalid credentials" error
 
-- [ ] **RED — Unit/Component (`RiderRoute.test.tsx`):**
-  - [ ] Test: no RIDER role → `<Navigate to="/rider/login" />`
-  - [ ] Test: RIDER role → children rendered
+- [x] **RED — Unit/Component (`RiderRoute.test.tsx`):**
+  - [x] Test: no RIDER role → `<Navigate to="/rider/login" />`
+  - [x] Test: RIDER role → children rendered
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/pages/rider/RiderLoginPage.tsx`
-  - [ ] Create `apps/web/src/components/rider/RiderRoute.tsx`
-  - [ ] Add `/rider/login` and `/rider/*` routes in `App.tsx`
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/pages/rider/RiderLoginPage.tsx`
+  - [x] Create `apps/web/src/components/rider/RiderRoute.tsx`
+  - [x] Add `/rider/login` and `/rider/*` routes in `App.tsx`
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Seeded rider navigates to `/rider/login` → enters credentials → JWT issued with RIDER role → redirected to `/rider/orders` → ✅
+- [x] **Verification chain:**
+  - [x] Seeded rider navigates to `/rider/login` → enters credentials → JWT issued with RIDER role → redirected to `/rider/orders` → ✅
 
 ---
 
@@ -139,33 +139,33 @@ Replace the 501 stub. Return orders filtered by `storeId` from JWT and status in
 
 ---
 
-- [ ] **RED — Integration (`rider.orders.test.ts`):**
-  - [ ] Test setup: store with 3 orders: 1 PLACED, 1 PREPARING, 1 OUT_FOR_DELIVERY
-  - [ ] Test: `GET /api/v1/rider/orders/active` with RIDER JWT (`storeId` = that store) → HTTP 200 (not 501); returns 2 orders (PREPARING + OUT_FOR_DELIVERY); PLACED order absent
-  - [ ] Test: response each order has `{ id, status, items: [{ productName, variantLabel, quantity }], deliveryAddress: { landmark }, buyerMaskedPhone, createdAt }`
-  - [ ] Test: `GET /api/v1/rider/orders/active` with BUYER JWT → HTTP 403
-  - [ ] Test: `GET /api/v1/rider/orders/active` with RIDER JWT from a different store → returns 0 orders (strict store scope)
-  - [ ] **Run — confirm RED (501)**
+- [x] **RED — Integration (`rider.orders.test.ts`):**
+  - [x] Test setup: store with 3 orders: 1 PLACED, 1 PREPARING, 1 OUT_FOR_DELIVERY
+  - [x] Test: `GET /api/v1/rider/orders/active` with RIDER JWT (`storeId` = that store) → HTTP 200 (not 501); returns 2 orders (PREPARING + OUT_FOR_DELIVERY); PLACED order absent
+  - [x] Test: response each order has `{ id, status, items: [{ productName, variantLabel, quantity }], deliveryAddress: { landmark }, buyerMaskedPhone, createdAt }`
+  - [x] Test: `GET /api/v1/rider/orders/active` with BUYER JWT → HTTP 403
+  - [x] Test: `GET /api/v1/rider/orders/active` with RIDER JWT from a different store → returns 0 orders (strict store scope)
+  - [x] **Run — confirm RED (501)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Create `RiderOrderService.getActiveOrders(storeId)` in `delivery/rider-order.service.ts`: calls `OrderRepository.findManyByStore(storeId, { status: ['PREPARING', 'OUT_FOR_DELIVERY'] })`
-  - [ ] [Controller] Replace stub: `GET /api/v1/rider/orders/active` with `requireAuth` + `requireRole('RIDER')`; extracts `storeId` from JWT; calls service
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Create `RiderOrderService.getActiveOrders(storeId)` in `delivery/rider-order.service.ts`: calls `OrderRepository.findManyByStore(storeId, { status: ['PREPARING', 'OUT_FOR_DELIVERY'] })`
+  - [x] [Controller] Replace stub: `GET /api/v1/rider/orders/active` with `requireAuth` + `requireRole('RIDER')`; extracts `storeId` from JWT; calls service
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx`):**
-  - [ ] Test: renders list of active orders grouped by status (PREPARING section, OUT_FOR_DELIVERY section)
-  - [ ] Test: each order card shows buyer masked phone, delivery landmark, items list, time elapsed since PLACED
-  - [ ] Test: empty state shows "No active orders right now" when list is empty
-  - [ ] Test: page auto-refreshes every 30 seconds (`refetchInterval: 30000`)
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderOrdersPage.test.tsx`):**
+  - [x] Test: renders list of active orders grouped by status (PREPARING section, OUT_FOR_DELIVERY section)
+  - [x] Test: each order card shows buyer masked phone, delivery landmark, items list, time elapsed since PLACED
+  - [x] Test: empty state shows "No active orders right now" when list is empty
+  - [x] Test: page auto-refreshes every 30 seconds (`refetchInterval: 30000`)
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/pages/rider/RiderOrdersPage.tsx`
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/pages/rider/RiderOrdersPage.tsx`
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Rider logs in → `/rider/orders` shows PREPARING orders ready for pickup → ✅
+- [x] **Verification chain:**
+  - [x] Rider logs in → `/rider/orders` shows PREPARING orders ready for pickup → ✅
 
 ---
 
@@ -176,29 +176,29 @@ Replace the 501 stub. Return orders filtered by `storeId` from JWT and status in
 
 ---
 
-- [ ] **RED — Integration (`rider.status.test.ts`):**
-  - [ ] Test: `PUT /api/v1/rider/orders/<orderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (order currently PREPARING) → HTTP 200; DB status = OUT_FOR_DELIVERY; `OrderStatusHistory` has new entry; buyer's Socket.IO `order:{orderId}` room receives `order_status_changed` event
-  - [ ] Test: `PUT .../status` with body `{ status: 'DELIVERED' }` (currently OUT_FOR_DELIVERY) → HTTP 200; DB status = DELIVERED
-  - [ ] Test: `PUT .../status` with body `{ status: 'PLACED' }` → HTTP 422 `INVALID_STATUS_TRANSITION` (backward transition forbidden)
-  - [ ] Test: `PUT .../status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (riders cannot cancel)
-  - [ ] Test: updating an order from a different store → HTTP 403 `FORBIDDEN`
-  - [ ] **Run — confirm RED (501)**
+- [x] **RED — Integration (`rider.status.test.ts`):**
+  - [x] Test: `PUT /api/v1/rider/orders/<orderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (order currently PREPARING) → HTTP 200; DB status = OUT_FOR_DELIVERY; `OrderStatusHistory` has new entry; buyer's Socket.IO `order:{orderId}` room receives `order_status_changed` event
+  - [x] Test: `PUT .../status` with body `{ status: 'DELIVERED' }` (currently OUT_FOR_DELIVERY) → HTTP 200; DB status = DELIVERED
+  - [x] Test: `PUT .../status` with body `{ status: 'PLACED' }` → HTTP 422 `INVALID_STATUS_TRANSITION` (backward transition forbidden)
+  - [x] Test: `PUT .../status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (riders cannot cancel)
+  - [x] Test: updating an order from a different store → HTTP 403 `FORBIDDEN`
+  - [x] **Run — confirm RED (501)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Service] Add `updateOrderStatus(storeId, orderId, newStatus)` to `rider-order.service.ts`: validates order belongs to `storeId`; validates transition (only PREPARING→OUT_FOR_DELIVERY or OUT_FOR_DELIVERY→DELIVERED allowed); calls `OrderRepository.updateStatus`; emits `order_status_changed` to `order:{orderId}` Socket.IO room
-  - [ ] [Controller] Replace stub: `PUT /api/v1/rider/orders/:id/status` with `requireAuth` + `requireRole('RIDER')`
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Service] Add `updateOrderStatus(storeId, orderId, newStatus)` to `rider-order.service.ts`: validates order belongs to `storeId`; validates transition (only PREPARING→OUT_FOR_DELIVERY or OUT_FOR_DELIVERY→DELIVERED allowed); calls `OrderRepository.updateStatus`; emits `order_status_changed` to `order:{orderId}` Socket.IO room
+  - [x] [Controller] Replace stub: `PUT /api/v1/rider/orders/:id/status` with `requireAuth` + `requireRole('RIDER')`
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests):**
-  - [ ] Test: PREPARING order card shows "Mark as Out for Delivery" button; clicking opens confirmation modal
-  - [ ] Test: OUT_FOR_DELIVERY card shows "Mark as Delivered" button
-  - [ ] Test: after status update, card moves to correct section or disappears from active list
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests):**
+  - [x] Test: PREPARING order card shows "Mark as Out for Delivery" button; clicking opens confirmation modal
+  - [x] Test: OUT_FOR_DELIVERY card shows "Mark as Delivered" button
+  - [x] Test: after status update, card moves to correct section or disappears from active list
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:** Update `RiderOrdersPage.tsx` with status action buttons; run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:** Update `RiderOrdersPage.tsx` with status action buttons; run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Rider clicks "Mark as Out for Delivery" → confirm → order moves to delivery section → buyer `/orders/:id` page updates status in real-time via Socket.IO → ✅
+- [x] **Verification chain:**
+  - [x] Rider clicks "Mark as Out for Delivery" → confirm → order moves to delivery section → buyer `/orders/:id` page updates status in real-time via Socket.IO → ✅
 
 ---
 
@@ -212,33 +212,76 @@ Replace HTTP stub with real implementation. Activate the `/rider` Socket.IO name
 
 ---
 
-- [ ] **RED — Integration (`rider.location.test.ts`):**
-  - [ ] Test: `PUT /api/v1/rider/location` with body `{ lat: 30.4593, lng: 78.0677, orderId: '<id>' }` with RIDER JWT → HTTP 200 (not 501); `RiderLocation` row upserted in DB with `{ riderId, lat, lng, updatedAt }`
-  - [ ] Test: `PUT /api/v1/rider/location` with invalid lat (> 90) → HTTP 400 `VALIDATION_ERROR`
-  - [ ] Test: Socket.IO `/rider` namespace: connect with valid RIDER JWT → connection accepted (no immediate disconnect)
-  - [ ] Test: after `PUT /api/v1/rider/location`, Socket.IO room `order:<orderId>` receives event `rider_location_update` with payload `{ lat, lng, updatedAt }`
-  - [ ] **Run — confirm RED (501 + Socket.IO disconnect)**
+- [x] **RED — Integration (`rider.location.test.ts`):**
+  - [x] Test: `PUT /api/v1/rider/location` with body `{ lat: 30.4593, lng: 78.0677, orderId: '<id>' }` with RIDER JWT → HTTP 200 (not 501); `RiderLocation` row upserted in DB with `{ riderId, lat, lng, updatedAt }`
+  - [x] Test: `PUT /api/v1/rider/location` with invalid lat (> 90) → HTTP 400 `VALIDATION_ERROR`
+  - [x] Test: Socket.IO `/rider` namespace: connect with valid RIDER JWT → connection accepted (no immediate disconnect)
+  - [x] Test: after `PUT /api/v1/rider/location`, Socket.IO room `order:<orderId>` receives event `rider_location_update` with payload `{ lat, lng, updatedAt }`
+  - [x] **Run — confirm RED (501 + Socket.IO disconnect)**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Schema] Verify `RiderLocation` model: `{ riderId (unique FK), lat Decimal, lng Decimal, updatedAt }`; run migration if needed
-  - [ ] [Service] Create `RiderLocationService.updateLocation(riderId, { lat, lng, orderId })`: upserts `RiderLocation`; emits `rider_location_update` to `order:{orderId}` Socket.IO room via `io.to(room).emit(...)`
-  - [ ] [Controller] Replace 501 stub: `PUT /api/v1/rider/location` with `requireAuth` + `requireRole('RIDER')`
-  - [ ] [Socket.IO] Update `/rider` namespace in `socket.ts`: authenticate connection via JWT cookie/header; on `rider_location` event from client, call `RiderLocationService.updateLocation`; on disconnect, log rider offline
-  - [ ] Run integration tests — **confirm GREEN**
+- [x] **GREEN — Backend:**
+  - [x] [Schema] Verify `RiderLocation` model: `{ riderId (unique FK), lat Decimal, lng Decimal, updatedAt }`; run migration if needed
+  - [x] [Service] Create `RiderLocationService.updateLocation(riderId, { lat, lng, orderId })`: upserts `RiderLocation`; emits `rider_location_update` to `order:{orderId}` Socket.IO room via `io.to(room).emit(...)`
+  - [x] [Controller] Replace 501 stub: `PUT /api/v1/rider/location` with `requireAuth` + `requireRole('RIDER')`
+  - [x] [Socket.IO] Update `/rider` namespace in `socket.ts`: authenticate connection via JWT cookie/header; on `rider_location` event from client, call `RiderLocationService.updateLocation`; on disconnect, log rider offline
+  - [x] Run integration tests — **confirm GREEN**
 
-- [ ] **RED — Unit/Component (new `useRiderLocation.test.ts` hook):**
-  - [ ] Test: hook calls `navigator.geolocation.watchPosition` on mount and stops watching on unmount
-  - [ ] Test: on each position update, calls `PUT /api/v1/rider/location` with `{ lat, lng, orderId }`
-  - [ ] Test: if geolocation is denied, hook sets `error: 'LOCATION_DENIED'` state
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (new `useRiderLocation.test.ts` hook):**
+  - [x] Test: hook calls `navigator.geolocation.watchPosition` on mount and stops watching on unmount
+  - [x] Test: on each position update, calls `PUT /api/v1/rider/location` with `{ lat, lng, orderId }`
+  - [x] Test: if geolocation is denied, hook sets `error: 'LOCATION_DENIED'` state
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/hooks/useRiderLocation.ts`: wraps `navigator.geolocation.watchPosition`, calls PUT on each update, cleans up on unmount
-  - [ ] Use hook in `RiderOrdersPage.tsx` — active only when rider has an OUT_FOR_DELIVERY order
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/hooks/useRiderLocation.ts`: wraps `navigator.geolocation.watchPosition`, calls PUT on each update, cleans up on unmount
+  - [x] Use hook in `RiderOrdersPage.tsx` — active only when rider has an OUT_FOR_DELIVERY order
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Rider marks order OUT_FOR_DELIVERY → browser requests location permission → rider moves → buyer `/orders/:id` page receives `rider_location_update` → map/placeholder updates → ✅
+- [x] **Verification chain:**
+  - [x] Rider marks order OUT_FOR_DELIVERY → browser requests location permission → rider moves → buyer `/orders/:id` page receives `rider_location_update` → map/placeholder updates → ✅
+
+---
+
+### 5.4.1 — Modular Geolocation Map Fix
+
+**Root cause / Goal:**
+The buyer's order confirmation page map is currently hardcoded to Mussoorie Town Center (`buyerHomeCoords = { lat: 30.4598, lng: 78.0664 }`) because the `Order` table doesn't persist the coordinates of the delivery address. Additionally, riders have no visual map to see where the delivery destination is. We need a modular solution where we capture the checkout address coordinates and display a Leaflet map with store, buyer, and active rider location markers, keeping it ready for future Google/Ola Maps Directions integrations.
+
+**Fix / Approach:**
+1. **Schema:** Add `deliveryLat` and `deliveryLng` Decimal fields to the `Order` model in Prisma.
+2. **Backend Services:**
+   - Update `BuyerCheckoutService` to copy `lat`/`lng` from the selected `Address` into `Order.deliveryLat`/`Order.deliveryLng` at checkout.
+3. **Frontend Components:**
+   - Create a reusable, modular `<OrderRouteMap />` component in `apps/web/src/components/shared/OrderRouteMap.tsx` that displays location markers.
+   - Update `OrderConfirmationPage.tsx` to use `<OrderRouteMap />`, displaying the real destination coordinate markers.
+   - Update `RiderOrdersPage.tsx` to show the `<OrderRouteMap />` inside an expandable details panel or modal on each order card.
+
+---
+
+- [x] **RED — Integration (`routing.test.ts`):**
+  - [x] Test setup: Seed an address with lat/lng. Execute checkout to create an order, verify the returned order contains the exact `deliveryLat` and `deliveryLng` matching the address.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **GREEN — Backend (Schema → Repository → Service):**
+  - [x] [Schema] Add `deliveryLat Decimal? @db.Decimal(10, 7)` and `deliveryLng Decimal? @db.Decimal(10, 7)` to `Order` model in `schema.prisma`. Run migrations and apply to test DB.
+  - [x] [Repository] Update `OrderRepository.create` in `order.repository.ts` to persist `deliveryLat` and `deliveryLng`.
+  - [x] [Service] Update `BuyerCheckoutService` to extract `lat`/`lng` from the database address or checkout request and pass them to order creation.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **RED — Unit / Component (`OrderRouteMap.test.tsx`):**
+  - [x] Test: renders Leaflet map container and places markers (Store, Rider, Destination) using coordinates passed via props.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] Update `BuyerOrderDetail` and `RiderOrder` types to include `deliveryLat` and `deliveryLng`.
+  - [x] [Component] Implement `<OrderRouteMap />` in `apps/web/src/components/shared/OrderRouteMap.tsx`.
+  - [x] [Component] Integrate `<OrderRouteMap />` into `OrderConfirmationPage.tsx`, replacing the hardcoded coordinate logic.
+  - [x] [Component] Integrate `<OrderRouteMap />` into `RiderOrdersPage.tsx` as a collapsible drawer/panel on the active order card.
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] User selects delivery location outside Mussoorie ➔ Places order ➔ Buyer confirmation page displays the map centered on their actual address, with store and buyer markers.
+  - [x] Rider logs in ➔ Opens active order card details ➔ Sees a map displaying their live location marker and the delivery address marker.
 
 ---
 
@@ -249,39 +292,61 @@ Rider interface needs to be mobile-first (riders use smartphones). The layout mu
 
 ---
 
-- [ ] **RED — Unit/Component (`RiderLayout.test.tsx`):**
-  - [ ] Test: renders bottom tab bar with "Orders" and "Account" tabs
-  - [ ] Test: "Orders" tab is active on `/rider/orders`; "Account" tab active on `/rider/account`
-  - [ ] Test: on mobile viewport (375px), all tap targets are >= 44px height
-  - [ ] **Run — confirm RED**
+- [x] **RED — Unit/Component (`RiderLayout.test.tsx`):**
+  - [x] Test: renders bottom tab bar with "Orders" and "Account" tabs
+  - [x] Test: "Orders" tab is active on `/rider/orders`; "Account" tab active on `/rider/account`
+  - [x] Test: on mobile viewport (375px), all tap targets are >= 44px height
+  - [x] **Run — confirm RED**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
-  - [ ] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
-  - [ ] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
-  - [ ] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
-  - [ ] Run unit tests — **confirm GREEN**
+- [x] **GREEN — Frontend:**
+  - [x] Create `apps/web/src/components/rider/RiderLayout.tsx`: bottom tab bar (Orders | Account); no sidebar
+  - [x] Create `apps/web/src/pages/rider/RiderAccountPage.tsx` → `/rider/account`: shows rider name, store name, logout button
+  - [x] All rider pages use `min-h-screen` mobile layout, large font sizes (`text-xl`+), large buttons (`py-4`)
+  - [x] [Routing] All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (see DECISION-038). No hardcoded `/rider/...` strings.
+  - [x] Run unit tests — **confirm GREEN**
 
-- [ ] **Verification chain:**
-  - [ ] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
+- [x] **Verification chain:**
+  - [x] Open rider app on 375px viewport → bottom tab bar visible → all buttons easily tappable → ✅
+
+### 5.5.1 — Rider Active Orders Layout Refactoring & Store Status Confirmations
+
+**Root cause / Goal:**
+Riders need a space-efficient mobile view to scan orders on smartphones (like iPhone SE). Rendering full cards with maps, items, contacts, and status buttons directly on the scrollable feed takes too much space. We want a compact list layout showing only items and address landmark. Tapping an order will open a details modal (similar to the store panel) displaying the full card details and tracking. Additionally, riders need top-level navigation filter tabs to easily switch between "Ready for Pickup" and "Out for Delivery" queues.
+Furthermore, store owners can accidentally update status buttons in the dashboard. To prevent accidental pocket or desktop misclicks, we must require confirmation dialogs for Store status transitions, matching the Rider flow.
+
+**Fix / Approach:**
+1. [Store Panel] In `StoreOrdersPage.tsx`, wrap status mutations in a confirmation dialog/modal.
+2. [Rider Feed] In `RiderOrdersPage.tsx`, replace the stacked layout with a top status filtering tab bar (Ready for Pickup | Out for Delivery).
+3. [Rider Cards] Refactor order cards in `RiderOrdersPage.tsx` to render compact cards (displaying only the items list and landmark address description).
+4. [Rider Modals] Implement a detail overlay modal in `RiderOrdersPage.tsx` that opens upon clicking any compact order card, presenting the full tracking map, actions, and contact info.
 
 ---
 
-### 5.6 — Rider E2E Tests (Playwright)
+- [x] **RED — Integration & Backend (N/A):**
+  - *N/A: No database schema, repository, or service logic changes are required. The REST endpoints and socket payloads remain exactly the same.*
 
-- [ ] `tests/e2e/rider-journey.spec.ts`:
-  - [ ] Rider login with seeded credentials → JWT with RIDER role → redirect to `/rider/orders`
-  - [ ] Active orders page shows PREPARING orders for rider's store
-  - [ ] Click "Mark as Out for Delivery" on order → confirm → order status updates in DB → buyer order page reflects DELIVERING status
-  - [ ] Click "Mark as Delivered" → DB status = DELIVERED → buyer sees delivered state
-  - [ ] Location update: mock `navigator.geolocation` → PUT location called with valid lat/lng → 200 response
-  - [ ] Unauth access to `/rider/orders` redirects to `/rider/login`
+- [x] **RED — Unit / Component Tests (`StoreOrdersPage.test.tsx` & `RiderOrdersPage.test.tsx`):**
+  - [x] Test (`StoreOrdersPage.test.tsx`): Click a status button (e.g. "Mark Preparing"), assert that the PUT status endpoint is NOT immediately called, and verify that the confirmation dialog appears in the DOM.
+  - [x] Test (`StoreOrdersPage.test.tsx`): Assert that clicking "Confirm" inside the modal triggers the API PUT endpoint.
+  - [x] Test (`RiderOrdersPage.test.tsx`): Verify that the active orders page displays top-level filter tabs ("Ready for Pickup" and "Out for Delivery") instead of grouped vertical sections.
+  - [x] Test (`RiderOrdersPage.test.tsx`): Assert that the active order list renders compact card containers containing items and address landmark, but NOT displaying the full map, contact phone, or action buttons.
+  - [x] Test (`RiderOrdersPage.test.tsx`): Assert that clicking a compact card opens a detailed overlay modal displaying the full card components (including map and action button).
+  - [x] **Run — confirm RED (the tests fail because the confirmation modals, filter tabs, and compact lists do not exist yet).**
 
----
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Store Component] In `StoreOrdersPage.tsx`, add a `confirmingOrderUpdate` state. Wrap the mutation execution in a Radix-based `Dialog` confirmation modal.
+  - [x] [Rider Component] In `RiderOrdersPage.tsx`, add `selectedFilterTab` state (`"PICKUP" | "DELIVERY"`). Render status filtering tabs at the top of the content pane.
+  - [x] [Rider Component] Refactor the card renderer in `RiderOrdersPage.tsx` to display a compact list item showing only `items` and `deliveryAddress.landmark`.
+  - [x] [Rider Component] Implement a modal details overlay that opens on selection, rendering the full active order information (masked phone, collapsible map, status transition actions, close button).
+  - [x] Run unit tests — **confirm GREEN**.
 
-### 5.7 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
+- [x] **Verification chain:**
+  - [x] Store Owner clicks "Mark Preparing" on an order ➔ Confirmation modal pops up ➔ Click "Confirm" ➔ Order moves to preparing status.
+  - [x] Rider logs in ➔ Sees top filter tabs "Ready for Pickup" and "Out for Delivery" ➔ Feed shows a clean compact list of items + address ➔ Taps an order card ➔ Full card details pop up in a modal ➔ Rider updates status or views location map ➔ ✅ Done.
 
-> ⚠️ **Prerequisite: Phase 7.1 (Schema Migration) must be complete before starting 5.7.**
+### 5.6 — Dual-Mode: Field Technician (BOOKING_COMMERCE Orders)
+
+> ⚠️ **Prerequisite: Phase 7.1 (Schema Migration) must be complete before starting 5.6.**
 > The `BookingOrder` table, `OrderType` enum, and `riderType` field on `DeliveryRider` must exist in the DB.
 
 **Root Cause / Goal:**
@@ -295,45 +360,558 @@ When Phase 7 goes live, booking orders (`orderType: BOOKING`) will be assigned t
 
 ---
 
-- [ ] **RED — Integration (`rider.field-technician.test.ts` — new file):**
-  - [ ] Test setup: `FIELD_TECHNICIAN` type rider seeded. A `BookingOrder` with `approvalStatus: APPROVED`, `scheduledDate: tomorrow`, `timeslot: '09:00-11:00'` attached to an `Order` with `orderType: BOOKING` and `status: APPROVED`
-  - [ ] Test: `GET /api/v1/rider/orders/active` with `FIELD_TECHNICIAN` JWT → HTTP 200; response includes the APPROVED booking order with fields `{ id, orderType: 'BOOKING', bookingOrder: { scheduledDate, timeslot, requiresFasting }, deliveryAddress: { landmark, lat, lng } }`
-  - [ ] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → booking orders are **absent** (delivery riders only see QUICK orders)
-  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (technician departed) → HTTP 200; `Order.status = OUT_FOR_DELIVERY` in DB; buyer receives `order_status_changed` Socket.IO event
-  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'DELIVERED' }` (visit complete) → HTTP 200; `Order.status = DELIVERED`; `BookingOrder.approvalStatus = COMPLETED` in DB
-  - [ ] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (technicians cannot cancel)
-  - [ ] **Run — confirm RED (endpoint returns 404 or ignores booking orders).**
+---
 
-- [ ] **GREEN — Backend (Schema → Service → Controller):**
-  - [ ] [Schema] Confirm `riderType RiderType @default(DELIVERY)` exists on `DeliveryRider` (added in Phase 7.1 migration). If Phase 7.1 is not yet done, **stop here and complete 7.1 first**.
-  - [ ] [Service] Update `RiderOrderService.getActiveOrders(storeId, riderId)` in `rider-order.service.ts`:
+- [x] **RED — Integration (`rider.field-technician.test.ts` — new file):**
+  - [x] Test setup: `FIELD_TECHNICIAN` type rider seeded. A `BookingOrder` with `approvalStatus: APPROVED`, `scheduledDate: tomorrow`, `timeslot: '09:00-11:00'` attached to an `Order` with `orderType: BOOKING` and `status: APPROVED`
+  - [x] Test: `GET /api/v1/rider/orders/active` with `FIELD_TECHNICIAN` JWT → HTTP 200; response includes the APPROVED booking order with fields `{ id, orderType: 'BOOKING', bookingOrder: { scheduledDate, timeslot, requiresFasting }, deliveryAddress: { landmark, lat, lng } }`
+  - [x] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → booking orders are **absent** (delivery riders only see QUICK orders)
+  - [x] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'OUT_FOR_DELIVERY' }` (technician departed) → HTTP 200; `Order.status = OUT_FOR_DELIVERY` in DB; buyer receives `order_status_changed` Socket.IO event
+  - [x] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'DELIVERED' }` (visit complete) → HTTP 200; `Order.status = DELIVERED`; `BookingOrder.approvalStatus = COMPLETED` in DB
+  - [x] Test: `PUT /api/v1/rider/orders/<bookingOrderId>/status` with body `{ status: 'CANCELLED' }` → HTTP 403 `FORBIDDEN` (technicians cannot cancel)
+  - [x] **Run — confirm RED (endpoint returns 404 or ignores booking orders).**
+
+- [x] **GREEN — Backend (Schema → Service → Controller):**
+  - [x] [Schema] Confirm `riderType RiderType @default(DELIVERY)` exists on `DeliveryRider` (added in Phase 7.1 migration). If Phase 7.1 is not yet done, **stop here and complete 7.1 first**.
+  - [x] [Service] Update `RiderOrderService.getActiveOrders(storeId, riderId)` in `rider-order.service.ts`:
     - Fetch the rider row to get `riderType`
     - If `DELIVERY`: filter `Order` where `orderType = QUICK` AND `status IN [PREPARING, OUT_FOR_DELIVERY]` — unchanged behaviour
     - If `FIELD_TECHNICIAN`: filter `Order` where `orderType = BOOKING` AND `status IN [APPROVED, OUT_FOR_DELIVERY]`; include `bookingOrder { scheduledDate, timeslot, requiresFasting }` in the response
-  - [ ] [Service] Update `RiderOrderService.updateOrderStatus` to allow `APPROVED → OUT_FOR_DELIVERY → DELIVERED` transitions for booking orders (in addition to existing PREPARING → OUT_FOR_DELIVERY → DELIVERED for quick orders). When a booking order reaches `DELIVERED`, also update `BookingOrder.approvalStatus = COMPLETED` in the same DB transaction.
-  - [ ] Run integration tests — **confirm GREEN.**
+  - [x] [Service] Update `RiderOrderService.updateOrderStatus` to allow `APPROVED → OUT_FOR_DELIVERY → DELIVERED` transitions for booking orders (in addition to existing PREPARING → OUT_FOR_DELIVERY → DELIVERED for quick orders). When a booking order reaches `DELIVERED`, also update `BookingOrder.approvalStatus = COMPLETED` in the same DB transaction.
+  - [x] Run integration tests — **confirm GREEN.**
 
-- [ ] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests for booking cards):**
-  - [ ] Test: when `order.orderType === 'BOOKING'`, the order card renders `data-testid="booking-order-card"` (not `data-testid="delivery-order-card"`)
-  - [ ] Test: booking card shows `scheduledDate` formatted as `"Mon, 19 May"`, `timeslot` as `"09:00 – 11:00"`, and a fasting banner `"⚠️ Patient must be fasting"` when `requiresFasting: true`
-  - [ ] Test: booking card shows only the buyer's delivery address (no "Pick up from store" section)
-  - [ ] Test: booking card in `APPROVED` status shows "Mark as Departed" button (not "Mark as Out for Delivery")
-  - [ ] Test: clicking "Mark as Departed" calls `PUT /api/v1/rider/orders/:id/status` with `{ status: 'OUT_FOR_DELIVERY' }`
-  - [ ] Test: booking card in `OUT_FOR_DELIVERY` status shows "Mark Visit Complete" button
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit/Component (`RiderOrdersPage.test.tsx` — additional tests for booking cards):**
+  - [x] Test: when `order.orderType === 'BOOKING'`, the order card renders `data-testid="booking-order-card"` (not `data-testid="delivery-order-card"`)
+  - [x] Test: booking card shows `scheduledDate` formatted as `"Mon, 19 May"`, `timeslot` as `"09:00 – 11:00"`, and a fasting banner `"⚠️ Patient must be fasting"` when `requiresFasting: true`
+  - [x] Test: booking card shows only the buyer's delivery address (no "Pick up from store" section)
+  - [x] Test: booking card in `APPROVED` status shows "Mark as Departed" button (not "Mark as Out for Delivery")
+  - [x] Test: clicking "Mark as Departed" calls `PUT /api/v1/rider/orders/:id/status` with `{ status: 'OUT_FOR_DELIVERY' }`
+  - [x] Test: booking card in `OUT_FOR_DELIVERY` status shows "Mark Visit Complete" button
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] [Types] Add `orderType: 'QUICK' | 'BOOKING'` and `bookingOrder?: { scheduledDate: string; timeslot: string; requiresFasting: boolean }` to the `RiderOrder` type in `RiderOrdersPage.tsx`
-  - [ ] [Component] In `RiderOrdersPage.tsx`, replace the single card renderer with a conditional: `order.orderType === 'BOOKING' ? <BookingVisitCard> : <DeliveryOrderCard>`
-  - [ ] [Component] Create `BookingVisitCard` sub-component (inline or separate file): shows scheduled date + timeslot + fasting banner + buyer address + action button based on current status
-  - [ ] [Component] `DeliveryOrderCard` is the existing card renamed — no logic changes
-  - [ ] Run unit tests — **confirm GREEN.**
+- [x] **GREEN — Frontend:**
+  - [x] [Types] Add `orderType: 'QUICK' | 'BOOKING'` and `bookingOrder?: { scheduledDate: string; timeslot: string; requiresFasting: boolean }` to the `RiderOrder` type in `RiderOrdersPage.tsx`
+  - [x] [Component] In `RiderOrdersPage.tsx`, replace the single card renderer with a conditional: `order.orderType === 'BOOKING' ? <BookingVisitCard> : <DeliveryOrderCard>`
+  - [x] [Component] Create `BookingVisitCard` sub-component (inline or separate file): shows scheduled date + timeslot + fasting banner + buyer address + action button based on current status
+  - [x] [Component] `DeliveryOrderCard` is the existing card renamed — no logic changes
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Field technician logs into rider app → `/rider/orders` shows a booking visit card with scheduled time "09:00–11:00 tomorrow" and a fasting warning → taps "Mark as Departed" → buyer's order page updates to "Technician is on the way" → technician arrives, taps "Mark Visit Complete" → buyer's order page shows "Visit Completed" → `BookingOrder.approvalStatus = COMPLETED` in DB → ✅ Done.
+
+---
+
+### 5.6.1 — Platform Improvements: Rider Feed, Booking Filters, Admin Riders Page, Dashboard KPI Navigation
+
+**Root cause / Goal:**
+Five distinct but related UX improvements are needed, all identified after Phase 5.6:
+
+1. **Rider feed shows all future approved bookings** — a field technician sees bookings scheduled for next week on today's shift, creating noise and confusion. The feed should only show bookings scheduled for *today*.
+2. **Store Bookings page has no date filter** — a store owner managing 50+ bookings has no way to narrow the list to "just today" or "this week." The status tabs exist, but no time dimension filter does.
+3. **Admin cannot create Rider accounts from the UI** — riders are seeded via scripts. No Admin Riders page exists. Additionally, the current schema hard-codes one `storeId` per rider; to support multi-store assignment in the future, the model must be migrated to a `RiderStore` junction table now, while the Admin Riders page is being built.
+4. **Store Dashboard KPI cards are not clickable** — the "Pending Orders" and "Today's Orders / Today's Bookings" cards display numbers but navigating to the relevant filtered list requires the user to manually find the tab. Clicking a card should deep-link to the correct page with the correct filter pre-applied.
+5. **"Today's Bookings" counts bookings *placed* today, not bookings *scheduled* for today** — the dashboard metric is semantically wrong for a booking-commerce store; it should count `approvalStatus = APPROVED` bookings whose `scheduledDate` falls on today's calendar date.
+
+**Fix / Approach (high-level per improvement):**
+
+1. **Rider feed date filter (backend + frontend):** Update `RiderOrderService.getActiveOrders` to additionally filter `bookingOrder.scheduledDate` to `[startOfToday, endOfToday)` for `FIELD_TECHNICIAN` riders. Update `RiderOrdersPage` header title to "Today's Bookings."
+2. **Booking date filter (frontend only):** Add a `scheduledDateFilter` state to `StoreBookingsPage`. Render a dropdown/date control on the right of the tab bar. All existing data is already in memory — apply a second client-side filter on top of the status tab filter. No backend change required.
+3. **Admin Riders page (schema + backend + frontend):**
+   - Migrate `DeliveryRider.storeId String` to a new `RiderStore` junction model (`riderId`, `storeId`, `isPrimary`). Remove the direct `storeId` FK from `DeliveryRider`. The rider JWT `storeId` becomes the **primary** store from the junction table.
+   - Add three backend endpoints to `admin.controller.ts`: `GET /api/v1/admin/riders`, `POST /api/v1/admin/riders`, `PUT /api/v1/admin/riders/:id`.
+   - Create `AdminRidersPage.tsx` with a rider table and a "Create Rider" modal (name, email, phone, password, multi-store picker filtered by `riderType`, rider type select).
+   - Add "Riders" nav item to `AdminLayout.tsx` and a route to `admin.tsx`.
+4. **Dashboard KPI click-through (frontend only):** Wrap each KPI card `<div>` in a `<button onClick={() => navigate(...)}>`. `StoreOrdersPage` and `StoreBookingsPage` read `useSearchParams()` on mount to pre-select the correct tab and date filter.
+5. **Fix "Today's Bookings" metric (backend):** In `StoreOwnerService.getDashboard`, for `BOOKING_COMMERCE` stores, change `todayOrderCount` to count `BookingOrder` rows where `scheduledDate >= startOfToday AND scheduledDate < startOfTomorrow AND approvalStatus = 'APPROVED'`.
+
+> ⚠️ **Schema migration note:** The `RiderStore` junction table migration (step 3) will break `rider.auth.test.ts`, `rider.orders.test.ts`, `rider.field-technician.test.ts`, `rider.status.test.ts`, and `rider.location.test.ts` because they all seed a `DeliveryRider` with a direct `storeId`. **Update all those test seed helpers first (mark them RED), then do the migration, then fix the service to query via the junction table.**
+
+---
+
+#### A. Rider Feed — Today-Only Scheduled Bookings
+
+- [x] **RED — Integration (`rider.field-technician.test.ts` — update existing tests):**
+  - [x] Add a new seed: a `BookingOrder` with `scheduledDate = 3 days from now`, `approvalStatus: APPROVED`, attached to an `Order` with `status: APPROVED`. Seed it alongside the existing "tomorrow" booking already in the file.
+  - [x] Test: `GET /api/v1/rider/orders/active` with a `FIELD_TECHNICIAN` JWT → the response array contains **only** the booking with `scheduledDate = today`; the booking scheduled 3 days from now is **absent**.
+  - [x] Test: `GET /api/v1/rider/orders/active` with a `DELIVERY` type rider JWT → response still contains only `QUICK` orders in `PREPARING` or `OUT_FOR_DELIVERY` status — behaviour unchanged.
+  - [x] **Run — confirm RED (currently all APPROVED booking orders appear regardless of date).**
+
+- [x] **GREEN — Backend (Service only):**
+  - [x] [Service] In `rider-order.service.ts`, inside the `getActiveOrders` method, in the `FIELD_TECHNICIAN` branch: compute `startOfToday` and `startOfTomorrow` as UTC midnight boundaries. Pass them as `scheduledDateFrom` and `scheduledDateTo` options to `this.orders.findManyByStore`.
+  - [x] [Repository] In `order.repository.ts`, update `findManyByStore` to accept optional `scheduledDateFrom?: Date` and `scheduledDateTo?: Date` parameters. When provided, add a Prisma `where: { bookingOrder: { scheduledDate: { gte: scheduledDateFrom, lt: scheduledDateTo } } }` clause.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`RiderOrdersPage.test.tsx` — update existing):**
+  - [x] Test: When `profileData.riderType === 'FIELD_TECHNICIAN'`, the page `<h1>` element contains the text `"Today's Bookings"` (not `"Shift Services"`).
+  - [x] Test: When `profileData.riderType === 'DELIVERY'`, the `<h1>` still contains `"Shift Orders"`.
+  - [x] **Run — confirm RED (header currently reads "Shift Services" for FIELD_TECHNICIAN).**
+
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] In `RiderOrdersPage.tsx`, change the `<h1>` text: when `isFieldTechnician === true` render `"Today's Bookings"` instead of `"Shift Services"`. Add a `<p>` subtitle: `"Scheduled for today"`.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Field technician logs into rider app → `/rider/orders` header reads **"Today's Bookings — Scheduled for today"** → feed shows only bookings whose `scheduledDate` is today's calendar date → a booking scheduled for next week is not visible → ✅ Done.
+
+---
+
+#### B. Store Bookings Page — Scheduled Date Filter
+
+- [x] **RED — Integration (N/A):**
+  - N/A: No backend change required. The existing `GET /api/v1/store/bookings?status=ALL` endpoint already returns all bookings including `bookingOrder.scheduledDate`. The filter is client-side only.
+
+- [x] **RED — Unit / Component (`StoreBookingsPage.test.tsx` — update existing):**
+  - [x] Test: The bookings page renders a date filter control with `data-testid="booking-date-filter"` in the tab bar row.
+  - [x] Test: The date filter dropdown contains options: `"All Dates"`, `"Today"`, `"Tomorrow"`, `"This Week"`, `"This Month"`, `"Custom Range"`.
+  - [x] Test: When `dateFilter = "Today"` is selected and two bookings are present — one with `scheduledDate = today`, one with `scheduledDate = tomorrow` — `getActiveList()` returns only the booking scheduled for today.
+  - [x] Test: When `dateFilter = "Custom Range"` is selected, two date inputs appear with `data-testid="date-from-input"` and `data-testid="date-to-input"`.
+  - [x] Test: When `dateFilter = "All Dates"` (default), `getActiveList()` returns all bookings unfiltered.
+  - [x] **Run — confirm RED (no date filter control exists today).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] Add `type DateFilter = "ALL" | "TODAY" | "TOMORROW" | "THIS_WEEK" | "THIS_MONTH" | "CUSTOM"` in `StoreBookingsPage.tsx`.
+  - [x] [Component] Add `const [dateFilter, setDateFilter] = useState<DateFilter>("ALL")` and `const [customFrom, setCustomFrom] = useState("")` and `const [customTo, setCustomTo] = useState("")` to `StoreBookingsPage`.
+  - [x] [Component] Add a `filterByDate(bookings: Booking[]): Booking[]` helper that compares `booking.bookingOrder.scheduledDate` against the selected filter range using `new Date()` for today/tomorrow/week/month boundaries.
+  - [x] [Component] Update `getActiveList()` to pipe its result through `filterByDate(...)` before returning.
+  - [x] [Component] Render a `<select data-testid="booking-date-filter">` dropdown to the right of the tab bar (inside the same flex row). When `dateFilter === "CUSTOM"`, render two `<input type="date">` elements (`data-testid="date-from-input"` and `data-testid="date-to-input"`).
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store owner opens Bookings page → sees date filter dropdown on the right of the tabs → selects **"Today"** → only bookings whose `scheduledDate` is today's date remain in the grid → selects **"This Week"** → this week's bookings appear → selects **"Custom Range"** → two date inputs appear → enters a range → list narrows accordingly → ✅ Done.
+
+---
+
+#### C. Admin Riders Page — Multi-Store Junction Table + Full CRUD
+
+> ⚠️ **This section has two sub-steps. Complete C.1 (schema migration) fully before starting C.2 (admin endpoints) and C.3 (frontend). The migration will break multiple existing rider test files — fix them as part of C.1's RED step.**
+
+---
+
+##### C.1 — Schema Migration: RiderStore Junction Table
+
+- [x] **RED — Integration (update ALL existing rider test files before migrating):**
+  - [x] In `rider.auth.test.ts`: find every `prisma.deliveryRider.create({ data: { storeId: ... } })` seed call. Add a comment `// TODO-C1: update after junction migration` — do NOT change the code yet. Run the file and confirm it still passes GREEN (baseline).
+  - [x] In `rider.orders.test.ts`, `rider.field-technician.test.ts`, `rider.status.test.ts`, `rider.location.test.ts`: same — locate every `prisma.deliveryRider.create` seed and add `// TODO-C1` comments.
+  - [x] Now update every `// TODO-C1` seed: remove the `storeId` field from `prisma.deliveryRider.create` and instead add a `prisma.riderStore.create({ data: { riderId: <id>, storeId: <id>, isPrimary: true } })` call immediately after.
+  - [x] **Run all five rider integration test files — confirm RED (schema does not have `RiderStore` yet; `prisma.riderStore` is undefined).**
+
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] [Schema] In `schema.prisma`:
+    - Remove `storeId String` and `store Store @relation(...)` from `DeliveryRider`.
+    - Remove `deliveryRiders DeliveryRider[]` from `Store`.
+    - Add new model:
+      ```prisma
+      model RiderStore {
+        id        String        @id @default(cuid())
+        riderId   String
+        storeId   String
+        isPrimary Boolean       @default(false)
+        createdAt DateTime      @default(now())
+        rider     DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+        store     Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+        @@unique([riderId, storeId])
+        @@index([riderId])
+        @@index([storeId])
+      }
+      ```
+    - Add `stores RiderStore[]` back-relation to `DeliveryRider`.
+    - Add `riders RiderStore[]` back-relation to `Store`.
+    - Run: `pnpm --filter @gorola/api prisma migrate dev --name add_rider_store_junction`. Apply to test DB.
+  - [x] [Repository] In `rider.repository.ts`, update `findById` to include `stores: { include: { store: true } }`. Add helper `getPrimaryStoreId(riderId: string): Promise<string | null>` that queries `prisma.riderStore.findFirst({ where: { riderId, isPrimary: true } })`.
+  - [x] [Service] In `rider-auth.service.ts`, update login to call `riderRepository.getPrimaryStoreId(rider.id)` to resolve `storeId` for JWT payload instead of reading `rider.storeId`.
+  - [x] [Service] In `rider-order.service.ts`, update `getActiveOrders(storeIds: string[], riderId: string)` — change first argument from a single `storeId` to `storeIds: string[]`. Update the `findManyByStore` call to use `storeId: { in: storeIds }`.
+  - [x] [Controller] In `rider.controller.ts`, update the `GET /api/v1/rider/orders/active` handler: after verifying the rider, call `riderRepository.getAllStoreIds(riderId)` (new method returning all `storeId[]` from junction) and pass the array to `riderOrderService.getActiveOrders`.
+  - [x] [Repository] Add `getAllStoreIds(riderId: string): Promise<string[]>` to `rider.repository.ts` that returns all `storeId` values from `RiderStore` where `riderId` matches.
+  - [x] Run all five rider integration test files — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] A rider seeded with 2 `RiderStore` rows (storeA + storeB, storeA = primary) logs in → JWT contains `storeId = storeA.id` → `GET /api/v1/rider/orders/active` returns orders from **both** storeA and storeB → a rider with only one `RiderStore` row sees orders from that one store only → ✅ Done.
+
+---
+
+##### C.2 — Admin Backend Endpoints for Riders
+
+- [x] **RED — Integration (`admin.riders.test.ts` — new file):**
+  - [x] Test setup: seed 1 Admin, 2 Stores (one `QUICK_COMMERCE`, one `BOOKING_COMMERCE`), 1 existing `DeliveryRider` with a `RiderStore` linking to the QUICK_COMMERCE store.
+  - [x] Test: `GET /api/v1/admin/riders` with valid ADMIN JWT → HTTP 200; response shape `{ success: true, data: [{ id, name, email, phone, riderType, isActive, stores: [{ storeId, storeName, isPrimary }] }] }`; array contains exactly 1 rider.
+  - [x] Test: `GET /api/v1/admin/riders` with STORE_OWNER JWT → HTTP 403.
+  - [x] Test: `POST /api/v1/admin/riders` with body `{ name: "Raju", email: "raju@gorola.in", phone: "9876543210", password: "Rider#456", riderType: "DELIVERY", storeIds: [<quickStoreId>], primaryStoreId: <quickStoreId> }` with ADMIN JWT → HTTP 201; response contains `{ id, name, email, riderType, stores: [{ storeId, isPrimary: true }] }`; `DeliveryRider` row exists in DB; one `RiderStore` row exists in DB with `isPrimary: true`.
+  - [x] Test: `POST /api/v1/admin/riders` with `email` already in use → HTTP 409 with `error.code = "CONFLICT"`.
+  - [x] Test: `POST /api/v1/admin/riders` with `storeIds` containing a `BOOKING_COMMERCE` storeId but `riderType: "DELIVERY"` → HTTP 400 with `error.code = "VALIDATION_ERROR"` (type-store mismatch).
+  - [x] Test: `PUT /api/v1/admin/riders/:id` with body `{ isActive: false, storeIds: [<quickStoreId>], primaryStoreId: <quickStoreId> }` → HTTP 200; `DeliveryRider.isActive = false` in DB.
+  - [x] Test: `PUT /api/v1/admin/riders/:id` for a non-existent rider id → HTTP 404.
+  - [x] **Run — confirm RED (routes do not exist; all return 404).**
+
+- [x] **GREEN — Backend (Service → Controller → Routes):**
+  - [x] [Service] In `admin.service.ts`, add three methods:
+    - `listRiders(): Promise<RiderWithStores[]>` — `prisma.deliveryRider.findMany({ where: { isDeleted: false }, include: { stores: { include: { store: { select: { id: true, name: true } } } } } })`.
+    - `createRider(data: { name, email, phone, password, riderType, storeIds, primaryStoreId }): Promise<RiderWithStores>` — hash password with `bcryptjs`, create `DeliveryRider`, then create `RiderStore` rows in a Prisma transaction; validate that each `storeId` store type matches `riderType` (DELIVERY → QUICK_COMMERCE, FIELD_TECHNICIAN → BOOKING_COMMERCE). Throw 409 on duplicate email, 400 on type mismatch.
+    - `updateRider(riderId, data: { isActive?, storeIds?, primaryStoreId? }): Promise<RiderWithStores>` — update `DeliveryRider.isActive`; if `storeIds` provided, delete all existing `RiderStore` rows for this rider and re-create them in a transaction.
+  - [x] [Controller] In `admin.controller.ts`, add three routes inside `registerAdminRoutes`:
+    - `GET /api/v1/admin/riders` — calls `adminService.listRiders()`.
+    - `POST /api/v1/admin/riders` — Zod validates body (`name` min 1, `email` valid email, `phone` 10-digit string, `password` min 8 chars, `riderType` enum, `storeIds` array min 1, `primaryStoreId` string). Calls `adminService.createRider(...)`. Returns HTTP 201.
+    - `PUT /api/v1/admin/riders/:id` — Zod validates body (all fields optional). Calls `adminService.updateRider(params.id, ...)`. Returns HTTP 200.
+  - [x] All three routes use `preHandler: [requireAuth(deps.tokenVerifier), requireRole(['ADMIN'])]`.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin hits `POST /api/v1/admin/riders` with two `storeIds` → 201 response → `DeliveryRider` row exists → two `RiderStore` rows exist, one with `isPrimary: true` → `GET /api/v1/admin/riders` lists the new rider with both stores → ✅ Done.
+
+---
+
+##### C.3 — AdminRidersPage Frontend
+
+- [x] **RED — Unit / Component (`AdminRidersPage.test.tsx` — new file):**
+  - [x] Test: component renders a table with columns Name, Email, Phone, Type, Stores, Status, Actions (assert header cells by text).
+  - [x] Test: when API returns 2 riders, 2 `<tr>` rows with `data-testid="rider-row-<id>"` are rendered.
+  - [x] Test: a "Create Rider" button with `id="create-rider-btn"` is visible; clicking it opens a modal with `data-testid="create-rider-modal"`.
+  - [x] Test: the create modal contains fields with `id="rider-name"`, `id="rider-email"`, `id="rider-phone"`, `id="rider-password"`, `id="rider-type-select"`, and a multi-store picker with `data-testid="store-picker"`.
+  - [x] Test: submitting the create form calls `POST /api/v1/admin/riders` with `{ name, email, phone, password, riderType, storeIds, primaryStoreId }`.
+  - [x] Test: when `riderType = "DELIVERY"`, the store picker only shows stores with `storeType = "QUICK_COMMERCE"`.
+  - [x] Test: when `riderType = "FIELD_TECHNICIAN"`, the store picker only shows stores with `storeType = "BOOKING_COMMERCE"`.
+  - [x] Test: clicking the "Suspend" action button on an active rider calls `PUT /api/v1/admin/riders/:id` with `{ isActive: false }`.
+  - [x] Test: clicking "Edit Stores" for a rider opens the edit modal pre-populated with the rider's current stores.
+  - [x] **Run — confirm RED (file does not exist).**
+
+- [x] **GREEN — Frontend (Types → Component → Routes → Nav):**
+  - [x] [Types] In `AdminRidersPage.tsx`, define:
+    ```typescript
+    type RiderStore = { storeId: string; storeName: string; isPrimary: boolean };
+    type AdminRider = { id: string; name: string; email: string; phone: string; riderType: "DELIVERY" | "FIELD_TECHNICIAN"; isActive: boolean; stores: RiderStore[] };
+    type StoreOption = { id: string; name: string; storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE" };
+    ```
+  - [x] [Component] Create `apps/web/src/pages/admin/AdminRidersPage.tsx`:
+    - Fetch `GET /api/v1/admin/riders` with `useQuery(['admin', 'riders'])`.
+    - Fetch `GET /api/v1/admin/stores` with `useQuery(['admin', 'stores'])` to populate the store picker (reuse existing endpoint).
+    - Render a table (same style as `AdminUsersPage`) with one row per rider.
+    - "Create Rider" button opens a `Dialog` modal. The modal has a `riderType` select that drives which stores appear in the multi-checkbox store picker. On submit, call `POST /api/v1/admin/riders` via `useMutation`; on success, invalidate `['admin', 'riders']` and close modal.
+    - Each row has a "Suspend/Unsuspend" button (`data-testid="rider-toggle-<id>"`) that calls `PUT /api/v1/admin/riders/:id` with `{ isActive: !current }`, and an "Edit Stores" button that opens the same modal pre-populated.
+    - Use `toast.success` / `toast.error` for feedback (matching other Admin pages).
+  - [x] [Routes] In `apps/web/src/app/routes/admin.tsx`: add `import { AdminRidersPage }` and a new `<Route key="admin-riders" path={\`${prefix}/riders\`} element={<AdminRoute><AdminLayout><AdminRidersPage /></AdminLayout></AdminRoute>} />`.
+  - [x] [Nav] In `apps/web/src/components/admin/AdminLayout.tsx`: add `{ label: "Riders", path: getScopedPath("/admin/riders", "admin", isSubdomainMode) }` to `navItems` array (after "Stores").
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin logs in → sidebar shows "Riders" nav item → navigates to `/admin/riders` → table lists all existing riders with their store assignments → clicks "Create Rider" → fills form, selects type "DELIVERY", picks a QUICK_COMMERCE store as primary → submits → new rider appears in the table → Admin clicks "Edit Stores" on that rider → changes to two stores → saves → rider row now shows two store names → Admin clicks "Suspend" → rider `isActive` flips to false → rider can no longer log in → ✅ Done.
+
+---
+
+#### D. Store Dashboard — Clickable KPI Cards, Split Active Offers/Discounts, and Quick Commerce Date Filters
+
+**Root cause / Goal:**
+Store owners need a seamless way to navigate from high-level dashboard metrics to itemized lists with corresponding filters pre-applied. The current dashboard cards are passive, requiring manual navigation.
+Additionally:
+1. "Today's Bookings" metric counts bookings placed today, not scheduled for today (incorrect semantics).
+2. "Active Offers" merges offers (campaigns) and discount codes into one card. They need to be separate cards navigating to their respective pages.
+3. Quick commerce store owner needs to filter incoming orders by date range (Today, Tomorrow, This Week, This Month, Custom Range) just like bookings, and the "Today's Orders" dashboard card should link directly to the Today-filtered orders list.
+
+**Fix / Approach:**
+1. [Backend - KPI Metrics] Update `StoreOwnerService.getDashboard` to:
+   - For `BOOKING_COMMERCE` stores, calculate `todayOrderCount` by counting `BookingOrder` rows where `scheduledDate` is today's calendar date and `approvalStatus` is `APPROVED`.
+   - Return both `activeOffersCount` (from `offer` table) and a new `activeDiscountsCount` (from `discount` table) to separate them.
+2. [Backend - Orders Query] Update `StoreOwnerService.getOrders` and `store-owner.controller.ts` to support optional query parameters: `dateFilter`, `customFrom`, `customTo`.
+   - Compute start/end date ranges on the backend based on `dateFilter` and apply a `createdAt` Prisma filter.
+3. [Frontend - Dashboard] Wrap each KPI card in a button/clickable container (with subtle hover shadow and cursor-pointer transitions) and wire to navigation:
+   - Today's Orders card -> `/store/orders?dateFilter=TODAY`
+   - Today's Bookings card -> `/store/bookings?tab=APPROVED&dateFilter=TODAY`
+   - Today's Revenue / Today's Booking Revenue -> Smooth scroll to `#revenue-chart` on the dashboard page.
+   - Pending Orders card -> `/store/orders?status=PLACED`
+   - Pending Approvals card -> `/store/bookings?tab=PENDING`
+   - Active Ads card -> `/store/advertisements`
+   - Active Offers card -> `/store/offers`
+   - Active Discount Codes card -> `/store/discounts` (The new split card, making 6 KPI cards total. Change grid style to `lg:grid-cols-6`).
+4. [Frontend - Orders Page] In `StoreOrdersPage.tsx`:
+   - Initialize selected tab and date filter states from `useSearchParams()`.
+   - Add a `<select data-testid="order-date-filter">` dropdown for date filtering on the right of the tab bar, and custom date inputs when `"CUSTOM"` range is selected (matching bookings filter layout).
+   - Invalidate/re-fetch orders by adding these params to the `useQuery` query key and endpoint URL.
+5. [Frontend - Bookings Page] In `StoreBookingsPage.tsx`:
+   - Read `useSearchParams()` on mount to pre-fill the selected status tab and date filter parameters.
+
+---
+
+- [x] **RED — Integration (`store-owner.dashboard.test.ts`):**
+  - [x] Setup: Seed 1 `BOOKING_COMMERCE` store, 1 store owner, 1 user buyer. Seed 2 `BookingOrder` rows with `scheduledDate = today` and `approvalStatus = APPROVED`. Seed 1 `BookingOrder` with `scheduledDate = tomorrow` and `approvalStatus = APPROVED`.
+  - [x] Test: `GET /api/v1/store/dashboard` -> response contains `{success: true, data: { todayOrderCount: 2, activeOffersCount: number, activeDiscountsCount: number }}`.
+  - [x] Test: Seed 2 active `Discount` rows and 1 active `Offer` row. `GET /api/v1/store/dashboard` returns `activeOffersCount = 1` and `activeDiscountsCount = 2`.
+  - [x] **Run — confirm RED (todayOrderCount is incorrect, activeDiscountsCount is missing/undefined).**
+
+- [x] **RED — Integration (`store-owner.orders.test.ts`):**
+  - [x] Setup: Seed 1 store, 1 store owner, 1 user buyer. Seed 3 orders: one placed today, one placed yesterday, one placed 3 days ago.
+  - [x] Test: `GET /api/v1/store/orders?dateFilter=TODAY` -> returns exactly 1 order (the one created today).
+  - [x] Test: `GET /api/v1/store/orders?dateFilter=CUSTOM&customFrom=<yesterday>&customTo=<today>` -> returns exactly 2 orders.
+  - [x] **Run — confirm RED (dateFilter query params are ignored, all orders returned).**
+
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `store-owner.service.ts`, update `DashboardKpiSummary` type and `getDashboard` method:
+    - Add `activeDiscountsCount` to `DashboardKpiSummary`.
+    - If `storeType === "BOOKING_COMMERCE"`, query `todayOrderCount` using `this.db.bookingOrder.count` with `scheduledDate` between start of today and end of today, and `approvalStatus: "APPROVED"`.
+    - Query `activeDiscountsCount` count from `this.db.discount.count` where `storeId` matches and `isActive: true`.
+  - [x] [Service] In `store-owner.service.ts`, update `getOrders(storeId, filters)` signature to support `dateFilter?: string; customFrom?: string; customTo?: string`.
+    - Compute `createdAt` range:
+      - `TODAY`: start of today to end of today.
+      - `TOMORROW`: start of tomorrow to end of tomorrow.
+      - `THIS_WEEK`: start of current week to end of current week.
+      - `THIS_MONTH`: start of current month to end of current month.
+      - `CUSTOM`: `customFrom` (start of day) to `customTo` (end of day).
+    - Add `createdAt` range condition to Prisma `where` object inside `getOrders`.
+  - [x] [Controller] In `store-owner.controller.ts`, inside the `GET /api/v1/store/orders` handler:
+    - Parse `dateFilter`, `customFrom`, `customTo` from query parameters and pass to `storeOwnerService.getOrders`.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`StoreDashboardPage.test.tsx`):**
+  - [x] Test: Renders 6 KPI cards for QUICK_COMMERCE, including a new card with text `"Active Discount Codes"`.
+  - [x] Test: clicking the card with `data-testid="kpi-pending-orders"` navigates to `/store/orders?status=PLACED`.
+  - [x] Test: clicking the card with `data-testid="kpi-today-orders"` navigates to `/store/orders?dateFilter=TODAY`.
+  - [x] Test: clicking the card with `data-testid="kpi-revenue"` calls smooth scroll to element `#revenue-chart`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-offers"` navigates to `/store/offers`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-discounts"` navigates to `/store/discounts`.
+  - [x] Test: clicking the card with `data-testid="kpi-active-ads"` navigates to `/store/advertisements`.
+  - [x] **Run — confirm RED (missing click handlers, missing discount card, assertions fail).**
+
+- [x] **RED — Unit / Component (`StoreOrdersPage.test.tsx`):**
+  - [x] Test: Orders page renders a date filter dropdown with `data-testid="order-date-filter"`.
+  - [x] Test: Changing date filter to TODAY calls `api.get` with `/api/v1/store/orders?dateFilter=TODAY`.
+  - [x] Test: Changing date filter to CUSTOM renders `data-testid="date-from-input"` and `data-testid="date-to-input"`.
+  - [x] Test: Initializing route with `?dateFilter=TODAY` automatically sets the default select value to `"TODAY"`.
+  - [x] **Run — confirm RED (date filter UI controls and query wiring are absent).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `StoreDashboardPage.tsx`, update `DashboardData` type to include `activeDiscountsCount: number`.
+  - [x] [Component] In `StoreDashboardPage.tsx`:
+    - Add `id="revenue-chart"` to the Weekly Revenue Trend Chart container `div`.
+    - Change KPI grid columns to `lg:grid-cols-6` and add the sixth card: `"Active Discount Codes"` displaying `dashboard.activeDiscountsCount`.
+    - Change KPI cards `div` structures to `<button>` elements (or add `role="button"` and tabIndex) with hover shadow/cursor-pointer transition styles and navigation click handlers.
+  - [x] [Component] In `StoreOrdersPage.tsx`:
+    - Import `useSearchParams` from `react-router-dom`.
+    - Add state variables for `dateFilter`, `customFrom`, `customTo`. Read them from search parameters on mount.
+    - Render a `<select data-testid="order-date-filter">` on the right side of the tab bar row. When `dateFilter === "CUSTOM"`, render start and end `<input type="date">` elements.
+    - Wire `useQuery` queryKey and api request URL to pass `dateFilter`, `customFrom`, and `customTo` query parameters.
+  - [x] [Component] In `StoreBookingsPage.tsx`:
+    - Import `useSearchParams` from `react-router-dom`.
+    - Initialize `activeTab` from `searchParams.get("tab")` and `dateFilter` from `searchParams.get("dateFilter")` on component mount.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store owner (QUICK_COMMERCE) goes to dashboard → clicks "Today's Orders" card → navigates to `/store/orders?dateFilter=TODAY` → orders page loads showing only today's orders, and date filter dropdown pre-selects "Today" → ✅.
+  - [x] Store owner clicks "Active Discount Codes" card → navigates to `/store/discounts` → ✅.
+  - [x] Store owner clicks "Today's Revenue" card → page scrolls smoothly down to the revenue chart → ✅ Done.
+
+---
+
+### 5.7 — Rider Earnings Page
+
+**Root cause / Goal:**
+Riders have no way to see how much they have earned — either for a single delivery, for today, or historically. The `Order` table already holds the `deliveryFee` field (the amount charged to the buyer for delivery), which is the source of truth for a rider's per-delivery earning. There is no `RiderEarning` model in the schema, no backend service to aggregate earnings by period, no API endpoint, and no frontend page. Riders need this to trust the platform and track their income without calling the store owner.
+
+**Fix / Approach:**
+1. [Schema] Add a `RiderEarning` model that creates one row per `DELIVERED` order, storing `riderId`, `orderId`, `amount` (copied from `Order.deliveryFee` at the moment of delivery), and `createdAt`. This row is created by the order status update flow (5.3) when status transitions to `DELIVERED`.
+2. [Backend] Create `RiderEarningsService` with two methods: `getSummary(riderId)` → aggregated totals for today / this week / this month; `getHistory(riderId, cursor?)` → paginated list of per-delivery records newest-first.
+3. [Backend] Expose two new authenticated endpoints: `GET /api/v1/rider/earnings/summary` and `GET /api/v1/rider/earnings/history`.
+4. [Frontend] Create `RiderEarningsPage.tsx` at `/rider/earnings`. The tab bar introduced in 5.5's `RiderLayout` gets an "Earnings" tab added alongside "Orders" and "Account".
+
+---
+
+- [ ] **RED — Integration (`rider.earnings.test.ts`):**
+  - [ ] Test setup: seed 1 `DeliveryRider` (`riderId`). Seed 3 `Order` rows all with `status: DELIVERED` and `deliveryFee: 40.00`, linked to this rider via `RiderEarning` rows (create rows directly in the test seed, do not rely on 5.3 being implemented yet).
+  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a valid RIDER JWT for that rider → HTTP 200; response shape `{ success: true, data: { today: { count: number, total: string }, thisWeek: { count: number, total: string }, thisMonth: { count: number, total: string } } }`. With 3 deliveries all created today, all three period totals must equal `"120.00"` and count `3`.
+  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a BUYER JWT → HTTP 403.
+  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a RIDER JWT for a **different** rider who has no earnings → HTTP 200; all totals `"0.00"` and counts `0` (strict rider scope — no cross-rider data leakage).
+  - [ ] Test: `GET /api/v1/rider/earnings/history` with a valid RIDER JWT → HTTP 200; response shape `{ success: true, data: { items: [{ id, orderId, amount, createdAt }], nextCursor: string | null } }`; `items` length is `3`; `amount` on each item is `"40.00"`; items ordered newest-first.
+  - [ ] Test: `GET /api/v1/rider/earnings/history?cursor=<cursorFromPreviousResponse>` → returns the next page (empty array if no more records); `nextCursor` is `null`.
+  - [ ] Test: `GET /api/v1/rider/earnings/history` with a RIDER JWT for a different rider → returns `items: []` (no cross-rider leakage).
+  - [ ] **Run — confirm RED (both endpoints return 404 today).**
+
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] Add `RiderEarning` model to `schema.prisma`:
+    ```prisma
+    model RiderEarning {
+      id        String        @id @default(cuid())
+      riderId   String
+      orderId   String        @unique
+      amount    Decimal       @db.Decimal(10, 2)
+      createdAt DateTime      @default(now())
+      rider     DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Restrict)
+      order     Order         @relation(fields: [orderId], references: [id], onDelete: Restrict)
+
+      @@index([riderId, createdAt])
+    }
+    ```
+    Also add `earnings RiderEarning[]` back-relation to the `DeliveryRider` model, and `earning RiderEarning?` to the `Order` model.
+    Run: `pnpm --filter @gorola/api prisma migrate dev --name add_rider_earning`.
+  - [ ] [Repository] Create `apps/api/src/modules/delivery/rider-earnings.repository.ts` with:
+    - `createEarning(data: { riderId: string; orderId: string; amount: Decimal }): Promise<RiderEarning>` — simple `prisma.riderEarning.create`.
+    - `getSummary(riderId: string): Promise<{ today: { count: number; total: Decimal }; thisWeek: { count: number; total: Decimal }; thisMonth: { count: number; total: Decimal } }>` — three separate `prisma.riderEarning.aggregate` calls filtered by `riderId` and `createdAt >= startOfDay/startOfWeek/startOfMonth`.
+    - `getHistory(riderId: string, cursor?: string, take = 20): Promise<{ items: RiderEarning[]; nextCursor: string | null }>` — `prisma.riderEarning.findMany` with `where: { riderId }`, `orderBy: { createdAt: 'desc' }`, cursor-based pagination using `id` as the cursor key.
+  - [ ] [Service] Create `apps/api/src/modules/delivery/rider-earnings.service.ts` with:
+    - `getSummary(riderId: string)` — calls `RiderEarningsRepository.getSummary`; formats `Decimal` totals as fixed-2 strings (`total.toFixed(2)`).
+    - `getHistory(riderId: string, cursor?: string)` — calls `RiderEarningsRepository.getHistory`; formats each `amount` as a fixed-2 string.
+  - [ ] [Controller] In `rider.controller.ts`, add two new routes inside `registerRiderRoutes` (both behind the existing `preHandler = [requireAuth, requireRole(['RIDER'])]`):
+    - `GET /api/v1/rider/earnings/summary`: extracts `riderId` from `request.user.riderId`; calls `deps.riderEarningsService.getSummary(riderId)`; returns standard envelope.
+    - `GET /api/v1/rider/earnings/history`: reads optional query param `cursor`; extracts `riderId`; calls `deps.riderEarningsService.getHistory(riderId, cursor)`; returns standard envelope.
+  - [ ] [Routes wiring] Add `riderEarningsService: RiderEarningsService` to the `deps` object passed to `registerRiderRoutes` in `routes.ts`. Instantiate `RiderEarningsRepository` and `RiderEarningsService` in the server bootstrap alongside the existing rider deps.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit / Component (`RiderEarningsPage.test.tsx`):**
+  - [ ] Test: component fetches `GET /api/v1/rider/earnings/summary`; while loading, renders a skeleton or spinner with `data-testid="earnings-summary-loading"`.
+  - [ ] Test: on success, renders three summary cards — today, this week, this month — each with `data-testid="summary-today"`, `data-testid="summary-week"`, `data-testid="summary-month"`; the today card displays `"₹120.00"` when the mocked response total is `"120.00"`.
+  - [ ] Test: component fetches `GET /api/v1/rider/earnings/history`; renders a list where each row has `data-testid="earning-row"`; the first row displays `"₹40.00"`.
+  - [ ] Test: when `nextCursor` is non-null, a "Load more" button with `id="earnings-load-more"` is rendered; clicking it calls the history endpoint with the cursor as a query param.
+  - [ ] Test: when `nextCursor` is `null`, the "Load more" button is absent.
+  - [ ] Test: when the history list is empty (rider has zero deliveries), renders `data-testid="earnings-empty-state"` with the text "No deliveries yet".
+  - [ ] **Run — confirm RED (the page file does not exist yet).**
+
+- [ ] **RED — Unit / Component (`RiderLayout.test.tsx` — additional tab assertion):**
+  - [ ] Test: the bottom tab bar (introduced in 5.5) renders an "Earnings" tab with `data-testid="tab-earnings"` that navigates to `/rider/earnings`.
+  - [ ] **Run — confirm RED (the Earnings tab is absent from the current tab bar).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Types] Create type `EarningsSummary` in `RiderEarningsPage.tsx`:
+    ```typescript
+    type EarningsPeriod = { count: number; total: string };
+    type EarningsSummary = { today: EarningsPeriod; thisWeek: EarningsPeriod; thisMonth: EarningsPeriod };
+    ```
+  - [ ] [Types] Create type `EarningRecord` in `RiderEarningsPage.tsx`:
+    ```typescript
+    type EarningRecord = { id: string; orderId: string; amount: string; createdAt: string };
+    ```
+  - [ ] [Component] Create `apps/web/src/pages/rider/RiderEarningsPage.tsx`:
+    - Fetch summary via `useQuery` with `queryKey: ['riderEarningsSummary']`.
+    - Fetch history via `useInfiniteQuery` with `queryKey: ['riderEarningsHistory']`; pass `cursor` from `pageParam` to the API call; `getNextPageParam` returns `data.data.nextCursor ?? undefined`.
+    - Render three summary cards (today / this week / this month) showing formatted rupee amount and delivery count.
+    - Render a flat list of `EarningRecord` rows, each showing order short-ID, formatted amount, and relative time.
+    - Render a "Load more" button (`id="earnings-load-more"`) only when `hasNextPage` is `true`.
+    - Render `data-testid="earnings-empty-state"` when the flat list is empty.
+    - All `navigate()` calls use `getScopedPath()` from `@/lib/subdomain-resolver` (DECISION-038).
+  - [ ] [Component] In `RiderLayout.tsx` (created in 5.5), add a third tab "Earnings" that navigates to `/rider/earnings` using `getScopedPath()`; give it `data-testid="tab-earnings"`.
+  - [ ] [Routes] In `App.tsx`, add `<Route path="/rider/earnings" element={<RiderRoute><RiderEarningsPage /></RiderRoute>} />`.
+  - [ ] Run unit tests — **confirm GREEN**.
 
 - [ ] **Verification chain:**
-  - [ ] Field technician logs into rider app → `/rider/orders` shows a booking visit card with scheduled time "09:00–11:00 tomorrow" and a fasting warning → taps "Mark as Departed" → buyer's order page updates to "Technician is on the way" → technician arrives, taps "Mark Visit Complete" → buyer's order page shows "Visit Completed" → `BookingOrder.approvalStatus = COMPLETED` in DB → ✅ Done.
+  - [ ] Rider logs in → taps the "Earnings" tab in the bottom tab bar → `RiderEarningsPage` loads at `/rider/earnings` → three summary cards display today's / this week's / this month's totals in rupees → below them, a scrollable list shows each past delivery with its earnings amount and order ID → rider taps "Load more" → next page of older deliveries loads and appends to the list → ✅ Done.
+
+---
+
+### 5.8 — Rider E2E Tests (Playwright)
+
+- [ ] `tests/e2e/rider-journey.spec.ts`:
+  - [ ] Rider login with seeded credentials → JWT with RIDER role → redirect to `/rider/orders`
+  - [ ] Active orders page shows PREPARING orders for rider's store
+  - [ ] Click "Mark as Out for Delivery" on order → confirm → order status updates in DB → buyer order page reflects DELIVERING status
+  - [ ] Click "Mark as Delivered" → DB status = DELIVERED → buyer sees delivered state
+  - [ ] Location update: mock `navigator.geolocation` → PUT location called with valid lat/lng → 200 response
+  - [ ] Unauth access to `/rider/orders` redirects to `/rider/login`
 
 ---
 
 ## Session Notes (Phase 5)
 
 _(Append new entries here — never delete old entries.)_
+
+### Session 1 — 2026-06-09 — Phase 5.1 Rider Auth Completed
+- Implemented core Rider authentication backend modules including `RiderAuthService` for login/refresh token operations with session rate-limiting, and `rider.controller.ts` routes.
+- Fixed legacy `rider.stubs.test.ts` to include valid signed RIDER tokens for the active orders, order status, and location update routes.
+- Created `RiderLoginPage` and `RiderRoute` components on the web application, wired into `App.tsx` router configuration.
+- Completed full TDD flow: wrote `RiderRoute.test.tsx` and `RiderLoginPage.test.tsx` unit tests, saw them fail, implemented frontend features, and ran full vitest suite ensuring all 360+ tests are green.
+- Updated `seed.ts` to add mock local accounts for both delivery rider (`rider1@gorola.in`) and field technician (`rider2@gorola.in`) with password `Rider#123`.
+- Documented seeded credentials in `quick-links/store-partner-info.md` and fixed all typescript/ESLint linting issues across the workspace.
+
+### Session 2 — 2026-06-09 — Phase 5.2 Rider Active Orders Feed Completed
+- Implemented `OrderRepository.findManyByStore` supporting status filtering, and updated `orderRelationsInclude` to retrieve user information (phone, name) automatically for order query callers.
+- Created `RiderOrderService` and wired it to `routes.ts` and `rider.controller.ts`, replacing the active orders feed stub with a real implementation returning masked customer phone numbers.
+- Renamed `rider.stubs.test.ts` to `rider.endpoints.test.ts` and created `rider.orders.test.ts` integration test suite.
+- Re-routed active rider portals and redirections from `/rider/dashboard` to `/rider/orders`.
+- Built `RiderOrdersPage` with status-based order grouping sections, responsive item lists, auto-refreshing polling (30s), and a clean header.
+- Wrote frontend component/unit tests in `RiderOrdersPage.test.tsx` and updated `RiderLoginPage.test.tsx`.
+- Ran full lint, typecheck, integration tests, and E2E playwright stubs suite ensuring all tests are green.
+
+### Session 3 — 2026-06-10 — Phase 5.3 Rider Order Status Update Completed
+- Wired PUT endpoint `/api/v1/rider/orders/:id/status` to handle rider status transitions.
+- Implemented status validation and update logic in `RiderOrderService`, restricting updates to owner store scope and valid transitions (`PREPARING -> OUT_FOR_DELIVERY -> DELIVERED`).
+- Added "Mark as Out for Delivery" and "Mark as Delivered" actions to the `RiderOrdersPage` UI, gated behind standard Radix confirmation dialogs.
+- Created and successfully verified `rider.status.test.ts` backend integration suite and updated `RiderOrdersPage.test.tsx` frontend suite.
+- Fixed unused variable `rider2` inside `rider.status.test.ts` to clear workspace lint checks.
+
+### Session 4 — 2026-06-10 — Phase 5.4 Rider Real-Time Location Tracking Completed
+- Implemented DB location upserts in `RiderRepository.updateLocation` and coordinator validation/Socket broadcasts in `RiderLocationService`.
+- Wired PUT endpoint `/api/v1/rider/location` and activated authenticated Socket.IO `/rider` namespace with JWT verifier middleware.
+- Created `useRiderLocation` hook to watch HTML5 Geolocation API coordinates and publish updates.
+- Integrated tracking into `RiderOrdersPage` and `OrderConfirmationPage`, rendering real-time coordinate displays.
+- Wrote full unit/integration test suites and verified that all tests, eslint, and tsc checks pass successfully.
+
+### Session 5 — 2026-06-10 — Phase 5.4.1 Modular Geolocation Map Fix Completed
+- Implemented coordinate persistence (`deliveryLat`/`deliveryLng`) on orders during checkout.
+- Built reusable Leaflet map component `<OrderRouteMap />` and integrated it into the buyer confirmation page and rider active orders list.
+- Removed OSRM routing engine code, routes, configurations, and test cases, configuring the map to present marker pins (store, buyer, rider) without routing polylines to keep the deployment fully private, compliant with the DPDP Act, and lightweight.
+- Cleaned unused imports and updated E2E stubs to align with the location endpoint implementation.
+- Verified that full stack typechecks, lints, integration tests, and E2E journeys are completely green.
+
+### Session 6 — 2026-06-11 — Phase 5.5 Rider Header & Quality Gates Completed
+- Added premium top header/navbar to `RiderLayout` containing the GoRola brand logo and `Rider` tag, matching Store/Admin layouts.
+- Ensured compliance with >= 44px mobile tap target accessibility guidelines and verified all vitest, eslint, and tsc quality gates are 100% green.
+- Clarified and mapped architectural plans for upcoming store status confirmation modals, rider order card list-view refactoring (click to open details modal), and status filtering tab menus.
+
+### Session 7 — 2026-06-11 — Phase 5.5.1 Rider Active Orders Refactoring & Store Status Confirmations Completed
+- Implemented status change confirmation dialogs in `StoreOrdersPage.tsx` using Radix `<Dialog>`.
+- Refactored `RiderOrdersPage.tsx` with filter tabs for PREPARING and OUT_FOR_DELIVERY orders, compact list-view cards (showing only items and delivery address landmark), and click-to-open overlay details modals featuring full buyer information, toggleable route maps, and status-updating action buttons.
+- Ensured body scroll locks when overlay detailed modals are active.
+- Completed full TDD cycle: verified RED state, implemented modifications, and ran full suite of web unit tests, typechecks, and lints (ensuring GREEN state).
+
+### Session 11 — 2026-06-11 — Tab Renaming and E2E Selector Collision Fixes Completed
+- Renamed the booking store dashboard's `"departed"` tab and status badge to `"on the way"` to align with quick commerce terminology and buyer confirmation screen configurations.
+- Resolved a critical E2E selector collision in `booking-journey.spec.ts` where `hasText: 'Approve'` was matching the `"approved"` tab button instead of the `"Approve Booking"` action button inside the modal. Updated selector to use exact getByRole query.
+- Aligned Vitest unit tests in `StoreBookingsPage.test.tsx` to search for `/on the way/i` tab instead of `/departed/i`.
+- Verified that all unit tests, eslint rules, and typescript compilations are completely green.
+
+### Session 8 — 2026-06-11 — Phase 5.6 Dual-Mode: Field Technician Completed
+- Implemented Dual-Mode capability for Delivery Riders and Field Technicians based on the store types and order configurations.
+- Integrated the database schema for `riderType` field on `DeliveryRider`.
+- Updated active orders feed controller (`GET /api/v1/rider/orders/active`) to return approved booking orders for `FIELD_TECHNICIAN` riders, while strictly filtering them out for normal `DELIVERY` riders.
+- Supported state transition flow for bookings (`APPROVED -> OUT_FOR_DELIVERY -> DELIVERED`) in the status updater service and emitted Socket.IO events to trigger real-time updates for buyers.
+- Created `BookingVisitCard` view in frontend to show scheduled date/timeslot, fasting warning, and buyer location map.
+- Verified backend and frontend test suites are passing with green results.
+
+### Session 9 — 2026-06-11 — Terminology Adjustments & Booking Flow Refinements
+- Modified Rider side bottom tab navigation, heading, lists, empty states, toasts, and dialogs to display "Services" instead of "Orders" when a rider is configured as a `FIELD_TECHNICIAN`.
+- Replaced "Out for Delivery" and "Ready for Pickup" terminology with "Departed" and "Ready for Visit" for field visits.
+- Updated the Store Bookings timeline log component to map raw `OUT_FOR_DELIVERY` status history events to `"DEPARTED"` label, matching the booking commerce vocabulary.
+- Configured dialog confirmations for both rider status transitions and store booking updates.
+- Updated unit test assertions in `RiderOrdersPage.test.tsx` to accommodate the revised text.
+- Re-run and confirmed all vitest suites, ESLint rules, and TypeScript compilation gates are 100% green.
+
+### Session 10 — 2026-06-11 — Status Capitalization Formatting & Receipt Page Adjustments
+- Implemented Title Case formatting (e.g. converting PENDING_APPROVAL to Pending Approval) for order/booking statuses displayed in the UI (Buyer's Order History page, Store Incoming Orders, and Bookings dashboards) by using the formatStatusLabel helper.
+- Removed the uppercase styling classes (uppercase, tracking-wider) from badges and order text across pages.
+- Removed the status badge entirely from the Booking Confirmation receipt page (`BookingConfirmationPage.tsx`), matching the layout of the quick commerce receipts (`OrderConfirmationPage.tsx`).
+- Removed the `uppercase` CSS class from the stepper step labels ("Placed", "Preparing", "On the way", "Delivered") and status badges on `OrderConfirmationPage.tsx` so they render in Title Case.
+- Updated failing vitest assertions in `StoreBookingsPage.test.tsx` and `StoreOrdersPage.test.tsx` to expect the correctly formatted status labels instead of the raw uppercase enums.
+- Successfully verified that all 383 frontend unit tests, TypeScript typechecks, and ESLint rule checks are fully passing.
+
+### Session 12 — 2026-06-11 — Phase 5.6.1-A Today-Only Bookings Completed
+- Completed Phase 5.6.1-A platform improvements for today-only bookings filtering on the rider feed.
+- Updated `findManyByStore` in `order.repository.ts` to support `scheduledDate` filters, and modified `rider-order.service.ts` to compute and pass UTC midnight range limits for the current day.
+- Updated `RiderOrdersPage.tsx` to show "Today's Bookings" heading and "Scheduled for today" subtitle for field technician riders.
+- Wrote new integration tests in `rider.field-technician.test.ts` and updated unit tests in `RiderOrdersPage.test.tsx`.
+- Confirmed full test suites (619 backend + 385 frontend) build, typecheck, lint, and execute completely green.
+
+### Session 13 — 2026-06-11 — Phase 5.6.1-B Store Bookings Date Filter Completed
+- Completed Phase 5.6.1-B store bookings schedule date dropdown filtering.
+- Implemented state management, local-timezone based string comparisons for robustness, client-side list filtering, and tab counts.
+- Rendered UI dropdown options along with dynamic custom date input fields.
+- Verified test suite executes completely green (389 passing in web workspace) and production builds pass cleanly.
+
+### Session 14 — 2026-06-11 — Phase 5.6.1-C Admin Riders Page & Multi-Store Junction Table Completed
+- Migrated database model to replace the single `storeId` on `DeliveryRider` with a modern `RiderStore` junction table.
+- Updated backend services, auth logic, and repositories to query stores via the junction table.
+- Added comprehensive Admin Riders CRUD endpoints (`GET /api/v1/admin/riders`, `POST /api/v1/admin/riders`, `PUT /api/v1/admin/riders/:id`) with validation and type checks.
+- Implemented the frontend `AdminRidersPage` with Add/Edit modals, type-scoped store checkbox pickers, and suspension toggles.
+- Fixed all ESLint imports and TypeScript compilation errors. Verified that the typecheck and lint tasks run completely clean across the entire repository workspace.
+
+### Session 15 — 2026-06-11 — Phase 5.6.1-D Store Dashboard & Orders/Bookings Date Filters Completed
+- Implemented clickable KPI cards on the store dashboard and wired deep-links to correspond with orders, bookings, active ads, offers, and discounts.
+- Split Active Offers and Active Discounts into two separate KPI cards, expanding the layout to 6 columns.
+- Implemented smooth scrolling on Today's Revenue card clicks down to the Weekly Revenue trend chart.
+- Wired Store Orders and Store Bookings pages to initialize active tabs, date filters, and custom ranges from URL search parameters on mount, invalidating and refetching data reactively.
+- Clarified dashboard card headings for booking commerce: `"Appointments Scheduled Today"` and `"Revenue from Bookings Made Today"` (with subtext `"From bookings made today"`) to clearly distinguish scheduling vs booking-creation dates.
+- Verified all Vitest frontend unit tests, integration test suites, TypeScript type compilation, and ESLint check tasks run completely green.
+

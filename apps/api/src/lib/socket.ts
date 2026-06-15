@@ -76,7 +76,11 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
 
     socket.on("join_store", async (storeId: string) => {
       try {
-        if (user.role !== "STORE_OWNER" && user.role !== "ADMIN") {
+        if (
+          user.role !== "STORE_OWNER" &&
+          user.role !== "ADMIN" &&
+          (user.role !== "RIDER" || user.storeId !== storeId)
+        ) {
           socket.emit("error", { message: "Unauthorized access to store updates" });
           return;
         }
@@ -94,12 +98,35 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
     });
   });
 
-  // Rider namespace stub
+  // Rider namespace
   const riderNamespace = io.of("/rider");
-  riderNamespace.on("connection", (socket) => {
-    app.log.info({ socketId: socket.id }, "Rider socket connected (STUB)");
-    socket.emit("error", { message: "Rider interface deferred to Phase 5" });
-    socket.disconnect();
+
+  riderNamespace.use(async (socket: Socket, next) => {
+    try {
+      const token = socket.handshake.auth.token;
+      if (typeof token !== "string") {
+        return next(new Error("Authentication error: Missing token"));
+      }
+
+      const payload = await options.tokenVerifier.verifyAccessToken(token);
+      if (payload.role !== "RIDER" && payload.role !== "ADMIN") {
+        return next(new Error("Authentication error: Unauthorized role"));
+      }
+      (socket as AuthenticatedSocket).user = payload;
+      next();
+    } catch {
+      next(new Error("Authentication error: Invalid token"));
+    }
+  });
+
+  riderNamespace.on("connection", (socket: Socket) => {
+    const authSocket = socket as AuthenticatedSocket;
+    const user = authSocket.user;
+    app.log.info({ socketId: socket.id, userId: user.sub }, "Rider socket connected");
+
+    socket.on("disconnect", () => {
+      app.log.info({ userId: user.sub, socketId: socket.id }, "Rider socket disconnected");
+    });
   });
 
   app.decorate("io", io);

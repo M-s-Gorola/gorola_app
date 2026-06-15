@@ -1,13 +1,15 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CheckCircle2, ChevronRight, Clock, MessageSquare, RefreshCcw, ThumbsDown, ThumbsUp } from "lucide-react";
+import { CheckCircle2, ChevronRight, Clock, MessageSquare, RefreshCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
+import { StarRating } from "@/components/shared/StarRating";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
+import { formatStatusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
@@ -43,16 +45,24 @@ type Order = {
     storeType: string;
   };
   items: OrderItem[];
-  rating: boolean | null;
+  rating: number | null;
   ratingComment: string | null;
   bookingOrder: BookingOrderDetails | null;
 };
+
+function parseScheduledDate(dateStr: string): Date {
+  const parts = dateStr.substring(0, 10).split("-").map(Number);
+  const year = parts[0] ?? 0;
+  const month = parts[1] ?? 1;
+  const day = parts[2] ?? 1;
+  return new Date(year, month - 1, day);
+}
 
 export function OrderHistoryPage() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [ratingComment, setRatingComment] = useState<Record<string, string>>({});
-  const [activeRating, setActiveRating] = useState<string | null>(null);
+  const [activeRating, setActiveRating] = useState<Record<string, number>>({});
   const [filter, setFilter] = useState<"all" | "quick" | "booking">("all");
 
   const getBadgeDetails = (order: Order) => {
@@ -71,17 +81,17 @@ export function OrderHistoryPage() {
         case "CANCELLED":
           return { label: "Cancelled", classes: "bg-red-100 text-red-700 border border-red-200" };
         default:
-          return { label: status, classes: "bg-blue-100 text-blue-700 border border-blue-200" };
+          return { label: formatStatusLabel(status), classes: "bg-blue-100 text-blue-700 border border-blue-200" };
       }
     }
 
     if (order.status === "DELIVERED") {
-      return { label: "DELIVERED", classes: "bg-green-100 text-green-700" };
+      return { label: "Delivered", classes: "bg-green-100 text-green-700" };
     }
     if (order.status === "CANCELLED") {
-      return { label: "CANCELLED", classes: "bg-red-100 text-red-700" };
+      return { label: "Cancelled", classes: "bg-red-100 text-red-700" };
     }
-    return { label: order.status, classes: "bg-blue-100 text-blue-700" };
+    return { label: formatStatusLabel(order.status), classes: "bg-blue-100 text-blue-700" };
   };
 
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -165,7 +175,7 @@ export function OrderHistoryPage() {
   });
 
   const rateMutation = useMutation({
-    mutationFn: async ({ orderId, rating, comment }: { orderId: string; rating: boolean; comment?: string | undefined }) => {
+    mutationFn: async ({ orderId, rating, comment }: { orderId: string; rating: number; comment?: string | undefined }) => {
       const res = await api!.put(`/api/v1/orders/${orderId}/rate`, { 
         rating,
         ratingComment: comment 
@@ -174,7 +184,13 @@ export function OrderHistoryPage() {
     },
     onSuccess: (_data, variables) => {
       toast.success("Thank you for your rating!");
-      setActiveRating(null);
+      setActiveRating((prev) => {
+        const next = { ...prev };
+        if (variables?.orderId) {
+          delete next[variables.orderId];
+        }
+        return next;
+      });
       void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
       if (variables?.orderId) {
         void queryClient.invalidateQueries({ queryKey: ["buyer-order-confirmation", variables.orderId] });
@@ -288,7 +304,7 @@ export function OrderHistoryPage() {
                 <div className="space-y-1 min-w-0 w-full md:w-auto">
                   <div className="flex items-center gap-2 flex-wrap">
                     <h3 className="font-bold text-sm sm:text-lg text-gorola-charcoal truncate">{order.store.name}</h3>
-                    <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${badge.classes} shrink-0`}>
+                    <span className={`text-[9px] sm:text-[10px] px-2 py-0.5 rounded-full font-bold tracking-wider ${badge.classes} shrink-0`}>
                       {badge.label}
                     </span>
                   </div>
@@ -300,7 +316,7 @@ export function OrderHistoryPage() {
                     <div className="mt-1 space-y-0.5 text-xs text-gorola-charcoal/60 bg-gorola-charcoal/[0.02] p-2 rounded-xl border border-gorola-charcoal/5">
                       <div className="flex items-center gap-1.5 font-semibold text-gorola-charcoal">
                         <Clock className="w-3.5 h-3.5 text-gorola-pine shrink-0" />
-                        <span className="truncate">Scheduled: {format(new Date(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
+                        <span className="truncate">Scheduled: {format(parseScheduledDate(order.bookingOrder.scheduledDate), "MMM d, yyyy")}</span>
                       </div>
                       <div className="pl-5 text-[11px]">
                         Slot: {order.bookingOrder.timeslot}
@@ -379,8 +395,12 @@ export function OrderHistoryPage() {
                             <CheckCircle2 className="w-3.5 h-3.5" />
                             Rating submitted
                           </span>
+                          <div className="flex items-center gap-2 mt-1">
+                            <StarRating rating={order.rating} disabled={true} starClassName="w-4 h-4" />
+                            <span className="text-xs font-bold text-gorola-charcoal">{order.rating} / 5</span>
+                          </div>
                           {order.ratingComment && (
-                            <p className="text-[10px] text-gorola-charcoal/50 italic">"{order.ratingComment}"</p>
+                            <p className="text-[10px] text-gorola-charcoal/50 italic mt-0.5">"{order.ratingComment}"</p>
                           )}
                         </div>
                       ) : (
@@ -388,58 +408,23 @@ export function OrderHistoryPage() {
                       )}
                     </div>
                     
-                    {order.rating !== null ? (
+                    {order.rating === null && (
                       <div className="flex items-center gap-3">
-                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold border ${
-                          order.rating === true 
-                            ? 'bg-green-50 text-green-700 border-green-200' 
-                            : 'bg-red-50 text-red-700 border-red-200'
-                        }`}>
-                          {order.rating === true ? (
-                            <>
-                              <ThumbsUp className="w-3.5 h-3.5" />
-                              Liked
-                            </>
-                          ) : (
-                            <>
-                              <ThumbsDown className="w-3.5 h-3.5" />
-                              Disliked
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="flex items-center gap-3">
-                        <button
-                          onClick={() => setActiveRating(activeRating === `${order.id}:up` ? null : `${order.id}:up`)}
-                          disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            activeRating === `${order.id}:up`
-                              ? 'bg-green-100 text-green-700 border border-green-200' 
-                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                          } disabled:opacity-50`}
-                          aria-label="Thumbs Up"
-                        >
-                          <ThumbsUp className="w-3.5 h-3.5" />
-                        </button>
-                        <button
-                          onClick={() => setActiveRating(activeRating === `${order.id}:down` ? null : `${order.id}:down`)}
-                          disabled={order.rating !== null || (rateMutation.isPending && rateMutation.variables?.orderId === order.id)}
-                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold transition-all ${
-                            activeRating === `${order.id}:down`
-                              ? 'bg-red-100 text-red-700 border border-red-200' 
-                              : 'bg-gorola-charcoal/5 text-gorola-charcoal/60 hover:bg-gorola-charcoal/10 hover:text-gorola-charcoal'
-                          } disabled:opacity-50`}
-                          aria-label="Thumbs Down"
-                        >
-                          <ThumbsDown className="w-3.5 h-3.5" />
-                        </button>
+                        <StarRating
+                          rating={activeRating[order.id] ?? 0}
+                          interactive={true}
+                          onChange={(val) => {
+                            setActiveRating((prev) => ({ ...prev, [order.id]: val }));
+                          }}
+                          disabled={rateMutation.isPending && rateMutation.variables?.orderId === order.id}
+                          starClassName="w-4 h-4"
+                        />
                       </div>
                     )}
                   </div>
 
                   {/* Comment Box */}
-                  {activeRating?.startsWith(order.id) && (
+                  {activeRating[order.id] !== undefined && order.rating === null && (
                     <div className="animate-in fade-in slide-in-from-top-2 duration-300">
                       <div className="relative group/input">
                         <MessageSquare className="absolute left-3 top-3 w-4 h-4 text-gorola-charcoal/20 group-focus-within/input:text-gorola-charcoal/40 transition-colors" />
@@ -454,7 +439,7 @@ export function OrderHistoryPage() {
                         <button
                           onClick={() => rateMutation.mutate({ 
                             orderId: order.id, 
-                            rating: activeRating.endsWith(":up"), 
+                            rating: activeRating[order.id]!, 
                             comment: ratingComment[order.id] 
                           })}
                           className="px-4 py-1.5 bg-gorola-pine text-white text-xs font-bold rounded-lg hover:bg-gorola-pine/90 transition-colors shadow-md shadow-gorola-pine/10 disabled:opacity-50"

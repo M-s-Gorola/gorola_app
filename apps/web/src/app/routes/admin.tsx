@@ -9,6 +9,7 @@ import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { AdminFeatureFlagsPage } from "@/pages/admin/AdminFeatureFlagsPage";
 import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
+import { AdminRidersPage } from "@/pages/admin/AdminRidersPage";
 import { AdminSetup2FAPage } from "@/pages/admin/AdminSetup2FAPage";
 import { AdminStoreDetailPage } from "@/pages/admin/AdminStoreDetailPage";
 import { AdminStoresPage } from "@/pages/admin/AdminStoresPage";
@@ -66,6 +67,17 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
         <AdminRoute>
           <AdminLayout>
             <AdminUsersPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-riders"
+      path={`${prefix}/riders`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminRidersPage />
           </AdminLayout>
         </AdminRoute>
       }

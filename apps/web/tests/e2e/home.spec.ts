@@ -5,9 +5,9 @@ test.describe('Home Page', () => {
     await page.goto('/');
 
     // Assert <nav> is visible and contains the GoRola mountain mark SVG
-    const nav = page.locator('nav');
+    const nav = page.locator('nav[aria-label="Buyer navigation"]');
     await expect(nav).toBeVisible();
-    const logo = nav.locator('img[data-testid="gorola-mountain-mark"]');
+    const logo = nav.locator('img[data-testid="gorola-mountain-mark"]:visible');
     await expect(logo).toBeVisible();
 
     // Assert hero heading is visible (matches regex /delivered|arrive|got you/i)

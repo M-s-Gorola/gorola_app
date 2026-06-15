@@ -2,17 +2,26 @@ import { test, expect } from '@playwright/test';
 
 test.describe('API Stubs', () => {
   test('E2E-016: Rider Stub Endpoints Return 501', async ({ request }) => {
-    // These are backend endpoints that are currently stubs
-    
-    const stubs = [
-      { url: '/api/v1/rider/auth/login', method: 'post' },
-      { url: '/api/v1/rider/orders/active', method: 'get' },
-      { url: '/api/v1/rider/orders/123/status', method: 'put' },
-      { url: '/api/v1/rider/location', method: 'put' }
-    ];
+    // 1. Authenticate to get a valid RIDER token
+    const loginResponse = await request.post('/api/v1/rider/auth/login', {
+      data: {
+        email: 'rider1@gorola.in',
+        password: 'Rider#123'
+      }
+    });
+    expect(loginResponse.status()).toBe(200);
+    const loginBody = await loginResponse.json();
+    const token = loginBody.data.accessToken;
+
+    // 2. All rider backend endpoints have been implemented. There are no remaining stubs.
+    const stubs: { url: string; method: 'get' | 'post' | 'put' | 'delete' }[] = [];
 
     for (const stub of stubs) {
-      const response = await request[stub.method](stub.url);
+      const response = await request[stub.method](stub.url, {
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
       // Assert status is 501 Not Implemented
       expect(response.status()).toBe(501);
       

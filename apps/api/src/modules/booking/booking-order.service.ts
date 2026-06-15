@@ -249,6 +249,8 @@ export class BookingOrderService {
           landmarkDescription: address.landmarkDescription,
           addressLabel: address.label,
           flatRoom: address.flatRoom,
+          deliveryLat: address.lat,
+          deliveryLng: address.lng,
           appliedDiscountCode: discountIdToIncrement ? normalizedCode : null,
           items: {
             create: items.map((item) => {
@@ -394,8 +396,8 @@ export class BookingOrderService {
       throw new ForbiddenError("You are not authorized to reject bookings for this store.");
     }
 
-    if (booking.order.status !== "PENDING_APPROVAL") {
-      throw new ValidationError("Only bookings in PENDING_APPROVAL status can be rejected.");
+    if (!["PENDING_APPROVAL", "APPROVED", "OUT_FOR_DELIVERY"].includes(booking.order.status)) {
+      throw new ValidationError("Only bookings in pending, approved, or on the way status can be cancelled.");
     }
 
     const rejected = await this.db.$transaction(async (tx) => {
@@ -535,8 +537,8 @@ export class BookingOrderService {
       throw new ForbiddenError("You are not authorized to complete bookings for this store.");
     }
 
-    if (booking.order.status !== "APPROVED") {
-      throw new ValidationError("Only bookings in APPROVED status can be completed.");
+    if (booking.order.status !== "OUT_FOR_DELIVERY") {
+      throw new ValidationError("Only bookings in OUT_FOR_DELIVERY status can be completed.");
     }
 
     const completed = await this.db.$transaction(async (tx) => {
@@ -586,6 +588,68 @@ export class BookingOrderService {
 
     this.orderEmitter?.emitStatusChanged(orderId, "DELIVERED");
     return completed;
+  }
+
+  public async dispatchBooking(
+    storeId: string,
+    orderId: string,
+    ownerId: string,
+    ip?: string,
+    userAgent?: string
+  ): Promise<Prisma.OrderGetPayload<{ include: { items: true; statusHistory: true } }>> {
+    const booking = await this.repository.findById(orderId);
+    if (!booking) {
+      throw new NotFoundError(`Booking order with ID ${orderId} not found.`);
+    }
+
+    if (booking.order.storeId !== storeId) {
+      throw new ForbiddenError("You are not authorized to dispatch bookings for this store.");
+    }
+
+    if (booking.order.status !== "APPROVED") {
+      throw new ValidationError("Only bookings in APPROVED status can be dispatched.");
+    }
+
+    const dispatched = await this.db.$transaction(async (tx) => {
+      await tx.order.update({
+        where: { id: orderId },
+        data: { status: "OUT_FOR_DELIVERY" }
+      });
+
+      await tx.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: "OUT_FOR_DELIVERY",
+          changedBy: `store-owner:${ownerId}`,
+          note: "Booking service dispatched / on the way"
+        }
+      });
+
+      await tx.auditLog.create({
+        data: {
+          actorId: ownerId,
+          actorRole: "STORE_OWNER",
+          action: "STORE_BOOKING_DISPATCH",
+          entityType: "Order",
+          entityId: orderId,
+          oldValue: { status: booking.order.status },
+          newValue: { status: "OUT_FOR_DELIVERY" },
+          ip: ip ?? "",
+          userAgent: userAgent ?? ""
+        }
+      });
+
+      return tx.order.findUniqueOrThrow({
+        where: { id: orderId },
+        include: {
+          items: true,
+          statusHistory: true
+        }
+      });
+    });
+
+    this.orderEmitter?.emitStatusChanged(orderId, "OUT_FOR_DELIVERY");
+    return dispatched;
   }
 }
 

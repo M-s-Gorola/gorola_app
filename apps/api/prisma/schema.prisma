@@ -105,7 +105,7 @@ model Store {
   advertisements            Advertisement[]
   offers                    Offer[]
   discounts                 Discount[]
-  deliveryRiders            DeliveryRider[]
+  riders                    RiderStore[]
 
   @@index([name])
   @@index([isActive, isDeleted])
@@ -279,8 +279,10 @@ model Order {
   addressLabel        String?
   flatRoom            String?
   deliveryNote        String?
+  deliveryLat         Decimal?             @db.Decimal(10, 7)
+  deliveryLng         Decimal?             @db.Decimal(10, 7)
   scheduledFor        DateTime?
-  rating              Boolean?
+  rating              Decimal?             @db.Decimal(2, 1)
   ratingComment       String?
   appliedDiscountCode String?
   createdAt           DateTime             @default(now())
@@ -432,19 +434,34 @@ model AuditLog {
 }
 
 model DeliveryRider {
-  id        String          @id @default(cuid())
-  name      String
-  phone     String
-  storeId   String
-  isActive  Boolean         @default(true)
-  riderType RiderType       @default(DELIVERY)
-  isDeleted Boolean         @default(false)
-  createdAt DateTime        @default(now())
-  updatedAt DateTime        @updatedAt
-  store     Store           @relation(fields: [storeId], references: [id], onDelete: Restrict)
-  locations RiderLocation[]
+  id           String          @id @default(cuid())
+  name         String
+  phone        String
+  email        String          @unique
+  passwordHash String
+  isActive     Boolean         @default(true)
+  riderType    RiderType       @default(DELIVERY)
+  isDeleted    Boolean         @default(false)
+  createdAt    DateTime        @default(now())
+  updatedAt    DateTime        @updatedAt
+  locations    RiderLocation[]
+  stores       RiderStore[]
 
-  @@index([storeId, isActive, isDeleted])
+  @@index([isActive, isDeleted])
+}
+
+model RiderStore {
+  id        String        @id @default(cuid())
+  riderId   String
+  storeId   String
+  isPrimary Boolean       @default(false)
+  createdAt DateTime      @default(now())
+  rider     DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  store     Store         @relation(fields: [storeId], references: [id], onDelete: Restrict)
+
+  @@unique([riderId, storeId])
+  @@index([riderId])
+  @@index([storeId])
 }
 
 model RiderLocation {
@@ -473,3 +490,4 @@ model BookingOrder {
   updatedAt            DateTime              @updatedAt
   order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+

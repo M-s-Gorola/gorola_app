@@ -20,15 +20,18 @@
 | Phase 6.8 | E2E Test Suite Alignment | COMPLETE | Aligned category segregation homepage assertions and E2E test routes. |
 | Phase 6.9 | Booking Commerce Feature Parity & Discount Integration | COMPLETE | Standardized discount pipelines, collapsible itemized detail modals, and transparent maximum discount disclosure rules. |
 | Phase 6.10 | Bulk Insert & Bulk Restock | COMPLETE | Two-phase validate/confirm pattern. Admin bulk category/subcategory import (Phase 6.10.1), store owner bulk product import (Phase 6.10.2), and bulk restock (Phase 6.10.3) are fully complete with comprehensive testing. |
+| Phase 6.11 | Star Rating System | COMPLETE | Upgrade thumbs up/down feedback to 0-5 decimal stars. |
+| Phase 6.12 | Mobile Bottom Navigation Tabs | COMPLETE | Implement bottom tab bar (Home, Orders, Cart, Profile Option B) on mobile viewports. |
+| Phase 6.13 | Card Layout & Advertisement Layout | COMPLETE | Standardize Category & Subcategory cards (square image, name below, no counts) and optimize ad banner placement and mobile sizing. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-08
-- **Session Summary:** Completed Phase 6.10 (Bulk Insert & Bulk Restock) fully. Implemented and tested: (1) Admin Bulk Category & Subcategory Import, (2) Store Owner Bulk Product/Variant Import, and (3) Store Owner Bulk Restock. All backend integration tests (all 99 tests pass) and frontend component tests (all 17 tests pass) are fully green.
-- **Next Session Must Start With:** Next planned maintenance or feature phase.
-- **In Progress Right Now:** None. All Phase 6.10 features complete.
+- **Date:** 2026-06-12
+- **Session Summary:** Completed Phase 6.12 and Phase 6.13. Implemented responsive bottom navigation tabs, updated Category & Subcategory cards to match the product layout (aspect-square images, centered names, 4 columns per row), moved the AdvertisementBanner below the HeroSection, and expanded mobile slide width to 92% to preserve adjacent previews while aligning margins.
+- **Next Session Must Start With:** Next Phase or features requested by the user.
+- **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
 ---
@@ -753,6 +756,133 @@ The two-phase validate/confirm API is thoroughly covered by **integration tests*
 
 ---
 
+## Phase 6.11 Checklist — Buyer Order & Booking Rating to 0–5 Stars
+
+**Root Cause / Goal:**
+Currently, `rules_and_spec.md` and the existing database schema use `rating Boolean?` to represent thumbs up/down feedback in the buyer's window. We want to upgrade this to a detailed 0–5 star decimal rating with 1 decimal precision, visually filled matching the brand's saffron orange color (`#e8833a`), standardized across both Quick Commerce and Booking Commerce pages.
+
+**Fix / Approach:**
+1. Update Prisma schema to alter the `rating` field of `Order` to `Decimal? @db.Decimal(2, 1)`.
+2. Update the backend repository types, schema validations, and serialization.
+3. Build a React `StarRating` component with dynamic filled widths (e.g. `4.3` fills the fifth star by `30%` using absolute overlay and `--gorola-saffron` color).
+4. Replace the old thumbs buttons in the confirmation and history pages.
+
+---
+
+- [x] **RED — Integration (`order.rate.test.ts`):**
+  - [x] Test: Update integration tests in `order.rate.test.ts` to send a numeric rating: `PUT /api/v1/orders/:id/rate` with `{ rating: 4.5, ratingComment: "Awesome!" }` should return 200 and serialize rating back as `4.5`.
+  - [x] Test: Verify validation rejects invalid ratings: `PUT /api/v1/orders/:id/rate` with `{ rating: 5.5 }` or `{ rating: -1.0 }` returns 400.
+  - [x] **Run — confirm RED (test fails compilation/validation due to Zod validating boolean, or DB failing to store decimal).**
+
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] [Schema] In `schema.prisma`, update `rating Boolean?` to `rating Decimal? @db.Decimal(2, 1)`.
+  - [x] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name change_rating_to_decimal` to apply migration to local test DB and update client types.
+  - [x] [Repository] In `order.repository.ts`, update `updateRating` signature to accept `rating: Prisma.Decimal | number | null`.
+  - [x] [Controller] In `order.controller.ts`:
+    - Update `rateBodySchema` to `rating: z.number().min(0).max(5).nullable().optional()`.
+    - Update `serializeOrderResponse` to return `rating: order.rating ? Number(order.rating) : null`.
+  - [x] Run integration test — **confirm GREEN**.
+
+- [x] **RED — Unit / Component (`OrderConfirmationPage.test.tsx`, `BookingConfirmationPage.test.tsx`, `OrderHistoryPage.test.tsx`):**
+  - [x] Test: In `OrderConfirmationPage.test.tsx`, assert that a delivered order displays a read-only 5-star rating view showing the selected stars when `rating` is `4.5`.
+  - [x] Test: Click a star rating during submission (e.g., clicking the 4th star) triggers `rateMutation.mutate` with `rating: 4.0`.
+  - [x] Test: Repeat assertions for `BookingConfirmationPage.test.tsx` and `OrderHistoryPage.test.tsx`.
+  - [x] **Run — confirm RED (since components currently search for "Thumbs Up" / "Thumbs Down" buttons and send boolean values).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, and `OrderHistoryPage.tsx`, update types `BuyerOrderDetail`, `BookingEnvelope`, and `Order` to have `rating: number | null`.
+  - [x] [Star Component] Create a reusable `StarRating.tsx` component (or add local rendering logic) that displays 5 stars:
+    - Background: 5 outline star SVGs.
+    - Foreground: 5 filled star SVGs in `--gorola-saffron` (`#e8833a`), wrapped in relative divs with `overflow-hidden` and `width: fillPercentage%` where `fillPercentage = Math.min(Math.max(rating - i, 0), 1) * 100` for star index `i`.
+    - Interactive State: Handle `onMouseMove`, `onMouseLeave`, and `onClick` to determine the hover/click values in 0.5 increments.
+  - [x] [Component] Replace `ThumbsUp`/`ThumbsDown` UI with the `StarRating` in `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, and `OrderHistoryPage.tsx`.
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Buyer places order → Order is delivered → Confirmation Page displays a 5-star rating input → Buyer hovers over stars (saffron color fills dynamically) and clicks 4.5 stars → Buyer types comment and submits → "Rating submitted" appears, rendering exactly 4.5 stars filled (4 fully filled, the 5th filled to 50% with saffron orange) → ✅ Done.
+
+---
+
+## Phase 6.12 Checklist — Mobile Bottom Navigation Tabs
+
+**Root cause / Goal:**
+Currently, the buyer application uses the top navbar for Cart and Profile access across both desktop and mobile views. On mobile, this crowds the navbar, limits search input width, and goes against mobile-first design patterns. We need to introduce bottom navigation tabs (Home, Orders, Cart, Profile) exclusively for mobile viewports, streamline the top mobile navbar to only show the logo and search bar, and add a Logout button to the Profile page (Option B).
+
+**Fix / Approach:**
+- In `BuyerNav.tsx`, hide the right-side Cart and Profile section on mobile (`hidden sm:flex`).
+- In `BuyerLayout.tsx`, implement a fixed bottom navigation bar (`sm:hidden`) containing:
+  - Link to Home (`/`)
+  - Link to Orders (`/account/orders`)
+  - Cart button (triggers `open()` on `useCartStore` with badge count)
+  - Link to Profile (`/profile`)
+- Adjust the main layout container's padding to account for the bottom bar's height.
+- In `ProfilePage.tsx`, add a Logout button calling `POST /api/v1/auth/buyer/logout` (fire-and-forget) and resetting client-side state.
+
+---
+
+- [x] **RED — Integration (`BuyerLayout.test.tsx`):**
+  - [x] Test: Renders the bottom tab bar on mobile screens (viewport width < 640px) but hides it on desktop screens.
+  - [x] Test: Clicking the bottom tab "Cart" button triggers `useCartStore`'s `open` function.
+  - [x] Test: Bottom tabs display correct href links: Home (`/`), Orders (`/account/orders`), and Profile (`/profile`).
+  - [x] **Run — confirm RED (bottom tabs do not exist in the layout yet).**
+
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] **N/A**: No backend database schema or API endpoint changes are required. The necessary endpoints (`POST /api/v1/auth/buyer/logout` and `/api/v1/account/orders`) are already fully implemented and verified.
+
+- [x] **RED — Unit / Component (`BuyerNav.test.tsx` and `ProfilePage.test.tsx`):**
+  - [x] Test (`BuyerNav`): Cart and Profile elements are hidden on mobile viewports.
+  - [x] Test (`ProfilePage`): Renders a Logout button for authenticated users. Clicking it triggers the logout flow, calling the API mock, clearing the store session, and navigating back to `/`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Component] Update `BuyerNav.tsx`: Add `hidden sm:flex` class to the right-side container holding Cart and Profile.
+  - [x] [Component] Update `BuyerLayout.tsx`: Add the bottom tab bar JSX with `sm:hidden` class, wire the navigation links, bind the Cart drawer trigger, and add padding class `pb-20 sm:pb-0` to the `<main>` element.
+  - [x] [Component] Update `ProfilePage.tsx`: Add a Logout button and implement the logout logic (with fire-and-forget API call, store clearance, and redirect).
+  - [x] Run unit and layout tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] User opens the buyer homepage on a mobile viewport → Navbar shows only the mountain logo and search bar → Bottom tab bar displays Home, Orders, Cart, and Profile tabs → User adds a product and clicks Cart tab → Cart drawer slides open showing items → User closes drawer, clicks Profile tab → User is redirected to login → User logs in and gets redirected back to Profile page → User clicks Logout on the profile page → Session is cleared and user is returned to the homepage → ✅ Done.
+
+---
+
+## Phase 6.13 Checklist — Card Layout Consistency & Advertisement Layout
+
+**Root Cause / Goal:**
+1. Category and subcategory cards are visually inconsistent with the standard Product card design in the buyer app. All cards must feature a large square image with the name center-aligned below it in matching font sizes (`text-xs sm:text-base font-semibold`). Product counts and metadata are removed.
+2. The `<AdvertisementBanner />` is positioned below categories, making promotions less discoverable. On mobile viewports, the slides occupy a smaller width (`85%`) which leaves too much empty space, looking small. The banner must be repositioned between Hero and Categories, and mobile slides expanded to `92%` to match section margins closely while retaining preview peeking.
+
+**Fix / Approach:**
+- Modify `CategoryGrid.tsx` (`renderCategoryCard`): Replace with vertical product card layout, using `aspect-square` image container, `text-xs sm:text-base` fonts, removing counts, and setting exactly 4 items per row (`grid-cols-4`).
+- Modify `SubCategoryGrid.tsx`: Replace with matching `aspect-square` layout and 4 items per row (`grid-cols-4`).
+- Reposition `<AdvertisementBanner />` in `HomePage.tsx` between `<HeroSection />` and the categories container.
+- Update slide width class in `AdvertisementBanner.tsx` to `flex-[0_0_92%] sm:flex-[0_0_94%] px-2 sm:px-3` to make the active slide wider while keeping the preview slide peeking.
+
+---
+
+- [x] **RED — Unit Test (`CategoryGrid.test.tsx`):**
+  - [x] Test: Category cards render category name and image, but do NOT render any product/service count text.
+  - [x] Test: Verify category card container uses `flex flex-col` and the image container uses product-card consistent classes (`h-28 sm:h-32` and `rounded-xl`).
+  - [x] **Run — confirm RED.**
+
+- [x] **RED — Unit Test (`SubCategoryGrid.test.tsx`):**
+  - [x] Test: Subcategory cards render subcategory name and image.
+  - [x] Test: Verify subcategory card image container is square (`rounded-xl`, NOT circular `rounded-full`) and matches product-card height classes.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Implementation:**
+  - [x] [Component] Update `CategoryGrid.tsx`: Rewrite `renderCategoryCard` to implement vertical cards, aspect-square image, and exactly 4 items per row.
+  - [x] [Component] Update `SubCategoryGrid.tsx`: Rewrite subcategory cards to implement vertical cards, aspect-square image, and exactly 4 items per row.
+  - [x] [Component] Reposition `AdvertisementBanner` in `HomePage.tsx` to render below `HeroSection` and above Category grid.
+  - [x] [Component] Update ad slide width to `flex-[0_0_92%] sm:flex-[0_0_94%] px-2` in `AdvertisementBanner.tsx`.
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification Chain:**
+  - [x] All unit tests pass successfully.
+  - [x] Production build compiles without warning or error.
+  - [x] Manual check shows Category/Subcategory cards match the elegant grid, and ads are prominent and properly aligned.
+
+---
+
 
 ## Session Notes (Phase 6)
 
@@ -907,5 +1037,33 @@ The two-phase validate/confirm API is thoroughly covered by **integration tests*
 - **Validation:**
   - Ran both frontend page tests and backend integration tests to ensure 100% green compliance.
 
+### 2026-06-12: Phase 6.11 — Buyer Order & Booking Rating to 0–5 Stars
+- **Goal:** Upgrade order and booking rating feedback systems from a simple boolean thumbs up/down to a high-fidelity 0–5 star rating system with 1 decimal place precision, custom saffron fills based on percentage, and interactive 0.5-star click increments.
+- **Problem (PostgreSQL Bind Parameter Mismatch):** Rating updates in the dev environment crashed with `incorrect binary data format in bind parameter 1` (error `22P03`). This occurred because the Railway staging PostgreSQL database runs behind a proxy/pooler that strictly expects decimal parameters, rejecting raw JS float numbers. SQLite-based local tests (or local Postgres coercion) masked this during local runs.
+- **Solution:** 
+  - Centralized type conversion inside `updateRating` in [order.repository.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/modules/order/order.repository.ts) by explicitly wrapping numeric inputs in `new Prisma.Decimal(rating)`.
+  - Re-typed `rating` across the booking controller interface and mock envelopes from boolean to decimal/number.
+  - Refactored [StarRating.tsx](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/components/shared/StarRating.tsx) component hotspot buttons to use `.toFixed(1)` for their `aria-label` names and preserve rendering of disabled button elements to align with test runner expectations.
+- **Validation:** 
+  - Verified API integration tests (`order.rate.test.ts`) and all web page tests (`OrderConfirmationPage.test.tsx`, `BookingConfirmationPage.test.tsx`, `OrderHistoryPage.test.tsx`) are 100% green.
+  - Workspace typecheck (`pnpm typecheck`), ESLint lint checks (`pnpm lint`), and production builds for both API and Web packages compile cleanly with zero errors or warnings.
+
+### 2026-06-12: Phase 6.12 Mobile Bottom Navigation Tabs
+- **Goal:** Implement responsive bottom navigation tabs (Home, Orders, Cart, Profile Option B) on mobile viewports, move Cart/Profile buttons to the bottom tab bar on mobile, and add a Logout button to the buyer profile page.
+- **Solution:** Swapped mobile header buttons to hidden and added a fixed bottom tab bar on mobile viewports. Wired Cart drawer opening and Profile redirects. Integrated dynamic logout routing and fire-and-forget token revocation.
+- **Validation:** Added full unit and layout integration tests in `BuyerLayout.test.tsx`, `BuyerNav.test.tsx`, and `ProfilePage.test.tsx` (all passing green).
+
+### 2026-06-12: Phase 6.13 Card Layout & Advertisement Layout
+- **Goal:** Align Category/Subcategory cards to look like the standard Product cards (large square image, centered name, no counts), display 4 items in a row across all views, reposition the advertisement banner below the Hero and before Categories, and optimize mobile ad height.
+- **Solution:** 
+  1. Refactored `CategoryGrid.tsx` and `SubCategoryGrid.tsx` to use vertical layouts, `aspect-square w-full rounded-xl` image wrappers, and `text-xs sm:text-base font-semibold` font classes. Completely removed counts.
+  2. Changed column wrapper styles to `grid-cols-4` on all screens.
+  3. Repositioned `AdvertisementBanner` on the home page layout.
+  4. Expanded ad slide widths to `flex-[0_0_92%] sm:flex-[0_0_94%] px-2 sm:px-3` to keep adjacent slides peeking in while matching general padding boundaries.
+  5. Changed ad aspect ratio from a narrow `21/9` to `16/9` on mobile for increased height and visual prominence.
+- **Validation:** Updated `CategoryGrid.test.tsx` and `SubCategoryGrid.test.tsx` with assertions for vertical flex layout and square image wrappers. Ran full Vitest suite cleanly (400/400 tests passing).
+
 ---
+
+
 

@@ -21,7 +21,8 @@ export const orderRelationsInclude = {
   },
   statusHistory: { orderBy: { changedAt: "asc" as const } },
   store: { select: { id: true, name: true, phone: true, storeType: true } },
-  bookingOrder: true
+  bookingOrder: true,
+  user: { select: { phone: true, name: true } }
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -39,6 +40,8 @@ export type CreateOrderInput = {
   addressLabel?: string | null;
   flatRoom?: string | null;
   deliveryNote?: string | null;
+  deliveryLat?: string | number | null;
+  deliveryLng?: string | number | null;
   scheduledFor?: Date | null;
   appliedDiscountCode?: string | null;
   items: Array<{
@@ -100,6 +103,8 @@ export class OrderRepository {
           addressLabel: input.addressLabel ?? null,
           flatRoom: input.flatRoom ?? null,
           deliveryNote: input.deliveryNote ?? null,
+          deliveryLat: input.deliveryLat ? toDecimal(input.deliveryLat) : null,
+          deliveryLng: input.deliveryLng ? toDecimal(input.deliveryLng) : null,
           scheduledFor: input.scheduledFor ?? null,
           appliedDiscountCode: input.appliedDiscountCode ?? null,
           items: {
@@ -160,6 +165,40 @@ export class OrderRepository {
     });
   }
 
+  public async findManyByStore(
+    storeId: string | string[],
+    filters?: {
+      status?: OrderStatus[];
+      orderType?: Prisma.OrderWhereInput["orderType"];
+      scheduledDateFrom?: Date;
+      scheduledDateTo?: Date;
+    }
+  ): Promise<OrderWithRelations[]> {
+    const where: Prisma.OrderWhereInput = {
+      storeId: Array.isArray(storeId) ? { in: storeId } : storeId
+    };
+    if (filters?.status) {
+      where.status = { in: filters.status };
+    }
+    if (filters?.orderType) {
+      where.orderType = filters.orderType;
+    }
+    if (filters?.scheduledDateFrom || filters?.scheduledDateTo) {
+      where.bookingOrder = {
+        scheduledDate: {
+          ...(filters.scheduledDateFrom ? { gte: filters.scheduledDateFrom } : {}),
+          ...(filters.scheduledDateTo ? { lt: filters.scheduledDateTo } : {})
+        }
+      };
+    }
+    return this.db.order.findMany({
+      include: orderRelationsInclude,
+      orderBy: { createdAt: "desc" },
+      where
+    });
+  }
+
+
   public async updateStatus(
     orderId: string,
     status: OrderStatus,
@@ -180,6 +219,18 @@ export class OrderRepository {
           changedBy
         }
       });
+      if (status === "DELIVERED") {
+        const order = await db.order.findUnique({
+          where: { id: orderId },
+          select: { orderType: true }
+        });
+        if (order?.orderType === "BOOKING") {
+          await db.bookingOrder.updateMany({
+            where: { orderId },
+            data: { approvalStatus: "COMPLETED" }
+          });
+        }
+      }
     };
 
     try {
@@ -224,13 +275,14 @@ export class OrderRepository {
 
   public async updateRating(
     orderId: string,
-    rating: boolean | null,
+    rating: Prisma.Decimal | number | null,
     ratingComment: string | null
   ): Promise<OrderWithRelations> {
     try {
+      const dbRating = rating !== null ? new Prisma.Decimal(rating) : null;
       await this.db.order.update({
         where: { id: orderId },
-        data: { rating, ratingComment }
+        data: { rating: dbRating, ratingComment }
       });
       return getOrderWithRelations(this.db, orderId);
     } catch (error: unknown) {

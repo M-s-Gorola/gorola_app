@@ -339,7 +339,7 @@ test.describe("Admin Panel E2E Journey", () => {
     await verifyOtpResponse2;
     
     await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
-    await expect(buyerPage.locator('button[aria-label="Profile"]')).toBeVisible({ timeout: 15000 });
+    await expect(buyerPage.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
 
     await buyerContext.close();
   });

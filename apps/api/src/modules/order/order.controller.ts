@@ -1,5 +1,5 @@
 /* eslint-disable simple-import-sort/imports */
-import { NotFoundError, UnauthorizedError } from "@gorola/shared";
+import { NotFoundError, UnauthorizedError, ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { getPrismaClient } from "../../lib/prisma.js";
@@ -63,6 +63,8 @@ function serializeOrderResponse(
     addressLabel: order.addressLabel,
     flatRoom: order.flatRoom,
     paymentMethod: order.paymentMethod,
+    deliveryLat: order.deliveryLat ? Number(order.deliveryLat) : null,
+    deliveryLng: order.deliveryLng ? Number(order.deliveryLng) : null,
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
     status: order.status,
     discount: {
@@ -90,7 +92,7 @@ function serializeOrderResponse(
     total: order.total.toString(),
     updatedAt: order.updatedAt.toISOString(),
     userId: order.userId,
-    rating: order.rating,
+    rating: order.rating ? Number(order.rating) : null,
     ratingComment: order.ratingComment,
     bookingOrder: order.bookingOrder
       ? {
@@ -129,7 +131,7 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
   });
   
   const rateBodySchema = z.object({
-    rating: z.boolean().nullable().optional(),
+    rating: z.number().min(0).max(5).nullable().optional(),
     ratingComment: z.string().nullable().optional()
   });
 
@@ -285,7 +287,11 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         throw new UnauthorizedError("Buyer subject missing");
       }
       const params = orderParamsSchema.parse(request.params);
-      const body = rateBodySchema.parse(request.body);
+      const parsedResult = rateBodySchema.safeParse(request.body);
+      if (!parsedResult.success) {
+        throw new ValidationError("Invalid rating payload", parsedResult.error.flatten());
+      }
+      const body = parsedResult.data;
 
       const order = await deps.orders.findById(params.id);
       if (order === null || order.userId !== buyerId) {
@@ -310,9 +316,13 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
         });
       }
 
+      const ratingVal = body.rating !== undefined && body.rating !== null
+        ? Math.round(body.rating * 10) / 10
+        : null;
+
       const updated = await deps.orders.updateRating(
         params.id,
-        body.rating ?? null,
+        ratingVal,
         body.ratingComment ?? null
       );
 

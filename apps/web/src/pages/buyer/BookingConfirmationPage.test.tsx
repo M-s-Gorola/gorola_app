@@ -94,8 +94,10 @@ describe("BookingConfirmationPage", () => {
       },
       discountAmount: undefined as string | undefined,
       discountCode: undefined as string | null | undefined,
-      rating: null as boolean | null | undefined,
+      rating: null as number | null | undefined,
       ratingComment: null as string | null | undefined,
+      deliveryLat: undefined as number | null | undefined,
+      deliveryLng: undefined as number | null | undefined,
     },
   });
 
@@ -142,6 +144,28 @@ describe("BookingConfirmationPage", () => {
     expect(screen.getByText("Service Done")).toBeInTheDocument();
     expect(screen.getByText(/This booking appointment has been marked as completed/)).toBeInTheDocument();
   });
+
+  it("renders technician departed details and route map when status is OUT_FOR_DELIVERY", async () => {
+    const envelope = mockBookingEnvelope("OUT_FOR_DELIVERY");
+    envelope.data = {
+      ...envelope.data,
+      deliveryLat: 30.45,
+      deliveryLng: 78.06,
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    expect(screen.getByText("Technician On The Way")).toBeInTheDocument();
+    expect(
+      screen.getByText(/Your technician is on the way/i)
+    ).toBeInTheDocument();
+    expect(screen.getByRole("region", { name: /order route map/i })).toBeInTheDocument();
+  });
+
 
   it("renders rejection reason banner when status transitions to REJECTED", async () => {
     apiGetSpy.mockResolvedValue({
@@ -238,8 +262,8 @@ describe("BookingConfirmationPage", () => {
     expect(screen.getByTestId("rate-service-section")).toBeInTheDocument();
     expect(screen.getByText("Rate your service")).toBeInTheDocument();
     expect(screen.getByText("How was your overall experience?")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Thumbs Up/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Thumbs Down/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Rate 4.5 stars/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Rate 5.0 stars/i })).toBeInTheDocument();
     expect(screen.queryByPlaceholderText(/Any feedback for the store/i)).not.toBeInTheDocument();
   });
 
@@ -247,7 +271,7 @@ describe("BookingConfirmationPage", () => {
     const envelope = mockBookingEnvelope("COMPLETED");
     envelope.data = {
       ...envelope.data,
-      rating: false,
+      rating: 4.5,
       ratingComment: "It was too late",
     };
     apiGetSpy.mockResolvedValue({
@@ -259,7 +283,8 @@ describe("BookingConfirmationPage", () => {
     
     expect(screen.getByTestId("rate-service-section")).toBeInTheDocument();
     expect(screen.getByText("Rating submitted")).toBeInTheDocument();
+    expect(screen.getByText(/4.5 \/ 5/i)).toBeInTheDocument();
     expect(screen.getByText(/"It was too late"/i)).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: /Thumbs Up/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
 });

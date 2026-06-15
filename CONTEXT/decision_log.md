@@ -1385,27 +1385,30 @@ Two schema changes are implemented together as a single atomic migration:
 
 ---
 
-## [DECISION-047] Store-Specific Weather Mode Delivery Window Configuration & Booking Applicability
+## [DECISION-047] Store Status Toggles (Online/Offline) & Dashboard Granular Charts
 
 **Date:** 2026-05-29
 **Status:** Accepted
 
 **Context:**
-High-altitude environments like Mussoorie experience severe and volatile inclement weather (dense fog, heavy monsoonal rain, winter snow, and landslides), which significantly slows down logistics and endangers rider safety. A system-wide `WEATHER_MODE_ACTIVE` state flag dynamically notifies buyers on the confirmation screen of general transit delays. However, different stores have varying logistics setups (e.g. self-delivery vs. unified couriers), diverse product classes (e.g. food delivery requiring instant arrival vs. bulk grocery packages), and varying booking styles. We need to document why we support store-specific weather delay configurations, why they are kept in Booking Commerce, and how they will be used.
+Store owners need a direct, high-visibility mechanism on their dashboard to control their operational availability in real time. If a store is overwhelmed, runs out of raw materials, or experiences a local emergency, the merchant must be able to temporarily stop accepting new orders/bookings immediately without waiting for an administrator. Furthermore, the store owner dashboard needs to display granular sales trends (daily/hourly charts) to help merchants optimize staffing and inventory.
 
 **Decision:**
-1. **Store-Specific Configuration:** Model a store-scoped config field `weatherModeDeliveryWindow` (saved as a string like `"30-45 min"`) that store owners can directly adjust via their Store Settings page (`StoreSettingsPage.tsx`).
-2. **Honest ETAs vs Fake Timers:** In alignment with the platform's core UX principle, we explicitly avoid calculating and displaying speculative, minute-by-minute countdown clocks on the buyer's order confirmation screen. Instead, we show a highly descriptive status warning banner and a live map pin (`OrderConfirmationPage.tsx`).
-3. **Application to Booking Commerce Stores:** Retain the weather mode delay configuration inside `BOOKING_COMMERCE` store settings as well. Just like standard food/grocery delivery, booking appointments (such as home lab tests or AC technician repairs) are not purely digital services; they represent **doorstep physical field visits** requiring field technicians to travel from the central store to the buyer's home. Mountain routes and transit pathways are identical for both delivery riders and field technicians, meaning both suffer from the exact same rain, snow, or fog transit disruptions. By maintaining the weather window configuration inside booking settings, the system enables managers to calculate expected travel adjustments and dynamically notify customers about delayed arrivals for their scheduled appointments.
+1. **Database Schema Support:** Add `isAcceptingOrders Boolean @default(true)` and `isAcceptingBookings Boolean @default(true)` to the `Store` model.
+2. **Dashboard Availability Toggles:** Implement high-visibility toggle buttons ("Online / Offline") directly in the header of the store owner dashboard (`StoreDashboardPage.tsx`). Toggling updates the store's status via a new endpoint `PUT /api/v1/store/availability` (with validation that the owner owns the store).
+3. **Storefront Gating:** Update buyer-facing endpoints and page guards:
+   - If a store has `isAcceptingOrders = false`, buyers cannot place new quick-commerce orders (checkout throws `STORE_NOT_ACCEPTING_ORDERS`).
+   - If `isAcceptingBookings = false`, scheduling a service booking is blocked (throws `STORE_NOT_ACCEPTING_BOOKINGS`).
+   - The buyer UI displays clean, descriptive warnings (e.g. "Store is temporarily offline and not accepting orders").
+4. **Dashboard Granular Charts:** Wire granular sales aggregation in `StoreOwnerService.getDashboard` and display a dynamic bar chart (using Recharts) to render daily revenue tracking for the store owner.
 
 **Rationale:**
-- **Store Autonomy:** Standardizing a single platform-wide weather delay is physically impossible. A pharmacy with internal delivery staff can manage minor rain faster than a restaurant preparing fresh, hot meals. Store-specific inputs give merchants control over their own logistics expectations.
-- **Rider/Technician Uniformity:** In Phase 5 (Rider Interface) and Phase 7 (Booking Technician Mode), both delivery couriers and field visit technicians operate under the same JWT role (`RIDER`) and travel paths. Keeping the store settings entity schema fully unified avoids redundant database models, keeps the code base DRY, and ensures all future routing/booking dispatch systems can reuse the exact same travel delay calculation logic.
-- **Managing Appointment Expectations:** Rather than displaying generic timers, the system can leverage these structured inputs to shift booked timeslots (e.g. offsetting a scheduled `"09:00 - 11:00"` appointment by the store's configured `30-45 min` weather delay buffer) and auto-notify patients/buyers of the updated on-site visit window via text notifications.
-- **Roadmap Readiness:** Storing these parameters now prepares the backend for Phase 5's automated dispatch engine to dynamically adjust target delivery slots and send precise SMS updates to buyers when `isWeatherMode` is triggered.
+- **Merchant Autonomy:** Gives store owners immediate control over their operations, preventing customer frustration from unfulfillable orders.
+- **Dry-run/Graceful Degradation:** Toggling status does not deactivate the store in the catalog search or hide its products; it simply disables the checkout/scheduling triggers. Buyers can still browse menus and services.
+- **Improved Analytics:** Granular charts provide actionable business intelligence directly on the home screen.
 
 **Tradeoffs:**
-- Requires maintaining the settings inputs on the store settings page even for service/booking stores. This is a negligible UI footprint compared to the massive structural benefit of a clean, unified store settings entity model.
+- Adds two boolean flags to the `Store` model and requires additional validation guards in both quick checkout and booking placement services.
 
 
 ---
@@ -1474,3 +1477,111 @@ No new E2E Playwright tests are written for Phase 6.10 bulk operations. Coverage
 2. Add E2E smoke test only (no file upload, just assert button exists) — rejected: too low value to justify the maintenance burden.
 
 ---
+
+## [DECISION-050] Password-Based Authentication for Delivery Riders
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+Delivery riders need to log in to their mobile web interface quickly and reliably. Unlike buyers (who use SMS OTP to avoid passwords) or admins/store owners (who use passwords + TOTP 2FA for high security), riders are pre-registered staff and need an optimized, frictionless authentication loop.
+
+**Decision:**
+Implement email + password authentication (using bcryptjs hashing) for the Rider interface. Do not require SMS OTP or TOTP 2FA. Access is gated by the `RiderRoute` React guard, which checks for the `RIDER` role in the JWT.
+
+**Rationale:**
+- **Friction Reduction:** Riders are active on the road and log in repeatedly from mobile browsers. Requiring SMS OTP introduces latency, relies on cellular network stability, and incurs SMS costs for every login.
+- **Security Balance:** Riders do not have access to administrative settings or cross-store financials; their access is limited strictly to orders assigned to their store. Standard password validation is sufficient.
+- **Administrative Control:** Rider accounts are created by administrators or seeded via scripts, allowing passwords to be managed or reset by store/admin managers.
+
+**Tradeoffs:**
+- Riders must remember a password (mitigated by modern password managers and mobile autocomplete).
+- Lower security posture compared to TOTP 2FA, but appropriate for the RIDER role's limited access scope.
+
+---
+
+## [DECISION-051] Customer Phone Number Masking on Rider Active Feed
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+Riders need to view active orders assigned to their store. While riders may need to contact buyers for delivery coordination, exposing unmasked customer phone numbers directly on the active orders feed creates privacy risks and potential data harvesting issues, violating our privacy-first principles (DECISION-035).
+
+**Decision:**
+Implement customer phone number masking (`maskPhone` helper: e.g. `*********7890`) at the API controller level in `rider.controller.ts` before returning active orders.
+
+**Rationale:**
+- **Data Protection:** Follows the principle of least privilege, preventing unnecessary exposure of PII (Personally Identifiable Information) in plain-text API responses.
+- **Preparation for Proxy Calls:** Aligns with DECISION-035, where direct voice calls will be routed through a Twilio proxy rather than direct dialing. The UI displays the masked phone number and a "Call" trigger, preventing the rider from seeing the actual customer number.
+
+**Tradeoffs:**
+- If the proxy communication system fails or is not yet implemented, riders cannot manually dial customers using their real numbers. However, this is an acceptable privacy constraint.
+
+---
+
+## [DECISION-052] Consent Auditing via Immutable ConsentLog Ledger
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+India's DPDP Act 2023 mandates that personal data (such as phone numbers, names, and addresses) can only be processed based on explicit, specific, and informed consent. We must be able to prove that consent was given, when it was given, under what terms/notices, and from what IP address. Additionally, users must be able to view and withdraw consent for non-essential purposes as easily as they gave it.
+
+**Decision:**
+1. **Consent Ledger Schema:** Implement a \`ConsentLog\` model in PostgreSQL containing \`userId\`, \`purpose\` (an enum of \`OTP_AUTH\`, \`ORDER_PROCESSING\`, \`MARKETING_EMAIL\`, \`ANALYTICS\`), \`consentVersion\`, \`noticeText\` (the exact text displayed to the user), \`ipAddress\`, \`isWithdrawn\`, and \`withdrawnAt\`.
+2. **Consent Gating & Gating Endpoints:**
+   - Create \`POST /api/v1/consent\` to record consent events.
+   - Create \`GET /api/v1/consent\` to fetch the user's current consent registry.
+   - Create \`DELETE /api/v1/consent/:purpose\` to withdraw a specific consent.
+3. **Essential Consent Blocking:** The service layer blocks withdrawal of essential operational consents (\`OTP_AUTH\` and \`ORDER_PROCESSING\`) with a \`CANNOT_WITHDRAW_ESSENTIAL_CONSENT\` error. Essential consent withdrawal requires complete account deletion (Right to Erasure).
+
+**Rationale:**
+- **Regulatory Proof:** Storing the exact notice text and version alongside the IP address provides an audit trail that can be produced to the Data Protection Board of India in the event of an investigation.
+- **Purpose Limitation:** Scoping consent to specific purposes ensures GoRola is in compliance with the DPDP principle of purpose limitation (i.e. using phone numbers for login delivery, not marketing, unless separately consented to).
+
+**Tradeoffs:**
+- Adds database write overhead on login and profile updates. This is negligible compared to the massive compliance security.
+
+---
+
+## [DECISION-053] Anonymization (Pseudonymization) Over Hard-Deletion for User Erasure & Redis Session Tracking
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+The DPDP Act's Right to Erasure requires us to delete all user personal data upon request. However, Indian tax and GST laws require us to preserve financial transaction logs (Order history) for 3 years. A simple hard-deletion of a user record breaks foreign key constraints, compromises sales analytics, and violates financial audit laws. Additionally, we need to ensure that when a user deletes their account, all active authentication sessions are instantly revoked.
+
+**Decision:**
+1. **Anonymization Strategy (Pseudonymization):** When a user requests account deletion (\`DELETE /api/v1/user/account\`), we immediately soft-delete the user record, overwrite all direct PII fields with anonymized strings (\`name = '[deleted]'\`, \`phone = 'DELETED_<userId>'\`), and soft-delete all \`Address\` records for the user.
+2. **Order History Retention:** The \`Order\` records are retained in their original schema structure for 3 years. Any personal data in the orders is anonymized so that the sales logs are preserved without leaking buyer PII.
+3. **Session Revocation via Redis Sets:** Introduce a Redis set \`user_sessions:{userId}\` which stores all active refresh tokens for the user. On account deletion, the system queries this set and deletes all corresponding \`refresh:{token}\` keys, instantly invalidating all active sessions.
+4. **BullMQ Grace Period Jobs:** Enqueue a \`UserDataPurgeJob\` via BullMQ scheduled to run 30 days after deletion. This 30-day grace period allows for account recovery if deletion was requested in error. After 30 days, the job executes a database hard-delete of the anonymized User row.
+
+**Rationale:**
+- **Legal Parity:** Retaining raw financial data under tax obligation is a lawful basis for processing that overrides the DPDP erasure right, provided the data is stripped of active user linkage.
+- **Immediate Security Containment:** Invalidating tokens immediately prevents subsequent API access.
+
+**Tradeoffs:**
+- Requires managing background queue workers (BullMQ) and maintaining dual data lifecycles (immediate anonymization vs. 30-day hard deletion vs. 3-year financial retention).
+
+---
+
+## [DECISION-054] Card Payment & Implicit Age Declaration for Medical Diagnostic Orders
+
+**Date:** 2026-06-09
+**Status:** Accepted
+
+**Context:**
+Processing children's data under the DPDP Act carries strict verification requirements and massive penalties (up to ₹200 Crore) for violations. Because GoRola offers diagnostic medical tests (e.g. via Aarna Diagnostic Centre), we must ensure that minors (under 18) do not independently schedule field diagnostic tests without parental authorization.
+
+**Decision:**
+1. **Explicit Age Declaration Checkbox:** Add a mandatory age confirmation checkbox ("I confirm I am 18 years of age or older") to the registration flow before a phone number is entered.
+2. **Payment Gate Verification:** Require credit/debit card payment methods for all diagnostic medical orders. Card ownership acts as an implicit, best-effort age verification step under DPDP Module 5, gating medical commerce from unauthorized minors.
+
+**Rationale:**
+- **Friction-vs-Compliance Balance:** Full Aadhaar or government ID age-verification adds immense user friction and costs. Card ownership is a legally accepted indicator of legal age or parental consent (i.e. parent letting a minor use their card).
+
+**Tradeoffs:**
+- Gating diagnostic medical orders to card payments prevents Cash-on-Delivery (COD) or simple UPI payments for these services, which may reduce conversion rates. This is an acceptable tradeoff to protect the platform from children's data violations.

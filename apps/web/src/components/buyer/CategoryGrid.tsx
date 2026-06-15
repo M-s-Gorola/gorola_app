@@ -152,31 +152,35 @@ export function CategoryGrid(): ReactElement {
       type="button"
       data-testid="category-card"
       className={cn(
-        "category-card flex flex-col sm:flex-row items-center gap-2 sm:gap-4 rounded-2xl border border-gorola-pine/10 bg-white p-3 sm:px-5 sm:py-4 text-center sm:text-left shadow-sm transition-all duration-300 w-full min-w-0 overflow-hidden",
-        "hover:-translate-y-1 hover:shadow-md hover:border-gorola-pine/20 hover:bg-gradient-to-r hover:from-white hover:to-gorola-saffron/5"
+        "category-card flex flex-col rounded-2xl border border-gorola-pine/10 bg-white p-2 sm:p-4 text-center shadow-sm group transition-all duration-300 w-full min-w-0 overflow-hidden",
+        "hover:-translate-y-1 hover:shadow-md hover:border-gorola-pine/20 hover:bg-gradient-to-br hover:from-white hover:to-gorola-saffron/5"
       )}
       onClick={() => {
         navigate(`/categories/${category.slug}`);
       }}
     >
-      {category.imageUrl ? (
-        <img 
-          src={category.imageUrl} 
-          alt={`${category.name} category`} 
-          className="h-12 w-12 sm:h-14 sm:w-14 rounded-xl object-cover shadow-sm border border-gray-100 shrink-0"
-        />
-      ) : (
-        <div className="flex h-12 w-12 sm:h-14 sm:w-14 items-center justify-center rounded-xl bg-gorola-saffron/10 border border-gorola-saffron/20 shadow-sm shrink-0">
-          <span className="text-xl sm:text-2xl">📦</span>
-        </div>
-      )}
+      <div className="mb-2 sm:mb-3 aspect-square w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20 shrink-0">
+        {category.imageUrl ? (
+          <img 
+            src={category.imageUrl} 
+            alt={`${category.name} category`} 
+            className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+            onError={(e) => {
+              const img = e.currentTarget as HTMLImageElement;
+              if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
+                img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+              }
+            }}
+          />
+        ) : (
+          <div className="flex h-full w-full items-center justify-center rounded-xl bg-gorola-saffron/10 border border-gorola-saffron/20 shadow-sm shrink-0">
+            <span className="text-3xl">📦</span>
+          </div>
+        )}
+      </div>
       <div className="min-w-0 w-full">
-        <p className="font-dm-sans text-sm sm:text-lg font-bold text-gorola-charcoal leading-tight truncate sm:leading-snug">{category.name}</p>
-        <p className="mt-0.5 font-dm-sans text-[10px] sm:text-xs font-medium text-gorola-slate flex items-center justify-center sm:justify-start gap-1">
-          <span className="inline-block w-1.5 h-1.5 rounded-full bg-gorola-pine/60 shrink-0"></span>
-          <span className="truncate">
-            {category.productCount} {category.slug === "repairs" || category.slug === "medical-tests" ? "Services" : "Products"}
-          </span>
+        <p className="font-dm-sans text-xs sm:text-base font-semibold text-gorola-charcoal group-hover:text-gorola-saffron transition-colors line-clamp-2 overflow-hidden leading-tight text-center">
+          {category.name}
         </p>
       </div>
     </button>
@@ -195,7 +199,7 @@ export function CategoryGrid(): ReactElement {
               <p className="font-dm-sans text-xs text-gorola-slate">Everyday essentials delivered to your doorstep in minutes</p>
             </div>
           </div>
-          <div className="category-grid grid gap-4 grid-cols-2 lg:grid-cols-3">
+          <div className="category-grid grid gap-4 grid-cols-4">
             {quickCommerceCategories.map(renderCategoryCard)}
           </div>
         </section>
@@ -212,7 +216,7 @@ export function CategoryGrid(): ReactElement {
               <p className="font-dm-sans text-xs text-gorola-slate">Expert doorstep repairs and diagnostic medical tests scheduled at your convenience</p>
             </div>
           </div>
-          <div className="category-grid grid gap-4 grid-cols-2 lg:grid-cols-3">
+          <div className="category-grid grid gap-4 grid-cols-4">
             {bookingCommerceCategories.map(renderCategoryCard)}
           </div>
         </section>
