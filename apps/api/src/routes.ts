@@ -40,6 +40,10 @@ import { BuyerCheckoutService } from "./modules/order/buyer-checkout.service.js"
 import { registerOrderRoutes } from "./modules/order/order.controller.js";
 import { OrderRepository } from "./modules/order/order.repository.js";
 import { OrderService } from "./modules/order/order.service.js";
+import { MockPaymentGateway } from "./modules/payment/mock-payment-gateway.js";
+import { registerPaymentRoutes } from "./modules/payment/payment.controller.js";
+import { PaymentService } from "./modules/payment/payment.service.js";
+import { RazorpayPaymentGateway } from "./modules/payment/razorpay-payment-gateway.js";
 import { DiscountRepository } from "./modules/promotion/discount.repository.js";
 import { registerPromotionRoutes } from "./modules/promotion/promotion.controller.js";
 import { registerStoreOwnerRoutes } from "./modules/store-owner/store-owner.controller.js";
@@ -355,6 +359,29 @@ export function registerAppRoutes(app: FastifyInstance): void {
     riderOrderService,
     riderLocationService,
     riderRepository
+  });
+
+  const paymentService = new PaymentService(prisma);
+  let gateway;
+  if (process.env.NODE_ENV === "test") {
+    gateway = new MockPaymentGateway();
+  } else if (
+    process.env.RAZORPAY_KEY_ID &&
+    process.env.RAZORPAY_KEY_SECRET &&
+    process.env.RAZORPAY_KEY_ID !== "placeholder" &&
+    process.env.RAZORPAY_KEY_SECRET !== "placeholder" &&
+    process.env.RAZORPAY_KEY_ID !== "replace_later" &&
+    process.env.RAZORPAY_KEY_SECRET !== "replace_later"
+  ) {
+    gateway = new RazorpayPaymentGateway();
+  } else {
+    gateway = new MockPaymentGateway();
+  }
+
+  registerPaymentRoutes(app, {
+    paymentService,
+    gateway,
+    tokenVerifier: tokenService
   });
 
   void app.register(socketPlugin, {

@@ -317,7 +317,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(page.locator('[data-testid="edit-product-prod_rice_1"]')).toBeVisible({ timeout: 15000 });
 
     // Navigate to the edit page for Premium Basmati Rice
-    await page.locator('[data-testid="edit-product-prod_rice_1"]').click({ force: true });
+    const editBtn = page.locator('[data-testid="edit-product-prod_rice_1"]');
+    await editBtn.scrollIntoViewIfNeeded();
+    await editBtn.click();
     // Wait for edit page to load (variants section with Restock button appears)
     await expect(page.locator('[data-testid="restock-button-0"]')).toBeVisible({ timeout: 15000 });
 
@@ -376,7 +378,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await expect(page.locator('[data-testid="stock-history-prod_rice_1"]')).toBeVisible({ timeout: 15000 });
 
     // Go to Stock History list and verify audit log entries
-    await page.getByTestId('stock-history-prod_rice_1').click({ force: true });
+    const historyBtn = page.getByTestId('stock-history-prod_rice_1');
+    await historyBtn.scrollIntoViewIfNeeded();
+    await historyBtn.click();
 
     // Wait for both React Query fetches (product detail + stock history) to resolve.
     // Use .first() to avoid strict mode violation — 3 skeleton divs are rendered simultaneously.
