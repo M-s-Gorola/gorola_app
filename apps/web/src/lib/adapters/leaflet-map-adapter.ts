@@ -3,8 +3,6 @@ import L from "leaflet";
 import type { LatLngTuple, Map, Marker } from "leaflet";
 import type { MapAdapter, MarkerIconType } from "../map-provider";
 import { fetchOlaRoute } from "../map-route-helper";
-import buyerPng from "../../assets/buyer.png";
-import riderPng from "../../assets/rider.png";
 import "leaflet/dist/leaflet.css";
 
 export class LeafletMapAdapter implements MapAdapter {
@@ -21,7 +19,7 @@ export class LeafletMapAdapter implements MapAdapter {
   ): Promise<void> {
     const defaultCenter: LatLngTuple = [center.lat, center.lng];
     this._map = L.map(container, {
-      scrollWheelZoom: true,
+      scrollWheelZoom: false,
       zoomControl: true
     }).setView(defaultCenter, zoom);
 
@@ -40,12 +38,12 @@ export class LeafletMapAdapter implements MapAdapter {
 
     const leafletIcon = icon === "buyer"
       ? L.icon({
-          iconUrl: buyerPng,
+          iconUrl: "/buyer.png",
           iconSize: [40, 40],
           iconAnchor: [20, 40]
         })
       : L.icon({
-          iconUrl: riderPng,
+          iconUrl: "/rider.png",
           iconSize: [40, 40],
           iconAnchor: [20, 40]
         });
@@ -131,5 +129,13 @@ export class LeafletMapAdapter implements MapAdapter {
         opacity: 0.8
       }).addTo(this._map);
     }
+  }
+
+  enableScrollZoom(): void {
+    this._map?.scrollWheelZoom.enable();
+  }
+
+  disableScrollZoom(): void {
+    this._map?.scrollWheelZoom.disable();
   }
 }

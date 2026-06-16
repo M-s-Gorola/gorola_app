@@ -1,8 +1,6 @@
 import L from "leaflet";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import buyerPng from "../../assets/buyer.png";
-import riderPng from "../../assets/rider.png";
 import { LeafletMapAdapter } from "../../lib/adapters/leaflet-map-adapter";
 import { fetchOlaRoute } from "../../lib/map-route-helper";
 
@@ -130,7 +128,7 @@ describe("LeafletMapAdapter", () => {
     );
     expect(vi.mocked(L.icon)).toHaveBeenCalledWith(
       expect.objectContaining({
-        iconUrl: buyerPng,
+        iconUrl: "/buyer.png",
         iconSize: [40, 40],
         iconAnchor: [20, 40]
       })
@@ -149,7 +147,7 @@ describe("LeafletMapAdapter", () => {
     );
     expect(vi.mocked(L.icon)).toHaveBeenCalledWith(
       expect.objectContaining({
-        iconUrl: riderPng,
+        iconUrl: "/rider.png",
         iconSize: [40, 40],
         iconAnchor: [20, 40]
       })

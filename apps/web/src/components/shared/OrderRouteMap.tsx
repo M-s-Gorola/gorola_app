@@ -56,15 +56,36 @@ export function OrderRouteMap({
       }
     }
 
-    const handleWheel = (e: WheelEvent) => {
-      e.preventDefault();
+    let hovered = node.matches(":hover");
+    if (hovered) {
+      adapter.enableScrollZoom();
+    }
+
+    const handleMouseEnter = () => {
+      hovered = true;
+      adapter.enableScrollZoom();
     };
+    const handleMouseLeave = () => {
+      hovered = false;
+      adapter.disableScrollZoom();
+    };
+    const handleWheel = (e: WheelEvent) => {
+      if (hovered) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+    };
+
+    node.addEventListener("mouseenter", handleMouseEnter);
+    node.addEventListener("mouseleave", handleMouseLeave);
     node.addEventListener("wheel", handleWheel, { passive: false });
 
     initMap();
 
     return () => {
       active = false;
+      node.removeEventListener("mouseenter", handleMouseEnter);
+      node.removeEventListener("mouseleave", handleMouseLeave);
       node.removeEventListener("wheel", handleWheel);
       adapter.destroy();
     };

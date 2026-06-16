@@ -14,4 +14,10 @@ export interface MapAdapter {
   
   /** Destroy all map resources (markers, map instance, injected scripts). */
   destroy(): void;
+
+  /** Enable scroll wheel zooming on the map. */
+  enableScrollZoom(): void;
+
+  /** Disable scroll wheel zooming on the map. */
+  disableScrollZoom(): void;
 }

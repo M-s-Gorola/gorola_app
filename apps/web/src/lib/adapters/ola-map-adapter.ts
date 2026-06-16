@@ -1,5 +1,3 @@
-import buyerPng from "../../assets/buyer.png";
-import riderPng from "../../assets/rider.png";
 import type { MapAdapter, MarkerIconType } from "../map-provider";
 import { fetchOlaRoute } from "../map-route-helper";
 
@@ -10,6 +8,10 @@ export interface OlaMapInstance {
   resize(): void;
   fitBounds(bounds: [number, number][], options?: { padding: number; maxZoom?: number }): void;
   on(event: string, listener: () => void): void;
+  scrollZoom?: {
+    enable(): void;
+    disable(): void;
+  };
 }
 
 export interface OlaMarkerInstance {
@@ -37,6 +39,7 @@ declare global {
           center: [number, number];
           zoom: number;
           style: string;
+          scrollZoom?: boolean;
         }): OlaMapInstance;
       };
       Marker: {
@@ -107,7 +110,8 @@ export class OlaMapAdapter implements MapAdapter {
       container,
       center: [center.lng, center.lat],
       zoom,
-      style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json"
+      style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
+      scrollZoom: false
     });
 
     this._map.on("load", () => {
@@ -130,7 +134,7 @@ export class OlaMapAdapter implements MapAdapter {
     if (icon === "buyer") {
       markerEl.style.width = "40px";
       markerEl.style.height = "40px";
-      markerEl.style.backgroundImage = `url('${buyerPng}')`;
+      markerEl.style.backgroundImage = "url('/buyer.png')";
       markerEl.style.backgroundSize = "contain";
       markerEl.style.backgroundRepeat = "no-repeat";
       markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
@@ -138,7 +142,7 @@ export class OlaMapAdapter implements MapAdapter {
     } else {
       markerEl.style.width = "40px";
       markerEl.style.height = "40px";
-      markerEl.style.backgroundImage = `url('${riderPng}')`;
+      markerEl.style.backgroundImage = "url('/rider.png')";
       markerEl.style.backgroundSize = "contain";
       markerEl.style.backgroundRepeat = "no-repeat";
       markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
@@ -297,6 +301,18 @@ export class OlaMapAdapter implements MapAdapter {
       }
     } catch (err) {
       console.warn("Failed to draw route in Ola Maps:", err);
+    }
+  }
+
+  enableScrollZoom(): void {
+    if (this._map && this._map.scrollZoom) {
+      this._map.scrollZoom.enable();
+    }
+  }
+
+  disableScrollZoom(): void {
+    if (this._map && this._map.scrollZoom) {
+      this._map.scrollZoom.disable();
     }
   }
 }

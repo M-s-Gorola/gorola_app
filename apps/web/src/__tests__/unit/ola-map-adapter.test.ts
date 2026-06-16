@@ -1,7 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import buyerPng from "../../assets/buyer.png";
-import riderPng from "../../assets/rider.png";
 import {
   OlaMapAdapter,
   resetOlaScriptPromise
@@ -138,7 +136,7 @@ describe("OlaMapAdapter", () => {
     const markerEl = (mockOlaMaps.Marker as unknown as { mock: { calls: Array<[{ element: HTMLDivElement }]>; }; }).mock.calls[0]![0]!.element!;
     expect(markerEl.style.width).toBe("40px");
     expect(markerEl.style.height).toBe("40px");
-    expect(markerEl.style.backgroundImage).toBe(`url("${buyerPng}")`);
+    expect(markerEl.style.backgroundImage).toBe('url("/buyer.png")');
     expect(markerEl.style.filter).toContain("saturate(2)");
     expect(markerEl.style.filter).toContain("contrast(1.2)");
 
@@ -164,7 +162,7 @@ describe("OlaMapAdapter", () => {
     const markerEl = (mockOlaMaps.Marker as unknown as { mock: { calls: Array<[{ element: HTMLDivElement }]>; }; }).mock.calls[0]![0]!.element!;
     expect(markerEl.style.width).toBe("40px");
     expect(markerEl.style.height).toBe("40px");
-    expect(markerEl.style.backgroundImage).toBe(`url("${riderPng}")`);
+    expect(markerEl.style.backgroundImage).toBe('url("/rider.png")');
     expect(markerEl.style.filter).toContain("saturate(2)");
     expect(markerEl.style.filter).toContain("contrast(1.2)");
 

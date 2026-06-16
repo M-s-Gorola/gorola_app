@@ -7,7 +7,9 @@ import { OrderRouteMap } from "./OrderRouteMap";
 const mockAdapterInstance = {
   init: vi.fn().mockResolvedValue(undefined),
   addMarker: vi.fn(),
-  destroy: vi.fn()
+  destroy: vi.fn(),
+  enableScrollZoom: vi.fn(),
+  disableScrollZoom: vi.fn()
 };
 
 vi.mock("../../lib/map-adapter-factory", () => ({
@@ -98,15 +100,40 @@ describe("OrderRouteMap", () => {
     expect(mockAdapterInstance.init).toHaveBeenCalledTimes(2);
   });
 
-  it("prevents default behavior on wheel events to block page scrolling during zoom", async () => {
+  it("allows page scroll (no preventDefault) before mouseenter and after mouseleave, but prevents it when mouse is over container", async () => {
     render(<OrderRouteMap buyerCoords={buyerCoords} />);
     
     const container = screen.getByRole("region", { name: /order route map/i });
-    const wheelEvent = new WheelEvent("wheel", { bubbles: true, cancelable: true });
     
-    const preventDefaultSpy = vi.spyOn(wheelEvent, "preventDefault");
-    container.dispatchEvent(wheelEvent);
-    
-    expect(preventDefaultSpy).toHaveBeenCalled();
+    // 1. Before mouseenter, wheel should not call preventDefault
+    const wheelEventBefore = new WheelEvent("wheel", { bubbles: true, cancelable: true });
+    const preventDefaultSpyBefore = vi.spyOn(wheelEventBefore, "preventDefault");
+    container.dispatchEvent(wheelEventBefore);
+    expect(preventDefaultSpyBefore).not.toHaveBeenCalled();
+    expect(mockAdapterInstance.enableScrollZoom).not.toHaveBeenCalled();
+
+    // 2. Dispatch mouseenter: should call enableScrollZoom
+    act(() => {
+      container.dispatchEvent(new MouseEvent("mouseenter", { bubbles: true }));
+    });
+    expect(mockAdapterInstance.enableScrollZoom).toHaveBeenCalledTimes(1);
+
+    // 3. During hover, wheel event should call preventDefault
+    const wheelEventDuring = new WheelEvent("wheel", { bubbles: true, cancelable: true });
+    const preventDefaultSpyDuring = vi.spyOn(wheelEventDuring, "preventDefault");
+    container.dispatchEvent(wheelEventDuring);
+    expect(preventDefaultSpyDuring).toHaveBeenCalled();
+
+    // 4. Dispatch mouseleave: should call disableScrollZoom
+    act(() => {
+      container.dispatchEvent(new MouseEvent("mouseleave", { bubbles: true }));
+    });
+    expect(mockAdapterInstance.disableScrollZoom).toHaveBeenCalledTimes(1);
+
+    // 5. After mouseleave, wheel should not call preventDefault
+    const wheelEventAfter = new WheelEvent("wheel", { bubbles: true, cancelable: true });
+    const preventDefaultSpyAfter = vi.spyOn(wheelEventAfter, "preventDefault");
+    container.dispatchEvent(wheelEventAfter);
+    expect(preventDefaultSpyAfter).not.toHaveBeenCalled();
   });
 });

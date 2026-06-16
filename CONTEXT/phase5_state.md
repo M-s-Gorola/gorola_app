@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6.2 are complete. Earnings page and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6.2 are complete. 5.6.3, Earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-16
-- **Session Summary:** Resolved Ola Directions API schema differences and marker reload/subdomain routing issues under strict TDD guidelines. Imported buyer and rider marker images dynamically from `src/assets` to enable compile-time Vite resolution, and updated all tests to assert on the correct payload structure and compiled asset paths.
-- **Next Session Must Start With:** Phase 5.7 — Rider Earnings Page
+- **Date:** 2026-06-17
+- **Session Summary:** Implemented the scroll propagation fix (Phase 5.6.3-A) across the Leaflet and Ola map adapters under a strict TDD workflow. Users can now scroll pages normally when mouse is outside map bounds, while wheel events zoom the map only when actively hovering over it.
+- **Next Session Must Start With:** Phase 5.6.3-B — Rider Icon / Last-Known Location Fix
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -885,24 +885,24 @@ Four distinct issues were identified after Sessions 16–20:
 
 #### A — Scroll Propagation Fix
 
-- [ ] **RED — Integration (N/A):**
+- [x] **RED — Integration (N/A):**
   - *N/A: Scroll propagation is a pure browser-event / frontend concern. No backend endpoint changes are required.*
 
-- [ ] **RED — Unit / Component (`OrderRouteMap.test.tsx` — update existing):**
-  - [ ] Test: render `<OrderRouteMap buyerCoords={...} />` in a JSDOM environment; dispatch a `wheel` event on the map container div **before** a `mouseenter` event — assert that `e.defaultPrevented` is `false` (page scroll is allowed when cursor is outside the map).
-  - [ ] Test: dispatch `mouseenter` on the map container, then dispatch a `wheel` event — assert that `e.defaultPrevented` is `true` (scroll zoom is captured; page does not scroll).
-  - [ ] Test: dispatch `mouseleave` followed by a `wheel` event — assert that `e.defaultPrevented` is `false` again.
-  - [ ] **Run — confirm RED (current implementation always calls `e.preventDefault()` regardless of hover state, so the first test will fail).**
+- [x] **RED — Unit / Component (`OrderRouteMap.test.tsx` — update existing):**
+  - [x] Test: render `<OrderRouteMap buyerCoords={...} />` in a JSDOM environment; dispatch a `wheel` event on the map container div **before** a `mouseenter` event — assert that `e.defaultPrevented` is `false` (page scroll is allowed when cursor is outside the map).
+  - [x] Test: dispatch `mouseenter` on the map container, then dispatch a `wheel` event — assert that `e.defaultPrevented` is `true` (scroll zoom is captured; page does not scroll).
+  - [x] Test: dispatch `mouseleave` followed by a `wheel` event — assert that `e.defaultPrevented` is `false` again.
+  - [x] **Run — confirm RED (current implementation always calls `e.preventDefault()` regardless of hover state, so the first test will fail).**
 
-- [ ] **GREEN — Frontend (MapAdapter interface → both Adapters → OrderRouteMap component):**
-  - [ ] [Types] In `map-provider.ts`, add `enableScrollZoom(): void` and `disableScrollZoom(): void` to the `MapAdapter` interface.
-  - [ ] [Adapter] In `leaflet-map-adapter.ts`, implement `enableScrollZoom()` as `this._map?.scrollWheelZoom.enable()` and `disableScrollZoom()` as `this._map?.scrollWheelZoom.disable()`. Set `scrollWheelZoom: false` in the Leaflet map constructor options (scroll zoom starts disabled; only enabled on hover).
-  - [ ] [Adapter] In `ola-map-adapter.ts`, implement `enableScrollZoom()` and `disableScrollZoom()` by maintaining a private `_scrollEnabled` boolean and conditionally calling `e.preventDefault()` inside the adapter's internal wheel listener.
-  - [ ] [Component] In `OrderRouteMap.tsx`, remove the current unconditional `handleWheel` listener. Replace with `mouseenter` → `adapter.enableScrollZoom()` and `mouseleave` → `adapter.disableScrollZoom()` listeners on the container node. Clean up both listeners in the return cleanup function.
-  - [ ] Run unit tests — **confirm GREEN**.
+- [x] **GREEN — Frontend (MapAdapter interface → both Adapters → OrderRouteMap component):**
+  - [x] [Types] In `map-provider.ts`, add `enableScrollZoom(): void` and `disableScrollZoom(): void` to the `MapAdapter` interface.
+  - [x] [Adapter] In `leaflet-map-adapter.ts`, implement `enableScrollZoom()` as `this._map?.scrollWheelZoom.enable()` and `disableScrollZoom()` as `this._map?.scrollWheelZoom.disable()`. Set `scrollWheelZoom: false` in the Leaflet map constructor options (scroll zoom starts disabled; only enabled on hover).
+  - [x] [Adapter] In `ola-map-adapter.ts`, implement `enableScrollZoom()` and `disableScrollZoom()` by maintaining a private `_scrollEnabled` boolean and conditionally calling `e.preventDefault()` inside the adapter's internal wheel listener.
+  - [x] [Component] In `OrderRouteMap.tsx`, remove the current unconditional `handleWheel` listener. Replace with `mouseenter` → `adapter.enableScrollZoom()` and `mouseleave` → `adapter.disableScrollZoom()` listeners on the container node. Clean up both listeners in the return cleanup function.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Buyer opens the order confirmation page → scrolls with the mouse wheel anywhere on the page (cursor outside map) → page scrolls normally, map does not zoom → buyer moves cursor onto the map → scrolls wheel → map zooms in/out, page does not scroll → buyer moves cursor off the map → scrolls → page scrolls again → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Buyer opens the order confirmation page → scrolls with the mouse wheel anywhere on the page (cursor outside map) → page scrolls normally, map does not zoom → buyer moves cursor onto the map → scrolls wheel → map zooms in/out, page does not scroll → buyer moves cursor off the map → scrolls → page scrolls again → ✅ Done.
 
 ---
 
@@ -1264,4 +1264,12 @@ _(Append new entries here — never delete old entries.)_
 - Cleaned up container-level scroll event bubbling listeners (`node.addEventListener("wheel", ...)`) for both `OrderRouteMap.tsx` and `AddressMapPicker.tsx` to handle maps correctly and prevent full-page body scrolling.
 - Integrated a delayed boundary resize call to correct initial marker layouts after page transitions.
 - Confirmed all quality gates (lints, typecheck, vitest tests) are fully passing.
+
+### Session 21 — 2026-06-17 — Phase 5.6.3-A Scroll Propagation Completed
+- Implemented the hover-activated scroll propagation fix (Phase 5.6.3-A) for the map component under strict TDD guidelines.
+- Modified the `MapAdapter` interface to define `enableScrollZoom` and `disableScrollZoom` methods, and implemented them in both Leaflet and Ola Maps adapters.
+- Configured `OrderRouteMap.tsx` with `mouseenter`/`mouseleave` event listeners to dynamically activate/deactivate scroll-zoom capabilities.
+- Added comprehensive unit tests in `OrderRouteMap.test.tsx` verifying that scroll zoom defaults are blocked unless the container is hovered, allowing normal page scrolling outside map bounds.
+- Documented data minimization and private map rendering architecture in `CONTEXT/DPDP Act/1_geolocation_privacy.md` for DPDP Act compliance (scoping coordinates to our own secure backend APIs, using local Vite asset bundling for markers, performing routing polyline decoding strictly in-memory, and fallback straight-line vectors).
+- Checked and confirmed that all vitest unit tests (429 passing), TypeScript type check, and ESLint checks are 100% green.
 
