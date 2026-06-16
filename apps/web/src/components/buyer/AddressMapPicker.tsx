@@ -79,11 +79,17 @@ export function AddressMapPicker({
       onCoordsRef.current({ lat: pos.lat, lng: pos.lng });
     };
 
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+    node.addEventListener("wheel", handleWheel, { passive: false });
+
     emitCoords();
 
     marker.on("dragend", emitCoords);
 
     return () => {
+      node.removeEventListener("wheel", handleWheel);
       marker.off("dragend", emitCoords);
       marker.remove();
       map.off();

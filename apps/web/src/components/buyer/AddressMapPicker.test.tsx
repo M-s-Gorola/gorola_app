@@ -129,4 +129,25 @@ describe("AddressMapPicker", () => {
     });
     expect(leafletMocks.mockMapRemove).toHaveBeenCalled();
   });
+
+  it("prevents default behavior on wheel events inside map picker to block page scrolling", async () => {
+    const onChange = vi.fn();
+    render(
+      <AddressMapPicker
+        center={{ lat: 30.454, lng: 78.066 }}
+        onCoordinatesChange={onChange}
+      />
+    );
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const container = screen.getByRole("region", { name: /delivery location map/i });
+    const wheelEvent = new WheelEvent("wheel", { bubbles: true, cancelable: true });
+
+    const preventDefaultSpy = vi.spyOn(wheelEvent, "preventDefault");
+    container.dispatchEvent(wheelEvent);
+
+    expect(preventDefaultSpy).toHaveBeenCalled();
+  });
 });

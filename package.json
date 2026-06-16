@@ -38,10 +38,11 @@
   "pnpm": {
     "overrides": {
       "ip-address": "^10.1.1",
-      "hono": "^4.12.21",
+      "hono": "^4.12.25",
       "fast-uri": "^3.1.1",
       "@opentelemetry/sdk-node": "^0.217.0",
       "@opentelemetry/exporter-prometheus": "^0.217.0",
+      "@opentelemetry/core": "^2.8.0",
       "protobufjs": "^7.6.1",
       "@protobufjs/utf8": "^1.1.1",
       "minimatch@10>brace-expansion": "^5.0.6",
@@ -62,10 +63,11 @@
   },
   "_pnpm_overrides_comments": {
     "ip-address": "Overridden due to moderate security vulnerability in <=10.1.0",
-    "hono": "Overridden due to moderate security vulnerabilities (JWT scheme bypass, HTML injection, percent-encoded path routing) in <4.12.21",
+    "hono": "Overridden due to moderate security vulnerabilities (JWT scheme bypass, HTML injection, percent-encoded path routing) in <4.12.21, and high vulnerability (CORS reflecting wildcard origin with credentials) in <4.12.25",
     "fast-uri": "Overridden due to high security vulnerability (path traversal) in <=3.1.0",
     "@opentelemetry/sdk-node": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
     "@opentelemetry/exporter-prometheus": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
+    "@opentelemetry/core": "Overridden due to moderate security vulnerability (unbounded memory allocation in W3C Baggage propagation) in <2.8.0",
     "protobufjs": "Overridden due to high security vulnerabilities (DoS/recursion in <=7.5.5, DoS unbounded Any expansion in <=7.6.0) — requires >=7.6.1",
     "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0",
     "minimatch@10>brace-expansion": "Overridden due to moderate security vulnerability (DoS) in <5.0.6",

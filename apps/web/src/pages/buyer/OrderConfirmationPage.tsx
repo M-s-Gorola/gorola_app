@@ -254,38 +254,49 @@ function StatusStepper({
       </div>
 
       {status === "OUT_FOR_DELIVERY" ? (
-        <div className="mt-8 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
-          <div className="flex items-center gap-3">
-            <div className="relative flex h-3 w-3">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
-              <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
-            </div>
-            <p className="font-dm-sans text-sm">
-              <strong>Rider location:</strong> Your rider is on the way with your order.
-            </p>
-          </div>
-
-          {/* Live Tracking Map Container */}
-          <div className="relative h-64 w-full rounded-lg border border-amber-200/60 overflow-hidden bg-amber-100/30 mt-1" data-testid="rider-location-map-container">
-            {riderLocation ? (
-              <OrderRouteMap
-                buyerCoords={{ lat: order.deliveryLat ?? 30.4598, lng: order.deliveryLng ?? 78.0664 }}
-                riderCoords={riderLocation}
-                className="h-full w-full border-0 rounded-none min-h-[256px]"
-              />
-            ) : (
-              <div className="flex items-center justify-center h-full w-full">
-                <p className="text-xs text-amber-800/80 italic animate-pulse">Waiting for rider GPS updates...</p>
+        <>
+          <div className="mt-8 flex flex-col gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-amber-950 animate-in fade-in slide-in-from-bottom-2 duration-500">
+            <div className="flex items-center gap-3">
+              <div className="relative flex h-3 w-3">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-amber-400 opacity-75" />
+                <span className="relative inline-flex h-3 w-3 rounded-full bg-amber-500" />
               </div>
-            )}
+              <p className="font-dm-sans text-sm">
+                <strong>Rider location:</strong> Your rider is on the way with your order.
+              </p>
+            </div>
           </div>
 
-          {riderLocation ? (
-            <div className="mt-1 text-xs font-mono bg-white/60 p-2 rounded-lg border border-amber-200/50" data-testid="rider-location-display">
-              Rider Coordinates: {riderLocation.lat.toFixed(5)}, {riderLocation.lng.toFixed(5)}
+          {/* Live Tracking Map Card */}
+          <div className="mt-4 flex flex-col gap-3 rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-md animate-in fade-in slide-in-from-bottom-2 duration-500" data-testid="rider-location-map-card">
+            <h3 className="font-dm-sans text-sm font-bold text-gorola-pine flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-gorola-pine opacity-75" />
+                <span className="relative inline-flex h-2 w-2 rounded-full bg-gorola-pine" />
+              </span>
+              Live Tracking Route
+            </h3>
+            <div className="relative h-64 w-full rounded-xl border border-gorola-pine/10 overflow-hidden bg-gorola-fog mt-1" data-testid="rider-location-map-container">
+              {riderLocation ? (
+                <OrderRouteMap
+                  buyerCoords={{ lat: order.deliveryLat ?? 30.4598, lng: order.deliveryLng ?? 78.0664 }}
+                  riderCoords={riderLocation}
+                  className="h-full w-full border-0 rounded-none min-h-[256px]"
+                />
+              ) : (
+                <div className="flex items-center justify-center h-full w-full">
+                  <p className="text-xs text-gorola-pine/60 italic animate-pulse">Waiting for rider GPS updates...</p>
+                </div>
+              )}
             </div>
-          ) : null}
-        </div>
+
+            {riderLocation ? (
+              <div className="mt-1 text-xs font-mono bg-gorola-fog p-2 rounded-lg border border-gorola-pine/5 text-gorola-charcoal" data-testid="rider-location-display">
+                Rider Coordinates: {riderLocation.lat.toFixed(5)}, {riderLocation.lng.toFixed(5)}
+              </div>
+            ) : null}
+          </div>
+        </>
       ) : null}
     </div>
   );
@@ -346,6 +357,27 @@ export function OrderConfirmationPage(): ReactElement {
   });
 
   const order = query.data;
+
+  useEffect(() => {
+    let active = true;
+    if (order?.status === "OUT_FOR_DELIVERY" && riderLocation === null) {
+      api!.get<{ success: boolean; data: { lat: string; lng: string } | null }>(
+        `/api/v1/orders/${id}/rider-location`
+      ).then((res) => {
+        if (active && res.data.success && res.data.data && res.data.data.lat != null && res.data.data.lng != null) {
+          setRiderLocation({
+            lat: Number(res.data.data.lat),
+            lng: Number(res.data.data.lng)
+          });
+        }
+      }).catch((err) => {
+        console.error("Failed to fetch rider last-known location:", err);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [order?.status, id, riderLocation]);
 
 interface StoreOffer {
   id: string;
