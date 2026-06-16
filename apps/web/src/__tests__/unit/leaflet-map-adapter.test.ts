@@ -1,6 +1,25 @@
+import L from "leaflet";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import buyerPng from "../../assets/buyer.png";
+import riderPng from "../../assets/rider.png";
 import { LeafletMapAdapter } from "../../lib/adapters/leaflet-map-adapter";
+import { fetchOlaRoute } from "../../lib/map-route-helper";
+
+// Mock the route helper module
+vi.mock("../../lib/map-route-helper", () => ({
+  fetchOlaRoute: vi.fn().mockResolvedValue([
+    [30.455, 78.068],
+    [30.452, 78.064],
+    [30.45, 78.06]
+  ])
+}));
+
+const mockMarkerElement = {
+  style: {
+    filter: ""
+  }
+};
 
 const leafletMocks = vi.hoisted(() => {
   const api = {
@@ -11,11 +30,17 @@ const leafletMocks = vi.hoisted(() => {
     mergeOptionsSpy: vi.fn(),
     mockMapRemove: vi.fn(),
     markerFactory: vi.fn(),
+    polylineFactory: vi.fn(() => ({
+      addTo: vi.fn().mockReturnThis(),
+      remove: vi.fn()
+    })),
     reset() {
       api.mockMapRemove.mockClear();
       api.Lmap.mockClear();
       api.markerFactory.mockClear();
       api.mergeOptionsSpy.mockClear();
+      api.polylineFactory.mockClear();
+      mockMarkerElement.style.filter = "";
     }
   };
 
@@ -36,7 +61,8 @@ const leafletMocks = vi.hoisted(() => {
     getLatLng: vi.fn(() => ({ lat: 30.454, lng: 78.066 })),
     off: vi.fn(),
     on: vi.fn(),
-    remove: vi.fn()
+    remove: vi.fn(),
+    getElement: vi.fn(() => mockMarkerElement)
   }));
 
   return api;
@@ -60,7 +86,8 @@ vi.mock("leaflet", () => ({
         }
       }
     },
-    tileLayer: leafletMocks.TileLayerMock
+    tileLayer: leafletMocks.TileLayerMock,
+    polyline: leafletMocks.polylineFactory
   }
 }));
 
@@ -75,10 +102,12 @@ describe("LeafletMapAdapter", () => {
     adapter = new LeafletMapAdapter();
     leafletMocks.reset();
     vi.clearAllMocks();
+    vi.stubEnv("VITE_OLA_MAPS_API_KEY", "mock-api-key");
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("initializes Leaflet map and tile layer", async () => {
@@ -91,7 +120,7 @@ describe("LeafletMapAdapter", () => {
     );
   });
 
-  it("places buyer marker on the map", async () => {
+  it("places buyer marker on the map with saturated filter styling", async () => {
     await adapter.init(container, buyerCoords, 14);
     adapter.addMarker(buyerCoords, "buyer");
 
@@ -99,14 +128,76 @@ describe("LeafletMapAdapter", () => {
       [buyerCoords.lat, buyerCoords.lng],
       expect.any(Object)
     );
+    expect(vi.mocked(L.icon)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconUrl: buyerPng,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
+      })
+    );
+    expect(mockMarkerElement.style.filter).toContain("saturate(2)");
+    expect(mockMarkerElement.style.filter).toContain("contrast(1.2)");
   });
 
-  it("places rider marker on the map", async () => {
+  it("places rider marker on the map with saturated filter styling", async () => {
     await adapter.init(container, buyerCoords, 14);
     adapter.addMarker(riderCoords, "rider");
 
     expect(leafletMocks.markerFactory).toHaveBeenCalledWith(
       [riderCoords.lat, riderCoords.lng],
+      expect.any(Object)
+    );
+    expect(vi.mocked(L.icon)).toHaveBeenCalledWith(
+      expect.objectContaining({
+        iconUrl: riderPng,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40]
+      })
+    );
+    expect(mockMarkerElement.style.filter).toContain("saturate(2)");
+    expect(mockMarkerElement.style.filter).toContain("contrast(1.2)");
+  });
+
+  it("fetches and draws the road route when both buyer and rider markers are added", async () => {
+    await adapter.init(container, buyerCoords, 14);
+    adapter.addMarker(buyerCoords, "buyer");
+    adapter.addMarker(riderCoords, "rider");
+
+    // Wait for async _drawRoute to finish
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(fetchOlaRoute).toHaveBeenCalledWith(riderCoords, buyerCoords, "mock-api-key");
+    expect(leafletMocks.polylineFactory).toHaveBeenCalledWith(
+      [
+        [30.455, 78.068],
+        [30.452, 78.064],
+        [30.45, 78.06]
+      ],
+      expect.objectContaining({
+        color: "#1d3d2f",
+        weight: 4
+      })
+    );
+
+    adapter.destroy();
+    const mockPolylineInstance = leafletMocks.polylineFactory.mock.results[0]!.value;
+    expect(mockPolylineInstance.remove).toHaveBeenCalled();
+  });
+
+  it("falls back to straight line route when directions API fails", async () => {
+    vi.mocked(fetchOlaRoute).mockRejectedValueOnce(new Error("API Error"));
+
+    await adapter.init(container, buyerCoords, 14);
+    adapter.addMarker(buyerCoords, "buyer");
+    adapter.addMarker(riderCoords, "rider");
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+
+    expect(leafletMocks.polylineFactory).toHaveBeenCalledWith(
+      [
+        [riderCoords.lat, riderCoords.lng],
+        [buyerCoords.lat, buyerCoords.lng]
+      ],
       expect.any(Object)
     );
   });

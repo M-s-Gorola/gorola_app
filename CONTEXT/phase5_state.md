@@ -18,7 +18,7 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-16
-- **Session Summary:** Completed Phase 5.6.2 (Ola Maps Provider Integration). Designed and implemented a formal MapProvider and MapAdapter abstraction layer, extracted Leaflet operations into LeafletMapAdapter, created OlaMapAdapter supporting script injection and standard vector coordinate formats, built MapAdapterFactory, and updated OrderRouteMap component with error boundaries. Verified with 20 passing unit tests, zero lint warnings/errors, strict typecheck compliance, and successful production build.
+- **Session Summary:** Resolved Ola Directions API schema differences and marker reload/subdomain routing issues under strict TDD guidelines. Imported buyer and rider marker images dynamically from `src/assets` to enable compile-time Vite resolution, and updated all tests to assert on the correct payload structure and compiled asset paths.
 - **Next Session Must Start With:** Phase 5.7 — Rider Earnings Page
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
@@ -210,6 +210,12 @@ Replace the 501 stub. Return orders filtered by `storeId` from JWT and status in
 **Fix / Approach:**
 Replace HTTP stub with real implementation. Activate the `/rider` Socket.IO namespace to accept connections, authenticate via JWT, and broadcast location to the buyer's `order:{orderId}` room.
 
+> [!NOTE]
+> **Development Geolocation Mock & Latency Mechanics:**
+> - **Production Safety:** All mock geolocation fallbacks, warnings, and mock coordinate injection are strictly guarded by `import.meta.env.DEV && import.meta.env.MODE !== 'test'`. In production builds (`npm run build`), Vite statically evaluates `import.meta.env.DEV` to `false`, causing the bundler/minifier to perform dead-code elimination (tree-shaking) and completely remove the mock logic, coordinates, and console warnings from the production bundle.
+> - **Initial Mock Coordinates:** On developer environments lacking dedicated hardware GPS (like desktop browsers or virtualized environments), high-accuracy geolocation requests (`enableHighAccuracy: true`) can take 5–10+ seconds to resolve (depending on IP/Wi-Fi positioning databases). To prevent blocking local testing, a 2-second timeout (`devTimeout` of `2000ms`) is set in development mode. If the browser does not return real coordinates within this 2-second window, the hook falls back to mock coordinates to render the map markers immediately.
+> - **Delayed Update to Real Coordinates:** Once the browser's background high-accuracy query successfully resolves, the real success callback fires, updating the hook's coordinates with the user's actual location. This causes the map to correctly re-center and update after the initial mock coordinates are rendered.
+
 ---
 
 - [x] **RED — Integration (`rider.location.test.ts`):**
@@ -234,6 +240,7 @@ Replace HTTP stub with real implementation. Activate the `/rider` Socket.IO name
 
 - [x] **GREEN — Frontend:**
   - [x] Create `apps/web/src/hooks/useRiderLocation.ts`: wraps `navigator.geolocation.watchPosition`, calls PUT on each update, cleans up on unmount
+    - [x] Documented development geolocation mock guard (safety in production) and the reason for 2s latency behavior.
   - [x] Use hook in `RiderOrdersPage.tsx` — active only when rider has an OUT_FOR_DELIVERY order
   - [x] Run unit tests — **confirm GREEN**
 
@@ -833,6 +840,176 @@ Additionally:
 
 ---
 
+### 5.6.3 — Map UX Fixes & Ola Maps Address Picker
+
+**Root cause / Goal:**
+Four distinct issues were identified after Sessions 16–20:
+
+1. **Scroll propagation bug:** On the buyer's order-confirmation page and the checkout address step, scrolling the mouse wheel over the map also scrolls the underlying page. The map container has a `wheel` event listener with `e.preventDefault()`, but when the Ola Maps SDK is active its own internal scroll handlers do not always stop the event from bubbling to the page scroll container, so both zoom and page scroll happen simultaneously.
+
+2. **Rider icon missing for OUT_FOR_DELIVERY orders:** On `OrderConfirmationPage`, `riderLocation` is initialised to `null` and is only populated when a live `rider_location_update` Socket.IO event arrives. If a buyer opens the page mid-delivery (after the rider has been out for a while), no socket event fires for the current position and the map shows "Waiting for rider GPS updates…" indefinitely. The `RiderLocation` table in the database holds the most-recent GPS fix, but there is no `GET /api/v1/rider/location/:orderId` endpoint to fetch it on page load.
+
+3. **Lag before route line appears:** When an order is `OUT_FOR_DELIVERY`, the map mounts and immediately fires `_drawRoute()`. This makes a network call to `https://api.olamaps.io/routing/v1/directions`, which can take 1–3 seconds. Nothing is drawn during that wait — the map shows two markers on a blank tile background. Both the buyer and rider see an empty map with no route indicator. The fix is to draw a curved dotted placeholder arrow immediately, then replace it with the real road route once the API responds.
+
+4. **Leaflet-only address picker:** `AddressMapPicker.tsx` is built on Leaflet/OpenStreetMap. It is used in three places: `CheckoutPage.tsx`, `SavedAddressesPage.tsx`, and `BookingTimeslotPage.tsx`. All three must be migrated to an Ola Maps–powered picker that: (a) defaults to Mussoorie/Dehradun, (b) shows the custom `buyer.png` marker, (c) lets the buyer search by POI name via a small Ola Maps Autocomplete input above the map, and (d) continues to save the same `lat`/`lng` data to the backend.
+
+**Fix / Approach (one subsection per issue):**
+
+#### A — Scroll Propagation Fix
+- In `OrderRouteMap.tsx`, replace the unconditional `e.preventDefault()` wheel handler with hover-state `mouseenter`/`mouseleave` listeners that call the adapter's `enableScrollZoom()` and `disableScrollZoom()` methods.
+- Add `enableScrollZoom()` and `disableScrollZoom()` to the `MapAdapter` interface in `map-provider.ts`.
+- Implement them in `LeafletMapAdapter` using `this._map.scrollWheelZoom.enable()` / `.disable()`.
+- Implement them in `OlaMapAdapter` by toggling the Ola Maps SDK's scroll-zoom option (or intercepting the wheel event only when hover state is active).
+- Apply the same fix to the new `OlaAddressMapPicker` component (section D).
+
+#### B — Rider Icon / Last-Known Location Fix
+- Add `GET /api/v1/rider/location/:orderId` as a **buyer-authenticated** endpoint that reads the `RiderLocation` row associated with the rider assigned to that order.
+- On `OrderConfirmationPage`, if `order.status === 'OUT_FOR_DELIVERY'`, make an initial REST fetch to this endpoint on mount to seed `riderLocation` before any Socket.IO events arrive.
+
+#### C — Route Lag: Curved Dotted Placeholder
+- In both `LeafletMapAdapter._drawRoute()` and `OlaMapAdapter._drawRoute()`, draw a **curved dotted line with an arrowhead** between rider and buyer coordinates immediately (no API call needed — this is computed purely from the two coordinate points using a bezier midpoint offset).
+- Add a `data-testid="route-calculating-note"` element below the map container in `OrderRouteMap.tsx` with the text "Calculating route…" while the API call is in-flight.
+- Once `fetchOlaRoute()` resolves successfully, replace the dotted line with the solid green road-aligned polyline and remove the note.
+- If `fetchOlaRoute()` rejects, keep the dotted line as the permanent fallback (no note).
+
+#### D — Ola Maps Address Picker
+- Create a new component `OlaAddressMapPicker.tsx` in `apps/web/src/components/buyer/` with the same props interface as the existing `AddressMapPicker` (`center`, `onCoordinatesChange`, `className`, `zoom`).
+- The component renders: (1) a small search `<input>` above the map that calls the Ola Maps Autocomplete API (`https://api.olamaps.io/places/v1/autocomplete?input=<term>&api_key=<key>&location=30.4598,78.0664&radius=80000`) debounced at 600ms; (2) a dropdown of up to 5 suggestions; (3) an Ola Maps map container defaulted to `{ lat: 30.4598, lng: 78.0664 }` (Mussoorie town centre) at zoom 13; (4) a draggable `buyer.png` marker at the selected position.
+- When a suggestion is selected, call the Ola Maps Geocode API (`https://api.olamaps.io/places/v1/geocode?address=<place_id>&api_key=<key>`) to resolve exact coordinates, then pan the map and move the marker.
+- When the user drags the marker, fire `onCoordinatesChange` with the new position.
+- On mount, fire `onCoordinatesChange` with the default center so the parent always has a valid coordinate even before the user interacts.
+- Map bounds are not hard-locked (Ola Maps doesn't offer a simple maxBounds API), but the default center and zoom 13 ensure the user starts in Mussoorie/Dehradun. The search autocomplete is biased to a 80 km radius around Mussoorie so irrelevant results from other cities are ranked below local results.
+- Replace the `AddressMapPicker` import with `OlaAddressMapPicker` in `CheckoutPage.tsx`, `SavedAddressesPage.tsx`, and `BookingTimeslotPage.tsx`. The `MUSSOORIE_AREA_CENTER` constant is re-exported from the new file so callers need no change beyond the import path.
+
+---
+
+#### A — Scroll Propagation Fix
+
+- [ ] **RED — Integration (N/A):**
+  - *N/A: Scroll propagation is a pure browser-event / frontend concern. No backend endpoint changes are required.*
+
+- [ ] **RED — Unit / Component (`OrderRouteMap.test.tsx` — update existing):**
+  - [ ] Test: render `<OrderRouteMap buyerCoords={...} />` in a JSDOM environment; dispatch a `wheel` event on the map container div **before** a `mouseenter` event — assert that `e.defaultPrevented` is `false` (page scroll is allowed when cursor is outside the map).
+  - [ ] Test: dispatch `mouseenter` on the map container, then dispatch a `wheel` event — assert that `e.defaultPrevented` is `true` (scroll zoom is captured; page does not scroll).
+  - [ ] Test: dispatch `mouseleave` followed by a `wheel` event — assert that `e.defaultPrevented` is `false` again.
+  - [ ] **Run — confirm RED (current implementation always calls `e.preventDefault()` regardless of hover state, so the first test will fail).**
+
+- [ ] **GREEN — Frontend (MapAdapter interface → both Adapters → OrderRouteMap component):**
+  - [ ] [Types] In `map-provider.ts`, add `enableScrollZoom(): void` and `disableScrollZoom(): void` to the `MapAdapter` interface.
+  - [ ] [Adapter] In `leaflet-map-adapter.ts`, implement `enableScrollZoom()` as `this._map?.scrollWheelZoom.enable()` and `disableScrollZoom()` as `this._map?.scrollWheelZoom.disable()`. Set `scrollWheelZoom: false` in the Leaflet map constructor options (scroll zoom starts disabled; only enabled on hover).
+  - [ ] [Adapter] In `ola-map-adapter.ts`, implement `enableScrollZoom()` and `disableScrollZoom()` by maintaining a private `_scrollEnabled` boolean and conditionally calling `e.preventDefault()` inside the adapter's internal wheel listener.
+  - [ ] [Component] In `OrderRouteMap.tsx`, remove the current unconditional `handleWheel` listener. Replace with `mouseenter` → `adapter.enableScrollZoom()` and `mouseleave` → `adapter.disableScrollZoom()` listeners on the container node. Clean up both listeners in the return cleanup function.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Buyer opens the order confirmation page → scrolls with the mouse wheel anywhere on the page (cursor outside map) → page scrolls normally, map does not zoom → buyer moves cursor onto the map → scrolls wheel → map zooms in/out, page does not scroll → buyer moves cursor off the map → scrolls → page scrolls again → ✅ Done.
+
+---
+
+#### B — Rider Icon / Last-Known Location Fix
+
+- [ ] **RED — Integration (`rider.location.test.ts` — add new test cases to existing file):**
+  - [ ] Test setup: seed a `DeliveryRider`, an `Order` with `status: OUT_FOR_DELIVERY` and `riderId` set to the seeded rider, and a `RiderLocation` row `{ riderId, lat: 30.4600, lng: 78.0680, updatedAt: now }`.
+  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` with a valid BUYER JWT (the buyer who owns that order) → HTTP 200; response shape `{ success: true, data: { lat: "30.46", lng: "78.068", updatedAt: "<iso-string>" } }`.
+  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` where the order status is `PREPARING` (rider not yet dispatched) → HTTP 200; response `{ success: true, data: null }` (null means no location available yet — not a 404).
+  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` with a BUYER JWT for a different buyer (not the owner of the order) → HTTP 403 `FORBIDDEN`.
+  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` with no JWT → HTTP 401 `UNAUTHORIZED`.
+  - [ ] **Run — confirm RED (the endpoint does not exist; returns 404 today).**
+
+- [ ] **GREEN — Backend (Repository → Service → Controller):**
+  - [ ] [Repository] In `rider.repository.ts`, add `getLocationByOrderId(orderId: string): Promise<{ lat: string; lng: string; updatedAt: Date } | null>`. Implementation: `prisma.riderLocation.findFirst({ where: { rider: { orders: { some: { id: orderId } } } }, select: { lat: true, lng: true, updatedAt: true } })`. Convert `Decimal` lat/lng to string in the return value.
+  - [ ] [Service] In `rider-location.service.ts`, add `getLastKnownLocationForOrder(orderId: string): Promise<{ lat: string; lng: string; updatedAt: string } | null>`. Calls `riderRepository.getLocationByOrderId(orderId)` and formats `updatedAt` to ISO string.
+  - [ ] [Controller] In `rider.controller.ts`, add route `GET /api/v1/orders/:orderId/rider-location` behind `requireAuth` + `requireRole(['BUYER'])`. Handler: verifies the order belongs to the requesting buyer (query `prisma.order.findFirst({ where: { id: orderId, userId: request.user.userId } })`), then calls `deps.riderLocationService.getLastKnownLocationForOrder(orderId)`. Returns `{ success: true, data: result }` where `result` is `null` or the location object.
+  - [ ] [Routes] Register the new route in `routes.ts` alongside existing rider routes. No new deps object changes needed — `riderLocationService` is already injected.
+  - [ ] Run integration tests — **confirm GREEN**.
+
+- [ ] **RED — Unit / Component (`OrderConfirmationPage.state.test.tsx` — add new test cases):**
+  - [ ] Test: when `order.status === 'OUT_FOR_DELIVERY'` and the component mounts, it calls `GET /api/v1/orders/:orderId/rider-location`; mock returns `{ lat: "30.46", lng: "78.068", updatedAt: "..." }` → assert that `data-testid="rider-location-display"` appears in the DOM with text containing `"30.46"` (not "Waiting for rider GPS updates…").
+  - [ ] Test: when `GET /api/v1/orders/:orderId/rider-location` returns `{ data: null }`, the component still shows "Waiting for rider GPS updates…" and does NOT show `data-testid="rider-location-display"`.
+  - [ ] Test: when `order.status === 'PREPARING'`, `GET /api/v1/orders/:orderId/rider-location` is NOT called (no unnecessary requests when order is not yet out for delivery).
+  - [ ] **Run — confirm RED (no initial fetch is made today; component relies solely on socket events).**
+
+- [ ] **GREEN — Frontend (Types → Component):**
+  - [ ] [Component] In `OrderConfirmationPage.tsx`, add a `useEffect` that fires only when `order.status === 'OUT_FOR_DELIVERY'` and `riderLocation === null`. Inside the effect, call `api.get<{ success: boolean; data: { lat: string; lng: string } | null }>('/api/v1/orders/${id}/rider-location')`. If `data` is non-null, call `setRiderLocation({ lat: Number(data.lat), lng: Number(data.lng) })`. The effect runs once on mount when status is OUT_FOR_DELIVERY.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Rider marks order OUT_FOR_DELIVERY and GPS updates are pushed → Rider moves 2 km → Buyer opens the order page 5 minutes later → On mount, the page fetches last-known location from the DB → Rider's `buyer.png` marker appears on the map immediately without waiting for the next GPS push → New GPS updates continue to move the marker via Socket.IO → ✅ Done.
+
+---
+
+#### C — Route Lag: Curved Dotted Placeholder Line
+
+- [ ] **RED — Integration (N/A):**
+  - *N/A: The dotted placeholder line is a pure frontend rendering concern. No backend endpoint or schema changes are required.*
+
+- [ ] **RED — Unit / Component (`leaflet-map-adapter.test.ts` and `ola-map-adapter.test.ts` — update existing):**
+  - [ ] Test (`leaflet-map-adapter.test.ts`): after calling `adapter.addMarker(riderCoords, 'rider')` when a buyer marker already exists, assert that a **dotted polyline** is added to the map immediately (before `fetchOlaRoute` resolves). The dotted polyline must have `dashArray` property set (e.g. `"6 8"`) and `color` set to `"#1d3d2f"`.
+  - [ ] Test (`leaflet-map-adapter.test.ts`): after `fetchOlaRoute` mock resolves, assert the dotted polyline is removed and a **solid polyline** is added with `dashArray` undefined/null.
+  - [ ] Test (`ola-map-adapter.test.ts`): after both markers are added, assert the map's `addLayer` has been called with a layer whose `paint["line-dasharray"]` is defined (dotted placeholder) before the routing API resolves.
+  - [ ] Test (`ola-map-adapter.test.ts`): after `fetchOlaRoute` mock resolves, assert `addLayer` is called a second time (or `setData` is called on the existing source) with a `paint` that has NO `line-dasharray` (solid line).
+  - [ ] Test (`OrderRouteMap.test.tsx`): when `riderCoords` prop is provided and the routing fetch is pending, the component renders an element with `data-testid="route-calculating-note"` containing the text `"Calculating route…"`.
+  - [ ] Test (`OrderRouteMap.test.tsx`): once the mock routing fetch resolves, `data-testid="route-calculating-note"` is removed from the DOM.
+  - [ ] **Run — confirm RED (no placeholder line exists today; `data-testid="route-calculating-note"` does not exist in the component).**
+
+- [ ] **GREEN — Frontend (Adapters → Component):**
+  - [ ] [MapAdapter interface] In `map-provider.ts`, add `isRouteCalculating: boolean` as a readable property on the `MapAdapter` interface (or expose via a callback `onRouteStatusChange(calculating: boolean): void`). Use the callback approach: add `setRouteStatusCallback(cb: (calculating: boolean) => void): void` to the interface.
+  - [ ] [LeafletMapAdapter] In `_drawRoute()`:
+    - **Before** calling `fetchOlaRoute`, draw a dotted curved polyline as a placeholder: compute a bezier midpoint `mid = { lat: (rider.lat + buyer.lat)/2 + offsetFactor, lng: (rider.lng + buyer.lng)/2 }` where `offsetFactor` is `Math.abs(rider.lat - buyer.lat) * 0.3` (creates curvature perpendicular to the line). Draw `L.polyline([riderCoords, mid, buyerCoords], { color: '#1d3d2f', weight: 3, opacity: 0.7, dashArray: '6 8' })` and store it as `this._placeholderLine`. Fire `this._routeStatusCallback?.(true)`.
+    - **After** `fetchOlaRoute` resolves: remove `this._placeholderLine`, draw the solid route, and fire `this._routeStatusCallback?.(false)`.
+    - **If** `fetchOlaRoute` rejects: keep `this._placeholderLine` (no solid route), fire `this._routeStatusCallback?.(false)`.
+  - [ ] [OlaMapAdapter] Apply the same pattern in `_drawRoute()` using a GeoJSON LineString with `"line-dasharray": [2, 4]` paint property for the placeholder, and replacing it with a solid layer once the route resolves.
+  - [ ] [OrderRouteMap.tsx] Call `adapter.setRouteStatusCallback((calculating) => setIsRouteCalculating(calculating))`. Add `const [isRouteCalculating, setIsRouteCalculating] = useState(false)`. Below the map container div (inside the outer wrapper), render `{isRouteCalculating && riderCoords && <p data-testid="route-calculating-note" className="text-xs text-center text-gorola-slate/70 mt-1 italic animate-pulse">Calculating route…</p>}`.
+  - [ ] Run unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Order goes OUT_FOR_DELIVERY → Buyer opens order confirmation page → Map appears with buyer marker and rider marker → A **curved dotted green line** is visible between them immediately, with "Calculating route…" text below the map → 1–3 seconds later, the dotted line is replaced by a solid road-aligned green polyline and the note disappears → Rider opens the detail modal and taps "Show Map" → Same dotted-line-then-solid-route sequence plays → ✅ Done.
+
+---
+
+#### D — Ola Maps Address Picker (Checkout + Saved Addresses + Booking)
+
+- [ ] **RED — Integration (N/A):**
+  - *N/A: The address picker is a frontend map widget. The backend endpoints (`POST /api/v1/addresses`, `PUT /api/v1/addresses/:id`, `POST /api/v1/orders`) already accept `lat`/`lng` in the request body and their contracts do not change.*
+
+- [ ] **RED — Unit / Component (`OlaAddressMapPicker.test.tsx` — new file at `apps/web/src/components/buyer/OlaAddressMapPicker.test.tsx`):**
+  - [ ] Test: renders a `<input data-testid="location-search-input">` element and a map container `<div aria-label="Delivery location map">`.
+  - [ ] Test: on mount, calls `onCoordinatesChange` immediately with the default center `{ lat: 30.4598, lng: 78.0664 }`.
+  - [ ] Test: when the user types `"hotel pad"` into `data-testid="location-search-input"` and waits 600ms (fake timers), calls `fetch` with a URL containing `"https://api.olamaps.io/places/v1/autocomplete"` and the query param `input=hotel+pad`.
+  - [ ] Test: when the autocomplete mock returns `[{ description: "Hotel Padmini, Mussoorie", place_id: "abc123" }]`, a dropdown renders with `data-testid="suggestion-0"` containing the text `"Hotel Padmini, Mussoorie"`.
+  - [ ] Test: clicking `data-testid="suggestion-0"` calls `fetch` with a URL containing `"https://api.olamaps.io/places/v1/geocode"` and `"abc123"`. When the geocode mock returns `{ lat: 30.4610, lng: 78.0690 }`, calls `onCoordinatesChange({ lat: 30.4610, lng: 78.0690 })` and clears the dropdown.
+  - [ ] Test: when `VITE_OLA_MAPS_API_KEY` is not set, renders an error state with `data-testid="map-api-key-missing"` and the text `"Map could not be loaded — API key missing"` (mirrors `OrderRouteMap` error handling).
+  - [ ] **Run — confirm RED (the `OlaAddressMapPicker.tsx` file does not exist yet).**
+
+- [ ] **GREEN — Frontend (New Component → Update three consumer pages → Update existing tests):**
+  - [ ] [New Component] Create `apps/web/src/components/buyer/OlaAddressMapPicker.tsx`:
+    - Props: `center: MapCoordinates`, `onCoordinatesChange: (coords: MapCoordinates) => void`, `className?: string`, `zoom?: number`.
+    - Re-export `MUSSOORIE_AREA_CENTER = { lat: 30.4598, lng: 78.0664 }` and `MapCoordinates` type from this file (so existing consumer import paths only need the filename changed).
+    - Internal state: `searchQuery: string`, `suggestions: { description: string; place_id: string }[]`, `isSearching: boolean`, `mapError: string | null`.
+    - Autocomplete: debounce `searchQuery` changes by 600ms, then `GET https://api.olamaps.io/places/v1/autocomplete?input=<term>&api_key=<key>&location=30.4598,78.0664&radius=80000`. Populate `suggestions` from `response.predictions`.
+    - Geocode on suggestion click: `GET https://api.olamaps.io/places/v1/geocode?address=<place_id>&api_key=<key>`. Extract `lat`/`lng` from `response.geocodingResults[0].geometry.location`. Call `onCoordinatesChange({ lat, lng })`, update marker position, pan map.
+    - Ola Maps map init: use the same `OlaMapAdapter` class to init the map, OR inline the SDK call directly since this component has a simpler requirement (single draggable marker, no route drawing). Use inline SDK call for simplicity to avoid coupling to the route-drawing adapter.
+    - Draggable marker: Use `buyer.png` image (import from `../../assets/buyer.png`). On `dragend`, read new coords and call `onCoordinatesChange`.
+    - Scroll zoom: Apply the same `mouseenter`/`mouseleave` hover-activation pattern from Fix A.
+    - On mount: call `onCoordinatesChange(center)` immediately so parent always has valid coords.
+    - Error state: if `VITE_OLA_MAPS_API_KEY` is not set, render `<div data-testid="map-api-key-missing">Map could not be loaded — API key missing</div>`.
+  - [ ] [CheckoutPage.tsx] Replace `import { AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/AddressMapPicker"` with `import { OlaAddressMapPicker as AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/OlaAddressMapPicker"`. Also remove the `<p>Tiles © OpenStreetMap</p>` attribution text block that appears after the map.
+  - [ ] [SavedAddressesPage.tsx] Same import alias swap. The component usage `<AddressMapPicker center={...} onCoordinatesChange={...} />` is unchanged — the alias handles it.
+  - [ ] [BookingTimeslotPage.tsx] Same import alias swap.
+  - [ ] [CheckoutPage.test.tsx] Update the `vi.mock("@/components/buyer/AddressMapPicker", ...)` block to mock `"@/components/buyer/OlaAddressMapPicker"` instead, keeping the same mock component shape.
+  - [ ] [SavedAddressesPage.test.tsx] Same mock path update.
+  - [ ] [BookingTimeslotPage.test.tsx] Same mock path update if `AddressMapPicker` is mocked there (grep to confirm).
+  - [ ] [AddressMapPicker.tsx] Keep the old file intact — do NOT delete it. Add a JSDoc deprecation comment: `/** @deprecated Use OlaAddressMapPicker instead. Retained for Leaflet fallback if needed. */`.
+  - [ ] Run `pnpm lint && pnpm typecheck` — confirm 0 errors.
+  - [ ] Run all unit tests — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] **Checkout (quick commerce):** Buyer selects "Deliver to new location" → sees Ola Maps centred on Mussoorie with buyer marker → types "hotel pad" in the search box → dropdown shows "Hotel Padmini, Mussoorie" → clicks it → map zooms to Hotel Padmini, marker moves → buyer drags marker to exact door → `lat`/`lng` captured → places order → order is created in DB with correct `deliveryLat` / `deliveryLng` → ✅ Done.
+  - [ ] **Saved Addresses:** Buyer opens Profile → Saved Addresses → Add New → dialog opens with Ola Maps picker → searches "Library Bazaar" → map zooms there → marker placed → buyer saves → address stored in DB with `lat`/`lng` → ✅ Done.
+  - [ ] **Booking commerce:** Buyer enters booking timeslot page → location section shows Ola Maps picker → searches landmark → selects → coordinates captured → booking placed with delivery coordinates → ✅ Done.
+
+---
+
 ### 5.7 — Rider Earnings Page
 
 **Root cause / Goal:**
@@ -1048,4 +1225,43 @@ _(Append new entries here — never delete old entries.)_
 - Wired Store Orders and Store Bookings pages to initialize active tabs, date filters, and custom ranges from URL search parameters on mount, invalidating and refetching data reactively.
 - Clarified dashboard card headings for booking commerce: `"Appointments Scheduled Today"` and `"Revenue from Bookings Made Today"` (with subtext `"From bookings made today"`) to clearly distinguish scheduling vs booking-creation dates.
 - Verified all Vitest frontend unit tests, integration test suites, TypeScript type compilation, and ESLint check tasks run completely green.
+
+### Session 16 — 2026-06-16 — Map Zoom and Custom Icons Completed
+- Resolved a critical bug in `ola-map-adapter.ts` where the map would initialize with zoom level 0 and display the entire world when the detailed modal opened.
+- Registered a listener for the map "load" event in `OlaMapInstance.init` to ensure that `_fitBounds` runs only after the map style has loaded and the DOM layout of the container has finished rendering.
+- Handled cases where the buyer's and rider's coordinates are identical or extremely close (distance < 0.0001) by centering on the buyer and setting an explicit zoom level of 14, preventing `fitBounds` from collapsing to zoom level 0 or throwing.
+- Manually calculated and verified bounding boxes to ensure valid southwest/northeast coordinates are passed to `fitBounds` with a `maxZoom: 14` option.
+- Updated both `LeafletMapAdapter` and `OlaMapAdapter` to render the buyer marker as the Leaflet default blue pinpoint icon (the same icon used when adding/saving addresses) and the rider location as a circular marker with a custom Rider on a Bike SVG icon.
+- Verified that all unit tests in `ola-map-adapter.test.ts`, `leaflet-map-adapter.test.ts`, and `OrderRouteMap.test.tsx` pass successfully.
+
+### Session 17 — 2026-06-16 — Custom Marker Icons & Route Line Drawing Completed
+- Copied user-requested marker images (`buyer.png` and `rider.png`) from the Desktop folder into `apps/web/public/`.
+- Configured both `LeafletMapAdapter` and `OlaMapAdapter` to render these custom image markers dynamically using Vite public path mappings.
+- Implemented automatic route line (polyline) drawing in both adapters when coordinates for both buyer and rider are active, rendering a solid GoRola brand Pine green line (`#1d3d2f`) connecting the two locations.
+- Handled route line cleanup dynamically on adapter destruction and map state resets.
+- Added comprehensive unit tests in `leaflet-map-adapter.test.ts` and `ola-map-adapter.test.ts` to assert on route line creation, coordinates ordering, styles, and cleanup.
+- Verified all vitest suites (20/20 passing) and TypeScript compilation (`tsc --noEmit`) pass 100% clean.
+
+### Session 18 — 2026-06-16 — Road-Based Routing & High-Contrast Saturated Markers Completed
+- Created a shared [map-route-helper.ts](file:///C:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/lib/map-route-helper.ts) containing a polyline decoder and fetcher for the Ola Maps Directions/Routing API.
+- Integrated the Directions API request flow inside `LeafletMapAdapter` and `OlaMapAdapter` to fetch the actual shortest road route between rider and buyer, dynamically rendering the road-aligned path on the map.
+- Implemented a seamless straight-line fallback mechanism if the Directions API is rate-limited, offline, or has expired keys.
+- Scaled map icons to a larger `40px` size and applied dynamic drop-shadows, saturation (`saturate(2)`), and contrast (`contrast(1.2)`) CSS styling to make markers stand out prominently.
+- Added comprehensive unit tests in `map-route-helper.test.ts`, `leaflet-map-adapter.test.ts`, and `ola-map-adapter.test.ts` checking polyline decoding accuracy, POST params, road routing render states, filter application, and fallback behavior.
+- Verified all vitest suites (25/25 passing) and TypeScript compiler validations (`tsc --noEmit`) run 100% clean.
+
+### Session 19 — 2026-06-16 — Strict TDD Map Routing & Reload Marker Asset Fix
+- Corrected the Ola Maps Directions API response schema parsing in `map-route-helper.ts`. Instead of accessing `.points` (Google Maps style), the code now dynamically handles `overview_polyline` directly as an encoded string.
+- Resolved marker rendering issues on page reloads/subdomain setups by importing custom buyer and rider marker PNG assets from `src/assets` and passing them directly to Leaflet and Ola Map adapters, enabling compile-time Vite static asset resolution.
+- Updated Vitest unit tests in `map-route-helper.test.ts`, `ola-map-adapter.test.ts`, and `leaflet-map-adapter.test.ts` following strict TDD guidelines to assert on the correct Ola Maps payload formats and compiled asset paths.
+- Confirmed all vitest test suites, TypeScript type compilation, and ESLint check tasks run completely green.
+
+### Session 20 — 2026-06-16 — Map Zoom, Scroll Propagation & Geolocation Analysis
+- Checked and documented the development geolocation mock and latency behavior. Verified that:
+  - High-accuracy geolocation calls on devices/browsers without true hardware GPS take 5–10+ seconds, causing the 2-second development mock fallback timeout to trigger initially.
+  - The fallback warning and mock coordinate injection is strictly guarded by dev environment flags (`import.meta.env.DEV`), meaning it is fully tree-shaken and will never run in production.
+  - Once the browser's background high-accuracy query completes, the success callback is invoked, correctly updating the coordinates from mock to real on the maps.
+- Cleaned up container-level scroll event bubbling listeners (`node.addEventListener("wheel", ...)`) for both `OrderRouteMap.tsx` and `AddressMapPicker.tsx` to handle maps correctly and prevent full-page body scrolling.
+- Integrated a delayed boundary resize call to correct initial marker layouts after page transitions.
+- Confirmed all quality gates (lints, typecheck, vitest tests) are fully passing.
 

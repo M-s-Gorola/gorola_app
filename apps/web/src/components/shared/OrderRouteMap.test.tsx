@@ -97,4 +97,16 @@ describe("OrderRouteMap", () => {
     expect(mockAdapterInstance.destroy).toHaveBeenCalledTimes(1);
     expect(mockAdapterInstance.init).toHaveBeenCalledTimes(2);
   });
+
+  it("prevents default behavior on wheel events to block page scrolling during zoom", async () => {
+    render(<OrderRouteMap buyerCoords={buyerCoords} />);
+    
+    const container = screen.getByRole("region", { name: /order route map/i });
+    const wheelEvent = new WheelEvent("wheel", { bubbles: true, cancelable: true });
+    
+    const preventDefaultSpy = vi.spyOn(wheelEvent, "preventDefault");
+    container.dispatchEvent(wheelEvent);
+    
+    expect(preventDefaultSpy).toHaveBeenCalled();
+  });
 });

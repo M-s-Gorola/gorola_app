@@ -56,10 +56,16 @@ export function OrderRouteMap({
       }
     }
 
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+    node.addEventListener("wheel", handleWheel, { passive: false });
+
     initMap();
 
     return () => {
       active = false;
+      node.removeEventListener("wheel", handleWheel);
       adapter.destroy();
     };
   }, [
