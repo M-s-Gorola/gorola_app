@@ -40,4 +40,16 @@ export class RiderLocationService {
 
     return location;
   }
+
+  public async getLastKnownLocationForOrder(
+    orderId: string
+  ): Promise<{ lat: string; lng: string; updatedAt: string } | null> {
+    const loc = await this.riderRepository.getLocationByOrderId(orderId);
+    if (!loc) return null;
+    return {
+      lat: loc.lat,
+      lng: loc.lng,
+      updatedAt: loc.updatedAt.toISOString()
+    };
+  }
 }

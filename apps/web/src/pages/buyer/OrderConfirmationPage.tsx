@@ -358,6 +358,27 @@ export function OrderConfirmationPage(): ReactElement {
 
   const order = query.data;
 
+  useEffect(() => {
+    let active = true;
+    if (order?.status === "OUT_FOR_DELIVERY" && riderLocation === null) {
+      api!.get<{ success: boolean; data: { lat: string; lng: string } | null }>(
+        `/api/v1/orders/${id}/rider-location`
+      ).then((res) => {
+        if (active && res.data.success && res.data.data && res.data.data.lat != null && res.data.data.lng != null) {
+          setRiderLocation({
+            lat: Number(res.data.data.lat),
+            lng: Number(res.data.data.lng)
+          });
+        }
+      }).catch((err) => {
+        console.error("Failed to fetch rider last-known location:", err);
+      });
+    }
+    return () => {
+      active = false;
+    };
+  }, [order?.status, id, riderLocation]);
+
 interface StoreOffer {
   id: string;
   title: string;

@@ -351,5 +351,39 @@ export function registerRiderRoutes(
     };
   });
 
+  // GET /api/v1/orders/:orderId/rider-location
+  app.get("/api/v1/orders/:orderId/rider-location", {
+    preHandler: [requireAuth(deps.tokenVerifier), requireRole(["BUYER"])]
+  }, async (request, reply) => {
+    const { orderId } = request.params as { orderId: string };
+    const buyerId = request.user?.sub;
+    if (!buyerId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const prisma = getPrismaClient();
+    const order = await prisma.order.findUnique({
+      where: { id: orderId }
+    });
+
+    if (!order) {
+      return reply.code(404).send({ success: false, error: "Order not found" });
+    }
+
+    if (order.userId !== buyerId) {
+      return reply.code(403).send({ success: false, error: "You are not authorized to view this order's rider location" });
+    }
+
+    const location = await deps.riderLocationService.getLastKnownLocationForOrder(orderId);
+
+    return {
+      success: true,
+      data: location,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
 }
 

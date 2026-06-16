@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import type { FastifyInstance } from "fastify";
 import { SignJWT } from "jose";
 import { io as Client } from "socket.io-client";
@@ -279,4 +280,97 @@ describe("Rider Geolocation Tracking Integration", () => {
       }, 500);
     });
   });
+
+  describe("GET /api/v1/orders/:orderId/rider-location", () => {
+    it("should return the last known rider location for a valid buyer owning the order", async () => {
+      // 1. Seed rider location in DB
+      await db.riderLocation.create({
+        data: {
+          riderId: riderId1,
+          lat: new Prisma.Decimal("30.4600000"),
+          lng: new Prisma.Decimal("78.0680000")
+        }
+      });
+
+      // 2. Add status history entry to link rider to the order as OUT_FOR_DELIVERY status changer
+      await db.orderStatusHistory.create({
+        data: {
+          orderId,
+          status: "OUT_FOR_DELIVERY",
+          changedBy: riderId1
+        }
+      });
+
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/orders/${orderId}/rider-location`,
+        headers: {
+          authorization: `Bearer ${buyerToken}`
+        }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data).not.toBeNull();
+      expect(body.data.lat).toBe("30.46");
+      expect(body.data.lng).toBe("78.068");
+      expect(body.data.updatedAt).toBeDefined();
+    });
+
+    it("should return null if there is no rider location or no status history (preparing)", async () => {
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/orders/${orderId}/rider-location`,
+        headers: {
+          authorization: `Bearer ${buyerToken}`
+        }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = res.json();
+      expect(body.success).toBe(true);
+      expect(body.data).toBeNull();
+    });
+
+    it("should return 403 if requested by a different buyer", async () => {
+      const differentBuyer = await db.user.create({
+        data: {
+          name: "Different Shopper",
+          phone: "+919999999999"
+        }
+      });
+
+      const differentBuyerToken = await new SignJWT({
+        role: "BUYER"
+      })
+        .setProtectedHeader({ alg: "RS256" })
+        .setSubject(differentBuyer.id)
+        .setIssuedAt()
+        .setExpirationTime("1h")
+        .sign(keys.privateKey);
+
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/orders/${orderId}/rider-location`,
+        headers: {
+          authorization: `Bearer ${differentBuyerToken}`
+        }
+      });
+
+      expect(res.statusCode).toBe(403);
+      expect(res.json().success).toBe(false);
+    });
+
+    it("should return 401 if requested without token", async () => {
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/orders/${orderId}/rider-location`
+      });
+
+      expect(res.statusCode).toBe(401);
+      expect(res.json().success).toBe(false);
+    });
+  });
 });
+

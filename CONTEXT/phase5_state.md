@@ -18,8 +18,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-17
-- **Session Summary:** Implemented the scroll propagation fix (Phase 5.6.3-A) across the Leaflet and Ola map adapters under a strict TDD workflow. Users can now scroll pages normally when mouse is outside map bounds, while wheel events zoom the map only when actively hovering over it.
-- **Next Session Must Start With:** Phase 5.6.3-B — Rider Icon / Last-Known Location Fix
+- **Session Summary:** Implemented Phase 5.6.3-A (Scroll Zoom Propagation Fix) and Phase 5.6.3-B (Rider Icon / Last-Known Location Fix) using strict TDD guidelines. Buyers now retrieve the rider's last-known coordinates upon order confirmation page load, avoiding indefinite map loading stubs.
+- **Next Session Must Start With:** Phase 5.6.3-C — Route Lag: Curved Dotted Placeholder Line
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -908,33 +908,33 @@ Four distinct issues were identified after Sessions 16–20:
 
 #### B — Rider Icon / Last-Known Location Fix
 
-- [ ] **RED — Integration (`rider.location.test.ts` — add new test cases to existing file):**
-  - [ ] Test setup: seed a `DeliveryRider`, an `Order` with `status: OUT_FOR_DELIVERY` and `riderId` set to the seeded rider, and a `RiderLocation` row `{ riderId, lat: 30.4600, lng: 78.0680, updatedAt: now }`.
-  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` with a valid BUYER JWT (the buyer who owns that order) → HTTP 200; response shape `{ success: true, data: { lat: "30.46", lng: "78.068", updatedAt: "<iso-string>" } }`.
-  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` where the order status is `PREPARING` (rider not yet dispatched) → HTTP 200; response `{ success: true, data: null }` (null means no location available yet — not a 404).
-  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` with a BUYER JWT for a different buyer (not the owner of the order) → HTTP 403 `FORBIDDEN`.
-  - [ ] Test: `GET /api/v1/orders/:orderId/rider-location` with no JWT → HTTP 401 `UNAUTHORIZED`.
-  - [ ] **Run — confirm RED (the endpoint does not exist; returns 404 today).**
+- [x] **RED — Integration (`rider.location.test.ts` — add new test cases to existing file):**
+  - [x] Test setup: seed a `DeliveryRider`, an `Order` with `status: OUT_FOR_DELIVERY` and `riderId` set to the seeded rider, and a `RiderLocation` row `{ riderId, lat: 30.4600, lng: 78.0680, updatedAt: now }`.
+  - [x] Test: `GET /api/v1/orders/:orderId/rider-location` with a valid BUYER JWT (the buyer who owns that order) → HTTP 200; response shape `{ success: true, data: { lat: "30.46", lng: "78.068", updatedAt: "<iso-string>" } }`.
+  - [x] Test: `GET /api/v1/orders/:orderId/rider-location` where the order status is `PREPARING` (rider not yet dispatched) → HTTP 200; response `{ success: true, data: null }` (null means no location available yet — not a 404).
+  - [x] Test: `GET /api/v1/orders/:orderId/rider-location` with a BUYER JWT for a different buyer (not the owner of the order) → HTTP 403 `FORBIDDEN`.
+  - [x] Test: `GET /api/v1/orders/:orderId/rider-location` with no JWT → HTTP 401 `UNAUTHORIZED`.
+  - [x] **Run — confirm RED (the endpoint does not exist; returns 404 today).**
 
-- [ ] **GREEN — Backend (Repository → Service → Controller):**
-  - [ ] [Repository] In `rider.repository.ts`, add `getLocationByOrderId(orderId: string): Promise<{ lat: string; lng: string; updatedAt: Date } | null>`. Implementation: `prisma.riderLocation.findFirst({ where: { rider: { orders: { some: { id: orderId } } } }, select: { lat: true, lng: true, updatedAt: true } })`. Convert `Decimal` lat/lng to string in the return value.
-  - [ ] [Service] In `rider-location.service.ts`, add `getLastKnownLocationForOrder(orderId: string): Promise<{ lat: string; lng: string; updatedAt: string } | null>`. Calls `riderRepository.getLocationByOrderId(orderId)` and formats `updatedAt` to ISO string.
-  - [ ] [Controller] In `rider.controller.ts`, add route `GET /api/v1/orders/:orderId/rider-location` behind `requireAuth` + `requireRole(['BUYER'])`. Handler: verifies the order belongs to the requesting buyer (query `prisma.order.findFirst({ where: { id: orderId, userId: request.user.userId } })`), then calls `deps.riderLocationService.getLastKnownLocationForOrder(orderId)`. Returns `{ success: true, data: result }` where `result` is `null` or the location object.
-  - [ ] [Routes] Register the new route in `routes.ts` alongside existing rider routes. No new deps object changes needed — `riderLocationService` is already injected.
-  - [ ] Run integration tests — **confirm GREEN**.
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository] In `rider.repository.ts`, add `getLocationByOrderId(orderId: string): Promise<{ lat: string; lng: string; updatedAt: Date } | null>`. Implementation: `prisma.riderLocation.findFirst({ where: { rider: { orders: { some: { id: orderId } } } }, select: { lat: true, lng: true, updatedAt: true } })`. Convert `Decimal` lat/lng to string in the return value.
+  - [x] [Service] In `rider-location.service.ts`, add `getLastKnownLocationForOrder(orderId: string): Promise<{ lat: string; lng: string; updatedAt: string } | null>`. Calls `riderRepository.getLocationByOrderId(orderId)` and formats `updatedAt` to ISO string.
+  - [x] [Controller] In `rider.controller.ts`, add route `GET /api/v1/orders/:orderId/rider-location` behind `requireAuth` + `requireRole(['BUYER'])`. Handler: verifies the order belongs to the requesting buyer (query `prisma.order.findFirst({ where: { id: orderId, userId: request.user.userId } })`), then calls `deps.riderLocationService.getLastKnownLocationForOrder(orderId)`. Returns `{ success: true, data: result }` where `result` is `null` or the location object.
+  - [x] [Routes] Register the new route in `routes.ts` alongside existing rider routes. No new deps object changes needed — `riderLocationService` is already injected.
+  - [x] Run integration tests — **confirm GREEN**.
 
-- [ ] **RED — Unit / Component (`OrderConfirmationPage.state.test.tsx` — add new test cases):**
-  - [ ] Test: when `order.status === 'OUT_FOR_DELIVERY'` and the component mounts, it calls `GET /api/v1/orders/:orderId/rider-location`; mock returns `{ lat: "30.46", lng: "78.068", updatedAt: "..." }` → assert that `data-testid="rider-location-display"` appears in the DOM with text containing `"30.46"` (not "Waiting for rider GPS updates…").
-  - [ ] Test: when `GET /api/v1/orders/:orderId/rider-location` returns `{ data: null }`, the component still shows "Waiting for rider GPS updates…" and does NOT show `data-testid="rider-location-display"`.
-  - [ ] Test: when `order.status === 'PREPARING'`, `GET /api/v1/orders/:orderId/rider-location` is NOT called (no unnecessary requests when order is not yet out for delivery).
-  - [ ] **Run — confirm RED (no initial fetch is made today; component relies solely on socket events).**
+- [x] **RED — Unit / Component (`OrderConfirmationPage.state.test.tsx` — add new test cases):**
+  - [x] Test: when `order.status === 'OUT_FOR_DELIVERY'` and the component mounts, it calls `GET /api/v1/orders/:orderId/rider-location`; mock returns `{ lat: "30.46", lng: "78.068", updatedAt: "..." }` → assert that `data-testid="rider-location-display"` appears in the DOM with text containing `"30.46"` (not "Waiting for rider GPS updates…").
+  - [x] Test: when `GET /api/v1/orders/:orderId/rider-location` returns `{ data: null }`, the component still shows "Waiting for rider GPS updates…" and does NOT show `data-testid="rider-location-display"`.
+  - [x] Test: when `order.status === 'PREPARING'`, `GET /api/v1/orders/:orderId/rider-location` is NOT called (no unnecessary requests when order is not yet out for delivery).
+  - [x] **Run — confirm RED (no initial fetch is made today; component relies solely on socket events).**
 
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Component] In `OrderConfirmationPage.tsx`, add a `useEffect` that fires only when `order.status === 'OUT_FOR_DELIVERY'` and `riderLocation === null`. Inside the effect, call `api.get<{ success: boolean; data: { lat: string; lng: string } | null }>('/api/v1/orders/${id}/rider-location')`. If `data` is non-null, call `setRiderLocation({ lat: Number(data.lat), lng: Number(data.lng) })`. The effect runs once on mount when status is OUT_FOR_DELIVERY.
-  - [ ] Run unit tests — **confirm GREEN**.
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Component] In `OrderConfirmationPage.tsx`, add a `useEffect` that fires only when `order.status === 'OUT_FOR_DELIVERY'` and `riderLocation === null`. Inside the effect, call `api.get<{ success: boolean; data: { lat: string; lng: string } | null }>('/api/v1/orders/${id}/rider-location')`. If `data` is non-null, call `setRiderLocation({ lat: Number(data.lat), lng: Number(data.lng) })`. The effect runs once on mount when status is OUT_FOR_DELIVERY.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Rider marks order OUT_FOR_DELIVERY and GPS updates are pushed → Rider moves 2 km → Buyer opens the order page 5 minutes later → On mount, the page fetches last-known location from the DB → Rider's `buyer.png` marker appears on the map immediately without waiting for the next GPS push → New GPS updates continue to move the marker via Socket.IO → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Rider marks order OUT_FOR_DELIVERY and GPS updates are pushed → Rider moves 2 km → Buyer opens the order page 5 minutes later → On mount, the page fetches last-known location from the DB → Rider's `buyer.png` marker appears on the map immediately without waiting for the next GPS push → New GPS updates continue to move the marker via Socket.IO → ✅ Done.
 
 ---
 
@@ -1272,4 +1272,14 @@ _(Append new entries here — never delete old entries.)_
 - Added comprehensive unit tests in `OrderRouteMap.test.tsx` verifying that scroll zoom defaults are blocked unless the container is hovered, allowing normal page scrolling outside map bounds.
 - Documented data minimization and private map rendering architecture in `CONTEXT/DPDP Act/1_geolocation_privacy.md` for DPDP Act compliance (scoping coordinates to our own secure backend APIs, using local Vite asset bundling for markers, performing routing polyline decoding strictly in-memory, and fallback straight-line vectors).
 - Checked and confirmed that all vitest unit tests (429 passing), TypeScript type check, and ESLint checks are 100% green.
+- Confirmed that stopping propagation of wheel events inside the map container does not impact Lenis smooth scrolling for the rest of the application, as the behavior is strictly scoped to the active map hover state.
+
+### Session 22 — 2026-06-17 — Phase 5.6.3-B Rider Last-Known Location Completed
+- Added integration test cases to `rider.location.test.ts` verifying that `GET /api/v1/orders/:orderId/rider-location` returns the correct coordinates when a location exists, handles `null` values for preparing orders, checks buyer ownership limits (403), and handles unauthenticated access (401).
+- Implemented `getRiderIdByOrderId` and `getLocationByOrderId` in `RiderRepository` to correctly resolve the assigned rider from either a booking technician mapping or the status history transition logs.
+- Integrated `getLastKnownLocationForOrder` in `RiderLocationService` and registered the REST endpoint in `rider.controller.ts`.
+- Updated `OrderConfirmationPage.tsx` with a `useEffect` hook to fetch and seed the initial `riderLocation` coordinates on mount, resolving map loading stub issues.
+- Added unit test assertions to `OrderConfirmationPage.state.test.tsx` checking correct mount-time querying and display behavior.
+- Verified that all unit tests, integration tests, TypeScript type compilations, and ESLint checks are 100% green.
+- **Architectural Polish (Socket.IO + REST Integration)**: Documented and implemented a hybrid location tracking design. While Socket.IO handles real-time "pushes" of live GPS updates as they happen, it is a stateless broadcast mechanism. To prevent the buyer's map from hanging on mount (waiting indefinitely for the next socket broadcast), we introduced a REST fetch on page load to "pull" the rider's last-known location from the database. Once loaded, the UI seamlessly transitions to listening for Socket.IO coordinate updates.
 
