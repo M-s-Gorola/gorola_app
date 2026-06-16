@@ -20,4 +20,7 @@ export interface MapAdapter {
 
   /** Disable scroll wheel zooming on the map. */
   disableScrollZoom(): void;
+
+  /** Register a callback for route status change (calculating route). */
+  setRouteStatusCallback?(cb: (calculating: boolean) => void): void;
 }

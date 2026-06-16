@@ -9,7 +9,8 @@ const mockAdapterInstance = {
   addMarker: vi.fn(),
   destroy: vi.fn(),
   enableScrollZoom: vi.fn(),
-  disableScrollZoom: vi.fn()
+  disableScrollZoom: vi.fn(),
+  setRouteStatusCallback: vi.fn()
 };
 
 vi.mock("../../lib/map-adapter-factory", () => ({
@@ -89,8 +90,8 @@ describe("OrderRouteMap", () => {
       await Promise.resolve();
     });
 
-    const newRiderCoords = { lat: 30.4560, lng: 78.0690 };
-    rerender(<OrderRouteMap buyerCoords={buyerCoords} riderCoords={newRiderCoords} />);
+    const newBuyerCoords = { lat: 30.4510, lng: 78.0710 };
+    rerender(<OrderRouteMap buyerCoords={newBuyerCoords} />);
 
     await act(async () => {
       await Promise.resolve();
@@ -98,6 +99,25 @@ describe("OrderRouteMap", () => {
 
     expect(mockAdapterInstance.destroy).toHaveBeenCalledTimes(1);
     expect(mockAdapterInstance.init).toHaveBeenCalledTimes(2);
+  });
+
+  it("updates existing marker without recreating map when only riderCoords change", async () => {
+    const { rerender } = render(<OrderRouteMap buyerCoords={buyerCoords} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    const newRiderCoords = { lat: 30.4560, lng: 78.0690 };
+    rerender(<OrderRouteMap buyerCoords={buyerCoords} riderCoords={newRiderCoords} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockAdapterInstance.destroy).not.toHaveBeenCalled();
+    expect(mockAdapterInstance.init).toHaveBeenCalledTimes(1);
+    expect(mockAdapterInstance.addMarker).toHaveBeenCalledWith(newRiderCoords, "rider");
   });
 
   it("allows page scroll (no preventDefault) before mouseenter and after mouseleave, but prevents it when mouse is over container", async () => {
@@ -135,5 +155,33 @@ describe("OrderRouteMap", () => {
     const preventDefaultSpyAfter = vi.spyOn(wheelEventAfter, "preventDefault");
     container.dispatchEvent(wheelEventAfter);
     expect(preventDefaultSpyAfter).not.toHaveBeenCalled();
+  });
+
+  it("renders calculating note while routing is in-flight, and hides it when done", async () => {
+    let cb: (calculating: boolean) => void = () => {};
+    mockAdapterInstance.setRouteStatusCallback.mockImplementationOnce((callback) => {
+      cb = callback;
+    });
+
+    render(<OrderRouteMap buyerCoords={buyerCoords} riderCoords={riderCoords} />);
+
+    await act(async () => {
+      await Promise.resolve();
+    });
+
+    expect(mockAdapterInstance.setRouteStatusCallback).toHaveBeenCalled();
+
+    // Trigger callback with true
+    act(() => {
+      cb(true);
+    });
+    expect(screen.getByTestId("route-calculating-note")).toBeInTheDocument();
+    expect(screen.getByTestId("route-calculating-note")).toHaveTextContent("Calculating route…");
+
+    // Trigger callback with false
+    act(() => {
+      cb(false);
+    });
+    expect(screen.queryByTestId("route-calculating-note")).not.toBeInTheDocument();
   });
 });

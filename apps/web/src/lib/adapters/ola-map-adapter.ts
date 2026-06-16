@@ -83,10 +83,15 @@ function loadOlaSdk(): Promise<void> {
 export class OlaMapAdapter implements MapAdapter {
   private _map: OlaMapInstance | null = null;
   private _markers: OlaMarkerInstance[] = [];
+  private _buyerMarker: OlaMarkerInstance | null = null;
+  private _riderMarker: OlaMarkerInstance | null = null;
   private _buyerCoords: { lat: number; lng: number } | null = null;
   private _riderCoords: { lat: number; lng: number } | null = null;
   private _routeSourceId = "route-source";
   private _routeLayerId = "route-layer";
+  private _routePlaceholderSourceId = "route-placeholder-source";
+  private _routePlaceholderLayerId = "route-placeholder-layer";
+  private _routeStatusCallback: ((calculating: boolean) => void) | null = null;
 
   async init(
     container: HTMLDivElement,
@@ -114,12 +119,30 @@ export class OlaMapAdapter implements MapAdapter {
       scrollZoom: false
     });
 
-    this._map.on("load", () => {
-      this._fitBounds();
-      setTimeout(() => {
+    return new Promise<void>((resolve) => {
+      let resolved = false;
+      const done = () => {
+        if (!resolved) {
+          resolved = true;
+          resolve();
+        }
+      };
+
+      this._map!.on("load", () => {
         this._fitBounds();
-      }, 350);
+        setTimeout(() => {
+          this._fitBounds();
+        }, 350);
+        done();
+      });
+
+      // Fallback timeout to prevent hanging in tests or slow network/style loads
+      setTimeout(done, 100);
     });
+  }
+
+  setRouteStatusCallback(cb: (calculating: boolean) => void): void {
+    this._routeStatusCallback = cb;
   }
 
   addMarker(coords: { lat: number; lng: number }, icon: MarkerIconType): void {
@@ -128,53 +151,75 @@ export class OlaMapAdapter implements MapAdapter {
     const OlaMaps = window.OlaMaps;
     if (!OlaMaps) return;
 
-    const markerEl = document.createElement("div");
-    const markerOptions: { element: HTMLDivElement; anchor?: string } = { element: markerEl };
-
-    if (icon === "buyer") {
-      markerEl.style.width = "40px";
-      markerEl.style.height = "40px";
-      markerEl.style.backgroundImage = "url('/buyer.png')";
-      markerEl.style.backgroundSize = "contain";
-      markerEl.style.backgroundRepeat = "no-repeat";
-      markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
-      markerOptions.anchor = "bottom";
-    } else {
-      markerEl.style.width = "40px";
-      markerEl.style.height = "40px";
-      markerEl.style.backgroundImage = "url('/rider.png')";
-      markerEl.style.backgroundSize = "contain";
-      markerEl.style.backgroundRepeat = "no-repeat";
-      markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
-      markerOptions.anchor = "bottom";
-    }
-
-    const marker = new OlaMaps.Marker(markerOptions)
-      .setLngLat([coords.lng, coords.lat])
-      .addTo(this._map);
-
-    this._markers.push(marker);
-
     if (icon === "buyer") {
       this._buyerCoords = coords;
+      if (this._buyerMarker) {
+        this._buyerMarker.setLngLat([coords.lng, coords.lat]);
+      } else {
+        const markerEl = document.createElement("div");
+        markerEl.style.width = "40px";
+        markerEl.style.height = "40px";
+        markerEl.style.backgroundImage = "url('/buyer.png')";
+        markerEl.style.backgroundSize = "contain";
+        markerEl.style.backgroundRepeat = "no-repeat";
+        markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
+
+        this._buyerMarker = new OlaMaps.Marker({ element: markerEl, anchor: "bottom" })
+          .setLngLat([coords.lng, coords.lat])
+          .addTo(this._map);
+        this._markers.push(this._buyerMarker);
+      }
     } else {
       this._riderCoords = coords;
+      if (this._riderMarker) {
+        this._riderMarker.setLngLat([coords.lng, coords.lat]);
+      } else {
+        const markerEl = document.createElement("div");
+        markerEl.style.width = "40px";
+        markerEl.style.height = "40px";
+        markerEl.style.backgroundImage = "url('/rider.png')";
+        markerEl.style.backgroundSize = "contain";
+        markerEl.style.backgroundRepeat = "no-repeat";
+        markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
+
+        this._riderMarker = new OlaMaps.Marker({ element: markerEl, anchor: "bottom" })
+          .setLngLat([coords.lng, coords.lat])
+          .addTo(this._map);
+        this._markers.push(this._riderMarker);
+      }
     }
 
     this._fitBounds();
   }
 
   destroy(): void {
-    this._markers.forEach((m) => m.remove());
+    if (this._buyerMarker) {
+      this._buyerMarker.remove();
+      this._buyerMarker = null;
+    }
+    if (this._riderMarker) {
+      this._riderMarker.remove();
+      this._riderMarker = null;
+    }
     this._markers = [];
     if (this._map) {
       const map = this._map as unknown as OlaMapExtended;
       try {
-        if (typeof map.getLayer === "function" && map.getLayer(this._routeLayerId)) {
-          map.removeLayer(this._routeLayerId);
+        if (typeof map.getLayer === "function") {
+          if (map.getLayer(this._routeLayerId)) {
+            map.removeLayer(this._routeLayerId);
+          }
+          if (map.getLayer(this._routePlaceholderLayerId)) {
+            map.removeLayer(this._routePlaceholderLayerId);
+          }
         }
-        if (typeof map.getSource === "function" && map.getSource(this._routeSourceId)) {
-          map.removeSource(this._routeSourceId);
+        if (typeof map.getSource === "function") {
+          if (map.getSource(this._routeSourceId)) {
+            map.removeSource(this._routeSourceId);
+          }
+          if (map.getSource(this._routePlaceholderSourceId)) {
+            map.removeSource(this._routePlaceholderSourceId);
+          }
         }
       } catch (err) {
         console.warn("Failed to clean up route source/layer in Ola Maps destroy:", err);
@@ -182,14 +227,6 @@ export class OlaMapAdapter implements MapAdapter {
       this._map.remove();
       this._map = null;
     }
-
-    const script = document.querySelector(
-      'script[src="https://www.unpkg.com/olamaps-web-sdk@latest/dist/olamaps-web-sdk.umd.js"]'
-    );
-    if (script) {
-      script.remove();
-    }
-    scriptPromise = null;
   }
 
   private _fitBounds(): void {
@@ -242,39 +279,99 @@ export class OlaMapAdapter implements MapAdapter {
     if (typeof map.isStyleLoaded !== "function") return;
     if (!map.isStyleLoaded()) return;
 
-    let roadCoords: [number, number][] = [
-      [this._riderCoords.lat, this._riderCoords.lng],
-      [this._buyerCoords.lat, this._buyerCoords.lng]
-    ];
-
-    const apiKey = import.meta.env.VITE_OLA_MAPS_API_KEY;
-    if (apiKey) {
-      try {
-        roadCoords = await fetchOlaRoute(this._riderCoords, this._buyerCoords, apiKey);
-      } catch (err) {
-        console.warn("Failed to fetch road route, falling back to straight line:", err);
+    // Clean up solid route if exists
+    try {
+      if (typeof map.getLayer === "function" && map.getLayer(this._routeLayerId)) {
+        map.removeLayer(this._routeLayerId);
       }
+      if (typeof map.getSource === "function" && map.getSource(this._routeSourceId)) {
+        map.removeSource(this._routeSourceId);
+      }
+    } catch {
+      // ignore
     }
 
-    // Convert from [lat, lng] to [lng, lat] for GeoJSON
-    const geojsonCoords = roadCoords.map((c) => [c[1], c[0]]);
+    // Draw placeholder curved line immediately
+    const midLat = (this._riderCoords.lat + this._buyerCoords.lat) / 2 + Math.abs(this._riderCoords.lat - this._buyerCoords.lat) * 0.3;
+    const midLng = (this._riderCoords.lng + this._buyerCoords.lng) / 2;
 
-    const geojson = {
+    const placeholderGeojson = {
       type: "Feature",
       properties: {},
       geometry: {
         type: "LineString",
-        coordinates: geojsonCoords
+        coordinates: [
+          [this._riderCoords.lng, this._riderCoords.lat],
+          [midLng, midLat],
+          [this._buyerCoords.lng, this._buyerCoords.lat]
+        ]
       }
     };
 
     try {
-      const source = typeof map.getSource === "function" ? map.getSource(this._routeSourceId) : null;
-      if (source) {
-        if (typeof source.setData === "function") {
-          source.setData(geojson);
+      const placeholderSource = typeof map.getSource === "function" ? map.getSource(this._routePlaceholderSourceId) : null;
+      if (placeholderSource) {
+        if (typeof placeholderSource.setData === "function") {
+          placeholderSource.setData(placeholderGeojson);
         }
       } else {
+        if (typeof map.addSource === "function") {
+          map.addSource(this._routePlaceholderSourceId, {
+            type: "geojson",
+            data: placeholderGeojson
+          });
+        }
+        if (typeof map.addLayer === "function") {
+          map.addLayer({
+            id: this._routePlaceholderLayerId,
+            type: "line",
+            source: this._routePlaceholderSourceId,
+            layout: {
+              "line-join": "round",
+              "line-cap": "round"
+            },
+            paint: {
+              "line-color": "#1d3d2f",
+              "line-width": 3,
+              "line-opacity": 0.7,
+              "line-dasharray": [2, 4]
+            }
+          });
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to draw placeholder route in Ola Maps:", err);
+    }
+
+    this._routeStatusCallback?.(true);
+
+    const apiKey = import.meta.env.VITE_OLA_MAPS_API_KEY;
+    if (apiKey) {
+      try {
+        const roadCoords = await fetchOlaRoute(this._riderCoords, this._buyerCoords, apiKey);
+        
+        // Remove placeholder layer and source before rendering the solid road path
+        try {
+          if (typeof map.getLayer === "function" && map.getLayer(this._routePlaceholderLayerId)) {
+            map.removeLayer(this._routePlaceholderLayerId);
+          }
+          if (typeof map.getSource === "function" && map.getSource(this._routePlaceholderSourceId)) {
+            map.removeSource(this._routePlaceholderSourceId);
+          }
+        } catch {
+          // ignore
+        }
+
+        const geojsonCoords = roadCoords.map((c) => [c[1], c[0]]);
+        const geojson = {
+          type: "Feature",
+          properties: {},
+          geometry: {
+            type: "LineString",
+            coordinates: geojsonCoords
+          }
+        };
+
         if (typeof map.addSource === "function") {
           map.addSource(this._routeSourceId, {
             type: "geojson",
@@ -298,10 +395,16 @@ export class OlaMapAdapter implements MapAdapter {
             }
           });
         }
+        
+        this._routeStatusCallback?.(false);
+        return;
+      } catch (err) {
+        console.warn("Failed to fetch road route, keeping curved dotted fallback:", err);
       }
-    } catch (err) {
-      console.warn("Failed to draw route in Ola Maps:", err);
     }
+
+    // Fallback: keep placeholder layer/source as permanent fallback
+    this._routeStatusCallback?.(false);
   }
 
   enableScrollZoom(): void {

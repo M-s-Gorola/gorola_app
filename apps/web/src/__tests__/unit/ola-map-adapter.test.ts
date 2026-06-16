@@ -170,6 +170,23 @@ describe("OlaMapAdapter", () => {
     expect(mockMarkerInstance.addTo).toHaveBeenCalledWith(mockMapInstance);
   });
 
+  it("updates existing marker position instead of recreating it when coordinates change", async () => {
+    const appendSpy = vi.spyOn(document.head, "appendChild");
+    const initPromise = adapter.init(container, center, 14);
+    const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
+    script.onload?.(new Event("load"));
+    await initPromise;
+
+    adapter.addMarker(center, "buyer");
+    expect(mockOlaMaps.Marker).toHaveBeenCalledTimes(1);
+
+    const newCenter = { lat: 30.46, lng: 78.07 };
+    adapter.addMarker(newCenter, "buyer");
+
+    expect(mockOlaMaps.Marker).toHaveBeenCalledTimes(1);
+    expect(mockMarkerInstance.setLngLat).toHaveBeenLastCalledWith([newCenter.lng, newCenter.lat]);
+  });
+
   it("draws and cleans up road route when both buyer and rider markers are added and style is loaded", async () => {
     const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
@@ -224,7 +241,7 @@ describe("OlaMapAdapter", () => {
     expect(mockMapInstance.removeSource).toHaveBeenCalledWith("route-source");
   });
 
-  it("falls back to straight line route in GeoJSON format when directions API fails", async () => {
+  it("falls back to curved dotted route in GeoJSON format when directions API fails", async () => {
     vi.mocked(fetchOlaRoute).mockRejectedValueOnce(new Error("API Error"));
 
     const appendSpy = vi.spyOn(document.head, "appendChild");
@@ -243,12 +260,13 @@ describe("OlaMapAdapter", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(mockMapInstance.addSource).toHaveBeenCalledWith(
-      "route-source",
+      "route-placeholder-source",
       expect.objectContaining({
         data: expect.objectContaining({
           geometry: expect.objectContaining({
             coordinates: [
               [riderCoords.lng, riderCoords.lat],
+              [78.064, 30.454],
               [center.lng, center.lat]
             ]
           })
@@ -267,5 +285,48 @@ describe("OlaMapAdapter", () => {
     adapter.destroy();
 
     expect(mockMapInstance.remove).toHaveBeenCalled();
+  });
+
+  it("draws a curved dotted placeholder layer immediately and triggers routeStatusCallback", async () => {
+    let resolveRoute: (val: [number, number][]) => void = () => {};
+    vi.mocked(fetchOlaRoute).mockImplementationOnce(() => new Promise((resolve) => {
+      resolveRoute = resolve;
+    }));
+
+    const statusCalls: boolean[] = [];
+    adapter.setRouteStatusCallback?.((calculating) => statusCalls.push(calculating));
+
+    const appendSpy = vi.spyOn(document.head, "appendChild");
+    const initPromise = adapter.init(container, center, 14);
+    const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
+    script.onload?.(new Event("load"));
+    await initPromise;
+
+    const loadCallback = mockMapInstance.on.mock.calls.find((c) => c[0] === "load")?.[1];
+    loadCallback();
+
+    adapter.addMarker(center, "buyer");
+    const riderCoords = { lat: 30.455, lng: 78.068 };
+    adapter.addMarker(riderCoords, "rider");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(statusCalls).toContain(true);
+    expect(mockMapInstance.addLayer).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "route-placeholder-layer",
+        paint: expect.objectContaining({
+          "line-dasharray": [2, 4]
+        })
+      })
+    );
+
+    resolveRoute([
+      [30.455, 78.068],
+      [30.452, 78.064]
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(statusCalls[statusCalls.length - 1]).toBe(false);
   });
 });

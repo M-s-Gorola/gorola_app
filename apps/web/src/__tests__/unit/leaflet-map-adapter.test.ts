@@ -182,7 +182,7 @@ describe("LeafletMapAdapter", () => {
     expect(mockPolylineInstance.remove).toHaveBeenCalled();
   });
 
-  it("falls back to straight line route when directions API fails", async () => {
+  it("falls back to curved dotted route when directions API fails", async () => {
     vi.mocked(fetchOlaRoute).mockRejectedValueOnce(new Error("API Error"));
 
     await adapter.init(container, buyerCoords, 14);
@@ -194,9 +194,13 @@ describe("LeafletMapAdapter", () => {
     expect(leafletMocks.polylineFactory).toHaveBeenCalledWith(
       [
         [riderCoords.lat, riderCoords.lng],
+        [30.454, 78.064],
         [buyerCoords.lat, buyerCoords.lng]
       ],
-      expect.any(Object)
+      expect.objectContaining({
+        color: "#1d3d2f",
+        dashArray: "6 8"
+      })
     );
   });
 
@@ -205,5 +209,38 @@ describe("LeafletMapAdapter", () => {
     adapter.destroy();
 
     expect(leafletMocks.mockMapRemove).toHaveBeenCalled();
+  });
+
+  it("draws a curved dotted placeholder line immediately and triggers routeStatusCallback", async () => {
+    let resolveRoute: (val: [number, number][]) => void = () => {};
+    vi.mocked(fetchOlaRoute).mockImplementationOnce(() => new Promise((resolve) => {
+      resolveRoute = resolve;
+    }));
+
+    const statusCalls: boolean[] = [];
+    adapter.setRouteStatusCallback?.((calculating) => statusCalls.push(calculating));
+
+    await adapter.init(container, buyerCoords, 14);
+    adapter.addMarker(buyerCoords, "buyer");
+    adapter.addMarker(riderCoords, "rider");
+
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(statusCalls).toContain(true);
+    expect(leafletMocks.polylineFactory).toHaveBeenCalledWith(
+      expect.any(Array),
+      expect.objectContaining({
+        color: "#1d3d2f",
+        dashArray: "6 8"
+      })
+    );
+
+    resolveRoute([
+      [30.455, 78.068],
+      [30.452, 78.064]
+    ]);
+    await new Promise((resolve) => setTimeout(resolve, 10));
+
+    expect(statusCalls[statusCalls.length - 1]).toBe(false);
   });
 });

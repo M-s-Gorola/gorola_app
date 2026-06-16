@@ -18,8 +18,8 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-06-17
-- **Session Summary:** Implemented Phase 5.6.3-A (Scroll Zoom Propagation Fix) and Phase 5.6.3-B (Rider Icon / Last-Known Location Fix) using strict TDD guidelines. Buyers now retrieve the rider's last-known coordinates upon order confirmation page load, avoiding indefinite map loading stubs.
-- **Next Session Must Start With:** Phase 5.6.3-C — Route Lag: Curved Dotted Placeholder Line
+- **Session Summary:** Implemented Phase 5.6.3-C (Route Lag Curved Dotted Placeholder Line) under strict TDD guidelines, and optimized map render flow to avoid double-flashing of the dotted line on mount and real-time socket updates.
+- **Next Session Must Start With:** Phase 5.6.3-D — Ola Maps Address Picker
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -1282,4 +1282,13 @@ _(Append new entries here — never delete old entries.)_
 - Added unit test assertions to `OrderConfirmationPage.state.test.tsx` checking correct mount-time querying and display behavior.
 - Verified that all unit tests, integration tests, TypeScript type compilations, and ESLint checks are 100% green.
 - **Architectural Polish (Socket.IO + REST Integration)**: Documented and implemented a hybrid location tracking design. While Socket.IO handles real-time "pushes" of live GPS updates as they happen, it is a stateless broadcast mechanism. To prevent the buyer's map from hanging on mount (waiting indefinitely for the next socket broadcast), we introduced a REST fetch on page load to "pull" the rider's last-known location from the database. Once loaded, the UI seamlessly transitions to listening for Socket.IO coordinate updates.
+
+### Session 23 — 2026-06-17 — Phase 5.6.3-C Route Lag Curved Dotted Placeholder Completed
+- Implemented Phase 5.6.3-C route lag curved dotted placeholder line with arrowhead drawing under strict TDD guidelines.
+- Modified Leaflet and Ola map adapters to draw curved dotted line immediately on route initialization, showing it while route fetching is active.
+- Added `setRouteStatusCallback` to `MapAdapter` interface to update `isRouteCalculating` component state.
+- Integrated calculating state below map rendering in `OrderRouteMap.tsx` via `route-calculating-note` ("Calculating route…").
+- Optimized map render cycles to prevent recreation: separated base map container initialization (depending on buyerCoords) from rider marker updates (depending on riderCoords) via React refs and `isInitialized` check hooks.
+- Used `lastRiderCoordsRef` to guard against duplicate marker update calls and suppressed recreating the dotted line when a solid road route line is already displayed (only displaying dotted lines on initial load when route is null).
+- Verified that all unit tests (leaflet adapter, ola adapter, component), global compiles (`tsc --noEmit`), and lints run completely green with 0 errors.
 

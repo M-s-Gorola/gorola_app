@@ -3,7 +3,7 @@ import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 
 import { createMapAdapter } from "../../lib/map-adapter-factory";
-import type { MapProvider } from "../../lib/map-provider";
+import type { MapAdapter, MapProvider } from "../../lib/map-provider";
 
 export type Coordinates = {
   lat: number;
@@ -22,7 +22,11 @@ export function OrderRouteMap({
   className = ""
 }: OrderRouteMapProps): ReactElement {
   const shellRef = useRef<HTMLDivElement | null>(null);
+  const adapterRef = useRef<MapAdapter | null>(null);
+  const lastRiderCoordsRef = useRef<Coordinates | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isRouteCalculating, setIsRouteCalculating] = useState(false);
+  const [isInitialized, setIsInitialized] = useState(false);
 
   useEffect(() => {
     const node = shellRef.current;
@@ -32,7 +36,16 @@ export function OrderRouteMap({
 
     const provider = (import.meta.env.VITE_MAP_PROVIDER || "leaflet") as MapProvider;
     const adapter = createMapAdapter(provider);
+    adapterRef.current = adapter;
     let active = true;
+
+    if (typeof adapter.setRouteStatusCallback === "function") {
+      adapter.setRouteStatusCallback((calculating) => {
+        if (active) {
+          setIsRouteCalculating(calculating);
+        }
+      });
+    }
 
     async function initMap() {
       try {
@@ -43,7 +56,9 @@ export function OrderRouteMap({
         adapter.addMarker(buyerCoords, "buyer");
         if (riderCoords) {
           adapter.addMarker(riderCoords, "rider");
+          lastRiderCoordsRef.current = riderCoords;
         }
+        setIsInitialized(true);
       } catch (err) {
         if (!active) return;
         console.error("Failed to initialize map:", err);
@@ -88,13 +103,25 @@ export function OrderRouteMap({
       node.removeEventListener("mouseleave", handleMouseLeave);
       node.removeEventListener("wheel", handleWheel);
       adapter.destroy();
+      adapterRef.current = null;
+      lastRiderCoordsRef.current = null;
+      setIsInitialized(false);
     };
-  }, [
-    buyerCoords.lat,
-    buyerCoords.lng,
-    riderCoords?.lat,
-    riderCoords?.lng
-  ]);
+  }, [buyerCoords.lat, buyerCoords.lng]);
+
+  useEffect(() => {
+    const adapter = adapterRef.current;
+    if (isInitialized && adapter && riderCoords) {
+      if (
+        !lastRiderCoordsRef.current ||
+        lastRiderCoordsRef.current.lat !== riderCoords.lat ||
+        lastRiderCoordsRef.current.lng !== riderCoords.lng
+      ) {
+        adapter.addMarker(riderCoords, "rider");
+        lastRiderCoordsRef.current = riderCoords;
+      }
+    }
+  }, [isInitialized, riderCoords?.lat, riderCoords?.lng]);
 
   if (error) {
     return (
@@ -128,14 +155,24 @@ export function OrderRouteMap({
   }
 
   return (
-    <div
-      ref={shellRef}
-      aria-label="Order route map"
-      className={clsx(
-        "relative z-0 min-h-[300px] w-full overflow-hidden rounded-xl border border-gorola-pine/15 shadow-inner",
-        className
+    <div className="flex flex-col w-full">
+      <div
+        ref={shellRef}
+        aria-label="Order route map"
+        className={clsx(
+          "relative z-0 min-h-[300px] w-full overflow-hidden rounded-xl border border-gorola-pine/15 shadow-inner",
+          className
+        )}
+        role="region"
+      />
+      {isRouteCalculating && riderCoords && (
+        <p
+          data-testid="route-calculating-note"
+          className="text-xs text-center text-gorola-slate/70 mt-1 italic animate-pulse"
+        >
+          Calculating route…
+        </p>
       )}
-      role="region"
-    />
+    </div>
   );
 }
