@@ -96,20 +96,22 @@ export function HeroSection(): ReactElement {
       ref={rootRef}
       aria-label="Hero section"
       className={cn(
-        "relative flex min-h-[40vh] items-center overflow-hidden rounded-3xl px-6 py-12 transition-colors duration-500 sm:px-10",
-        isWeatherMode
-          ? "bg-gorola-slate text-gorola-fog"
-          : "bg-gorola-hero-gradient text-gorola-charcoal"
+        "relative flex min-h-[30vh] sm:min-h-[40vh] items-center overflow-hidden rounded-3xl px-6 py-8 sm:py-12 transition-all duration-500 sm:px-10 bg-cover bg-center bg-no-repeat text-white"
       )}
+      style={{
+        backgroundImage: isWeatherMode
+          ? "linear-gradient(rgba(15, 23, 42, 0.75), rgba(15, 23, 42, 0.75)), url('/hero_final.png')"
+          : "linear-gradient(rgba(0, 0, 0, 0.5), rgba(0, 0, 0, 0.5)), url('/hero_final.png')"
+      }}
     >
-      <TopographicBg opacity={isWeatherMode ? 0.1 : 0.07} />
+      <TopographicBg opacity={isWeatherMode ? 0.08 : 0.05} />
       <div className="noise-overlay pointer-events-none absolute inset-0" aria-hidden />
 
-      <div className="relative z-10 flex max-w-none flex-col gap-6">
-        <div className="flex flex-col gap-2">
+      <div className="relative z-10 flex max-w-none flex-col gap-4 sm:gap-6">
+        <div className="flex flex-col gap-1 sm:gap-2">
           <p className={cn(
             "hero-greeting font-dm-sans text-sm font-medium tracking-wide sm:text-base",
-            isWeatherMode ? "text-gorola-fog/70" : "text-gorola-charcoal/70"
+            isWeatherMode ? "text-gorola-fog/70" : "text-white/80"
           )}>
             {isWeatherMode ? (
               <span className="inline-flex items-center gap-2">
@@ -120,14 +122,13 @@ export function HeroSection(): ReactElement {
             )}
           </p>
           <h1 className={cn(
-            "hero-subheading font-playfair text-4xl leading-[1.1] tracking-tight sm:text-5xl md:text-[52px] lg:text-6xl",
-            isWeatherMode ? "text-white" : "text-gorola-charcoal"
+            "hero-subheading font-playfair text-3xl sm:text-5xl md:text-[52px] lg:text-6xl leading-[1.1] tracking-tight text-white"
           )}>
             {isWeatherMode ? messages.weatherHeading : messages.normalHeading}
           </h1>
         </div>
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
+        <div className="flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:gap-4">
           <button
             type="button"
             className="hero-cta rounded-full bg-gorola-saffron px-8 py-3 font-dm-sans text-sm font-semibold text-gorola-charcoal shadow-lg transition hover:scale-105 active:scale-95"
@@ -138,10 +139,7 @@ export function HeroSection(): ReactElement {
 
           <div
             className={cn(
-              "hero-eta flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-medium transition-colors sm:inline-flex sm:w-fit sm:gap-3 sm:text-sm",
-              isWeatherMode 
-                ? "bg-white/10 text-gorola-fog" 
-                : "bg-gorola-charcoal/10 text-gorola-charcoal",
+              "hero-eta flex items-center gap-2 rounded-full px-4 py-2 text-[11px] font-medium transition-colors sm:inline-flex sm:w-fit sm:gap-3 sm:text-sm bg-white/10 text-white",
               "w-full"
             )}
             role="status"
@@ -149,11 +147,11 @@ export function HeroSection(): ReactElement {
           >
             <div className="flex shrink-0 items-center gap-2">
               <span className="hero-pulse h-2 w-2 rounded-full bg-gorola-amber" data-testid="pulse-dot" />
-              <span className={cn("font-bold", isWeatherMode ? "text-white" : "text-gorola-charcoal")}>
+              <span className="font-bold text-white">
                 {isWeatherMode ? "45-55 mins" : "25-35 mins"}
               </span>
             </div>
-            <div className={cn("w-px self-stretch", isWeatherMode ? "bg-white/20" : "bg-gorola-charcoal/20")} aria-hidden />
+            <div className="w-px self-stretch bg-white/20" aria-hidden />
             <span className="opacity-80 whitespace-normal leading-tight">
               {isWeatherMode ? messages.weatherETA : messages.normalETA}
             </span>

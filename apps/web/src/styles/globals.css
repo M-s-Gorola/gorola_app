@@ -103,7 +103,21 @@
 
 @layer base {
   body {
-    @apply m-0 min-h-dvh font-sans antialiased bg-background text-foreground transition-colors duration-500 ease-in-out;
+    @apply m-0 min-h-dvh font-sans antialiased text-foreground transition-colors duration-500 ease-in-out;
+    background-color: transparent !important;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -10;
+    background-image: url("/Gorola_background.png");
+    background-size: cover;
+    background-position: center;
+    background-repeat: no-repeat;
+    filter: blur(6px);
+    opacity: 0.5;
   }
 
   /* Remove aggressive global outline to prevent production focus ring artifacts */
@@ -118,6 +132,7 @@
 
   html {
     @apply font-sans;
+    background-color: var(--gorola-fog);
   }
 }
 
@@ -229,7 +244,7 @@
 body.weather-mode {
   --gorola-fog: var(--gorola-slate-mist);
   --background: var(--gorola-slate-mist);
-  background-color: var(--gorola-slate-mist);
+  background-color: transparent !important;
 
   .nav-blur {
     background: color-mix(in srgb, var(--gorola-slate) 85%, transparent);
@@ -239,6 +254,10 @@ body.weather-mode {
     background-color: var(--gorola-slate) !important;
     border-color: #2d3a4a !important;
   }
+}
+
+body.weather-mode::before {
+  filter: blur(6px) grayscale(50%) brightness(0.85);
 }
 
 @theme inline {
@@ -352,15 +371,20 @@ body.weather-mode {
   --sidebar-ring: oklch(0.556 0 0);
 }
 
-/* Brand Gradient Background for Hero and Footer */
-.bg-gorola-hero-gradient,
-.bg-gorola-footer-gradient {
+/* Brand Gradient Background for Hero */
+.bg-gorola-hero-gradient {
   background: linear-gradient(89deg, #FEBB56 0%, #FFFFFF 34%, #FFFFFF 67%, #AAD3FF 100%) !important;
 }
 
+/* Brand Footer Gradient Background copied from Navbar */
+.bg-gorola-footer-gradient {
+  background: linear-gradient(89deg, #E6F2FF 0%, #FFFFFF 18%, #FFFFFF 32%, #FFFFFF 68%, #FFFFFF 82%, #E6F2FF 100%) !important;
+}
+
+
 /* Brand Navbar Gradient Background specifically requested */
 .bg-gorola-pine\/95 {
-  background: linear-gradient(89deg, #E6F2FF 0%, #FFFFFF 18%, #FFFFFF 32%, #FFDFAE 50%, #FFFFFF 68%, #FFFFFF 82%, #E6F2FF 100%) !important;
+  background: linear-gradient(89deg, #E6F2FF 0%, #FFFFFF 18%, #FFFFFF 32%, #FFFFFF 68%, #FFFFFF 82%, #E6F2FF 100%) !important;
 }
 
 /* Base formatting for brand gradient backgrounds */
@@ -409,6 +433,6 @@ a.bg-gorola-hero-gradient,
 .olamaps-logo,
 .maplibregl-ctrl-bottom-left div,
 .maplibregl-ctrl-bottom-left a,
-.maplibregl-ctrl-bottom-left > * {
+.maplibregl-ctrl-bottom-left>* {
   display: none !important;
 }
