@@ -322,6 +322,7 @@ describe("StoreOwner Dashboard Integration Tests", () => {
     const todayTrend = dataA.weeklyRevenue.find((item: { date: string }) => item.date === todayStr);
     expect(todayTrend).toBeDefined();
     expect(todayTrend.revenue).toBe(900);
+    expect(todayTrend.count).toBe(2);
 
     // Top selling products check (Apples sold 2 units across Placed/Delivered)
     expect(dataA.topProducts).toBeInstanceOf(Array);
@@ -448,8 +449,10 @@ describe("StoreOwner Dashboard Integration Tests", () => {
       const hour15Item = weeklyTrend.find((item: { date: string }) => item.date === "15:00");
       expect(hour10Item).toBeDefined();
       expect(hour10Item.revenue).toBe(100.0);
+      expect(hour10Item.count).toBe(1);
       expect(hour15Item).toBeDefined();
       expect(hour15Item.revenue).toBe(200.0);
+      expect(hour15Item.count).toBe(1);
 
       // Scenario 2: range=MONTH, groupBy=DAILY (Sequential daily timeline for last 30 days)
       // Expect 30 buckets.

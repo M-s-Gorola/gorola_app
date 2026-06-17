@@ -471,5 +471,38 @@ describe("StoreDashboardPage", () => {
     fireEvent.click(pendingApprovalsCard);
     expect(mockNavigate).toHaveBeenCalledWith("/store/bookings?tab=PENDING");
   });
+
+  it("renders chart switcher tabs and handles toggling between Revenue and Orders", async () => {
+    const mockDashboardData = {
+      success: true,
+      data: {
+        todayOrderCount: 15,
+        todayRevenue: 1250.5,
+        pendingOrdersCount: 4,
+        weeklyRevenue: [
+          { date: "2026-05-13", revenue: 400, count: 2 },
+          { date: "2026-05-14", revenue: 500, count: 3 }
+        ],
+        topProducts: [],
+        lowStockItems: [],
+        activeAdvertisementsCount: 2,
+        activeOffersCount: 3,
+        activeDiscountsCount: 5
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockDashboardData });
+
+    renderStoreDashboard();
+
+    // Verify switcher tabs are rendered
+    const revenueTab = await screen.findByRole("button", { name: "Revenue" });
+    const ordersTab = screen.getByRole("button", { name: "Orders" });
+    expect(revenueTab).toBeInTheDocument();
+    expect(ordersTab).toBeInTheDocument();
+
+    // Click "Orders" tab to toggle count mode
+    fireEvent.click(ordersTab);
+  });
 });
 

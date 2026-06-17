@@ -50,7 +50,49 @@ export function registerAdminRoutes(
     const query = request.query as Record<string, string | undefined>;
     const range = query["range"] ?? "WEEK";
     const groupBy = query["groupBy"] ?? "DAILY";
-    const data = await adminService.getDashboard(range, groupBy);
+    const storeIdsRaw = query["storeIds"];
+    const storeIds = storeIdsRaw ? storeIdsRaw.split(",").filter(Boolean) : [];
+    const storeType = query["storeType"] as "QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined;
+
+    const data = await adminService.getDashboard(range, groupBy, storeIds, storeType);
+
+    return {
+      success: true,
+      data,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/dashboard/orders-trend", { preHandler }, async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const range = query["range"] ?? "WEEK";
+    const groupBy = query["groupBy"] ?? "DAILY";
+    const storeIdsRaw = query["storeIds"];
+    const storeIds = storeIdsRaw ? storeIdsRaw.split(",").filter(Boolean) : [];
+    const storeType = query["storeType"] as "QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined;
+
+    const data = await adminService.getOrdersTrend({ range, groupBy, storeIds, storeType });
+
+    return {
+      success: true,
+      data,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/dashboard/bookings-trend", { preHandler }, async (request, reply) => {
+    const query = request.query as Record<string, string | undefined>;
+    const range = query["range"] ?? "WEEK";
+    const groupBy = query["groupBy"] ?? "DAILY";
+    const storeIdsRaw = query["storeIds"];
+    const storeIds = storeIdsRaw ? storeIdsRaw.split(",").filter(Boolean) : [];
+    const storeType = query["storeType"] as "QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined;
+
+    const data = await adminService.getBookingsTrend({ range, groupBy, storeIds, storeType });
 
     return {
       success: true,
