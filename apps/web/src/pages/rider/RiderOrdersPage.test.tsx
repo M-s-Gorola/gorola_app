@@ -201,6 +201,15 @@ describe("RiderOrdersPage", () => {
     expect(putMock).toHaveBeenCalledWith("/api/v1/rider/orders/order-1/status", {
       status: "OUT_FOR_DELIVERY"
     });
+
+    // Verify detailed modal remains open and action button has changed
+    const modal = screen.getByTestId("rider-order-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByRole("button", { name: /Mark as Delivered/i })).toBeInTheDocument();
+
+    // Verify active tab has automatically switched to Out for Delivery
+    const deliveryTab = screen.getByRole("button", { name: /Out for Delivery/i });
+    expect(deliveryTab).toHaveClass("bg-gorola-pine");
   });
 
   it("renders map toggle button and displays OrderRouteMap when expanded inside detailed modal", async () => {

@@ -18,6 +18,8 @@ export interface OlaMarkerInstance {
   setLngLat(coords: [number, number]): OlaMarkerInstance;
   addTo(map: OlaMapInstance): OlaMarkerInstance;
   remove(): void;
+  on(event: string, listener: () => void): void;
+  getLngLat(): { lng: number; lat: number };
 }
 
 export interface OlaMapExtended extends OlaMapInstance {
@@ -40,10 +42,11 @@ declare global {
           zoom: number;
           style: string;
           scrollZoom?: boolean;
+          attributionControl?: boolean;
         }): OlaMapInstance;
       };
       Marker: {
-        new (options?: { element?: HTMLDivElement; anchor?: string }): OlaMarkerInstance;
+        new (options?: { element?: HTMLDivElement; anchor?: string; draggable?: boolean }): OlaMarkerInstance;
       };
     };
   }
@@ -116,7 +119,8 @@ export class OlaMapAdapter implements MapAdapter {
       center: [center.lng, center.lat],
       zoom,
       style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
-      scrollZoom: false
+      scrollZoom: false,
+      attributionControl: false
     });
 
     return new Promise<void>((resolve) => {

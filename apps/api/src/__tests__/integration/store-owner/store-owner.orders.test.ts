@@ -305,7 +305,7 @@ describe("StoreOwner Orders Integration Tests", () => {
     // First was PLACED (created during order create), second is PREPARING
     expect(history).toHaveLength(2);
     expect(history[1]?.status).toBe("PREPARING");
-    expect(history[1]?.changedBy).toBe("STORE_OWNER");
+    expect(history[1]?.changedBy).toBe(`store-owner:${owner.id}`);
 
     // 2. PREPARING -> PLACED (invalid backward transition)
     const resInvalid = await server.inject({

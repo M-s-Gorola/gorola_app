@@ -367,4 +367,48 @@ describe("Rider Order Status Update Integration", () => {
 
     expect(response.statusCode).toBe(403);
   });
+
+  it("should save status update with rider:<riderId> prefix in the database status history log", async () => {
+    const order = await db.order.create({
+      data: {
+        userId: buyerId,
+        storeId: storeId1,
+        status: "PREPARING",
+        subtotal: 150.00,
+        deliveryFee: 30.00,
+        total: 180.00,
+        landmarkDescription: "Near Central Park",
+        items: {
+          create: {
+            productVariantId: variantId1,
+            productName: "Apple",
+            variantLabel: "1kg",
+            price: 150.00,
+            quantity: 1
+          }
+        }
+      }
+    });
+
+    const response = await server.inject({
+      method: "PUT",
+      url: `/api/v1/rider/orders/${order.id}/status`,
+      payload: { status: "OUT_FOR_DELIVERY" },
+      headers: {
+        authorization: `Bearer ${riderTokenStore1}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const history = await db.orderStatusHistory.findFirst({
+      where: {
+        orderId: order.id,
+        status: "OUT_FOR_DELIVERY"
+      }
+    });
+
+    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
+    expect(history?.changedBy).toBe(`rider:${rider?.id}`);
+  });
 });

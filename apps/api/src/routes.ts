@@ -141,10 +141,19 @@ export function registerAppRoutes(app: FastifyInstance): void {
       app.io.to(`order:${orderId}`).emit("order_status_changed", { orderId, status });
       prisma.order.findUnique({
         where: { id: orderId },
-        select: { storeId: true }
+        select: {
+          storeId: true,
+          statusHistory: {
+            orderBy: { changedAt: "asc" }
+          }
+        }
       }).then((o) => {
         if (o) {
-          app.io.to(`store:${o.storeId}`).emit("store:order_updated", { orderId, status });
+          app.io.to(`store:${o.storeId}`).emit("store:order_updated", {
+            orderId,
+            status,
+            statusHistory: o.statusHistory
+          });
         }
       }).catch((err) => {
         app.log.error(err, "Failed to broadcast order status change to store room");

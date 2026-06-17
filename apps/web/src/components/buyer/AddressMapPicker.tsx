@@ -43,6 +43,9 @@ export const MUSSOORIE_AREA_CENTER = {
   lat: 30.455
 } satisfies MapCoordinates;
 
+/**
+ * @deprecated Use OlaAddressMapPicker instead. Retained for Leaflet fallback if needed.
+ */
 export function AddressMapPicker({
   center,
   className = "",

@@ -582,7 +582,7 @@ export function AdminOrdersPage(): ReactElement {
                             />
                             <p className="text-xs font-black text-gorola-charcoal">{hist.status}</p>
                             <p className="text-[10px] text-gorola-slate mt-0.5">
-                              By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}
+                              By {hist.changedBy} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
                               {hist.note && ` • Reason: "${hist.note}"`}
                             </p>
                           </div>

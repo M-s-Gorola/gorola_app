@@ -241,7 +241,9 @@ function StatusStepper({
                 </p>
                 {hist !== undefined ? (
                   <p className="font-dm-sans text-[10px] text-gorola-slate">
-                    {new Date(hist.changedAt).toLocaleTimeString([], {
+                    {new Date(hist.changedAt).toLocaleString("en-IN", {
+                      day: "numeric",
+                      month: "short",
                       hour: "2-digit",
                       minute: "2-digit",
                     })}

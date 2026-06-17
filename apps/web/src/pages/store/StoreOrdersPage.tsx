@@ -11,7 +11,7 @@ import {
   XCircle
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -83,6 +83,23 @@ type OrdersEnvelope = {
   };
 };
 
+function formatChangedBy(changedBy: string): string {
+  if (!changedBy) return "System";
+  const normalized = changedBy.toUpperCase();
+  if (normalized === "BUYER" || normalized.startsWith("BUYER:")) return "Buyer";
+  if (normalized === "RIDER" || normalized.startsWith("RIDER:")) return "Rider";
+  if (
+    normalized.startsWith("STORE:") ||
+    normalized.startsWith("STORE-OWNER:") ||
+    normalized.startsWith("STORE_OWNER:") ||
+    normalized === "STORE_OWNER"
+  ) {
+    return "Store Owner";
+  }
+  if (normalized.startsWith("ADMIN:") || normalized === "ADMIN") return "Admin";
+  return "System";
+}
+
 function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
   const [elapsed, setElapsed] = useState("");
 
@@ -134,6 +151,8 @@ export function StoreOrdersPage(): ReactElement {
 
   const [page, setPage] = useState(1);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const selectedOrderRef = useRef<Order | null>(null);
+  selectedOrderRef.current = selectedOrder;
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
   const [confirmingOrderUpdate, setConfirmingOrderUpdate] = useState<{ orderId: string; status: OrderStatus } | null>(null);
 
@@ -301,9 +320,19 @@ interface StoreOffer {
       });
     });
 
-    socket.on("store:order_updated", () => {
-      console.log("🔌 [StoreSocket] Event: store:order_updated received!");
+    socket.on("store:order_updated", (payload?: { orderId: string; status: OrderStatus; statusHistory?: OrderStatusHistory[] }) => {
+      console.log("🔌 [StoreSocket] Event: store:order_updated received!", payload);
       triggerRefresh();
+      if (payload?.orderId && selectedOrderRef.current?.id === payload.orderId) {
+        setSelectedOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            status: payload.status,
+            statusHistory: payload.statusHistory ?? prev.statusHistory
+          };
+        });
+      }
       toast.info("📋 Order status was updated by client/system.");
     });
 
@@ -349,6 +378,20 @@ interface StoreOffer {
       return res.data;
     }
   });
+
+  useEffect(() => {
+    if (selectedOrder && data?.data) {
+      const updatedOrder = data.data.find((o) => o.id === selectedOrder.id);
+      if (updatedOrder) {
+        if (
+          updatedOrder.status !== selectedOrder.status ||
+          updatedOrder.statusHistory?.length !== selectedOrder.statusHistory?.length
+        ) {
+          setSelectedOrder(updatedOrder);
+        }
+      }
+    }
+  }, [data, selectedOrder?.id]);
 
   // 2. Mutation for changing status
   const updateStatusMutation = useMutation({
@@ -778,7 +821,7 @@ interface StoreOffer {
                         {formatStatusLabel(hist.status)}
                       </p>
                       <p className="text-[10px] text-gorola-slate mt-0.5">
-                        By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}
+                        By {formatChangedBy(hist.changedBy)} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
                       </p>
                     </div>
                   ))}

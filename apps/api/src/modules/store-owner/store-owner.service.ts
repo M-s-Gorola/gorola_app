@@ -179,9 +179,10 @@ export class StoreOwnerService {
       });
     }
 
+    const changedBy = `store-owner:${ownerId}`;
     const result = newStatus === "CANCELLED"
-      ? await orderService.cancelOrderWithStockRestore(orderId, "STORE_OWNER")
-      : await orderService.updateStatus(orderId, newStatus, "STORE_OWNER");
+      ? await orderService.cancelOrderWithStockRestore(orderId, changedBy)
+      : await orderService.updateStatus(orderId, newStatus, changedBy);
 
     await this.db.auditLog.create({
       data: {

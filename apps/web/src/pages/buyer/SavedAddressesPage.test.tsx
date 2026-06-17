@@ -8,8 +8,8 @@ import { useAuthStore } from "@/store/auth.store";
 
 import { SavedAddressesPage } from "./SavedAddressesPage";
 
-vi.mock("@/components/buyer/AddressMapPicker", () => ({
-  AddressMapPicker: () => <div data-testid="address-map-picker">Map Mock</div>,
+vi.mock("@/components/buyer/OlaAddressMapPicker", () => ({
+  OlaAddressMapPicker: () => <div data-testid="address-map-picker">Map Mock</div>,
   MUSSOORIE_AREA_CENTER: { lat: 30.45, lng: 78.08 }
 }));
 
