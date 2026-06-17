@@ -23,7 +23,8 @@ vi.mock("@/lib/api", () => ({
     delete: deleteMock,
     post: postMock,
     put: putMock
-  }
+  },
+  getFeatureFlag: vi.fn().mockResolvedValue(false)
 }));
 
 describe("CartDrawer", () => {
@@ -154,6 +155,16 @@ describe("CartDrawer", () => {
     expect(upi).toBeChecked();
     fireEvent.click(card);
     expect(card).toBeChecked();
+  });
+
+  it("clicking payment methods updates selectedPaymentMethod in useCartStore", () => {
+    useFeatureFlagsStore.getState().setFlag("PAYMENT_UPI_ENABLED", true);
+    useFeatureFlagsStore.getState().setFlag("PAYMENT_CARD_ENABLED", true);
+    useCartStore.setState({ isOpen: true, selectedPaymentMethod: "COD" });
+    renderShell();
+    const upi = screen.getByRole("radio", { name: "UPI" });
+    fireEvent.click(upi);
+    expect(useCartStore.getState().selectedPaymentMethod).toBe("UPI");
   });
 
   it("keeps UPI/Card disabled when feature flags are off", () => {

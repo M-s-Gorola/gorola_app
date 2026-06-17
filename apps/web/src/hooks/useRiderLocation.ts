@@ -16,7 +16,10 @@ export function useRiderLocation(activeOrderId?: string) {
       return;
     }
 
+    let receivedLocation = false;
+
     const successHandler = async (position: GeolocationPosition) => {
+      receivedLocation = true;
       const lat = position.coords.latitude;
       const lng = position.coords.longitude;
       setCoords({ lat, lng });
@@ -34,6 +37,23 @@ export function useRiderLocation(activeOrderId?: string) {
     };
 
     const errorHandler = (err: GeolocationPositionError) => {
+      if (import.meta.env.DEV && import.meta.env.MODE !== "test") {
+        console.warn("Geolocation failed or was denied. Using mock rider coordinates in development.");
+        void successHandler({
+          coords: {
+            latitude: 30.3702093 - 0.003,
+            longitude: 78.0982018 - 0.003,
+            accuracy: 10,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null
+          },
+          timestamp: Date.now()
+        } as GeolocationPosition);
+        return;
+      }
+
       if (err.code === 1) {
         setError("LOCATION_DENIED");
       } else {
@@ -54,9 +74,34 @@ export function useRiderLocation(activeOrderId?: string) {
       maximumAge: 0
     });
 
+    // In development mode, mock location updates if no real GPS location is fetched within 2 seconds
+    let devTimeout: ReturnType<typeof setTimeout> | undefined;
+    if (import.meta.env.DEV && import.meta.env.MODE !== "test") {
+      devTimeout = setTimeout(() => {
+        if (!receivedLocation) {
+          console.warn("No real GPS location received. Using mock rider coordinates in development.");
+          void successHandler({
+            coords: {
+              latitude: 30.3702093 - 0.003,
+              longitude: 78.0982018 - 0.003,
+              accuracy: 10,
+              altitude: null,
+              altitudeAccuracy: null,
+              heading: null,
+              speed: null
+            },
+            timestamp: Date.now()
+          } as GeolocationPosition);
+        }
+      }, 2000);
+    }
+
     return () => {
       if (typeof navigator !== "undefined" && navigator?.geolocation) {
         navigator.geolocation.clearWatch(watchId);
+      }
+      if (devTimeout) {
+        clearTimeout(devTimeout);
       }
     };
   }, [activeOrderId]);

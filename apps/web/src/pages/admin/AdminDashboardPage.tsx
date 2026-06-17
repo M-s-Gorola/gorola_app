@@ -71,7 +71,7 @@ export function AdminDashboardPage(): ReactElement {
   const toggleFlagMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: boolean }) => {
       if (!api) throw new Error("API helper not initialized");
-      await api.put(`/api/v1/admin/feature-flags/${key}`, { value });
+      await api.patch(`/api/v1/admin/feature-flags/${key}`, { enabled: value });
     },
     onSuccess: (_, variables) => {
       toast.success(`Feature flag '${variables.key}' updated successfully.`);

@@ -381,4 +381,49 @@ describe("OrderConfirmationPage", () => {
     expect(screen.getByText(/"Super awesome service!"/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
+
+  it("renders a payment confirmed badge when paymentStatus is CAPTURED and method is UPI", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            paymentMethod: "UPI",
+            paymentStatus: "CAPTURED",
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Thank you" });
+    expect(screen.getByText("Payment confirmed via UPI")).toBeInTheDocument();
+  });
+
+  it("renders a pay on delivery badge when paymentStatus is PENDING and method is COD", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            paymentMethod: "COD",
+            paymentStatus: "PENDING",
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Thank you" });
+    expect(screen.getByText("Pay on delivery")).toBeInTheDocument();
+  });
 });
+

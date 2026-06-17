@@ -265,6 +265,12 @@ model CartItem {
   @@index([productVariantId])
 }
 
+enum PaymentStatus {
+  PENDING
+  CAPTURED
+  FAILED
+}
+
 model Order {
   id                  String               @id @default(cuid())
   userId              String
@@ -275,7 +281,11 @@ model Order {
   deliveryFee         Decimal              @db.Decimal(10, 2)
   total               Decimal              @db.Decimal(10, 2)
   paymentMethod       PaymentMethod        @default(COD)
+  paymentStatus       PaymentStatus        @default(PENDING)
+  razorpayOrderId     String?
+  razorpayPaymentId   String?
   landmarkDescription String
+
   addressLabel        String?
   flatRoom            String?
   deliveryNote        String?

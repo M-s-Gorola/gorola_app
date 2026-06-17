@@ -26,7 +26,7 @@ export function BuyerLayout({ children }: BuyerLayoutProps): ReactElement {
   const isProfileActive = location.pathname === "/profile" || location.pathname.startsWith("/profile/");
 
   return (
-    <div className="flex min-h-screen flex-col bg-background transition-colors duration-500 ease-in-out">
+    <div className="flex min-h-screen flex-col bg-transparent transition-colors duration-500 ease-in-out">
       <BuyerCartHydration />
       <BuyerNav />
       <CartDrawer />

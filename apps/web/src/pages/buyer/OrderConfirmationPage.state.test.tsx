@@ -225,8 +225,15 @@ describe("OrderConfirmationPage States", () => {
       landmarkDescription: "Near red gate",
     };
 
-    apiGetSpy.mockResolvedValue({
-      data: { success: true, data: mockOrder }
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.endsWith("/rider-location")) {
+        return Promise.resolve({
+          data: { success: true, data: null }
+        });
+      }
+      return Promise.resolve({
+        data: { success: true, data: mockOrder }
+      });
     });
 
     renderComponent("order-delivering");
@@ -245,6 +252,95 @@ describe("OrderConfirmationPage States", () => {
 
     const display = await screen.findByTestId("rider-location-display");
     expect(display).toHaveTextContent("30.12345, 78.67890");
+  });
+
+  it("queries the last-known location on mount when status is OUT_FOR_DELIVERY", async () => {
+    const mockOrder = {
+      id: "order-delivering",
+      status: "OUT_FOR_DELIVERY",
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      store: { name: "Test Bakery", phone: "1234567890" },
+      items: [],
+      subtotal: "100.00",
+      deliveryFee: "20.00",
+      total: "120.00",
+      paymentMethod: "COD",
+      landmarkDescription: "Near red gate",
+    };
+
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.endsWith("/rider-location")) {
+        return Promise.resolve({
+          data: { success: true, data: { lat: "30.4600", lng: "78.0680", updatedAt: new Date().toISOString() } }
+        });
+      }
+      return Promise.resolve({
+        data: { success: true, data: mockOrder }
+      });
+    });
+
+    renderComponent("order-delivering");
+
+    expect(await screen.findByRole("heading", { name: "On the way" })).toBeInTheDocument();
+    const display = await screen.findByTestId("rider-location-display");
+    expect(display).toHaveTextContent("30.46000, 78.06800");
+    expect(apiGetSpy).toHaveBeenCalledWith("/api/v1/orders/order-delivering/rider-location");
+  });
+
+  it("does not render rider location display when API returns null last-known location", async () => {
+    const mockOrder = {
+      id: "order-delivering",
+      status: "OUT_FOR_DELIVERY",
+      createdAt: new Date(Date.now() - 3600000).toISOString(),
+      store: { name: "Test Bakery", phone: "1234567890" },
+      items: [],
+      subtotal: "100.00",
+      deliveryFee: "20.00",
+      total: "120.00",
+      paymentMethod: "COD",
+      landmarkDescription: "Near red gate",
+    };
+
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.endsWith("/rider-location")) {
+        return Promise.resolve({
+          data: { success: true, data: null }
+        });
+      }
+      return Promise.resolve({
+        data: { success: true, data: mockOrder }
+      });
+    });
+
+    renderComponent("order-delivering");
+
+    expect(await screen.findByRole("heading", { name: "On the way" })).toBeInTheDocument();
+    expect(screen.queryByTestId("rider-location-display")).not.toBeInTheDocument();
+    expect(screen.getByText(/waiting for rider gps updates/i)).toBeInTheDocument();
+  });
+
+  it("does not query last-known location on mount when status is PREPARING", async () => {
+    const mockOrder = {
+      id: "order-preparing",
+      status: "PREPARING",
+      createdAt: new Date(Date.now() - 600000).toISOString(),
+      store: { name: "Test Bakery", phone: "1234567890" },
+      items: [],
+      subtotal: "100.00",
+      deliveryFee: "20.00",
+      total: "120.00",
+      paymentMethod: "COD",
+      landmarkDescription: "Near red gate",
+    };
+
+    apiGetSpy.mockResolvedValue({
+      data: { success: true, data: mockOrder }
+    });
+
+    renderComponent("order-preparing");
+
+    expect(await screen.findByText(/store is picking items/i)).toBeInTheDocument();
+    expect(apiGetSpy).not.toHaveBeenCalledWith("/api/v1/orders/order-preparing/rider-location");
   });
 });
 

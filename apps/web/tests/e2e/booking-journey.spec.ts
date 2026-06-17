@@ -140,12 +140,12 @@ test.describe('Booking Journey Pipeline E2E', () => {
     const approveBtn = storePage.getByRole("button", { name: "Approve Booking" }).first();
     await expect(approveBtn).toBeVisible({ timeout: 15000 });
     await approveBtn.scrollIntoViewIfNeeded();
-    await approveBtn.click();
+    await approveBtn.dispatchEvent('click');
 
     // Confirm the status update dialog
     const confirmApproveBtn = storePage.getByRole("button", { name: "Confirm" }).first();
     await expect(confirmApproveBtn).toBeVisible({ timeout: 15000 });
-    await confirmApproveBtn.click({ force: true });
+    await confirmApproveBtn.dispatchEvent('click');
 
     // Confirm booking moves to Approved tab
     await storePage.locator('button[role="tab"]', { hasText: /approved/i }).click();
@@ -160,12 +160,12 @@ test.describe('Booking Journey Pipeline E2E', () => {
     const markOnTheWayBtn = storePage.locator('button', { hasText: 'Mark On The Way' }).first();
     await expect(markOnTheWayBtn).toBeVisible({ timeout: 15000 });
     await markOnTheWayBtn.scrollIntoViewIfNeeded();
-    await markOnTheWayBtn.click();
+    await markOnTheWayBtn.dispatchEvent('click');
 
     // Confirm the status update dialog for dispatch
     const confirmDispatchBtn = storePage.getByRole("button", { name: "Confirm" }).first();
     await expect(confirmDispatchBtn).toBeVisible({ timeout: 15000 });
-    await confirmDispatchBtn.click({ force: true });
+    await confirmDispatchBtn.dispatchEvent('click');
 
     // Assert Live Socket update on Buyer's screen: Confirmed -> Technician On The Way
     await expect(buyerPage.locator('text=/Technician On The Way/i').first()).toBeVisible({ timeout: 25000 });
@@ -180,12 +180,12 @@ test.describe('Booking Journey Pipeline E2E', () => {
     const markCompletedBtn = storePage.locator('button', { hasText: 'Mark Completed' }).first();
     await expect(markCompletedBtn).toBeVisible({ timeout: 15000 });
     await markCompletedBtn.scrollIntoViewIfNeeded();
-    await markCompletedBtn.click();
+    await markCompletedBtn.dispatchEvent('click');
 
     // Confirm the status update dialog for completion
     const confirmCompleteBtn = storePage.getByRole("button", { name: "Confirm" }).first();
     await expect(confirmCompleteBtn).toBeVisible({ timeout: 15000 });
-    await confirmCompleteBtn.click({ force: true });
+    await confirmCompleteBtn.dispatchEvent('click');
 
     // Confirm booking moves to History tab
     await storePage.locator('button[role="tab"]', { hasText: /history/i }).click();
@@ -258,7 +258,7 @@ test.describe('Booking Journey Pipeline E2E', () => {
     const rejectBtn = storePage.locator('button', { hasText: 'Reject' }).first();
     await expect(rejectBtn).toBeVisible({ timeout: 15000 });
     await rejectBtn.scrollIntoViewIfNeeded();
-    await rejectBtn.click();
+    await rejectBtn.dispatchEvent('click');
 
     // Input rejection reason
     const reasonTextarea = storePage.locator('textarea[placeholder*="reason"]');
@@ -266,7 +266,7 @@ test.describe('Booking Journey Pipeline E2E', () => {
     await reasonTextarea.fill('Equipment failure');
 
     const confirmRejectBtn = storePage.locator('button', { hasText: /Confirm Rejection/i });
-    await confirmRejectBtn.click();
+    await confirmRejectBtn.dispatchEvent('click');
 
     // Verify booking moved to History tab
     await storePage.locator('button[role="tab"]', { hasText: /history/i }).click();

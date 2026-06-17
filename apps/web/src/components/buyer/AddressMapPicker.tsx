@@ -43,6 +43,9 @@ export const MUSSOORIE_AREA_CENTER = {
   lat: 30.455
 } satisfies MapCoordinates;
 
+/**
+ * @deprecated Use OlaAddressMapPicker instead. Retained for Leaflet fallback if needed.
+ */
 export function AddressMapPicker({
   center,
   className = "",
@@ -79,11 +82,17 @@ export function AddressMapPicker({
       onCoordsRef.current({ lat: pos.lat, lng: pos.lng });
     };
 
+    const handleWheel = (e: WheelEvent) => {
+      e.preventDefault();
+    };
+    node.addEventListener("wheel", handleWheel, { passive: false });
+
     emitCoords();
 
     marker.on("dragend", emitCoords);
 
     return () => {
+      node.removeEventListener("wheel", handleWheel);
       marker.off("dragend", emitCoords);
       marker.remove();
       map.off();

@@ -27,9 +27,11 @@ type CartState = {
   activeOffer: ActiveOffer | null;
   activeOffers: ActiveOffer[];
   storeId: string | null;
+  selectedPaymentMethod: "COD" | "UPI" | "CARD";
   setActiveOffer: (offer: ActiveOffer | null) => void;
   setActiveOffers: (offers: ActiveOffer[]) => void;
   setStoreId: (storeId: string | null) => void;
+  setSelectedPaymentMethod: (method: "COD" | "UPI" | "CARD") => void;
   addOrMergeLine: (line: CartLine) => void;
   /** Replaces all lines (e.g. after `GET /api/v1/cart`). */
   replaceLines: (lines: CartLine[]) => void;
@@ -81,9 +83,11 @@ export const useCartStore = create<CartState>((set, get) => ({
   activeOffer: null,
   activeOffers: [],
   storeId: null,
+  selectedPaymentMethod: "COD",
   setActiveOffer: (offer) => set({ activeOffer: offer }),
   setActiveOffers: (offers) => set({ activeOffers: offers }),
   setStoreId: (storeId) => set({ storeId }),
+  setSelectedPaymentMethod: (method) => set({ selectedPaymentMethod: method }),
   addOrMergeLine: (line) =>
     set((s) => ({
       lines: mergeLine(s.lines, line),
@@ -132,7 +136,8 @@ export const useCartStore = create<CartState>((set, get) => ({
       discountSavedAmount: 0,
       activeOffer: null,
       activeOffers: [],
-      storeId: null
+      storeId: null,
+      selectedPaymentMethod: "COD"
     }),
   totalItemCount: () => get().lines.reduce((acc, l) => acc + l.quantity, 0)
 }));

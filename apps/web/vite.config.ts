@@ -30,6 +30,16 @@ export default defineConfig({
       destructuring: true
     }
   },
+  optimizeDeps: {
+    esbuildOptions: {
+      supported: {
+        destructuring: true
+      }
+    }
+  },
+  build: {
+    target: "es2022"
+  },
   server: {
     port: 5180,
     allowedHosts: true,

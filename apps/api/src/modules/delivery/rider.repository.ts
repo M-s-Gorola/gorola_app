@@ -133,4 +133,41 @@ export class RiderRepository {
       }
     });
   }
+
+  public async getRiderIdByOrderId(orderId: string): Promise<string | null> {
+    const booking = await this.db.bookingOrder.findUnique({
+      where: { orderId },
+      select: { assignedTechnicianId: true }
+    });
+    if (booking?.assignedTechnicianId) {
+      return booking.assignedTechnicianId;
+    }
+
+    const history = await this.db.orderStatusHistory.findFirst({
+      where: {
+        orderId,
+        status: "OUT_FOR_DELIVERY"
+      },
+      select: { changedBy: true }
+    });
+    return history?.changedBy || null;
+  }
+
+  public async getLocationByOrderId(
+    orderId: string
+  ): Promise<{ lat: string; lng: string; updatedAt: Date } | null> {
+    const riderId = await this.getRiderIdByOrderId(orderId);
+    if (!riderId) return null;
+
+    const loc = await this.db.riderLocation.findFirst({
+      where: { riderId }
+    });
+    if (!loc) return null;
+
+    return {
+      lat: loc.lat.toString(),
+      lng: loc.lng.toString(),
+      updatedAt: loc.updatedAt
+    };
+  }
 }

@@ -38,14 +38,15 @@
   "pnpm": {
     "overrides": {
       "ip-address": "^10.1.1",
-      "hono": "^4.12.21",
+      "hono": "^4.12.25",
       "fast-uri": "^3.1.1",
       "@opentelemetry/sdk-node": "^0.217.0",
       "@opentelemetry/exporter-prometheus": "^0.217.0",
-      "protobufjs": "^7.5.6",
+      "@opentelemetry/core": "^2.8.0",
+      "protobufjs": "^7.6.1",
       "@protobufjs/utf8": "^1.1.1",
       "minimatch@10>brace-expansion": "^5.0.6",
-      "ws": "^8.20.1",
+      "ws": "^8.21.0",
       "qs": "^6.15.2",
       "axios": "^1.16.0",
       "vitest": "^4.1.0",
@@ -54,19 +55,23 @@
       "react-router-dom": "^7.15.0",
       "xlsx": "https://cdn.sheetjs.com/xlsx-latest/xlsx-latest.tgz",
       "@grpc/grpc-js": "^1.14.4",
-      "esbuild": "^0.28.1"
+      "esbuild": "^0.28.1",
+      "form-data": "^4.0.6",
+      "js-yaml": "^4.2.0",
+      "@babel/core": "^7.29.6"
     }
   },
   "_pnpm_overrides_comments": {
     "ip-address": "Overridden due to moderate security vulnerability in <=10.1.0",
-    "hono": "Overridden due to moderate security vulnerabilities (JWT scheme bypass, HTML injection, percent-encoded path routing) in <4.12.21",
+    "hono": "Overridden due to moderate security vulnerabilities (JWT scheme bypass, HTML injection, percent-encoded path routing) in <4.12.21, and high vulnerability (CORS reflecting wildcard origin with credentials) in <4.12.25",
     "fast-uri": "Overridden due to high security vulnerability (path traversal) in <=3.1.0",
     "@opentelemetry/sdk-node": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
     "@opentelemetry/exporter-prometheus": "Overridden due to high security vulnerability (DoS/Process crash) in <0.217.0",
-    "protobufjs": "Overridden due to high security vulnerability (DoS/recursion) in <=7.5.5 and <=8.0.1",
+    "@opentelemetry/core": "Overridden due to moderate security vulnerability (unbounded memory allocation in W3C Baggage propagation) in <2.8.0",
+    "protobufjs": "Overridden due to high security vulnerabilities (DoS/recursion in <=7.5.5, DoS unbounded Any expansion in <=7.6.0) — requires >=7.6.1",
     "@protobufjs/utf8": "Overridden due to moderate security vulnerability (overlong UTF-8) in <=1.1.0",
     "minimatch@10>brace-expansion": "Overridden due to moderate security vulnerability (DoS) in <5.0.6",
-    "ws": "Overridden due to moderate security vulnerability (uninitialized memory leak) in <8.20.1",
+    "ws": "Overridden due to high security vulnerability (memory exhaustion DoS from tiny fragments) in <8.21.0",
     "qs": "Overridden due to moderate security vulnerability (remotely triggerable DoS) in <=6.15.2",
     "axios": "Overridden due to high security vulnerabilities (NO_PROXY bypass CVE-2025-62718, MitM via prototype pollution) in <1.16.0",
     "vitest": "Overridden due to critical security vulnerability (arbitrary file read/execution in Vitest UI server) in <4.1.0",
@@ -75,6 +80,9 @@
     "react-router-dom": "Overridden due to high security vulnerability (DoS via path expansion) in <7.15.0",
     "xlsx": "Overridden due to high security vulnerabilities (Prototype Pollution, ReDoS) in <0.20.2",
     "@grpc/grpc-js": "Overridden due to high security vulnerabilities (server crash, malformed compression message crash) in <1.14.4",
-    "esbuild": "Overridden due to high security vulnerability (remote code execution via NPM_CONFIG_REGISTRY in Deno module) in <0.28.1"
+    "esbuild": "Overridden due to high security vulnerability (remote code execution via NPM_CONFIG_REGISTRY in Deno module) in <0.28.1",
+    "form-data": "Overridden due to high security vulnerability (CRLF injection via unescaped multipart field names/filenames, GHSA-hmw2-7cc7-3qxx) in <4.0.6",
+    "js-yaml": "Overridden due to moderate security vulnerability (quadratic-complexity DoS via merge key repeated aliases, GHSA-h67p-54hq-rp68) in <=4.1.1",
+    "@babel/core": "Overridden due to low security vulnerability (arbitrary file read via sourceMappingURL comment, GHSA-4x5r-pxfx-6jf8) in <=7.29.0"
   }
 }

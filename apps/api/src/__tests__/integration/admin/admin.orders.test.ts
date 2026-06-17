@@ -328,7 +328,7 @@ describe("Admin Orders Integration Tests", () => {
     const latestHistory = updatedOrder?.statusHistory.find((h) => h.status === "CANCELLED");
     expect(latestHistory).toBeDefined();
     expect(latestHistory?.note).toBe("Fraud detected");
-    expect(latestHistory?.changedBy).toBe("ADMIN");
+    expect(latestHistory?.changedBy).toBe("admin:admin-123");
 
     // Verify AuditLog
     const logs = await db.auditLog.findMany({

@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  AddressMapPicker,
   type MapCoordinates,
-  MUSSOORIE_AREA_CENTER} from "@/components/buyer/AddressMapPicker";
+  MUSSOORIE_AREA_CENTER,
+  OlaAddressMapPicker as AddressMapPicker} from "@/components/buyer/OlaAddressMapPicker";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { useAuthStore } from "@/store/auth.store";
@@ -21,6 +21,21 @@ type AddrRow = {
   label: string;
   landmarkDescription: string;
 };
+
+function loadRazorpayScript(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if ((window as unknown as Record<string, unknown>).Razorpay) {
+      resolve(true);
+      return;
+    }
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
 
 export function CheckoutPage(): ReactElement {
   const navigate = useNavigate();
@@ -48,7 +63,7 @@ export function CheckoutPage(): ReactElement {
   const [flatRoom, setFlatRoom] = useState("");
   const [saveAddress, setSaveAddress] = useState(false);
   const [addressLabel, setAddressLabel] = useState("");
-  const [paymentMethod] = useState<"COD" | "UPI" | "CARD">("COD");
+  const paymentMethod = useCartStore((s) => s.selectedPaymentMethod);
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const [addressDefaultSet, setAddressDefaultSet] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
@@ -206,7 +221,66 @@ export function CheckoutPage(): ReactElement {
       if (typeof id !== "string" || id.length === 0) {
         throw new Error("Missing order id");
       }
-      return id;
+
+      if (payment === "COD") {
+        return id;
+      }
+
+      await loadRazorpayScript();
+      if (!(window as unknown as Record<string, unknown>).Razorpay) {
+        throw new Error("Razorpay SDK could not be loaded.");
+      }
+
+      const initiateRes = await api.post<{
+        data?: { razorpayOrderId: string; amount: number; currency: string };
+      }>("/api/v1/payments/initiate", {
+        orderId: id,
+        paymentMethod: payment
+      });
+
+      const initData = initiateRes.data?.data;
+      if (!initData || !initData.razorpayOrderId) {
+        throw new Error("Failed to initiate payment");
+      }
+
+      return new Promise<string>((resolve, reject) => {
+        const options = {
+          key: (import.meta.env.VITE_RAZORPAY_KEY_ID as string) || "rzp_test_mock",
+          amount: initData.amount,
+          currency: initData.currency,
+          name: "GoRola",
+          description: `Payment for Order #${id}`,
+          order_id: initData.razorpayOrderId,
+          handler: async function (response: {
+            razorpay_order_id: string;
+            razorpay_payment_id: string;
+            razorpay_signature: string;
+          }) {
+            try {
+              await api!.post("/api/v1/payments/verify", {
+                orderId: id,
+                razorpayPaymentId: response.razorpay_payment_id,
+                razorpaySignature: response.razorpay_signature
+              });
+              resolve(id);
+            } catch {
+              reject(new Error("Payment could not be verified. Please contact support."));
+            }
+          },
+          modal: {
+            ondismiss: function () {
+              reject(new Error("Payment window closed. Please try again."));
+            }
+          },
+          theme: {
+            color: "#1B4D3E"
+          }
+        };
+
+        const RazorpayConstructor = (window as unknown as Record<string, unknown>).Razorpay as new (opts: unknown) => { open: () => void };
+        const rzp = new RazorpayConstructor(options);
+        rzp.open();
+      });
     },
     onSuccess: (orderId) => {
       clearCart();
@@ -372,17 +446,6 @@ export function CheckoutPage(): ReactElement {
                         center={MUSSOORIE_AREA_CENTER}
                         onCoordinatesChange={handleMapCoordinates}
                       />
-                      <p className="font-dm-sans text-xs text-gorola-slate">
-                        Tiles ©{" "}
-                        <a
-                          className="text-gorola-pine underline"
-                          href="https://www.openstreetmap.org/copyright"
-                          rel="noopener noreferrer"
-                          target="_blank"
-                        >
-                          OpenStreetMap
-                        </a>
-                      </p>
                     </div>
                   </div>
                 ) : null}
