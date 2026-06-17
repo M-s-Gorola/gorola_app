@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6.2 are complete. 5.6.3, Earnings page, and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6.3-D are complete. Earnings page, and E2E journeys remaining. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-06-17
-- **Session Summary:** Implemented Phase 5.6.3-C (Route Lag Curved Dotted Placeholder Line) under strict TDD guidelines, and optimized map render flow to avoid double-flashing of the dotted line on mount and real-time socket updates.
-- **Next Session Must Start With:** Phase 5.6.3-D — Ola Maps Address Picker
+- **Session Summary:** Standardized status history logging formats in the database (`rider:${riderId}` and `store-owner:${ownerId}`). Updated the frontend role parsing logic to handle both the new format and legacy/mock formats (like raw `BUYER`/`RIDER`) cleanly. Verified all backend integration tests and all 81 web test suites are 100% green.
+- **Next Session Must Start With:** Phase 5.7 (Rider Earnings Page)
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -940,49 +940,49 @@ Four distinct issues were identified after Sessions 16–20:
 
 #### C — Route Lag: Curved Dotted Placeholder Line
 
-- [ ] **RED — Integration (N/A):**
+- [x] **RED — Integration (N/A):**
   - *N/A: The dotted placeholder line is a pure frontend rendering concern. No backend endpoint or schema changes are required.*
 
-- [ ] **RED — Unit / Component (`leaflet-map-adapter.test.ts` and `ola-map-adapter.test.ts` — update existing):**
-  - [ ] Test (`leaflet-map-adapter.test.ts`): after calling `adapter.addMarker(riderCoords, 'rider')` when a buyer marker already exists, assert that a **dotted polyline** is added to the map immediately (before `fetchOlaRoute` resolves). The dotted polyline must have `dashArray` property set (e.g. `"6 8"`) and `color` set to `"#1d3d2f"`.
-  - [ ] Test (`leaflet-map-adapter.test.ts`): after `fetchOlaRoute` mock resolves, assert the dotted polyline is removed and a **solid polyline** is added with `dashArray` undefined/null.
-  - [ ] Test (`ola-map-adapter.test.ts`): after both markers are added, assert the map's `addLayer` has been called with a layer whose `paint["line-dasharray"]` is defined (dotted placeholder) before the routing API resolves.
-  - [ ] Test (`ola-map-adapter.test.ts`): after `fetchOlaRoute` mock resolves, assert `addLayer` is called a second time (or `setData` is called on the existing source) with a `paint` that has NO `line-dasharray` (solid line).
-  - [ ] Test (`OrderRouteMap.test.tsx`): when `riderCoords` prop is provided and the routing fetch is pending, the component renders an element with `data-testid="route-calculating-note"` containing the text `"Calculating route…"`.
-  - [ ] Test (`OrderRouteMap.test.tsx`): once the mock routing fetch resolves, `data-testid="route-calculating-note"` is removed from the DOM.
-  - [ ] **Run — confirm RED (no placeholder line exists today; `data-testid="route-calculating-note"` does not exist in the component).**
+- [x] **RED — Unit / Component (`leaflet-map-adapter.test.ts` and `ola-map-adapter.test.ts` — update existing):**
+  - [x] Test (`leaflet-map-adapter.test.ts`): after calling `adapter.addMarker(riderCoords, 'rider')` when a buyer marker already exists, assert that a **dotted polyline** is added to the map immediately (before `fetchOlaRoute` resolves). The dotted polyline must have `dashArray` property set (e.g. `"6 8"`) and `color` set to `"#1d3d2f"`.
+  - [x] Test (`leaflet-map-adapter.test.ts`): after `fetchOlaRoute` mock resolves, assert the dotted polyline is removed and a **solid polyline** is added with `dashArray` undefined/null.
+  - [x] Test (`ola-map-adapter.test.ts`): after both markers are added, assert the map's `addLayer` has been called with a layer whose `paint["line-dasharray"]` is defined (dotted placeholder) before the routing API resolves.
+  - [x] Test (`ola-map-adapter.test.ts`): after `fetchOlaRoute` mock resolves, assert `addLayer` is called a second time (or `setData` is called on the existing source) with a `paint` that has NO `line-dasharray` (solid line).
+  - [x] Test (`OrderRouteMap.test.tsx`): when `riderCoords` prop is provided and the routing fetch is pending, the component renders an element with `data-testid="route-calculating-note"` containing the text `"Calculating route…"`.
+  - [x] Test (`OrderRouteMap.test.tsx`): once the mock routing fetch resolves, `data-testid="route-calculating-note"` is removed from the DOM.
+  - [x] **Run — confirm RED (no placeholder line exists today; `data-testid="route-calculating-note"` does not exist in the component).**
 
-- [ ] **GREEN — Frontend (Adapters → Component):**
-  - [ ] [MapAdapter interface] In `map-provider.ts`, add `isRouteCalculating: boolean` as a readable property on the `MapAdapter` interface (or expose via a callback `onRouteStatusChange(calculating: boolean): void`). Use the callback approach: add `setRouteStatusCallback(cb: (calculating: boolean) => void): void` to the interface.
-  - [ ] [LeafletMapAdapter] In `_drawRoute()`:
+- [x] **GREEN — Frontend (Adapters → Component):**
+  - [x] [MapAdapter interface] In `map-provider.ts`, add `isRouteCalculating: boolean` as a readable property on the `MapAdapter` interface (or expose via a callback `onRouteStatusChange(calculating: boolean): void`). Use the callback approach: add `setRouteStatusCallback(cb: (calculating: boolean) => void): void` to the interface.
+  - [x] [LeafletMapAdapter] In `_drawRoute()`:
     - **Before** calling `fetchOlaRoute`, draw a dotted curved polyline as a placeholder: compute a bezier midpoint `mid = { lat: (rider.lat + buyer.lat)/2 + offsetFactor, lng: (rider.lng + buyer.lng)/2 }` where `offsetFactor` is `Math.abs(rider.lat - buyer.lat) * 0.3` (creates curvature perpendicular to the line). Draw `L.polyline([riderCoords, mid, buyerCoords], { color: '#1d3d2f', weight: 3, opacity: 0.7, dashArray: '6 8' })` and store it as `this._placeholderLine`. Fire `this._routeStatusCallback?.(true)`.
     - **After** `fetchOlaRoute` resolves: remove `this._placeholderLine`, draw the solid route, and fire `this._routeStatusCallback?.(false)`.
     - **If** `fetchOlaRoute` rejects: keep `this._placeholderLine` (no solid route), fire `this._routeStatusCallback?.(false)`.
-  - [ ] [OlaMapAdapter] Apply the same pattern in `_drawRoute()` using a GeoJSON LineString with `"line-dasharray": [2, 4]` paint property for the placeholder, and replacing it with a solid layer once the route resolves.
-  - [ ] [OrderRouteMap.tsx] Call `adapter.setRouteStatusCallback((calculating) => setIsRouteCalculating(calculating))`. Add `const [isRouteCalculating, setIsRouteCalculating] = useState(false)`. Below the map container div (inside the outer wrapper), render `{isRouteCalculating && riderCoords && <p data-testid="route-calculating-note" className="text-xs text-center text-gorola-slate/70 mt-1 italic animate-pulse">Calculating route…</p>}`.
-  - [ ] Run unit tests — **confirm GREEN**.
+  - [x] [OlaMapAdapter] Apply the same pattern in `_drawRoute()` using a GeoJSON LineString with `"line-dasharray": [2, 4]` paint property for the placeholder, and replacing it with a solid layer once the route resolves.
+  - [x] [OrderRouteMap.tsx] Call `adapter.setRouteStatusCallback((calculating) => setIsRouteCalculating(calculating))`. Add `const [isRouteCalculating, setIsRouteCalculating] = useState(false)`. Below the map container div (inside the outer wrapper), render `{isRouteCalculating && riderCoords && <p data-testid="route-calculating-note" className="text-xs text-center text-gorola-slate/70 mt-1 italic animate-pulse">Calculating route…</p>}`.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Order goes OUT_FOR_DELIVERY → Buyer opens order confirmation page → Map appears with buyer marker and rider marker → A **curved dotted green line** is visible between them immediately, with "Calculating route…" text below the map → 1–3 seconds later, the dotted line is replaced by a solid road-aligned green polyline and the note disappears → Rider opens the detail modal and taps "Show Map" → Same dotted-line-then-solid-route sequence plays → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Order goes OUT_FOR_DELIVERY → Buyer opens order confirmation page → Map appears with buyer marker and rider marker → A **curved dotted green line** is visible between them immediately, with "Calculating route…" text below the map → 1–3 seconds later, the dotted line is replaced by a solid road-aligned green polyline and the note disappears → Rider opens the detail modal and taps "Show Map" → Same dotted-line-then-solid-route sequence plays → ✅ Done.
 
 ---
 
 #### D — Ola Maps Address Picker (Checkout + Saved Addresses + Booking)
 
-- [ ] **RED — Integration (N/A):**
+- [x] **RED — Integration (N/A):**
   - *N/A: The address picker is a frontend map widget. The backend endpoints (`POST /api/v1/addresses`, `PUT /api/v1/addresses/:id`, `POST /api/v1/orders`) already accept `lat`/`lng` in the request body and their contracts do not change.*
 
-- [ ] **RED — Unit / Component (`OlaAddressMapPicker.test.tsx` — new file at `apps/web/src/components/buyer/OlaAddressMapPicker.test.tsx`):**
-  - [ ] Test: renders a `<input data-testid="location-search-input">` element and a map container `<div aria-label="Delivery location map">`.
-  - [ ] Test: on mount, calls `onCoordinatesChange` immediately with the default center `{ lat: 30.4598, lng: 78.0664 }`.
-  - [ ] Test: when the user types `"hotel pad"` into `data-testid="location-search-input"` and waits 600ms (fake timers), calls `fetch` with a URL containing `"https://api.olamaps.io/places/v1/autocomplete"` and the query param `input=hotel+pad`.
-  - [ ] Test: when the autocomplete mock returns `[{ description: "Hotel Padmini, Mussoorie", place_id: "abc123" }]`, a dropdown renders with `data-testid="suggestion-0"` containing the text `"Hotel Padmini, Mussoorie"`.
-  - [ ] Test: clicking `data-testid="suggestion-0"` calls `fetch` with a URL containing `"https://api.olamaps.io/places/v1/geocode"` and `"abc123"`. When the geocode mock returns `{ lat: 30.4610, lng: 78.0690 }`, calls `onCoordinatesChange({ lat: 30.4610, lng: 78.0690 })` and clears the dropdown.
-  - [ ] Test: when `VITE_OLA_MAPS_API_KEY` is not set, renders an error state with `data-testid="map-api-key-missing"` and the text `"Map could not be loaded — API key missing"` (mirrors `OrderRouteMap` error handling).
-  - [ ] **Run — confirm RED (the `OlaAddressMapPicker.tsx` file does not exist yet).**
+- [x] **RED — Unit / Component (`OlaAddressMapPicker.test.tsx` — new file at `apps/web/src/components/buyer/OlaAddressMapPicker.test.tsx`):**
+  - [x] Test: renders a `<input data-testid="location-search-input">` element and a map container `<div aria-label="Delivery location map">`.
+  - [x] Test: on mount, calls `onCoordinatesChange` immediately with the default center `{ lat: 30.4598, lng: 78.0664 }`.
+  - [x] Test: when the user types `"hotel pad"` into `data-testid="location-search-input"` and waits 600ms (fake timers), calls `fetch` with a URL containing `"https://api.olamaps.io/places/v1/autocomplete"` and the query param `input=hotel+pad`.
+  - [x] Test: when the autocomplete mock returns `[{ description: "Hotel Padmini, Mussoorie", place_id: "abc123" }]`, a dropdown renders with `data-testid="suggestion-0"` containing the text `"Hotel Padmini, Mussoorie"`.
+  - [x] Test: clicking `data-testid="suggestion-0"` calls `fetch` with a URL containing `"https://api.olamaps.io/places/v1/geocode"` and `"abc123"`. When the geocode mock returns `{ lat: 30.4610, lng: 78.0690 }`, calls `onCoordinatesChange({ lat: 30.4610, lng: 78.0690 })` and clears the dropdown.
+  - [x] Test: when `VITE_OLA_MAPS_API_KEY` is not set, renders an error state with `data-testid="map-api-key-missing"` and the text `"Map could not be loaded — API key missing"` (mirrors `OrderRouteMap` error handling).
+  - [x] **Run — confirm RED (the `OlaAddressMapPicker.tsx` file does not exist yet).**
 
-- [ ] **GREEN — Frontend (New Component → Update three consumer pages → Update existing tests):**
-  - [ ] [New Component] Create `apps/web/src/components/buyer/OlaAddressMapPicker.tsx`:
+- [x] **GREEN — Frontend (New Component → Update three consumer pages → Update existing tests):**
+  - [x] [New Component] Create `apps/web/src/components/buyer/OlaAddressMapPicker.tsx`:
     - Props: `center: MapCoordinates`, `onCoordinatesChange: (coords: MapCoordinates) => void`, `className?: string`, `zoom?: number`.
     - Re-export `MUSSOORIE_AREA_CENTER = { lat: 30.4598, lng: 78.0664 }` and `MapCoordinates` type from this file (so existing consumer import paths only need the filename changed).
     - Internal state: `searchQuery: string`, `suggestions: { description: string; place_id: string }[]`, `isSearching: boolean`, `mapError: string | null`.
@@ -993,20 +993,20 @@ Four distinct issues were identified after Sessions 16–20:
     - Scroll zoom: Apply the same `mouseenter`/`mouseleave` hover-activation pattern from Fix A.
     - On mount: call `onCoordinatesChange(center)` immediately so parent always has valid coords.
     - Error state: if `VITE_OLA_MAPS_API_KEY` is not set, render `<div data-testid="map-api-key-missing">Map could not be loaded — API key missing</div>`.
-  - [ ] [CheckoutPage.tsx] Replace `import { AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/AddressMapPicker"` with `import { OlaAddressMapPicker as AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/OlaAddressMapPicker"`. Also remove the `<p>Tiles © OpenStreetMap</p>` attribution text block that appears after the map.
-  - [ ] [SavedAddressesPage.tsx] Same import alias swap. The component usage `<AddressMapPicker center={...} onCoordinatesChange={...} />` is unchanged — the alias handles it.
-  - [ ] [BookingTimeslotPage.tsx] Same import alias swap.
-  - [ ] [CheckoutPage.test.tsx] Update the `vi.mock("@/components/buyer/AddressMapPicker", ...)` block to mock `"@/components/buyer/OlaAddressMapPicker"` instead, keeping the same mock component shape.
-  - [ ] [SavedAddressesPage.test.tsx] Same mock path update.
-  - [ ] [BookingTimeslotPage.test.tsx] Same mock path update if `AddressMapPicker` is mocked there (grep to confirm).
-  - [ ] [AddressMapPicker.tsx] Keep the old file intact — do NOT delete it. Add a JSDoc deprecation comment: `/** @deprecated Use OlaAddressMapPicker instead. Retained for Leaflet fallback if needed. */`.
-  - [ ] Run `pnpm lint && pnpm typecheck` — confirm 0 errors.
-  - [ ] Run all unit tests — **confirm GREEN**.
+  - [x] [CheckoutPage.tsx] Replace `import { AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/AddressMapPicker"` with `import { OlaAddressMapPicker as AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/OlaAddressMapPicker"`. Also remove the `<p>Tiles © OpenStreetMap</p>` attribution text block that appears after the map.
+  - [x] [SavedAddressesPage.tsx] Same import alias swap. The component usage `<AddressMapPicker center={...} onCoordinatesChange={...} />` is unchanged — the alias handles it.
+  - [x] [BookingTimeslotPage.tsx] Same import alias swap.
+  - [x] [CheckoutPage.test.tsx] Update the `vi.mock("@/components/buyer/AddressMapPicker", ...)` block to mock `"@/components/buyer/OlaAddressMapPicker"` instead, keeping the same mock component shape.
+  - [x] [SavedAddressesPage.test.tsx] Same mock path update.
+  - [x] [BookingTimeslotPage.test.tsx] Same mock path update if `AddressMapPicker` is mocked there (grep to confirm).
+  - [x] [AddressMapPicker.tsx] Keep the old file intact — do NOT delete it. Add a JSDoc deprecation comment: `/** @deprecated Use OlaAddressMapPicker instead. Retained for Leaflet fallback if needed. */`.
+  - [x] Run `pnpm lint && pnpm typecheck` — confirm 0 errors.
+  - [x] Run all unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] **Checkout (quick commerce):** Buyer selects "Deliver to new location" → sees Ola Maps centred on Mussoorie with buyer marker → types "hotel pad" in the search box → dropdown shows "Hotel Padmini, Mussoorie" → clicks it → map zooms to Hotel Padmini, marker moves → buyer drags marker to exact door → `lat`/`lng` captured → places order → order is created in DB with correct `deliveryLat` / `deliveryLng` → ✅ Done.
-  - [ ] **Saved Addresses:** Buyer opens Profile → Saved Addresses → Add New → dialog opens with Ola Maps picker → searches "Library Bazaar" → map zooms there → marker placed → buyer saves → address stored in DB with `lat`/`lng` → ✅ Done.
-  - [ ] **Booking commerce:** Buyer enters booking timeslot page → location section shows Ola Maps picker → searches landmark → selects → coordinates captured → booking placed with delivery coordinates → ✅ Done.
+- [x] **Verification chain:**
+  - [x] **Checkout (quick commerce):** Buyer selects "Deliver to new location" → sees Ola Maps centred on Mussoorie with buyer marker → types "hotel pad" in the search box → dropdown shows "Hotel Padmini, Mussoorie" → clicks it → map zooms to Hotel Padmini, marker moves → buyer drags marker to exact door → `lat`/`lng` captured → places order → order is created in DB with correct `deliveryLat` / `deliveryLng` → ✅ Done.
+  - [x] **Saved Addresses:** Buyer opens Profile → Saved Addresses → Add New → dialog opens with Ola Maps picker → searches "Library Bazaar" → map zooms there → marker placed → buyer saves → address stored in DB with `lat`/`lng` → ✅ Done.
+  - [x] **Booking commerce:** Buyer enters booking timeslot page → location section shows Ola Maps picker → searches landmark → selects → coordinates captured → booking placed with delivery coordinates → ✅ Done.
 
 ---
 
@@ -1291,4 +1291,36 @@ _(Append new entries here — never delete old entries.)_
 - Optimized map render cycles to prevent recreation: separated base map container initialization (depending on buyerCoords) from rider marker updates (depending on riderCoords) via React refs and `isInitialized` check hooks.
 - Used `lastRiderCoordsRef` to guard against duplicate marker update calls and suppressed recreating the dotted line when a solid road route line is already displayed (only displaying dotted lines on initial load when route is null).
 - Verified that all unit tests (leaflet adapter, ola adapter, component), global compiles (`tsc --noEmit`), and lints run completely green with 0 errors.
+
+### Session 24 — 2026-06-17 — Phase 5.6.3-D Ola Maps Address Picker Completed
+- Implemented and refined the modular `OlaAddressMapPicker.tsx` component to replace the Leaflet-based address map picker across Checkout, Saved Addresses, and Booking Timeslot selection pages.
+- Configured autocomplete input to retain and preserve the selected location text query inside the search field, avoiding redundant search triggers by managing a lookup ref.
+- Handled geocoding and coordinates resolution using the Ola Places Details API to fetch location data dynamically and center the map.
+- Implemented hover-state scroll zoom toggle to prevent scroll propagation outside the map bounds on mouse wheel actions.
+- Fully removed the "OLA MAPS" watermark text, logo, and attributions from the map container globally by overriding styles targeting MapLibre controls, specifically hiding dynamically injected elements inside the `.maplibregl-ctrl-bottom-left` container.
+- Verified that all unit tests (leaflet/ola adapters, component tests, web page tests) compile and pass cleanly.
+
+### Session 25 — 2026-06-17 — Rider Active Order Modal In-Place Status Transformation Completed
+- Refactored `RiderOrdersPage.tsx` to support in-place status transformations for the detailed overlay modal instead of closing it when updating the status to Out for Delivery.
+- Updated local `selectedOrder` state on transition success and automatically switched the active tab to "DELIVERY" (Out for Delivery/Departed).
+- Allowed the final transition (marking an order as DELIVERED/Visit Complete) to close the modal as expected.
+- Resolved TypeScript and ESLint lint/typecheck errors in `OlaAddressMapPicker.test.tsx` by replacing dynamic `any` object references with strict properties and removing generic `Function` typecasts.
+- Verified that all unit tests, integration tests, lint checks, and typechecks pass completely green.
+
+### Session 26 — 2026-06-17 — Store Panel Logs Updates & Role Display Formatting Completed
+- Wired `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx` with a reactive `useEffect` hook to keep the detailed modal details in sync with query updates, ensuring status and status transition logs update automatically in real-time when the rider updates the order status.
+- Implemented `formatChangedBy` helper in both pages to present human-readable role designations ("Buyer", "Store Owner", "Rider", "System") instead of displaying raw entity IDs in the Status Transition Log UI.
+
+### Session 27 — 2026-06-17 — Temporal Dead Zone Fix and Real-time Log Updates Completed
+- Moved the `useEffect` blocks in both `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx` below their respective `useQuery` hooks to resolve the Temporal Dead Zone (TDZ) ReferenceError crashes that caused a white screen on mounting.
+- Added support for the `ADMIN` role formatting in the `formatChangedBy` helper function in both pages.
+- Modified the backend socket emitter to include the full `statusHistory` in the `store:order_updated` event payload.
+- Updated the socket listener callbacks in `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx` to handle the new `statusHistory` payload and update the modal's state in real-time.
+- Confirmed that all typechecks, linting, and build tasks are completely clean and successful.
+
+### Session 28 — 2026-06-17 — Standardizing Status Log Actor Formats & Datetime Displays Completed
+- Standardized DB storage of status change actors by saving Rider updates as `rider:${riderId}`, Store Owner updates as `store-owner:${ownerId}`, and Admin updates as `admin:${adminId}` in the database.
+- Updated both `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx` `formatChangedBy` helpers to gracefully handle new standardized prefixes and maintain backward compatibility with raw legacy strings (like `"BUYER"` and `"RIDER"`).
+- Modified the status history timelines on Store Orders, Store Bookings, Admin Orders, and Buyer Order Confirmation screens to display both local date and time (using `.toLocaleString("en-IN")` with options) rather than just the time.
+- Updated API integration tests and web unit tests to match formatting and prefix standards, confirming that the full test suites (81/81 web test files, 446/446 tests) and backend tests run completely green.
 

@@ -10,7 +10,7 @@ import {
   XCircle
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
@@ -117,6 +117,23 @@ function ElapsedTimer({ createdAt }: { createdAt: string }): ReactElement {
   return <span className="text-xs font-semibold text-gorola-slate/75">{elapsed}</span>;
 }
 
+function formatChangedBy(changedBy: string): string {
+  if (!changedBy) return "System";
+  const normalized = changedBy.toUpperCase();
+  if (normalized === "BUYER" || normalized.startsWith("BUYER:")) return "Buyer";
+  if (normalized === "RIDER" || normalized.startsWith("RIDER:")) return "Rider";
+  if (
+    normalized.startsWith("STORE:") ||
+    normalized.startsWith("STORE-OWNER:") ||
+    normalized.startsWith("STORE_OWNER:") ||
+    normalized === "STORE_OWNER"
+  ) {
+    return "Store Owner";
+  }
+  if (normalized.startsWith("ADMIN:") || normalized === "ADMIN") return "Admin";
+  return "System";
+}
+
 export function StoreBookingsPage(): ReactElement {
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
@@ -139,6 +156,8 @@ export function StoreBookingsPage(): ReactElement {
   const [rejectingBooking, setRejectingBooking] = useState<Booking | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
   const [selectedBooking, setSelectedBooking] = useState<Booking | null>(null);
+  const selectedBookingRef = useRef<Booking | null>(null);
+  selectedBookingRef.current = selectedBooking;
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
   const [confirmingBookingUpdate, setConfirmingBookingUpdate] = useState<{
     orderId: string;
@@ -258,8 +277,22 @@ export function StoreBookingsPage(): ReactElement {
       toast.success("🔔 New Booking request received!");
     });
 
-    socket.on("store:order_updated", () => {
+    socket.on("store:order_updated", (payload?: { orderId: string; status: string; statusHistory?: BookingStatusHistory[] }) => {
       triggerRefresh();
+      if (payload?.orderId && (selectedBookingRef.current?.orderId === payload.orderId || selectedBookingRef.current?.id === payload.orderId)) {
+        setSelectedBooking((prev) => {
+          if (!prev) return null;
+          const updated: Booking = {
+            ...prev,
+            status: payload.status
+          };
+          const newHistory = payload.statusHistory ?? prev.statusHistory;
+          if (newHistory) {
+            updated.statusHistory = newHistory;
+          }
+          return updated;
+        });
+      }
       toast.info("📋 A booking request was updated.");
     });
 
@@ -282,6 +315,20 @@ export function StoreBookingsPage(): ReactElement {
     },
     refetchInterval: 60000 // fallback polling
   });
+
+  useEffect(() => {
+    if (selectedBooking && bookings) {
+      const updatedBooking = bookings.find((b) => b.id === selectedBooking.id);
+      if (updatedBooking) {
+        if (
+          updatedBooking.status !== selectedBooking.status ||
+          updatedBooking.statusHistory?.length !== selectedBooking.statusHistory?.length
+        ) {
+          setSelectedBooking(updatedBooking);
+        }
+      }
+    }
+  }, [bookings, selectedBooking?.id]);
 
   // Approve Booking Request Mutation
   const approveMutation = useMutation({
@@ -838,7 +885,7 @@ export function StoreBookingsPage(): ReactElement {
                         )}
                         </p>
                         <p className="text-[10px] text-gorola-slate mt-0.5">
-                          By {hist.changedBy} at {new Date(hist.changedAt).toLocaleTimeString("en-IN")}
+                          By {formatChangedBy(hist.changedBy)} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
                         </p>
                       </div>
                     ))
@@ -849,7 +896,7 @@ export function StoreBookingsPage(): ReactElement {
                         {selectedBooking.bookingOrder?.approvalStatus?.replace(/_/g, " ")}
                       </p>
                       <p className="text-[10px] text-gorola-slate mt-0.5">
-                        Created at {new Date(selectedBooking.createdAt).toLocaleTimeString("en-IN")}
+                        Created at {new Date(selectedBooking.createdAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
                       </p>
                     </div>
                   )}

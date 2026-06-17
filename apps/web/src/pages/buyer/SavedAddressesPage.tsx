@@ -5,7 +5,7 @@ import type { ReactElement } from "react";
 import { useState } from "react";
 import { toast } from "sonner";
 
-import { AddressMapPicker, type MapCoordinates, MUSSOORIE_AREA_CENTER } from "@/components/buyer/AddressMapPicker";
+import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,

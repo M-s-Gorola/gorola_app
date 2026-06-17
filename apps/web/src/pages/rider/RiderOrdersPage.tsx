@@ -151,10 +151,12 @@ export function RiderOrdersPage(): ReactElement {
         `${isBooking ? "Service" : "Order"} marked as ${statusText}!`
       );
       setConfirmingOrder(null);
-      setSelectedOrder(null);
       if (variables.status === "OUT_FOR_DELIVERY") {
+        setSelectedOrder((prev) => (prev ? { ...prev, status: "OUT_FOR_DELIVERY" } : null));
+        setActiveTab("DELIVERY");
         setActiveTrackingId(variables.orderId);
       } else if (variables.status === "DELIVERED") {
+        setSelectedOrder(null);
         setActiveTrackingId(undefined);
       }
     },

@@ -389,3 +389,26 @@ a.bg-gorola-hero-gradient,
     box-shadow: 0 4px 12px rgba(170, 211, 255, 0.45) !important;
   }
 }
+
+/* Hide Ola Maps attribution copyright controls */
+.maplibregl-ctrl-attribution,
+.olamaps-ctrl-attribution,
+.olamap-ctrl-attribution,
+.ola-ctrl-attribution,
+.maplibregl-ctrl-attrib {
+  display: none !important;
+}
+
+/* Hide Ola Maps logo watermark */
+.maplibregl-ctrl-logo,
+.olamaps-ctrl-logo,
+.olamap-ctrl-logo,
+.olamap-logo,
+.ola-ctrl-logo,
+.ola-maps-logo,
+.olamaps-logo,
+.maplibregl-ctrl-bottom-left div,
+.maplibregl-ctrl-bottom-left a,
+.maplibregl-ctrl-bottom-left > * {
+  display: none !important;
+}

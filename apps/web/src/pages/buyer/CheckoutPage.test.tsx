@@ -28,7 +28,7 @@ vi.mock("@/lib/api", () => ({
   }
 }));
 
-vi.mock("@/components/buyer/AddressMapPicker", async () => {
+vi.mock("@/components/buyer/OlaAddressMapPicker", async () => {
   const react = await import("react");
 
   function MockAddressMapPicker({
@@ -46,7 +46,7 @@ vi.mock("@/components/buyer/AddressMapPicker", async () => {
   }
 
   return {
-    AddressMapPicker: MockAddressMapPicker,
+    OlaAddressMapPicker: MockAddressMapPicker,
     MUSSOORIE_AREA_CENTER: { lat: 30.455, lng: 78.066 }
   };
 });

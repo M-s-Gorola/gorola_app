@@ -1585,3 +1585,31 @@ Processing children's data under the DPDP Act carries strict verification requir
 
 **Tradeoffs:**
 - Gating diagnostic medical orders to card payments prevents Cash-on-Delivery (COD) or simple UPI payments for these services, which may reduce conversion rates. This is an acceptable tradeoff to protect the platform from children's data violations.
+
+---
+
+## [DECISION-055] Standardizing Status Log Actor Prefixes in Database
+
+**Date:** 2026-06-17
+**Status:** Accepted
+
+**Context:**
+Rider, store owner, and admin status transitions were logged using mixed conventions (e.g. `"STORE_OWNER"`, `"ADMIN"`, or raw IDs). This created formatting complexity, inconsistent data modeling, and exposed raw database IDs to users in the UI timeline.
+
+**Decision:**
+1. Storing rider-initiated status logs as `rider:${riderId}` in the database.
+2. Storing quick-commerce store owner status logs as `store-owner:${ownerId}` in the database.
+3. Storing admin-initiated force status updates as `admin:${adminId}` in the database.
+4. Standardizing frontend parsing via `formatChangedBy()` in `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx` to handle new prefixes while maintaining backward compatibility with legacy and mock data formats (e.g., `"BUYER"` and `"RIDER"`).
+
+**Rationale:**
+- **Audit Trails:** Provides a uniform, human-verifiable, and machine-parsable format for status change actors, complying with DPDP log auditing.
+- **Privacy Gating:** Decouples database record identification from the frontend UI presentation layer, preventing the leaking of entity IDs to other platform roles.
+- **Uniformity:** Establishes a predictable data standard across the modular monolith modules.
+
+**Tradeoffs:**
+- Requires parsing strings on the frontend client to map prefixes to display labels. However, this keeps the storage schema simple and performs optimally.
+
+**Alternatives Considered:**
+1. Changing the database schema to store a JSON object of the actor details — rejected: too invasive.
+2. Storing raw database IDs without entity prefixes — rejected: requires searching multiple tables (User, Store, Rider) to identify the actor type.

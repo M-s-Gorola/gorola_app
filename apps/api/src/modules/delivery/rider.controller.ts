@@ -247,16 +247,17 @@ export function registerRiderRoutes(
       throw new ValidationError("Invalid status transition payload", bodyParsed.error.flatten());
     }
 
-    const changedBy = request.user?.sub;
-    if (!changedBy) {
+    const riderId = request.user?.sub;
+    if (!riderId) {
       return reply.code(400).send({ success: false, error: "Authentication context missing" });
     }
 
-    const storeIds = await deps.riderRepository.getAllStoreIds(changedBy);
+    const storeIds = await deps.riderRepository.getAllStoreIds(riderId);
     if (storeIds.length === 0) {
       return reply.code(403).send({ success: false, error: "You are not authorized to update this order" });
     }
 
+    const changedBy = `rider:${riderId}`;
     const order = await deps.riderOrderService.updateOrderStatus(
       storeIds,
       paramsParsed.data.id,

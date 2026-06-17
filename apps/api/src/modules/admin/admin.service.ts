@@ -371,7 +371,7 @@ export class AdminService {
     }
 
     if (status === "CANCELLED") {
-      const updated = await deps.orderService.cancelOrderWithStockRestore(orderId, "ADMIN", auditNote);
+      const updated = await deps.orderService.cancelOrderWithStockRestore(orderId, `admin:${adminId}`, auditNote);
       await this.db.auditLog.create({
         data: {
           actorId: adminId,
@@ -388,23 +388,21 @@ export class AdminService {
       return updated;
     }
 
-    return this.db.$transaction(async (tx) => {
-      const updated = await deps.ordersRepo.updateStatus(orderId, status, "ADMIN", auditNote, tx);
-      await tx.auditLog.create({
-        data: {
-          actorId: adminId,
-          actorRole: "ADMIN",
-          action: "ADMIN_FORCE_STATUS_UPDATE",
-          entityType: "Order",
-          entityId: orderId,
-          oldValue: { status: order.status },
-          newValue: { status, note: auditNote },
-          ip,
-          userAgent
-        }
-      });
-      return updated;
+    const updated = await deps.orderService.updateStatus(orderId, status, `admin:${adminId}`, auditNote);
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "ADMIN_FORCE_STATUS_UPDATE",
+        entityType: "Order",
+        entityId: orderId,
+        oldValue: { status: order.status },
+        newValue: { status, note: auditNote },
+        ip,
+        userAgent
+      }
     });
+    return updated;
   }
 
   public async getOrderDetail(orderId: string) {

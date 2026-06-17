@@ -6,9 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import {
-  AddressMapPicker,
   type MapCoordinates,
-  MUSSOORIE_AREA_CENTER} from "@/components/buyer/AddressMapPicker";
+  MUSSOORIE_AREA_CENTER,
+  OlaAddressMapPicker as AddressMapPicker} from "@/components/buyer/OlaAddressMapPicker";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { useAuthStore } from "@/store/auth.store";
@@ -446,17 +446,6 @@ export function CheckoutPage(): ReactElement {
                         center={MUSSOORIE_AREA_CENTER}
                         onCoordinatesChange={handleMapCoordinates}
                       />
-                      <p className="font-dm-sans text-xs text-gorola-slate">
-                        Tiles ©{" "}
-                        <a
-                          className="text-gorola-pine underline"
-                          href="https://www.openstreetmap.org/copyright"
-                          rel="noopener noreferrer"
-                          target="_blank"
-                        >
-                          OpenStreetMap
-                        </a>
-                      </p>
                     </div>
                   </div>
                 ) : null}
