@@ -19,6 +19,7 @@ import { useAuthStore } from "@/store/auth.store";
 type WeeklyRevenueItem = {
   date: string;
   revenue: number;
+  count: number;
 };
 
 type TopProductItem = {
@@ -61,6 +62,7 @@ export function StoreDashboardPage(): ReactElement {
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [chartMode, setChartMode] = useState<"REVENUE" | "COUNT">("REVENUE");
 
   useEffect(() => {
     if (!storeId || !accessToken) return;
@@ -214,13 +216,18 @@ export function StoreDashboardPage(): ReactElement {
   }
 
   // Calculate chart metrics
-  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1);
+  const chartMaxVal = chartMode === "REVENUE"
+    ? Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1)
+    : Math.max(...dashboard.weeklyRevenue.map((d) => d.count ?? 0), 1);
 
   const formatYAxisLabel = (val: number): string => {
-    if (val >= 1000) {
-      return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+    if (chartMode === "REVENUE") {
+      if (val >= 1000) {
+        return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+      }
+      return `₹${Math.round(val)}`;
     }
-    return `₹${Math.round(val)}`;
+    return Math.round(val).toString();
   };
 
   const gapClass = dashboard.weeklyRevenue.length > 20
@@ -471,19 +478,55 @@ export function StoreDashboardPage(): ReactElement {
         <div id="revenue-chart" className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden`}>
           <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
-              {range === "TODAY"
-                ? "Hourly Revenue Today"
-                : range === "WEEK"
-                ? "Weekly Revenue Trend"
-                : range === "MONTH"
-                ? "Monthly Revenue Trend"
-                : range === "YEAR"
-                ? "Yearly Revenue Trend"
-                : "All-Time Revenue Trend"}
+              {chartMode === "REVENUE"
+                ? (range === "TODAY"
+                  ? "Hourly Revenue Today"
+                  : range === "WEEK"
+                  ? "Weekly Revenue Trend"
+                  : range === "MONTH"
+                  ? "Monthly Revenue Trend"
+                  : range === "YEAR"
+                  ? "Yearly Revenue Trend"
+                  : "All-Time Revenue Trend")
+                : (range === "TODAY"
+                  ? `Hourly ${isBooking ? "Bookings" : "Orders"} Today`
+                  : range === "WEEK"
+                  ? `Weekly ${isBooking ? "Bookings" : "Orders"} Trend`
+                  : range === "MONTH"
+                  ? `Monthly ${isBooking ? "Bookings" : "Orders"} Trend`
+                  : range === "YEAR"
+                  ? `Yearly ${isBooking ? "Bookings" : "Orders"} Trend`
+                  : `All-Time ${isBooking ? "Bookings" : "Orders"} Trend`)
+              }
             </h2>
             
             {/* Elegant control panel */}
             <div className="flex items-center gap-3">
+              {/* Switcher Tabs */}
+              <div className="flex items-center bg-gorola-charcoal/5 p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("REVENUE")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    chartMode === "REVENUE"
+                      ? "bg-white text-gorola-charcoal shadow-sm"
+                      : "text-gorola-slate hover:text-gorola-charcoal"
+                  }`}
+                >
+                  Revenue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("COUNT")}
+                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                    chartMode === "COUNT"
+                      ? "bg-white text-gorola-charcoal shadow-sm"
+                      : "text-gorola-slate hover:text-gorola-charcoal"
+                  }`}
+                >
+                  {isBooking ? "Bookings" : "Orders"}
+                </button>
+              </div>
               {/* Range Select */}
               <div className="relative">
                 <select
@@ -542,8 +585,8 @@ export function StoreDashboardPage(): ReactElement {
           <div className="flex-1 min-h-[260px] w-full select-none flex items-stretch mt-4">
             {/* Y-Axis Scale Labels */}
             <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 select-none text-right min-w-[50px] border-r border-gorola-charcoal/5">
-              <span>{formatYAxisLabel(maxRevenue)}</span>
-              <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
+              <span>{formatYAxisLabel(chartMaxVal)}</span>
+              <span>{formatYAxisLabel(chartMaxVal * 0.5)}</span>
               <span>{formatYAxisLabel(0)}</span>
             </div>
 
@@ -559,7 +602,8 @@ export function StoreDashboardPage(): ReactElement {
               {/* Bars container */}
               <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${gapClass} pr-4 z-10`}>
                 {dashboard.weeklyRevenue.map((item, index) => {
-                  const barHeightPct = maxRevenue > 0 && item.revenue > 0 ? (item.revenue / maxRevenue) * 94 + 6 : 6;
+                  const val = chartMode === "REVENUE" ? item.revenue : (item.count ?? 0);
+                  const barHeightPct = chartMaxVal > 0 && val > 0 ? (val / chartMaxVal) * 94 + 6 : 6;
                   const isToday = index === dashboard.weeklyRevenue.length - 1;
                   return (
                     <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
@@ -574,7 +618,7 @@ export function StoreDashboardPage(): ReactElement {
                       >
                         {/* Tooltip on hover */}
                         <div className="opacity-0 group-hover:opacity-100 absolute bottom-[105%] left-1/2 -translate-x-1/2 bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-20 pointer-events-none shadow-md whitespace-nowrap">
-                          {formatDateLabel(item.date)} • {formatCurrency(item.revenue)}
+                          {formatDateLabel(item.date)} • {chartMode === "REVENUE" ? formatCurrency(item.revenue) : `${val} ${isBooking ? "bookings" : "orders"}`}
                         </div>
                       </div>
 

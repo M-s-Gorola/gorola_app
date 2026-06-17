@@ -24,15 +24,16 @@
 | Phase 6.12 | Mobile Bottom Navigation Tabs | COMPLETE | Implement bottom tab bar (Home, Orders, Cart, Profile Option B) on mobile viewports. |
 | Phase 6.13 | Card Layout & Advertisement Layout | COMPLETE | Standardize Category & Subcategory cards (square image, name below, no counts) and optimize ad banner placement and mobile sizing. |
 | Phase 6.14 | UPI & Card Payment Integration (Razorpay) | COMPLETE | Wire UPI and Card payment methods end-to-end using a swappable Razorpay adapter. Admin toggles activate the payment gateway. Full TDD with mocked adapter — real Razorpay keys plug in without changing tests. |
+| Phase 6.15 | Analytics Volume Graphs, Settings Manager & Auto-Suggestions | IN PROGRESS | Adding number of orders/bookings graphs with store multi-select, platform settings manager for fees, and buyer global autocomplete search suggestions. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-15
-- **Session Summary:** Fixed two critical checkout issues: (1) backend loaded production `RazorpayPaymentGateway` using placeholder keys ("placeholder" / "replace_later") causing 401 logouts, resolved by falling back to `MockPaymentGateway`; (2) concurrent calls to `syncBuyerCartFromServer` on page mount caused duplicate cart items, resolved by implementing a sequential promise-chain queue.
-- **Next Session Must Start With:** Next Phase or features requested by the user.
-- **In Progress Right Now:** None.
+- **Date:** 2026-06-18
+- **Session Summary:** Completed implementation of Phase 6.15.1: Analytics Volume Graphs (Store Owner & System Admin dashboards, custom SVG bar volume trend charts, and admin store multi-select dropdown picker). All 652 tests passed completely with clean eslint/typecheck validation.
+- **Next Session Must Start With:** Implementing Phase 6.15.2 (Remove Feature Flags panel from Admin Dashboard).
+- **In Progress Right Now:** None (Phase 6.15.1 complete).
 - **Current Blocker:** None.
 
 ---
@@ -1085,12 +1086,188 @@ Add `selectedPaymentMethod: "COD" | "UPI" | "CARD"` and `setSelectedPaymentMetho
 
 ---
 
-### Final Verification — Phase 6.14
-
 - [x] Run `pnpm --filter @gorola/api test` — **zero failures in all API test suites ✅**
 - [x] Run `pnpm --filter @gorola/web test` — **zero failures in all web test suites ✅**
 - [x] `tsc --noEmit` across both packages — **0 compilation errors ✅**
 - [x] Update `CONTEXT/phase6_state.md`: Phase 6.14 status set to `COMPLETE`. Session notes added. ✅
+
+---
+
+## Phase 6.15 Checklist — Analytics volume graphs, settings manager, and autocomplete suggestions
+
+#### Phase 6.15.1 — Analytics Volume Graphs (Orders & Bookings counts)
+
+**Root cause / Goal:**
+Currently, store owners and admins can only view financial revenue trends, but cannot track the volume/count of orders or bookings over time. Additionally, admins cannot filter the order/booking volume counts by specific stores (multiselect). We need to aggregate and return counts in the dashboard trend responses, support store multi-filtering on admin trend endpoints, and build the corresponding frontend switcher tabs and multi-select filters.
+
+**Fix / Approach:**
+- **Backend:**
+  - Update `StoreOwnerService.getDashboard` to count the orders in each date interval and include `count` in the returned array of `weeklyRevenue` (changing return type from `{ date: string; revenue: number }[]` to `{ date: string; revenue: number; count: number }[]`).
+  - Update `AdminService.getDashboard` to include `count` (total orders count across all active stores) along with `revenue` in its main trend array.
+  - Add two new endpoints: `GET /api/v1/admin/dashboard/orders-trend` and `GET /api/v1/admin/dashboard/bookings-trend`. They will accept `range`, `groupBy`, and `storeIds` (comma-separated query parameter) and return daily/hourly/weekly order or booking count stats.
+- **Frontend:**
+  - Add switcher tabs ("Revenue", "Orders" or "Bookings" based on store Type) above the charts on `StoreDashboardPage.tsx` to toggle between displaying financial totals and counts.
+  - Add "Orders Volume" and "Bookings Volume" charts on `AdminDashboardPage.tsx` with a multi-select store picker dropdown. Multi-selecting stores will trigger dynamic queries to the new trend endpoints.
+
+---
+
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/admin/admin.dashboard.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/dashboard/orders-trend` with query params `range=WEEK`, `groupBy=DAILY`, and `storeIds=store-a-id,store-b-id` and a valid admin JWT returns `200` with `{ success: true, data: { date: string, count: number }[] }`. Assert that the counts only reflect orders belonging to `store-a-id` or `store-b-id`.
+  - [x] Test: `GET /api/v1/admin/dashboard/bookings-trend` with query params `range=WEEK`, `groupBy=DAILY`, and `storeIds=store-c-id` and a valid admin JWT returns `200` with `{ success: true, data: { date: string, count: number }[] }`. Assert that the counts only reflect bookings belonging to `store-c-id`.
+  - [x] **Run — confirm RED (these endpoints will return 404 today).**
+
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/store-owner/store-owner.dashboard.test.ts`):**
+  - [x] Test: `GET /api/v1/store-owner/dashboard` returns a `weeklyRevenue` trend array where every item includes a `count` field (integer value >= 0).
+  - [x] **Run — confirm RED (the `count` field is missing from the trend items).**
+
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `apps/api/src/modules/store-owner/store-owner.service.ts`, update `getDashboard()` to calculate the number of orders in each group loop iteration, pushing `{ date, revenue: sum, count: ordersInGroup.length }` to the trend array.
+  - [x] [Service] In `apps/api/src/modules/admin/admin.service.ts`:
+    - Update `getDashboard()` trend generation to count the orders in each group loop iteration, returning `{ date, revenue, count }`.
+    - Implement `getOrdersTrend({ range, groupBy, storeIds: string[] })` and `getBookingsTrend({ range, groupBy, storeIds: string[] })` querying the `Order` table. Join `bookingOrder` for bookings. Filter by `storeId: { in: storeIds }` if `storeIds` is provided, and by `orderType` ("QUICK" / "BOOKING"). Group and map the counts into the requested intervals.
+  - [x] [Controller] In `apps/api/src/modules/admin/admin.controller.ts`, map `GET /api/v1/admin/dashboard/orders-trend` and `GET /api/v1/admin/dashboard/bookings-trend` with the admin auth preHandler. Parse `storeIds` query parameter split by comma into an array, call the service methods, and return success payload.
+  - [x] Run integration tests — **confirm GREEN**.
+
+- [x] **RED — Unit (`apps/web/src/pages/store/StoreDashboardPage.test.tsx`):**
+  - [x] Test: Render `StoreDashboardPage`. Verify a toggle component containing "Revenue" and "Orders" tabs is displayed on the chart card.
+  - [x] Test: Click the "Orders" tab. Assert that the chart updates to render count data (verify tooltips show counts and no rupee symbol `Rs.`).
+  - [x] **Run — confirm RED (no toggle is rendered, chart only renders revenue).**
+
+- [x] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
+  - [x] Test: Render `AdminDashboardPage`. Verify that two new chart cards titled "Orders Volume" and "Bookings Volume" are rendered with store select controls.
+  - [x] Test: Select store "Store A" from the store multi-select picker. Verify that the query client is triggered with `GET /api/v1/admin/dashboard/orders-trend?storeIds=store-a-id`.
+  - [x] **Run — confirm RED (new chart sections and multi-select filter do not exist).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `apps/web/src/pages/store/StoreDashboardPage.tsx` and `AdminDashboardPage.tsx`, update types or interfaces representing trend items (e.g. `WeeklyRevenueItem`) to include `count: number`.
+  - [x] [Component] In `apps/web/src/pages/store/StoreDashboardPage.tsx`, add a local tab switcher state (`"revenue" | "count"`). Render a selector (e.g., Radix UI Tabs or simple styled buttons) above the chart. Map the active series accordingly on the Recharts bar component.
+  - [x] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx`:
+    - Add the "Orders Volume" and "Bookings Volume" chart sections displaying bar trends.
+    - Implement a multi-select store picker dropdown (e.g., checkable items in a dropdown menu showing active store list). Bind selected IDs state to refetch queries querying the new trend endpoints.
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Store owner/Admin opens dashboard → toggles chart view to "Orders/Bookings" → Y-axis adjusts to integer numbers and bars display counts → Admin checks "Store A" in multi-select -> Orders/Bookings graphs update to reflect only Store A's orders/bookings -> ✅ Done.
+
+---
+
+#### Phase 6.15.2 — Remove Feature Flags panel from Admin Dashboard
+
+**Root cause / Goal:**
+The feature flags toggle card displayed on the main admin dashboard page is redundant since admins already manage all feature flags on a dedicated view at `/admin/feature-flags` (`AdminFeatureFlagsPage.tsx`). Keeping it on the dashboard creates visual clutter and duplicate code.
+
+**Fix / Approach:**
+Remove the feature flags toggle card section, associated mutations, and state from the main admin dashboard page layout.
+
+---
+
+- [ ] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
+  - [ ] Test: Render `AdminDashboardPage`. Query the DOM for any heading or toggle switch containing feature flag keys (like "WEATHER_MODE_ACTIVE" or "Feature Flags"). Assert that they are not found.
+  - [ ] **Run — confirm RED (the test suite currently asserts feature flags toggles are present and clickable).**
+
+- [ ] **GREEN — Frontend (Component):**
+  - [ ] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx`, delete the JSX block rendering the Feature Flags card/panel, the `confirmingFlag` state, and the `toggleFlagMutation` react-query mutation.
+  - [ ] [Tests] In `apps/web/src/pages/admin/AdminDashboardPage.test.tsx`, remove feature flag render assertions and delete the test case `it:handles toggling feature flags with confirmation dialogs and triggers PUT requests`.
+  - [ ] Run unit test — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Admin logs in → dashboard loads → confirms no feature flag card is rendered → clicks sidebar link to navigate to `/admin/feature-flags` to manage toggles -> ✅ Done.
+
+---
+
+#### Phase 6.15.3 — Dynamic Platform Fees Manager (Delivery & Service Charges)
+
+**Root cause / Goal:**
+Currently, quick commerce order delivery fees (`30` in `BuyerCheckoutService`) and booking commerce service charges (`0` in `BookingOrderService`) are hardcoded constants in the backend. System administrators cannot modify these charges dynamically, which is vital for pricing and operational changes. We need to store these in a database table, provide admin API endpoints to update them, and display an admin editing form.
+
+**Fix / Approach:**
+- **Schema & Seeding:** Create a `SystemSetting` model in `schema.prisma`. Seed default settings: `DELIVERY_CHARGE = "30"` and `SERVICE_CHARGE = "0"`.
+- **Backend:**
+  - Replace the hardcoded decimals in `BuyerCheckoutService.placeFromCart` and `BookingOrderService.placeBookingRequest` with database queries fetching setting values by key.
+  - Expose `GET /api/v1/admin/settings` and `PUT /api/v1/admin/settings` endpoints for Admin CRUD.
+- **Frontend:**
+  - Create a settings card form under the Admin panel dashboard containing inputs for Delivery Fee and Service Fee.
+  - Submit calls `PUT /api/v1/admin/settings` to update values.
+
+---
+
+- [ ] **RED — Integration (`apps/api/src/__tests__/integration/admin/admin.settings.test.ts` — new file):**
+  - [ ] Test: `GET /api/v1/admin/settings` with a valid admin JWT returns `200` with the current settings list containing keys `"DELIVERY_CHARGE"` and `"SERVICE_CHARGE"`.
+  - [ ] Test: `PUT /api/v1/admin/settings` with payload `{ deliveryCharge: "45.00", serviceCharge: "25.00" }` and admin JWT returns `200` and saves values.
+  - [ ] Test: Place a QUICK order after updating settings. Verify that `deliveryFee` is `45.00`.
+  - [ ] Test: Place a BOOKING request after updating settings. Verify that `deliveryFee` (or platform service charge) is `25.00`.
+  - [ ] **Run — confirm RED (endpoints return 404; fees remain hardcoded).**
+
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] In `apps/api/prisma/schema.prisma`, add model:
+    ```prisma
+    model SystemSetting {
+      id          String   @id @default(cuid())
+      key         String   @unique
+      value       String
+      description String?
+      updatedBy   String
+      updatedAt   DateTime @updatedAt
+    }
+    ```
+  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_system_settings` to create the table.
+  - [ ] [Seeding] Update `apps/api/prisma/seed.ts` (and test setup helpers) to seed `SystemSetting` rows for key `DELIVERY_CHARGE` (value: `"30"`) and `SERVICE_CHARGE` (value: `"0"`).
+  - [ ] [Service] Create `SystemSettingService` to get/set values. Update `BuyerCheckoutService` and `BookingOrderService` to query `SystemSetting` using keys `"DELIVERY_CHARGE"` and `"SERVICE_CHARGE"` respectively (fall back to `"30"` and `"0"` if not found in database).
+  - [ ] [Controller] In `admin.controller.ts`, register `GET /api/v1/admin/settings` and `PUT /api/v1/admin/settings` (using z.object validator schema for values).
+  - [ ] Run integration test — **confirm GREEN**.
+
+- [ ] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
+  - [ ] Test: Render settings section. Assert inputs for "Delivery Charge" and "Service Charge" are rendered.
+  - [ ] Test: Update inputs and click "Save Platform Fees". Verify that `api.put` is called with target `"/api/v1/admin/settings"` and values `{ deliveryCharge: "45.00", serviceCharge: "25.00" }`.
+  - [ ] **Run — confirm RED (settings form card does not exist).**
+
+- [ ] **GREEN — Frontend (Component):**
+  - [ ] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx` (or a dedicated settings page component), implement a form containing fields for Delivery Fee and Service Fee. Fetch current settings list on load and populate the fields. Wire the save button to a mutation calling `PUT /api/v1/admin/settings`.
+  - [ ] Run unit test — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Admin changes Delivery Charge to `50` in Admin settings card → saves → buyer adds QUICK product to cart → goes to checkout → cart summary displays `Delivery Fee: Rs. 50.00` → order details database entry has `deliveryFee = 50.00` → ① Done.
+
+---
+
+#### Phase 6.15.4 — Interactive Search Autocomplete Suggestions (Buyer)
+
+**Root cause / Goal:**
+The search input in the global navigation bar does not provide autocomplete suggestions as the user types. The user has to submit the form blindly without knowing whether matching categories, subcategories, products, or services exist on the platform. We need to query suggestions dynamically, display them in a categorized list, and route clicks to the proper detail pages.
+
+**Fix / Approach:**
+- **Backend:**
+  - Update `SearchRepository.searchGlobally` (or add a dedicated method) to fetch category, subcategory, and product matches matching query `q`. Join the product's `Store` relation to check its `storeType`.
+  - Expose `GET /api/v1/search/suggestions?q=...` returning a decorated list where each suggestion includes `{ id, name, type, redirectUrl }`, mapping type as `"category"`, `"subcategory"`, `"product"` (if storeType is `QUICK_COMMERCE`), or `"service"` (if storeType is `BOOKING_COMMERCE`).
+- **Frontend:**
+  - Implement a debounced search input trigger in `BuyerNav.tsx`.
+  - Display a floating autocomplete dropdown menu containing matching items, marked with categorized badges/pills (**Category**, **Subcategory**, **Product**, **Service**).
+  - Clicking a suggestion navigates to the item's target path (`/categories/:categorySlug`, `/categories/:categorySlug/:subcategorySlug`, `/products/:productId`, or `/bookings/service/:productId`).
+
+---
+
+- [ ] **RED — Integration (`apps/api/src/__tests__/integration/search/search.suggestions.test.ts` — new file):**
+  - [ ] Test: `GET /api/v1/search/suggestions?q=cough` returns `200` with list of suggestion items.
+  - [ ] Test: Verify each item in the payload has fields: `id`, `name`, `type` (one of `"category"`, `"subcategory"`, `"product"`, `"service"`), and `redirectUrl` (e.g. `"/products/prod-123"`).
+  - [ ] **Run — confirm RED (suggestions endpoint returns 404).**
+
+- [ ] **GREEN — Backend (Repository → Controller):**
+  - [ ] [Repository] In `apps/api/src/modules/catalog/search.repository.ts`, implement suggestions retrieval: query categories, subcategories, and product variants matching query string `q` (case-insensitive fuzzy or like match). Include `store: { select: { storeType: true } }` on the product entity.
+  - [ ] [Controller] In `apps/api/src/modules/catalog/search.controller.ts`, map `GET /api/v1/search/suggestions`. Compile matching records into a unified list. Set `type` to `"product"` if the product's parent store has `storeType === "QUICK_COMMERCE"`, and `"service"` if it has `storeType === "BOOKING_COMMERCE"`.
+  - [ ] Run integration test — **confirm GREEN**.
+
+- [ ] **RED — Unit (`apps/web/src/components/buyer/BuyerNav.test.tsx`):**
+  - [ ] Test: Simulate typing `"cough"` into the navigation search bar. Assert that a suggestion menu pops open displaying list items with respective type badges.
+  - [ ] Test: Click a product suggestion with `redirectUrl = "/products/prod-123"`. Assert that `navigate` is called with `"/products/prod-123"`.
+  - [ ] **Run — confirm RED (search bar has no popover suggestions list).**
+
+- [ ] **GREEN — Frontend (Component):**
+  - [ ] [Component] In `apps/web/src/components/buyer/BuyerNav.tsx`, integrate a debounced React hook or state triggers on the search input. Query the autocomplete API `/api/v1/search/suggestions?q=...` using a query hook (e.g. `@tanstack/react-query`).
+  - [ ] [Component] Render a floating overlay/popover block directly beneath the search input when search results are loaded. Render item results styled with dynamic visual indicators (e.g. grey pill for Category, green pill for Product, purple pill for Service). Route item selection clicks to the dynamic URL returned in the API response.
+  - [ ] Run unit test — **confirm GREEN**.
+
+- [ ] **Verification chain:**
+  - [ ] Buyer types "blood" in header search bar → a dropdown menu pops up → shows "Blood Test [Service]" and "Diagnostics [Category]" → Buyer clicks "Blood Test [Service]" → page redirects directly to service detail path `/products/blood-test-id` → ✅ Done.
 
 ---
 

@@ -17,8 +17,8 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-17
-- **Session Summary:** Standardized status history logging formats in the database (`rider:${riderId}` and `store-owner:${ownerId}`). Updated the frontend role parsing logic to handle both the new format and legacy/mock formats (like raw `BUYER`/`RIDER`) cleanly. Verified all backend integration tests and all 81 web test suites are 100% green.
+- **Date:** 2026-06-18
+- **Session Summary:** Implemented key branding and UI polish changes: integrated the favicon, configured a global blurred topographic background image, styled the buyer Hero section with a dark overlay and white text, made the hero section responsive by decreasing its mobile height and padding, left-aligned the mobile "Shop Now" button to prevent stretching, and copied the navbar's blue-white gradient style to the footer.
 - **Next Session Must Start With:** Phase 5.7 (Rider Earnings Page)
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
@@ -1323,4 +1323,13 @@ _(Append new entries here — never delete old entries.)_
 - Updated both `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx` `formatChangedBy` helpers to gracefully handle new standardized prefixes and maintain backward compatibility with raw legacy strings (like `"BUYER"` and `"RIDER"`).
 - Modified the status history timelines on Store Orders, Store Bookings, Admin Orders, and Buyer Order Confirmation screens to display both local date and time (using `.toLocaleString("en-IN")` with options) rather than just the time.
 - Updated API integration tests and web unit tests to match formatting and prefix standards, confirming that the full test suites (81/81 web test files, 446/446 tests) and backend tests run completely green.
+
+### Session 29 — 2026-06-18 — UI Visual Adjustments, Favicon, Blurred Background, and Responsive Hero Layout Completed
+- Set the cropped small logo (`logo_small_screen_new_cropped.png`) as the application-wide favicon for all subdomains.
+- Configured a fixed, centered, and blurred global topographic background image (`Gorola_background.png`) using body stylesheet overlays, and updated page wrappers (`BuyerLayout`) to support background transparency.
+- Applied `hero_final.png` as the background of the buyer landing page's Hero section, darkening it with an overlay for readability, and updated all typography within it to high-contrast white.
+- Decreased the Hero section box size on mobile phones by setting the height to `min-h-[30vh]` and reducing vertical padding to `py-8` to save viewport estate.
+- Constrained the mobile "Shop Now" button to occupy only its natural text width with padding (`items-start`) rather than stretching to the full width of the container, and left-aligned it.
+- Copied the current navbar's blue-white gradient layout background (`.bg-gorola-pine\/95`) to the footer background styling (`.bg-gorola-footer-gradient`).
+
 

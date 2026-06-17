@@ -9,7 +9,7 @@ export type DashboardKpiSummary = {
   todayOrderCount: number;
   todayRevenue: number;
   pendingOrdersCount: number;
-  weeklyRevenue: { date: string; revenue: number }[];
+  weeklyRevenue: { date: string; revenue: number; count: number }[];
   topProducts: { name: string; soldCount: number }[];
   lowStockItems: { productName: string; variantLabel: string; stockQty: number }[];
   activeAdvertisementsCount: number;
@@ -296,7 +296,7 @@ export class StoreOwnerService {
         });
 
     // 4. Dynamic Multi-Dimensional Revenue Trend Aggregation
-    const weeklyRevenue: { date: string; revenue: number }[] = [];
+    const weeklyRevenue: { date: string; revenue: number; count: number }[] = [];
     const now = new Date();
     let rangeStart = new Date(now);
     let rangeEnd = new Date(now);
@@ -352,10 +352,9 @@ export class StoreOwnerService {
     if (resolvedGroupBy === "HOURLY") {
       for (let hour = 0; hour < 24; hour++) {
         const label = `${String(hour).padStart(2, "0")}:00`;
-        const sum = orders
-          .filter((o) => new Date(o.createdAt).getHours() === hour)
-          .reduce((acc, o) => acc + Number(o.total), 0);
-        weeklyRevenue.push({ date: label, revenue: sum });
+        const groupOrders = orders.filter((o) => new Date(o.createdAt).getHours() === hour);
+        const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: label, revenue: sum, count: groupOrders.length });
       }
     } else if (resolvedGroupBy === "DAILY") {
       if (range === "WEEK") {
@@ -373,14 +372,13 @@ export class StoreOwnerService {
           const dayEnd = new Date(d);
           dayEnd.setHours(23, 59, 59, 999);
 
-          const sum = orders
-            .filter((o) => {
-              const oct = new Date(o.createdAt);
-              return oct >= dayStart && oct <= dayEnd;
-            })
-            .reduce((acc, o) => acc + Number(o.total), 0);
+          const groupOrders = orders.filter((o) => {
+            const oct = new Date(o.createdAt);
+            return oct >= dayStart && oct <= dayEnd;
+          });
+          const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
 
-          weeklyRevenue.push({ date: dateStr, revenue: sum });
+          weeklyRevenue.push({ date: dateStr, revenue: sum, count: groupOrders.length });
         }
       } else if (range === "MONTH") {
         for (let i = 29; i >= 0; i--) {
@@ -393,46 +391,42 @@ export class StoreOwnerService {
           const dayEnd = new Date(d);
           dayEnd.setHours(23, 59, 59, 999);
 
-          const sum = orders
-            .filter((o) => {
-              const oct = new Date(o.createdAt);
-              return oct >= dayStart && oct <= dayEnd;
-            })
-            .reduce((acc, o) => acc + Number(o.total), 0);
+          const groupOrders = orders.filter((o) => {
+            const oct = new Date(o.createdAt);
+            return oct >= dayStart && oct <= dayEnd;
+          });
+          const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
 
-          weeklyRevenue.push({ date: label, revenue: sum });
+          weeklyRevenue.push({ date: label, revenue: sum, count: groupOrders.length });
         }
       } else if (range === "YEAR" || range === "ALL") {
         const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         for (const w of weekdays) {
-          const sum = orders
-            .filter((o) => {
-              const dayName = new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" });
-              return dayName === w;
-            })
-            .reduce((acc, o) => acc + Number(o.total), 0);
-          weeklyRevenue.push({ date: w, revenue: sum });
+          const groupOrders = orders.filter((o) => {
+            const dayName = new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" });
+            return dayName === w;
+          });
+          const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+          weeklyRevenue.push({ date: w, revenue: sum, count: groupOrders.length });
         }
       }
     } else if (resolvedGroupBy === "MONTHLY") {
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       for (const m of months) {
-        const sum = orders
-          .filter((o) => {
-            const mName = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" });
-            return mName === m;
-          })
-          .reduce((acc, o) => acc + Number(o.total), 0);
-        weeklyRevenue.push({ date: m, revenue: sum });
+        const groupOrders = orders.filter((o) => {
+          const mName = new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" });
+          return mName === m;
+        });
+        const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: m, revenue: sum, count: groupOrders.length });
       }
     } else if (resolvedGroupBy === "YEARLY") {
       const currentYear = now.getFullYear();
       for (let i = 4; i >= 0; i--) {
         const targetYear = currentYear - i;
-        const sum = orders
-          .filter((o) => new Date(o.createdAt).getFullYear() === targetYear)
-          .reduce((acc, o) => acc + Number(o.total), 0);
-        weeklyRevenue.push({ date: String(targetYear), revenue: sum });
+        const groupOrders = orders.filter((o) => new Date(o.createdAt).getFullYear() === targetYear);
+        const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: String(targetYear), revenue: sum, count: groupOrders.length });
       }
     }
 

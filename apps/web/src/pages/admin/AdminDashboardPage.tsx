@@ -19,6 +19,7 @@ type PerStoreBreakdownItem = {
   ordersToday: number;
   revenueToday: number;
   pendingOrdersCount: number;
+  storeType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
 };
 
 type WeeklyRevenueItem = {
@@ -48,6 +49,28 @@ type AdminDashboardEnvelope = {
   data: AdminDashboardData;
 };
 
+type TrendItem = {
+  date: string;
+  count: number;
+};
+
+type TrendEnvelope = {
+  success: boolean;
+  data: TrendItem[];
+};
+
+type AdminStoreListItem = {
+  id: string;
+  name: string;
+  storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+  isActive: boolean;
+};
+
+type StoresListResponse = {
+  success: boolean;
+  data: AdminStoreListItem[];
+};
+
 export function AdminDashboardPage(): ReactElement {
   const queryClient = useQueryClient();
 
@@ -56,16 +79,82 @@ export function AdminDashboardPage(): ReactElement {
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
+  const [storeType, setStoreType] = useState<"QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined>(undefined);
 
-  const { data: dashboard, isLoading, error } = useQuery<AdminDashboardData>({
-    queryKey: ["admin", "dashboard", range, groupBy],
+  const [volumeRange, setVolumeRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
+  const [volumeGroupBy, setVolumeGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [volumeSelectedStoreIds, setVolumeSelectedStoreIds] = useState<string[]>([]);
+  const [volumeStorePickerOpen, setVolumeStorePickerOpen] = useState(false);
+  const [volumeStoreType, setVolumeStoreType] = useState<"QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined>(undefined);
+
+  const { data: storesList } = useQuery<AdminStoreListItem[]>({
+    queryKey: ["admin", "stores"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<AdminDashboardEnvelope>(`/api/v1/admin/dashboard?range=${range}&groupBy=${groupBy}`);
+      const res = await api.get<StoresListResponse>("/api/v1/admin/stores");
+      return res.data.data;
+    },
+    staleTime: 60000
+  });
+
+  const allStores = Array.isArray(storesList) ? storesList : [];
+
+  const { data: dashboard, isLoading, error } = useQuery<AdminDashboardData>({
+    queryKey: ["admin", "dashboard", range, groupBy, selectedStoreIds, storeType],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const storeIdsParam = selectedStoreIds.length > 0 ? `&storeIds=${selectedStoreIds.join(",")}` : "";
+      const storeTypeParam = storeType ? `&storeType=${storeType}` : "";
+      const res = await api.get<AdminDashboardEnvelope>(
+        `/api/v1/admin/dashboard?range=${range}&groupBy=${groupBy}${storeIdsParam}${storeTypeParam}`
+      );
       return res.data.data;
     },
     staleTime: 30000,
     placeholderData: (prev) => prev
+  });
+
+  const { data: ordersTrend } = useQuery<TrendItem[]>({
+    queryKey: ["admin", "orders-trend", volumeRange, volumeGroupBy, volumeSelectedStoreIds, volumeStoreType],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const storeIdsParam = volumeSelectedStoreIds.length > 0 ? `&storeIds=${volumeSelectedStoreIds.join(",")}` : "";
+      const storeTypeParam = volumeStoreType ? `&storeType=${volumeStoreType}` : "";
+      const res = await api.get<TrendEnvelope>(
+        `/api/v1/admin/dashboard/orders-trend?range=${volumeRange}&groupBy=${volumeGroupBy}${storeIdsParam}${storeTypeParam}`
+      );
+      return res.data.data;
+    },
+    staleTime: 30000,
+    placeholderData: (prev) => prev
+  });
+
+  const { data: bookingsTrend } = useQuery<TrendItem[]>({
+    queryKey: ["admin", "bookings-trend", volumeRange, volumeGroupBy, volumeSelectedStoreIds, volumeStoreType],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const storeIdsParam = volumeSelectedStoreIds.length > 0 ? `&storeIds=${volumeSelectedStoreIds.join(",")}` : "";
+      const storeTypeParam = volumeStoreType ? `&storeType=${volumeStoreType}` : "";
+      const res = await api.get<TrendEnvelope>(
+        `/api/v1/admin/dashboard/bookings-trend?range=${volumeRange}&groupBy=${volumeGroupBy}${storeIdsParam}${storeTypeParam}`
+      );
+      return res.data.data;
+    },
+    staleTime: 30000,
+    placeholderData: (prev) => prev
+  });
+
+  const ordersTrendData = Array.isArray(ordersTrend) ? ordersTrend : [];
+  const bookingsTrendData = Array.isArray(bookingsTrend) ? bookingsTrend : [];
+
+  const revenueDropdownStores = allStores.filter(store => !storeType || store.storeType === storeType);
+  const volumeDropdownStores = allStores.filter(store => {
+    if (volumeStoreType && volumeStoreType !== store.storeType) {
+      return false;
+    }
+    return true;
   });
 
   const toggleFlagMutation = useMutation({
@@ -195,6 +284,56 @@ export function AdminDashboardPage(): ReactElement {
     : range === "YEAR" ? "Yearly System Revenue Trend"
     : "All-Time System Revenue Trend";
 
+  const volumeChartTitle =
+    volumeStoreType === "QUICK_COMMERCE"
+      ? volumeRange === "TODAY" ? "Hourly Orders Today"
+        : volumeRange === "WEEK" ? "Weekly System Orders Volume Trend"
+        : volumeRange === "MONTH" ? "Monthly System Orders Volume Trend"
+        : volumeRange === "YEAR" ? "Yearly System Orders Volume Trend"
+        : "All-Time System Orders Volume Trend"
+      : volumeStoreType === "BOOKING_COMMERCE"
+      ? volumeRange === "TODAY" ? "Hourly Bookings Today"
+        : volumeRange === "WEEK" ? "Weekly System Bookings Volume Trend"
+        : volumeRange === "MONTH" ? "Monthly System Bookings Volume Trend"
+        : volumeRange === "YEAR" ? "Yearly System Bookings Volume Trend"
+        : "All-Time System Bookings Volume Trend"
+      : volumeRange === "TODAY" ? "Hourly System Volume Today"
+        : volumeRange === "WEEK" ? "Weekly System Volume Trend"
+        : volumeRange === "MONTH" ? "Monthly System Volume Trend"
+        : volumeRange === "YEAR" ? "Yearly System Volume Trend"
+        : "All-Time System Volume Trend";
+
+  const formatCountYAxisLabel = (val: number): string => {
+    if (val % 1 === 0) {
+      return String(val);
+    }
+    return val.toFixed(1);
+  };
+
+  const volumeData = (() => {
+    if (volumeStoreType === "QUICK_COMMERCE") {
+      return ordersTrendData.map((d) => ({ date: d.date, count: d.count, label: `${d.count} orders` }));
+    }
+    if (volumeStoreType === "BOOKING_COMMERCE") {
+      return bookingsTrendData.map((d) => ({ date: d.date, count: d.count, label: `${d.count} bookings` }));
+    }
+    const maxLen = Math.max(ordersTrendData.length, bookingsTrendData.length);
+    const combined: { date: string; count: number; label: string }[] = [];
+    for (let i = 0; i < maxLen; i++) {
+      const o = ordersTrendData[i];
+      const b = bookingsTrendData[i];
+      const date = o?.date || b?.date || "";
+      const oCount = o?.count || 0;
+      const bCount = b?.count || 0;
+      combined.push({
+        date,
+        count: oCount + bCount,
+        label: `${oCount + bCount} total`
+      });
+    }
+    return combined;
+  })();
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -307,8 +446,92 @@ export function AdminDashboardPage(): ReactElement {
               {chartTitle}
             </h2>
 
-            {/* Range + GroupBy controls — identical to store dashboard */}
+            {/* Range + GroupBy + Store Type + Store Multiselect controls */}
             <div className="flex items-center gap-3">
+              {/* Store Type Filter */}
+              <div className="relative">
+                <select
+                  data-testid="revenue-store-type-select"
+                  value={storeType || "ALL"}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStoreType(val === "ALL" ? undefined : val as "QUICK_COMMERCE" | "BOOKING_COMMERCE");
+                    setSelectedStoreIds([]); // clear selection
+                  }}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                >
+                  <option value="ALL">All Store Types</option>
+                  <option value="QUICK_COMMERCE">Quick Commerce</option>
+                  <option value="BOOKING_COMMERCE">Booking Commerce</option>
+                </select>
+                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              </div>
+
+              {/* Store Picker Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setStorePickerOpen(!storePickerOpen)}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-2"
+                  aria-label="Filter by store"
+                >
+                  <span>Filter by store</span>
+                  {selectedStoreIds.length > 0 && (
+                    <span className="bg-gorola-pine text-white text-[10px] px-1.5 py-0.5 rounded-full font-sans font-bold">
+                      {selectedStoreIds.length}
+                    </span>
+                  )}
+                  <span className="text-[10px]">▼</span>
+                </button>
+
+                {storePickerOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-gorola-charcoal/10 rounded-xl shadow-lg z-30 p-3 space-y-2 max-h-60 overflow-y-auto">
+                    <div className="flex justify-between items-center pb-2 border-b border-gorola-charcoal/5">
+                      <span className="text-xs font-bold text-gorola-charcoal">Select Stores</span>
+                      {selectedStoreIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStoreIds([])}
+                          className="text-[10px] text-gorola-pine hover:underline font-bold"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-1.5 pt-1">
+                      {revenueDropdownStores.map((store) => {
+                        const isChecked = selectedStoreIds.includes(store.id);
+                        return (
+                          <label
+                            key={store.id}
+                            className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-gorola-mint/10 rounded-lg cursor-pointer text-xs text-gorola-charcoal font-semibold transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedStoreIds(selectedStoreIds.filter((id) => id !== store.id));
+                                } else {
+                                  setSelectedStoreIds([...selectedStoreIds, store.id]);
+                                }
+                              }}
+                              className="rounded text-gorola-pine focus:ring-gorola-pine/20 h-4 w-4 cursor-pointer"
+                            />
+                            <span className="truncate">{store.name}</span>
+                          </label>
+                        );
+                      })}
+                      {revenueDropdownStores.length === 0 && (
+                        <p className="text-xs text-gorola-slate/60 italic text-center py-2">
+                          No stores available
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Range Select */}
               <div className="relative">
                 <select
@@ -364,9 +587,9 @@ export function AdminDashboardPage(): ReactElement {
           </div>
 
           {/* Bar Chart */}
-          <div className="flex-1 min-h-[260px] w-full flex items-stretch select-none mt-4">
+          <div className="h-72 w-full flex items-stretch select-none mt-4">
             {/* Y-Axis scale */}
-            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 text-right min-w-[50px] border-r border-gorola-charcoal/5">
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-2.5 pb-2 text-right min-w-[50px] border-r border-gorola-charcoal/20">
               <span>{formatYAxisLabel(maxRevenue)}</span>
               <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
               <span>{formatYAxisLabel(0)}</span>
@@ -375,9 +598,9 @@ export function AdminDashboardPage(): ReactElement {
             {/* Bars container */}
             <div className="flex-1 h-full relative ml-3">
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
-                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
-                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
-                <div className="w-full border-b border-gorola-charcoal/10" />
+                <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+                <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+                <div className="w-full border-b border-gorola-charcoal/20" />
               </div>
 
               <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${gapClass} pr-4 z-10`}>
@@ -398,7 +621,7 @@ export function AdminDashboardPage(): ReactElement {
                           {formatDateLabel(item.date)} • {formatCurrency(item.revenue)}
                         </div>
                       </div>
-                      <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-slate/60 font-semibold whitespace-nowrap mt-1 ${
+                      <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-charcoal/80 font-semibold whitespace-nowrap mt-1 ${
                         shouldShowLabel(index, dashboard.weeklyRevenue.length) ? "" : "invisible"
                       }`}>
                         {formatDateLabel(item.date)}
@@ -470,6 +693,214 @@ export function AdminDashboardPage(): ReactElement {
             <span className="text-[10px] text-gorola-slate font-dm-sans block text-center">
               * Note: Flag changes will propagate to Redis cache within 60s.
             </span>
+          </div>
+        </div>
+      </div>
+
+      {/* Volume Trend Chart */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
+              {volumeChartTitle}
+            </h2>
+          </div>
+
+          {/* Range + GroupBy + Store Picker controls */}
+          <div className="flex items-center gap-3">
+            {/* Store Type Filter */}
+            <div className="relative">
+              <select
+                data-testid="volume-store-type-select"
+                value={volumeStoreType || "ALL"}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setVolumeStoreType(val === "ALL" ? undefined : val as "QUICK_COMMERCE" | "BOOKING_COMMERCE");
+                  setVolumeSelectedStoreIds([]); // clear selection
+                }}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+              >
+                <option value="ALL">All Store Types</option>
+                <option value="QUICK_COMMERCE">Quick Commerce</option>
+                <option value="BOOKING_COMMERCE">Booking Commerce</option>
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+            </div>
+            {/* Store Picker */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setVolumeStorePickerOpen(!volumeStorePickerOpen)}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-2"
+                aria-label="Filter by store"
+              >
+                <span>Filter by store</span>
+                {volumeSelectedStoreIds.length > 0 && (
+                  <span className="bg-gorola-pine text-white text-[10px] px-1.5 py-0.5 rounded-full font-sans font-bold">
+                    {volumeSelectedStoreIds.length}
+                  </span>
+                )}
+                <span className="text-[10px]">▼</span>
+              </button>
+
+              {volumeStorePickerOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-gorola-charcoal/10 rounded-xl shadow-lg z-30 p-3 space-y-2 max-h-60 overflow-y-auto">
+                  <div className="flex justify-between items-center pb-2 border-b border-gorola-charcoal/5">
+                    <span className="text-xs font-bold text-gorola-charcoal">Select Stores</span>
+                    {volumeSelectedStoreIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setVolumeSelectedStoreIds([])}
+                        className="text-[10px] text-gorola-pine hover:underline font-bold"
+                      >
+                        Clear All
+                      </button>
+                    )}
+                  </div>
+                  <div className="space-y-1.5 pt-1">
+                    {volumeDropdownStores.map((store) => {
+                      const isChecked = volumeSelectedStoreIds.includes(store.id);
+                      return (
+                        <label
+                          key={store.id}
+                          className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-gorola-mint/10 rounded-lg cursor-pointer text-xs text-gorola-charcoal font-semibold transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setVolumeSelectedStoreIds(volumeSelectedStoreIds.filter((id) => id !== store.id));
+                              } else {
+                                setVolumeSelectedStoreIds([...volumeSelectedStoreIds, store.id]);
+                              }
+                            }}
+                            className="rounded text-gorola-pine focus:ring-gorola-pine/20 h-4 w-4 cursor-pointer"
+                          />
+                          <span className="truncate">{store.name}</span>
+                        </label>
+                      );
+                    })}
+                    {volumeDropdownStores.length === 0 && (
+                      <p className="text-xs text-gorola-slate/60 italic text-center py-2">
+                        No stores available
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Range Select */}
+            <div className="relative">
+              <select
+                data-testid="volume-range-select"
+                value={volumeRange}
+                onChange={(e) => {
+                  const nextRange = e.target.value as "TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL";
+                  setVolumeRange(nextRange);
+                  if (nextRange === "TODAY") {
+                    setVolumeGroupBy("HOURLY");
+                  } else if (nextRange === "WEEK" || nextRange === "MONTH") {
+                    setVolumeGroupBy("DAILY");
+                  } else if (nextRange === "YEAR") {
+                    setVolumeGroupBy("MONTHLY");
+                  } else {
+                    setVolumeGroupBy("YEARLY");
+                  }
+                }}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+              >
+                <option value="TODAY">Today</option>
+                <option value="WEEK">Last 7 Days</option>
+                <option value="MONTH">Last 30 Days</option>
+                <option value="YEAR">Current Year</option>
+                <option value="ALL">All Time</option>
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+            </div>
+
+            {/* GroupBy Select */}
+            <div className="relative">
+              <select
+                data-testid="volume-groupby-select"
+                value={volumeGroupBy}
+                onChange={(e) => setVolumeGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
+                disabled={volumeRange === "TODAY"}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {volumeRange === "TODAY" ? (
+                  <option value="HOURLY">Hourly</option>
+                ) : (
+                  <>
+                    <option value="HOURLY">Hourly (Pattern)</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="MONTHLY" disabled={volumeRange === "WEEK" || volumeRange === "MONTH"}>Monthly</option>
+                    <option value="YEARLY" disabled={volumeRange !== "ALL"}>Yearly</option>
+                  </>
+                )}
+              </select>
+              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="h-72 w-full flex items-stretch select-none mt-4">
+          {/* Y-Axis scale */}
+          <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-2.5 pb-2 text-right min-w-[30px] border-r border-gorola-charcoal/20">
+            <span>{formatCountYAxisLabel(Math.max(...volumeData.map((d) => d.count), 1))}</span>
+            <span>{formatCountYAxisLabel(Math.max(...volumeData.map((d) => d.count), 1) * 0.5)}</span>
+            <span>0</span>
+          </div>
+
+          {/* Bars container */}
+          <div className="flex-1 h-full relative ml-3">
+            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
+              <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+              <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+              <div className="w-full border-b border-gorola-charcoal/20" />
+            </div>
+
+            <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${
+              volumeData.length > 20
+                ? "gap-1 sm:gap-1.5"
+                : volumeData.length > 10
+                ? "gap-2"
+                : "gap-4"
+            } pr-4 z-10`}>
+              {volumeData.map((item, index) => {
+                const maxCount = Math.max(...volumeData.map((d) => d.count), 1);
+                const heightPct = maxCount > 0 && item.count > 0 ? (item.count / maxCount) * 94 + 6 : 6;
+                const isLatest = index === volumeData.length - 1;
+                return (
+                  <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
+                    <div
+                      style={{ height: `${heightPct}%` }}
+                      className={`relative w-full ${
+                        volumeData.length > 20
+                          ? "max-w-[8px] sm:max-w-[12px]"
+                          : volumeData.length > 10
+                          ? "max-w-[16px]"
+                          : "max-w-[40px]"
+                      } rounded-t-sm transition-all duration-300 group-hover:opacity-90 ${
+                        isLatest
+                          ? "bg-gorola-saffron shadow-lg shadow-gorola-saffron/10"
+                          : "bg-gorola-pine"
+                      }`}
+                    >
+                      <div className="opacity-0 group-hover:opacity-100 absolute bottom-[105%] left-1/2 -translate-x-1/2 bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-20 pointer-events-none shadow-md whitespace-nowrap">
+                        {formatDateLabel(item.date)} • {item.label}
+                      </div>
+                    </div>
+                    <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-charcoal/80 font-semibold whitespace-nowrap mt-1 ${
+                      shouldShowLabel(index, volumeData.length) ? "" : "invisible"
+                    }`}>
+                      {formatDateLabel(item.date)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
