@@ -1,15 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Clock,
   Layers,
-  Settings,
   ShoppingBag,
   TrendingUp,
-  Users} from "lucide-react";
+  Users
+} from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 
@@ -72,10 +71,9 @@ type StoresListResponse = {
 };
 
 export function AdminDashboardPage(): ReactElement {
-  const queryClient = useQueryClient();
 
-  const [confirmingFlag, setConfirmingFlag] = useState<{ key: string; value: boolean } | null>(null);
-  const [isUpdatingFlag, setIsUpdatingFlag] = useState(false);
+
+
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
@@ -157,34 +155,7 @@ export function AdminDashboardPage(): ReactElement {
     return true;
   });
 
-  const toggleFlagMutation = useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: boolean }) => {
-      if (!api) throw new Error("API helper not initialized");
-      await api.patch(`/api/v1/admin/feature-flags/${key}`, { enabled: value });
-    },
-    onSuccess: (_, variables) => {
-      toast.success(`Feature flag '${variables.key}' updated successfully.`);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-    },
-    onError: (err) => {
-      console.error("Failed to toggle feature flag", err);
-      toast.error("Failed to update feature flag.");
-    },
-    onSettled: () => {
-      setIsUpdatingFlag(false);
-      setConfirmingFlag(null);
-    }
-  });
 
-  const handleToggleFlag = (key: string, currentValue: boolean) => {
-    setConfirmingFlag({ key, value: !currentValue });
-  };
-
-  const confirmToggleFlag = () => {
-    if (!confirmingFlag) return;
-    setIsUpdatingFlag(true);
-    toggleFlagMutation.mutate(confirmingFlag);
-  };
 
   const formatCurrency = (val: number): string => {
     return `₹${val.toLocaleString("en-IN", {
@@ -443,7 +414,7 @@ export function AdminDashboardPage(): ReactElement {
       {/* Main Section Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Revenue Trend Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden">
+        <div className="lg:col-span-3 bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden">
           <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
               {chartTitle}
@@ -637,67 +608,7 @@ export function AdminDashboardPage(): ReactElement {
           </div>
         </div>
 
-        {/* Feature Flags Panel */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-8 w-8 rounded-lg bg-gorola-mint/10 flex items-center justify-center text-gorola-pine">
-                <Settings className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Feature Flags</h2>
-                <p className="text-xs text-gorola-slate font-dm-sans">Toggle system-wide feature flags.</p>
-              </div>
-            </div>
 
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-              {dashboard.featureFlags.map((flag) => (
-                <div
-                  key={flag.key}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-gorola-charcoal/5 bg-gorola-mint/5 hover:bg-gorola-mint/10 transition-colors"
-                >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <span className="text-xs font-bold text-gorola-charcoal block truncate">
-                      {flag.key}
-                    </span>
-                    <span className="text-[10px] text-gorola-slate block truncate">
-                      {flag.key === "WEATHER_MODE_ACTIVE"
-                        ? "Restricts deliveries and adjusts pricing parameters."
-                        : "Toggle feature operations."}
-                    </span>
-                  </div>
-
-                  <button
-                    role="switch"
-                    aria-checked={flag.value}
-                    aria-label={`Toggle flag ${flag.key}`}
-                    onClick={() => handleToggleFlag(flag.key, flag.value)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                      flag.value ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                        flag.value ? "translate-x-5" : "translate-x-0.5"
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
-
-              {dashboard.featureFlags.length === 0 && (
-                <p className="text-sm text-gorola-slate/60 italic text-center py-6">
-                  No feature flags currently seeded in database.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="mt-4 border-t border-gorola-charcoal/5 pt-3">
-            <span className="text-[10px] text-gorola-slate font-dm-sans block text-center">
-              * Note: Flag changes will propagate to Redis cache within 60s.
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Volume Trend Chart */}
@@ -959,42 +870,7 @@ export function AdminDashboardPage(): ReactElement {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {confirmingFlag && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Confirm Feature Flag Update
-            </h3>
-            <p className="text-sm text-gorola-slate font-dm-sans mt-3">
-              Are you sure you want to toggle the feature flag <strong>{confirmingFlag.key}</strong> to{" "}
-              <strong>{confirmingFlag.value ? "ON" : "OFF"}</strong>?
-              {confirmingFlag.key === "WEATHER_MODE_ACTIVE" && (
-                <span className="block mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 p-2 rounded-lg font-sans">
-                  <strong>⚠️ Warning:</strong> Activating Weather Mode has high system impact, restricting rider delivery zones and altering pricing modifiers immediately.
-                </span>
-              )}
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                disabled={isUpdatingFlag}
-                onClick={() => setConfirmingFlag(null)}
-                className="px-4 py-2 border border-gorola-charcoal/10 hover:bg-gorola-charcoal/5 rounded-xl font-bold text-sm text-gorola-slate transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isUpdatingFlag}
-                onClick={confirmToggleFlag}
-                className="px-4 py-2 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl font-bold text-sm shadow-sm transition-colors"
-              >
-                {isUpdatingFlag ? "Updating..." : "Confirm Update"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

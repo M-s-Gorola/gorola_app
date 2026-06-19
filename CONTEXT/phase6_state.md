@@ -30,12 +30,11 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-19
+- **Date:** 2026-06-20
 - **Session Summary:** 
-  - Fixed chart filter layout wrapping bug: Updated `StoreDashboardPage.tsx` and `AdminDashboardPage.tsx` using `lg:flex-row` and `sm:flex-nowrap` so filters align cleanly in a single row on tablet/desktop viewports without wrapping.
-  - Fixed ESM `@prisma/instrumentation` import issue: Updated `telemetry.ts` to use named ESM import (`import { PrismaInstrumentation }`) for compliance with modern Prisma v6.19.3 exports.
-  - Fixed TypeScript compile errors: Added explicit `Prisma.TransactionClient` types to transaction callback parameters (`tx`) in `order.service.ts` and `store-owner.service.ts` under strict type rules.
-- **Next Session Must Start With:** Running the WSL verification typechecks (`pnpm --filter @gorola/api typecheck` and `pnpm --filter @gorola/web typecheck`) to confirm compilation, and then starting Phase 6.15.2.
+  - Fixed `prisma-instrumentation-cjs` unit test failure in apps/api by using the correct named import structure matching modern ESM build.
+  - Completed Phase 6.15.2: Removed the redundant Feature Flags panel, state, mutation, and confirmation modal from `AdminDashboardPage.tsx` and cleaned up its assertions in `AdminDashboardPage.test.tsx`.
+- **Next Session Must Start With:** Starting Phase 6.15.3 (Dynamic Platform Fees Manager).
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -1164,17 +1163,17 @@ Remove the feature flags toggle card section, associated mutations, and state fr
 
 ---
 
-- [ ] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
-  - [ ] Test: Render `AdminDashboardPage`. Query the DOM for any heading or toggle switch containing feature flag keys (like "WEATHER_MODE_ACTIVE" or "Feature Flags"). Assert that they are not found.
-  - [ ] **Run — confirm RED (the test suite currently asserts feature flags toggles are present and clickable).**
+- [x] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
+  - [x] Test: Render `AdminDashboardPage`. Query the DOM for any heading or toggle switch containing feature flag keys (like "WEATHER_MODE_ACTIVE" or "Feature Flags"). Assert that they are not found.
+  - [x] **Run — confirm RED (the test suite currently asserts feature flags toggles are present and clickable).**
 
-- [ ] **GREEN — Frontend (Component):**
-  - [ ] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx`, delete the JSX block rendering the Feature Flags card/panel, the `confirmingFlag` state, and the `toggleFlagMutation` react-query mutation.
-  - [ ] [Tests] In `apps/web/src/pages/admin/AdminDashboardPage.test.tsx`, remove feature flag render assertions and delete the test case `it:handles toggling feature flags with confirmation dialogs and triggers PUT requests`.
-  - [ ] Run unit test — **confirm GREEN**.
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx`, delete the JSX block rendering the Feature Flags card/panel, the `confirmingFlag` state, and the `toggleFlagMutation` react-query mutation.
+  - [x] [Tests] In `apps/web/src/pages/admin/AdminDashboardPage.test.tsx`, remove feature flag render assertions and delete the test case `it:handles toggling feature flags with confirmation dialogs and triggers PUT requests`.
+  - [x] Run unit test — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Admin logs in → dashboard loads → confirms no feature flag card is rendered → clicks sidebar link to navigate to `/admin/feature-flags` to manage toggles -> ✅ Done.
+- [x] **Verification chain:**
+  - [x] Admin logs in → dashboard loads → confirms no feature flag card is rendered → clicks sidebar link to navigate to `/admin/feature-flags` to manage toggles -> ✅ Done.
 
 ---
 
@@ -1479,3 +1478,11 @@ The search input in the global navigation bar does not provide autocomplete sugg
   - **Chart Layout**: Changed the parent headers in [StoreDashboardPage.tsx](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/web/src/pages/store/StoreDashboardPage.tsx) and [AdminDashboardPage.tsx](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/web/src/pages/admin/AdminDashboardPage.tsx) from `sm:flex-row` to `lg:flex-row`. Added `sm:flex-nowrap` to the filter control wrapper. This allows the filters to stack cleanly on mobile, but align in a single, non-wrapping row on tablet and desktop views.
   - **Prisma Instrumentation ESM Fix**: Updated [telemetry.ts](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/api/src/lib/telemetry.ts) to import `PrismaInstrumentation` as a named ESM export rather than destructuring it from a default import, aligning with the exports defined in `@prisma/instrumentation@6.19.3`'s modern ESM build.
   - **Typecheck Param Fixes**: Annotated the transaction parameters `tx` in `$transaction` blocks inside [order.service.ts](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/api/src/modules/order/order.service.ts) and [store-owner.service.ts](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/api/src/modules/store-owner/store-owner.service.ts) as `Prisma.TransactionClient` to resolve `implicitly has an 'any' type` compilation errors.
+
+### 2026-06-20: Phase 6.15.2 — Feature Flags Removal from Admin Dashboard
+
+- **Goal**: Remove redundant Feature Flags panel from the main Admin Dashboard since it is already managed in its dedicated `/admin/feature-flags` page.
+- **Solution**:
+  - **RED Test Case**: Added a test asserting that `"Feature Flags"` and flag key `"WEATHER_MODE_ACTIVE"` are not rendered on `AdminDashboardPage`. Fixed an async race condition in the test (which originally resolved in the loading state, resulting in a false-positive passing test) by ensuring it waits for the dashboard to load. Verified that the test failed (RED).
+  - **Component Cleanup**: Removed the Feature Flags panel JSX, `confirmingFlag` and `isUpdatingFlag` states, and `toggleFlagMutation` from `AdminDashboardPage.tsx`. Adjusted the remaining Revenue Trend Chart to span the full grid width (`lg:col-span-3`).
+  - **Test/Lint Cleanup**: Removed obsolete feature flag render assertions and deleted the unused test `handles toggling feature flags...`. Resolved unused imports/variables and auto-formatted via ESLint. All tests, linters, and typechecks are completely green.
