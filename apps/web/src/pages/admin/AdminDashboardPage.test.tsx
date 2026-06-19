@@ -199,58 +199,9 @@ describe("AdminDashboardPage", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getByText("₹1,600.25")).toBeInTheDocument();
 
-    // Verify Feature Flags section
-    expect(screen.getByText("WEATHER_MODE_ACTIVE")).toBeInTheDocument();
-    expect(screen.getByText("RIDER_INTERFACE_ENABLED")).toBeInTheDocument();
+
   });
 
-  it("handles toggling feature flags with confirmation dialogs and triggers PUT requests", async () => {
-    const mockDashboardData = {
-      success: true,
-      data: {
-        totalOrdersToday: 0,
-        totalRevenueToday: 0,
-        perStoreBreakdown: [],
-        weeklyRevenue: [],
-        lowStockAlertCount: 0,
-        totalActiveBuyers: 0,
-        totalProducts: 0,
-        pendingAdApprovalsCount: 0,
-        featureFlags: [
-          { key: "WEATHER_MODE_ACTIVE", value: false }
-        ]
-      }
-    };
-
-    getMock.mockImplementation((url: string) => {
-      if (url.includes("/admin/stores")) {
-        return Promise.resolve({ data: { success: true, data: [] } });
-      }
-      return Promise.resolve({ data: mockDashboardData });
-    });
-    patchMock.mockResolvedValueOnce({ data: { success: true } });
-
-    renderAdminDashboard();
-
-    const toggleButton = await screen.findByRole("switch", { name: /toggle flag WEATHER_MODE_ACTIVE/i });
-    expect(toggleButton).toBeInTheDocument();
-    expect(toggleButton).toHaveAttribute("aria-checked", "false");
-
-    // Click toggle to turn on
-    fireEvent.click(toggleButton);
-
-    // Verify confirmation modal is shown
-    expect(screen.getByText("Confirm Feature Flag Update")).toBeInTheDocument();
-    expect(screen.getByText(/Activating Weather Mode has high system impact/i)).toBeInTheDocument();
-
-    const confirmButton = screen.getByRole("button", { name: "Confirm Update" });
-    fireEvent.click(confirmButton);
-
-    // Verify PATCH request is made
-    await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith("/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE", { enabled: true });
-    });
-  });
 
   it("renders Orders Volume and Bookings Volume charts with store multi-select picker and triggers endpoint calls", async () => {
     const mockDashboardData = {
@@ -345,5 +296,40 @@ describe("AdminDashboardPage", () => {
         expect.stringContaining("storeType=QUICK_COMMERCE")
       );
     });
+  });
+
+  it("does not render the Feature Flags panel or toggles on the dashboard", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            totalOrdersToday: 0,
+            totalRevenueToday: 0,
+            perStoreBreakdown: [],
+            weeklyRevenue: [],
+            lowStockAlertCount: 0,
+            totalActiveBuyers: 0,
+            totalProducts: 0,
+            pendingAdApprovalsCount: 0,
+            featureFlags: [
+              { key: "WEATHER_MODE_ACTIVE", value: false }
+            ]
+          }
+        }
+      });
+    });
+
+    renderAdminDashboard();
+
+    // Wait for the dashboard to finish loading
+    expect(await screen.findByText("System Dashboard")).toBeInTheDocument();
+
+    // Assert that the feature flags container or keys are NOT in the document
+    expect(screen.queryByText("Feature Flags")).not.toBeInTheDocument();
+    expect(screen.queryByText("WEATHER_MODE_ACTIVE")).not.toBeInTheDocument();
   });
 });

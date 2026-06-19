@@ -6,12 +6,7 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-node";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-// @prisma/instrumentation is CJS; named ESM import fails in Node (e.g. Railway, Node 18)
-import prismaInstrumentation from "@prisma/instrumentation";
-
-const { PrismaInstrumentation } = prismaInstrumentation as {
-  PrismaInstrumentation: new () => import("@prisma/instrumentation").PrismaInstrumentation;
-};
+import { PrismaInstrumentation } from "@prisma/instrumentation";
 
 let sdk: NodeSDK | null = null;
 

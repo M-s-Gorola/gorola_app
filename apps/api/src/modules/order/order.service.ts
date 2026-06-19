@@ -5,7 +5,7 @@ import {
   NotFoundError,
   UnprocessableEntityError
 } from "@gorola/shared";
-import { type OrderStatus, type PrismaClient, type ProductVariant } from "@prisma/client";
+import { type OrderStatus, Prisma, type PrismaClient, type ProductVariant } from "@prisma/client";
 
 import { ProductVariantRepository } from "../catalog/variant.repository.js";
 import { StockMovementRepository } from "../inventory/stock-movement.repository.js";
@@ -47,7 +47,7 @@ export class OrderService {
    */
   public async placeOrderWithStock(input: CreateOrderInput): Promise<OrderWithRelations> {
     return this.db.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         const byVariant = new Map<string, number>();
         for (const line of input.items) {
           byVariant.set(
@@ -153,7 +153,7 @@ export class OrderService {
     }
 
     if (current.orderType === "BOOKING") {
-      return this.db.$transaction(async (tx) => {
+      return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
         await this.orders.updateStatus(orderId, "CANCELLED", changedBy, note, tx);
 
         if (this.emitter) {
@@ -168,7 +168,7 @@ export class OrderService {
     }
 
     return this.db.$transaction(
-      async (tx) => {
+      async (tx: Prisma.TransactionClient) => {
         const variantIds = current.items.map((i) => i.productVariantId);
         const variants = await tx.productVariant.findMany({
           where: { id: { in: variantIds } },

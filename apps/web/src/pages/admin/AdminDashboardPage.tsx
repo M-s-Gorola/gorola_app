@@ -1,15 +1,14 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Clock,
   Layers,
-  Settings,
   ShoppingBag,
   TrendingUp,
-  Users} from "lucide-react";
+  Users
+} from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
-import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 
@@ -72,10 +71,9 @@ type StoresListResponse = {
 };
 
 export function AdminDashboardPage(): ReactElement {
-  const queryClient = useQueryClient();
 
-  const [confirmingFlag, setConfirmingFlag] = useState<{ key: string; value: boolean } | null>(null);
-  const [isUpdatingFlag, setIsUpdatingFlag] = useState(false);
+
+
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
@@ -157,34 +155,7 @@ export function AdminDashboardPage(): ReactElement {
     return true;
   });
 
-  const toggleFlagMutation = useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: boolean }) => {
-      if (!api) throw new Error("API helper not initialized");
-      await api.patch(`/api/v1/admin/feature-flags/${key}`, { enabled: value });
-    },
-    onSuccess: (_, variables) => {
-      toast.success(`Feature flag '${variables.key}' updated successfully.`);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-    },
-    onError: (err) => {
-      console.error("Failed to toggle feature flag", err);
-      toast.error("Failed to update feature flag.");
-    },
-    onSettled: () => {
-      setIsUpdatingFlag(false);
-      setConfirmingFlag(null);
-    }
-  });
 
-  const handleToggleFlag = (key: string, currentValue: boolean) => {
-    setConfirmingFlag({ key, value: !currentValue });
-  };
-
-  const confirmToggleFlag = () => {
-    if (!confirmingFlag) return;
-    setIsUpdatingFlag(true);
-    toggleFlagMutation.mutate(confirmingFlag);
-  };
 
   const formatCurrency = (val: number): string => {
     return `₹${val.toLocaleString("en-IN", {
@@ -249,7 +220,7 @@ export function AdminDashboardPage(): ReactElement {
     );
   }
 
-  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1);
+  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 10);
 
   const formatYAxisLabel = (val: number): string => {
     if (val >= 1000) {
@@ -333,6 +304,9 @@ export function AdminDashboardPage(): ReactElement {
     }
     return combined;
   })();
+
+  const rawVolumeMax = Math.max(...volumeData.map((d) => d.count), 4);
+  const volumeMax = rawVolumeMax % 2 === 0 ? rawVolumeMax : rawVolumeMax + 1;
 
   return (
     <div className="space-y-8">
@@ -440,14 +414,14 @@ export function AdminDashboardPage(): ReactElement {
       {/* Main Section Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Revenue Trend Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+        <div className="lg:col-span-3 bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden">
+          <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
               {chartTitle}
             </h2>
 
             {/* Range + GroupBy + Store Type + Store Multiselect controls */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
               {/* Store Type Filter */}
               <div className="relative">
                 <select
@@ -458,13 +432,13 @@ export function AdminDashboardPage(): ReactElement {
                     setStoreType(val === "ALL" ? undefined : val as "QUICK_COMMERCE" | "BOOKING_COMMERCE");
                     setSelectedStoreIds([]); // clear selection
                   }}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
                 >
                   <option value="ALL">All Store Types</option>
                   <option value="QUICK_COMMERCE">Quick Commerce</option>
                   <option value="BOOKING_COMMERCE">Booking Commerce</option>
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
 
               {/* Store Picker Dropdown */}
@@ -472,7 +446,7 @@ export function AdminDashboardPage(): ReactElement {
                 <button
                   type="button"
                   onClick={() => setStorePickerOpen(!storePickerOpen)}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-2"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-1 sm:gap-2"
                   aria-label="Filter by store"
                 >
                   <span>Filter by store</span>
@@ -550,7 +524,7 @@ export function AdminDashboardPage(): ReactElement {
                       setGroupBy("YEARLY");
                     }
                   }}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
                 >
                   <option value="TODAY">Today</option>
                   <option value="WEEK">Last 7 Days</option>
@@ -558,7 +532,7 @@ export function AdminDashboardPage(): ReactElement {
                   <option value="YEAR">Current Year</option>
                   <option value="ALL">All Time</option>
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
 
               {/* GroupBy Select */}
@@ -568,7 +542,7 @@ export function AdminDashboardPage(): ReactElement {
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
                   disabled={range === "TODAY"}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {range === "TODAY" ? (
                     <option value="HOURLY">Hourly</option>
@@ -581,7 +555,7 @@ export function AdminDashboardPage(): ReactElement {
                     </>
                   )}
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
             </div>
           </div>
@@ -589,14 +563,14 @@ export function AdminDashboardPage(): ReactElement {
           {/* Bar Chart */}
           <div className="h-72 w-full flex items-stretch select-none mt-4">
             {/* Y-Axis scale */}
-            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-2.5 pb-2 text-right min-w-[50px] border-r border-gorola-charcoal/20">
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-1.5 sm:pr-2.5 pb-2 text-right min-w-[35px] sm:min-w-[50px] border-r border-gorola-charcoal/20">
               <span>{formatYAxisLabel(maxRevenue)}</span>
               <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
               <span>{formatYAxisLabel(0)}</span>
             </div>
 
             {/* Bars container */}
-            <div className="flex-1 h-full relative ml-3">
+            <div className="flex-1 h-full relative ml-1.5 sm:ml-3">
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
                 <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
                 <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
@@ -634,72 +608,12 @@ export function AdminDashboardPage(): ReactElement {
           </div>
         </div>
 
-        {/* Feature Flags Panel */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-8 w-8 rounded-lg bg-gorola-mint/10 flex items-center justify-center text-gorola-pine">
-                <Settings className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Feature Flags</h2>
-                <p className="text-xs text-gorola-slate font-dm-sans">Toggle system-wide feature flags.</p>
-              </div>
-            </div>
 
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-              {dashboard.featureFlags.map((flag) => (
-                <div
-                  key={flag.key}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-gorola-charcoal/5 bg-gorola-mint/5 hover:bg-gorola-mint/10 transition-colors"
-                >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <span className="text-xs font-bold text-gorola-charcoal block truncate">
-                      {flag.key}
-                    </span>
-                    <span className="text-[10px] text-gorola-slate block truncate">
-                      {flag.key === "WEATHER_MODE_ACTIVE"
-                        ? "Restricts deliveries and adjusts pricing parameters."
-                        : "Toggle feature operations."}
-                    </span>
-                  </div>
-
-                  <button
-                    role="switch"
-                    aria-checked={flag.value}
-                    aria-label={`Toggle flag ${flag.key}`}
-                    onClick={() => handleToggleFlag(flag.key, flag.value)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                      flag.value ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                        flag.value ? "translate-x-5" : "translate-x-0.5"
-                      }`}
-                    />
-                  </button>
-                </div>
-              ))}
-
-              {dashboard.featureFlags.length === 0 && (
-                <p className="text-sm text-gorola-slate/60 italic text-center py-6">
-                  No feature flags currently seeded in database.
-                </p>
-              )}
-            </div>
-          </div>
-          <div className="mt-4 border-t border-gorola-charcoal/5 pt-3">
-            <span className="text-[10px] text-gorola-slate font-dm-sans block text-center">
-              * Note: Flag changes will propagate to Redis cache within 60s.
-            </span>
-          </div>
-        </div>
       </div>
 
       {/* Volume Trend Chart */}
-      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden">
-        <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
           <div className="flex flex-col sm:flex-row sm:items-center gap-4">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
               {volumeChartTitle}
@@ -707,7 +621,7 @@ export function AdminDashboardPage(): ReactElement {
           </div>
 
           {/* Range + GroupBy + Store Picker controls */}
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
             {/* Store Type Filter */}
             <div className="relative">
               <select
@@ -718,20 +632,20 @@ export function AdminDashboardPage(): ReactElement {
                   setVolumeStoreType(val === "ALL" ? undefined : val as "QUICK_COMMERCE" | "BOOKING_COMMERCE");
                   setVolumeSelectedStoreIds([]); // clear selection
                 }}
-                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
               >
                 <option value="ALL">All Store Types</option>
                 <option value="QUICK_COMMERCE">Quick Commerce</option>
                 <option value="BOOKING_COMMERCE">Booking Commerce</option>
               </select>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
             </div>
             {/* Store Picker */}
             <div className="relative">
               <button
                 type="button"
                 onClick={() => setVolumeStorePickerOpen(!volumeStorePickerOpen)}
-                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-2"
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-1 sm:gap-2"
                 aria-label="Filter by store"
               >
                 <span>Filter by store</span>
@@ -809,7 +723,7 @@ export function AdminDashboardPage(): ReactElement {
                     setVolumeGroupBy("YEARLY");
                   }
                 }}
-                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
               >
                 <option value="TODAY">Today</option>
                 <option value="WEEK">Last 7 Days</option>
@@ -817,7 +731,7 @@ export function AdminDashboardPage(): ReactElement {
                 <option value="YEAR">Current Year</option>
                 <option value="ALL">All Time</option>
               </select>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
             </div>
 
             {/* GroupBy Select */}
@@ -827,7 +741,7 @@ export function AdminDashboardPage(): ReactElement {
                 value={volumeGroupBy}
                 onChange={(e) => setVolumeGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
                 disabled={volumeRange === "TODAY"}
-                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {volumeRange === "TODAY" ? (
                   <option value="HOURLY">Hourly</option>
@@ -840,21 +754,21 @@ export function AdminDashboardPage(): ReactElement {
                   </>
                 )}
               </select>
-              <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
             </div>
           </div>
         </div>
 
         <div className="h-72 w-full flex items-stretch select-none mt-4">
           {/* Y-Axis scale */}
-          <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-2.5 pb-2 text-right min-w-[30px] border-r border-gorola-charcoal/20">
-            <span>{formatCountYAxisLabel(Math.max(...volumeData.map((d) => d.count), 1))}</span>
-            <span>{formatCountYAxisLabel(Math.max(...volumeData.map((d) => d.count), 1) * 0.5)}</span>
+          <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-1.5 sm:pr-2.5 pb-2 text-right min-w-[20px] sm:min-w-[30px] border-r border-gorola-charcoal/20">
+            <span>{formatCountYAxisLabel(volumeMax)}</span>
+            <span>{formatCountYAxisLabel(volumeMax * 0.5)}</span>
             <span>0</span>
           </div>
 
           {/* Bars container */}
-          <div className="flex-1 h-full relative ml-3">
+          <div className="flex-1 h-full relative ml-1.5 sm:ml-3">
             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
               <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
               <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
@@ -869,8 +783,7 @@ export function AdminDashboardPage(): ReactElement {
                 : "gap-4"
             } pr-4 z-10`}>
               {volumeData.map((item, index) => {
-                const maxCount = Math.max(...volumeData.map((d) => d.count), 1);
-                const heightPct = maxCount > 0 && item.count > 0 ? (item.count / maxCount) * 94 + 6 : 6;
+                const heightPct = volumeMax > 0 && item.count > 0 ? (item.count / volumeMax) * 94 + 6 : 6;
                 const isLatest = index === volumeData.length - 1;
                 return (
                   <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
@@ -957,42 +870,7 @@ export function AdminDashboardPage(): ReactElement {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {confirmingFlag && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Confirm Feature Flag Update
-            </h3>
-            <p className="text-sm text-gorola-slate font-dm-sans mt-3">
-              Are you sure you want to toggle the feature flag <strong>{confirmingFlag.key}</strong> to{" "}
-              <strong>{confirmingFlag.value ? "ON" : "OFF"}</strong>?
-              {confirmingFlag.key === "WEATHER_MODE_ACTIVE" && (
-                <span className="block mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 p-2 rounded-lg font-sans">
-                  <strong>⚠️ Warning:</strong> Activating Weather Mode has high system impact, restricting rider delivery zones and altering pricing modifiers immediately.
-                </span>
-              )}
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                disabled={isUpdatingFlag}
-                onClick={() => setConfirmingFlag(null)}
-                className="px-4 py-2 border border-gorola-charcoal/10 hover:bg-gorola-charcoal/5 rounded-xl font-bold text-sm text-gorola-slate transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isUpdatingFlag}
-                onClick={confirmToggleFlag}
-                className="px-4 py-2 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl font-bold text-sm shadow-sm transition-colors"
-              >
-                {isUpdatingFlag ? "Updating..." : "Confirm Update"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

@@ -216,9 +216,12 @@ export function StoreDashboardPage(): ReactElement {
   }
 
   // Calculate chart metrics
+  const rawChartMaxVal = chartMode === "REVENUE"
+    ? Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 10)
+    : Math.max(...dashboard.weeklyRevenue.map((d) => d.count ?? 0), 4);
   const chartMaxVal = chartMode === "REVENUE"
-    ? Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1)
-    : Math.max(...dashboard.weeklyRevenue.map((d) => d.count ?? 0), 1);
+    ? rawChartMaxVal
+    : (rawChartMaxVal % 2 === 0 ? rawChartMaxVal : rawChartMaxVal + 1);
 
   const formatYAxisLabel = (val: number): string => {
     if (chartMode === "REVENUE") {
@@ -475,8 +478,8 @@ export function StoreDashboardPage(): ReactElement {
       {/* Main Panel layout Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Weekly Revenue Trend Chart */}
-        <div id="revenue-chart" className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden`}>
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+        <div id="revenue-chart" className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden`}>
+          <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
               {chartMode === "REVENUE"
                 ? (range === "TODAY"
@@ -501,13 +504,13 @@ export function StoreDashboardPage(): ReactElement {
             </h2>
             
             {/* Elegant control panel */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
               {/* Switcher Tabs */}
-              <div className="flex items-center bg-gorola-charcoal/5 p-1 rounded-xl">
+              <div className="flex items-center bg-gorola-charcoal/5 p-0.5 sm:p-1 rounded-xl">
                 <button
                   type="button"
                   onClick={() => setChartMode("REVENUE")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all ${
                     chartMode === "REVENUE"
                       ? "bg-white text-gorola-charcoal shadow-sm"
                       : "text-gorola-slate hover:text-gorola-charcoal"
@@ -518,7 +521,7 @@ export function StoreDashboardPage(): ReactElement {
                 <button
                   type="button"
                   onClick={() => setChartMode("COUNT")}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all ${
                     chartMode === "COUNT"
                       ? "bg-white text-gorola-charcoal shadow-sm"
                       : "text-gorola-slate hover:text-gorola-charcoal"
@@ -546,7 +549,7 @@ export function StoreDashboardPage(): ReactElement {
                       setGroupBy("YEARLY");
                     }
                   }}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
                 >
                   <option value="TODAY">Today</option>
                   <option value="WEEK">Last 7 Days</option>
@@ -554,7 +557,7 @@ export function StoreDashboardPage(): ReactElement {
                   <option value="YEAR">Current Year</option>
                   <option value="ALL">All Time</option>
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
 
               {/* GroupBy Select */}
@@ -564,7 +567,7 @@ export function StoreDashboardPage(): ReactElement {
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
                   disabled={range === "TODAY"}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {range === "TODAY" ? (
                     <option value="HOURLY">Hourly</option>
@@ -577,21 +580,21 @@ export function StoreDashboardPage(): ReactElement {
                     </>
                   )}
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
             </div>
           </div>
           {/* Custom SVG Bar Chart */}
           <div className="flex-1 min-h-[260px] w-full select-none flex items-stretch mt-4">
             {/* Y-Axis Scale Labels */}
-            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 select-none text-right min-w-[50px] border-r border-gorola-charcoal/5">
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-1.5 sm:pr-2.5 pb-2 select-none text-right min-w-[35px] sm:min-w-[50px] border-r border-gorola-charcoal/5">
               <span>{formatYAxisLabel(chartMaxVal)}</span>
               <span>{formatYAxisLabel(chartMaxVal * 0.5)}</span>
               <span>{formatYAxisLabel(0)}</span>
             </div>
 
             {/* Chart Area with Gridlines & Bars */}
-            <div className="flex-1 h-full relative ml-3">
+            <div className="flex-1 h-full relative ml-1.5 sm:ml-3">
               {/* Gridlines */}
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
                 <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
