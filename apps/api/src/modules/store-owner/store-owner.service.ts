@@ -674,7 +674,7 @@ export class StoreOwnerService {
       });
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       const product = await tx.product.create({
         data: {
           storeId,
@@ -782,7 +782,7 @@ export class StoreOwnerService {
       categoryId = subCategory.categoryId;
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await tx.product.update({
         where: { id: productId },
         data: {
@@ -830,7 +830,7 @@ export class StoreOwnerService {
       throw new ForbiddenError("You are not authorized to delete this product");
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await tx.product.update({
         where: { id: productId },
         data: {
@@ -876,7 +876,7 @@ export class StoreOwnerService {
       throw new ForbiddenError("You are not authorized to modify this product's status");
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       const updated = await tx.product.update({
         where: { id: productId },
         data: {
@@ -939,7 +939,7 @@ export class StoreOwnerService {
       throw new NotFoundError("Product variant not found");
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       const currentStock = variant.stockQty;
       const targetStock = dto.stockQty !== undefined ? dto.stockQty : currentStock;
       const threshold = dto.lowStockThreshold !== undefined ? dto.lowStockThreshold : variant.lowStockThreshold;
@@ -1051,7 +1051,7 @@ export class StoreOwnerService {
     const isInStock = dto.stockQty > 0;
     const isLowStock = dto.stockQty <= lowStockThreshold;
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       const variant = await tx.productVariant.create({
         data: {
           productId,
@@ -1772,7 +1772,7 @@ export class StoreOwnerService {
   ) {
     await this.enforceQuickCommerce(storeId);
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Verify product belongs to store
       const product = await tx.product.findUnique({
         where: { id: productId }
@@ -1829,7 +1829,7 @@ export class StoreOwnerService {
       });
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Verify product belongs to store
       const product = await tx.product.findUnique({
         where: { id: productId }
@@ -1886,7 +1886,7 @@ export class StoreOwnerService {
       });
     }
 
-    return this.db.$transaction(async (tx) => {
+    return this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       // 1. Verify product belongs to store
       const product = await tx.product.findUnique({
         where: { id: productId }
@@ -2059,7 +2059,7 @@ export class StoreOwnerService {
       };
     }
 
-    await this.db.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const row of cleanRows) {
         const subCategory = await tx.subCategory.findFirst({
           where: { name: { equals: row.subCategoryName, mode: "insensitive" } }
@@ -2216,7 +2216,7 @@ export class StoreOwnerService {
 
     let updatedCount = 0;
 
-    await this.db.$transaction(async (tx) => {
+    await this.db.$transaction(async (tx: Prisma.TransactionClient) => {
       for (const row of cleanRows) {
         const product = await tx.product.findFirstOrThrow({
           where: { storeId, name: row.productName, isDeleted: false }

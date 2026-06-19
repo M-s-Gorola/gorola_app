@@ -30,10 +30,13 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-18
-- **Session Summary:** Completed implementation of Phase 6.15.1: Analytics Volume Graphs (Store Owner & System Admin dashboards, custom SVG bar volume trend charts, and admin store multi-select dropdown picker). All 652 tests passed completely with clean eslint/typecheck validation.
-- **Next Session Must Start With:** Implementing Phase 6.15.2 (Remove Feature Flags panel from Admin Dashboard).
-- **In Progress Right Now:** None (Phase 6.15.1 complete).
+- **Date:** 2026-06-19
+- **Session Summary:** 
+  - Fixed chart filter layout wrapping bug: Updated `StoreDashboardPage.tsx` and `AdminDashboardPage.tsx` using `lg:flex-row` and `sm:flex-nowrap` so filters align cleanly in a single row on tablet/desktop viewports without wrapping.
+  - Fixed ESM `@prisma/instrumentation` import issue: Updated `telemetry.ts` to use named ESM import (`import { PrismaInstrumentation }`) for compliance with modern Prisma v6.19.3 exports.
+  - Fixed TypeScript compile errors: Added explicit `Prisma.TransactionClient` types to transaction callback parameters (`tx`) in `order.service.ts` and `store-owner.service.ts` under strict type rules.
+- **Next Session Must Start With:** Running the WSL verification typechecks (`pnpm --filter @gorola/api typecheck` and `pnpm --filter @gorola/web typecheck`) to confirm compilation, and then starting Phase 6.15.2.
+- **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
 ---
@@ -1469,3 +1472,10 @@ The search input in the global navigation bar does not provide autocomplete sugg
 - **Investigation**: Discovered that when placing an order, the backend database cart is cleared, but if checkout/payment fails, the client cart is NOT cleared because the success callback was never executed. When the user returned to the homepage, multiple components (such as `BuyerCartHydration` and `CartDrawer`) concurrently called `syncBuyerCartFromServer()`. All concurrent calls fetched the empty server cart, saw that local lines still had items, and dispatched concurrent `POST /api/v1/cart/items` requests in the same event loop tick. Since the database `addItem` operation is an additive increment (`existing.quantity + quantity`), these concurrent requests ran in parallel and stacked, multiplying and doubling/tripling the cart item quantity.
 - **Solution**: Refactored [buyer-cart-sync.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/lib/buyer-cart-sync.ts) to chain all sync attempts through a sequential promise queue (`syncChain`). This ensures that sync tasks execute serially, preventing concurrent guest pushes. Verified with 100% passing Vitest test suite.
 
+### 2026-06-19: Dashboard Chart Filter Layout & Strict Typecheck Fixes
+
+- **Goal**: Resolve layout issues with chart filters wrapping onto multiple lines on tablet and desktop screens. Fix TypeScript compilation/typecheck errors under strict configuration and handle ESM module loader conflicts with `@prisma/instrumentation` after package regeneration.
+- **Solution**:
+  - **Chart Layout**: Changed the parent headers in [StoreDashboardPage.tsx](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/web/src/pages/store/StoreDashboardPage.tsx) and [AdminDashboardPage.tsx](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/web/src/pages/admin/AdminDashboardPage.tsx) from `sm:flex-row` to `lg:flex-row`. Added `sm:flex-nowrap` to the filter control wrapper. This allows the filters to stack cleanly on mobile, but align in a single, non-wrapping row on tablet and desktop views.
+  - **Prisma Instrumentation ESM Fix**: Updated [telemetry.ts](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/api/src/lib/telemetry.ts) to import `PrismaInstrumentation` as a named ESM export rather than destructuring it from a default import, aligning with the exports defined in `@prisma/instrumentation@6.19.3`'s modern ESM build.
+  - **Typecheck Param Fixes**: Annotated the transaction parameters `tx` in `$transaction` blocks inside [order.service.ts](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/api/src/modules/order/order.service.ts) and [store-owner.service.ts](file:///c:/Users/PickleRick/Desktop/GoRola/gorola_app/apps/api/src/modules/store-owner/store-owner.service.ts) as `Prisma.TransactionClient` to resolve `implicitly has an 'any' type` compilation errors.
