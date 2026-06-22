@@ -1248,28 +1248,28 @@ The search input in the global navigation bar does not provide autocomplete sugg
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/__tests__/integration/search/search.suggestions.test.ts` — new file):**
-  - [ ] Test: `GET /api/v1/search/suggestions?q=cough` returns `200` with list of suggestion items.
-  - [ ] Test: Verify each item in the payload has fields: `id`, `name`, `type` (one of `"category"`, `"subcategory"`, `"product"`, `"service"`), and `redirectUrl` (e.g. `"/products/prod-123"`).
-  - [ ] **Run — confirm RED (suggestions endpoint returns 404).**
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/search/search.suggestions.test.ts` — new file):**
+  - [x] Test: `GET /api/v1/search/suggestions?q=cough` returns `200` with list of suggestion items.
+  - [x] Test: Verify each item in the payload has fields: `id`, `name`, `type` (one of `"category"`, `"subcategory"`, `"product"`, `"service"`), and `redirectUrl` (e.g. `"/products/prod-123"`).
+  - [x] **Run — confirm RED (suggestions endpoint returns 404).**
 
-- [ ] **GREEN — Backend (Repository → Controller):**
-  - [ ] [Repository] In `apps/api/src/modules/catalog/search.repository.ts`, implement suggestions retrieval: query categories, subcategories, and product variants matching query string `q` (case-insensitive fuzzy or like match). Include `store: { select: { storeType: true } }` on the product entity.
-  - [ ] [Controller] In `apps/api/src/modules/catalog/search.controller.ts`, map `GET /api/v1/search/suggestions`. Compile matching records into a unified list. Set `type` to `"product"` if the product's parent store has `storeType === "QUICK_COMMERCE"`, and `"service"` if it has `storeType === "BOOKING_COMMERCE"`.
-  - [ ] Run integration test — **confirm GREEN**.
+- [x] **GREEN — Backend (Repository → Controller):**
+  - [x] [Repository] In `apps/api/src/modules/catalog/search.repository.ts`, implement suggestions retrieval: query categories, subcategories, and product variants matching query string `q` (case-insensitive fuzzy or like match). Include `store: { select: { storeType: true } }` on the product entity.
+  - [x] [Controller] In `apps/api/src/modules/catalog/search.controller.ts`, map `GET /api/v1/search/suggestions`. Compile matching records into a unified list. Set `type` to `"product"` if the product's parent store has `storeType === "QUICK_COMMERCE"`, and `"service"` if it has `storeType === "BOOKING_COMMERCE"`.
+  - [x] Run integration test — **confirm GREEN**.
 
-- [ ] **RED — Unit (`apps/web/src/components/buyer/BuyerNav.test.tsx`):**
-  - [ ] Test: Simulate typing `"cough"` into the navigation search bar. Assert that a suggestion menu pops open displaying list items with respective type badges.
-  - [ ] Test: Click a product suggestion with `redirectUrl = "/products/prod-123"`. Assert that `navigate` is called with `"/products/prod-123"`.
-  - [ ] **Run — confirm RED (search bar has no popover suggestions list).**
+- [x] **RED — Unit (`apps/web/src/components/buyer/BuyerNav.test.tsx`):**
+  - [x] Test: Simulate typing `"cough"` into the navigation search bar. Assert that a suggestion menu pops open displaying list items with respective type badges.
+  - [x] Test: Click a product suggestion with `redirectUrl = "/products/prod-123"`. Assert that `navigate` is called with `"/products/prod-123"`.
+  - [x] **Run — confirm RED (search bar has no popover suggestions list).**
 
-- [ ] **GREEN — Frontend (Component):**
-  - [ ] [Component] In `apps/web/src/components/buyer/BuyerNav.tsx`, integrate a debounced React hook or state triggers on the search input. Query the autocomplete API `/api/v1/search/suggestions?q=...` using a query hook (e.g. `@tanstack/react-query`).
-  - [ ] [Component] Render a floating overlay/popover block directly beneath the search input when search results are loaded. Render item results styled with dynamic visual indicators (e.g. grey pill for Category, green pill for Product, purple pill for Service). Route item selection clicks to the dynamic URL returned in the API response.
-  - [ ] Run unit test — **confirm GREEN**.
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] In `apps/web/src/components/buyer/BuyerNav.tsx`, integrate a debounced React hook or state triggers on the search input. Query the autocomplete API `/api/v1/search/suggestions?q=...` using a query hook (e.g. `@tanstack/react-query`).
+  - [x] [Component] Render a floating overlay/popover block directly beneath the search input when search results are loaded. Render item results styled with dynamic visual indicators (e.g. grey pill for Category, green pill for Product, purple pill for Service). Route item selection clicks to the dynamic URL returned in the API response.
+  - [x] Run unit test — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Buyer types "blood" in header search bar → a dropdown menu pops up → shows "Blood Test [Service]" and "Diagnostics [Category]" → Buyer clicks "Blood Test [Service]" → page redirects directly to service detail path `/products/blood-test-id` → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Buyer types "blood" in header search bar → a dropdown menu pops up → shows "Blood Test [Service]" and "Diagnostics [Category]" → Buyer clicks "Blood Test [Service]" → page redirects directly to service detail path `/products/blood-test-id` → ✅ Done.
 
 ---
 
@@ -1495,4 +1495,13 @@ The search input in the global navigation bar does not provide autocomplete sugg
   - Refactored `BookingTimeslotPage.tsx` to query `SERVICE_CHARGE` via `useSystemSettings()`, render it in the receipt summary, and sum it in `finalTotal`.
   - Added cleanups to `booking.controller.integration.test.ts`, `booking.discount.test.ts`, and `order.controller.test.ts` to execute `await db.systemSetting.deleteMany()` before/after runs.
 - **Result**: Checked and confirmed that all 81 test files with all 661 tests pass cleanly, and both API and Web packages are fully lint-free.
+
+### 2026-06-22: Phase 6.15.4 — Interactive Search Autocomplete Suggestions (Buyer)
+- **Goal**: Implement dynamic search suggestions dropdown in the global navigation bar (`BuyerNav.tsx`) to show category, subcategory, product, and service suggestions as users type.
+- **Solution**:
+  - **Backend**: Implemented `getSearchSuggestions` in `SearchRepository` and exposed the public endpoint `GET /api/v1/search/suggestions?q=...` returning structured autocomplete items matching categories, subcategories, products, and services.
+  - **Frontend**: Created the `useSearchSuggestions` hook. Integrated debounced search suggestion queries (with a 200ms input delay) in `BuyerNav.tsx`, rendering a premium glassmorphic floating popover beneath the input. Custom HSL pills/badges represent Category, Subcategory, Product, and Service types.
+  - **TDD Tests & Isolation**: Added backend integration test `search.suggestions.test.ts` and updated unit tests in `BuyerNav.test.tsx`, mocking hooks to prevent the React Query context error `No QueryClient set` in related layout and cart hydration test suites.
+- **Result**: All integration and unit tests pass successfully.
+
 

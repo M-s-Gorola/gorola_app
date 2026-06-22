@@ -16,6 +16,13 @@ vi.mock("@/hooks/useSystemSettings", () => ({
   })
 }));
 
+vi.mock("@/hooks/useSearchSuggestions", () => ({
+  useSearchSuggestions: () => ({
+    data: [],
+    isLoading: false
+  })
+}));
+
 describe("BuyerLayout", () => {
   it("renders nav, main content, and footer shell", () => {
     render(

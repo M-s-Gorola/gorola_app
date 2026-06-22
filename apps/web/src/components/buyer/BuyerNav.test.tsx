@@ -4,18 +4,25 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BuyerNav } from "@/components/buyer/BuyerNav";
+import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { useWeatherStore } from "@/store/weather.store";
 
-const { postMock } = vi.hoisted(() => ({
-  postMock: vi.fn()
+const { postMock, getMock } = vi.hoisted(() => ({
+  postMock: vi.fn(),
+  getMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
-    post: postMock
+    post: postMock,
+    get: getMock
   }
+}));
+
+vi.mock("@/hooks/useSearchSuggestions", () => ({
+  useSearchSuggestions: vi.fn().mockReturnValue({ data: [], isLoading: false })
 }));
 
 function SearchDebugPage() {
@@ -205,6 +212,57 @@ describe("BuyerNav", () => {
     );
     const rightContainer = screen.getByRole("button", { name: /cart/i }).parentElement;
     expect(rightContainer).toHaveClass("hidden", "sm:flex");
+  });
+
+  it("shows suggestions dropdown when typing in the search bar and navigates when clicking a suggestion", async () => {
+    const user = userEvent.setup();
+    
+    vi.mocked(useSearchSuggestions).mockImplementation((query: string) => {
+      if (query === "cough") {
+        return {
+          data: [
+            {
+              id: "prod-1",
+              name: "Cough Syrup",
+              type: "product",
+              redirectUrl: "/products/prod-1"
+            },
+            {
+              id: "cat-1",
+              name: "Cough Category",
+              type: "category",
+              redirectUrl: "/categories/cough-category"
+            }
+          ],
+          isLoading: false
+        } as unknown as ReturnType<typeof useSearchSuggestions>;
+      }
+      return { data: [], isLoading: false } as unknown as ReturnType<typeof useSearchSuggestions>;
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/"]}>
+        <Routes>
+          <Route path="/" element={<BuyerNav />} />
+          <Route path="/products/prod-1" element={<p data-testid="target">Product Details Page</p>} />
+        </Routes>
+      </MemoryRouter>
+    );
+
+    const input = screen.getByPlaceholderText(/Search/i);
+    await user.type(input, "cough");
+
+    // Wait for the dropdown suggestion to appear
+    const suggestionItem = await screen.findByText("Cough Syrup");
+    expect(suggestionItem).toBeInTheDocument();
+    
+    // Type badge should be rendered
+    const typeBadge = screen.getByText("product");
+    expect(typeBadge).toBeInTheDocument();
+
+    // Click it and verify navigation
+    await user.click(suggestionItem);
+    expect(screen.getByTestId("target")).toHaveTextContent("Product Details Page");
   });
 });
 

@@ -27,6 +27,13 @@ vi.mock("@/hooks/useSystemSettings", () => ({
   })
 }));
 
+vi.mock("@/hooks/useSearchSuggestions", () => ({
+  useSearchSuggestions: () => ({
+    data: [],
+    isLoading: false
+  })
+}));
+
 describe("BuyerCartHydration", () => {
   beforeEach(() => {
     getMock.mockReset();
