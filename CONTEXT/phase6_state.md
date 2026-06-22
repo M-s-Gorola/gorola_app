@@ -1193,15 +1193,15 @@ Currently, quick commerce order delivery fees (`30` in `BuyerCheckoutService`) a
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/__tests__/integration/admin/admin.settings.test.ts` — new file):**
-  - [ ] Test: `GET /api/v1/admin/settings` with a valid admin JWT returns `200` with the current settings list containing keys `"DELIVERY_CHARGE"` and `"SERVICE_CHARGE"`.
-  - [ ] Test: `PUT /api/v1/admin/settings` with payload `{ deliveryCharge: "45.00", serviceCharge: "25.00" }` and admin JWT returns `200` and saves values.
-  - [ ] Test: Place a QUICK order after updating settings. Verify that `deliveryFee` is `45.00`.
-  - [ ] Test: Place a BOOKING request after updating settings. Verify that `deliveryFee` (or platform service charge) is `25.00`.
-  - [ ] **Run — confirm RED (endpoints return 404; fees remain hardcoded).**
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/admin/admin.settings.test.ts` — new file):**
+  - [x] Test: `GET /api/v1/admin/settings` with a valid admin JWT returns `200` with the current settings list containing keys `"DELIVERY_CHARGE"` and `"SERVICE_CHARGE"`.
+  - [x] Test: `PUT /api/v1/admin/settings` with payload `{ deliveryCharge: "45.00", serviceCharge: "25.00" }` and admin JWT returns `200` and saves values.
+  - [x] Test: Place a QUICK order after updating settings. Verify that `deliveryFee` is `45.00`.
+  - [x] Test: Place a BOOKING request after updating settings. Verify that `deliveryFee` (or platform service charge) is `25.00`.
+  - [x] **Run — confirm RED (endpoints return 404; fees remain hardcoded).**
 
-- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
-  - [ ] [Schema] In `apps/api/prisma/schema.prisma`, add model:
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] [Schema] In `apps/api/prisma/schema.prisma`, add model:
     ```prisma
     model SystemSetting {
       id          String   @id @default(cuid())
@@ -1212,23 +1212,23 @@ Currently, quick commerce order delivery fees (`30` in `BuyerCheckoutService`) a
       updatedAt   DateTime @updatedAt
     }
     ```
-  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_system_settings` to create the table.
-  - [ ] [Seeding] Update `apps/api/prisma/seed.ts` (and test setup helpers) to seed `SystemSetting` rows for key `DELIVERY_CHARGE` (value: `"30"`) and `SERVICE_CHARGE` (value: `"0"`).
-  - [ ] [Service] Create `SystemSettingService` to get/set values. Update `BuyerCheckoutService` and `BookingOrderService` to query `SystemSetting` using keys `"DELIVERY_CHARGE"` and `"SERVICE_CHARGE"` respectively (fall back to `"30"` and `"0"` if not found in database).
-  - [ ] [Controller] In `admin.controller.ts`, register `GET /api/v1/admin/settings` and `PUT /api/v1/admin/settings` (using z.object validator schema for values).
-  - [ ] Run integration test — **confirm GREEN**.
+  - [x] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_system_settings` to create the table.
+  - [x] [Seeding] Update `apps/api/prisma/seed.ts` (and test setup helpers) to seed `SystemSetting` rows for key `DELIVERY_CHARGE` (value: `"30"`) and `SERVICE_CHARGE` (value: `"0"`).
+  - [x] [Service] Create `SystemSettingService` to get/set values. Update `BuyerCheckoutService` and `BookingOrderService` to query `SystemSetting` using keys `"DELIVERY_CHARGE"` and `"SERVICE_CHARGE"` respectively (fall back to `"30"` and `"0"` if not found in database).
+  - [x] [Controller] In `admin.controller.ts`, register `GET /api/v1/admin/settings` and `PUT /api/v1/admin/settings` (using z.object validator schema for values).
+  - [x] Run integration test — **confirm GREEN**.
 
-- [ ] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
-  - [ ] Test: Render settings section. Assert inputs for "Delivery Charge" and "Service Charge" are rendered.
-  - [ ] Test: Update inputs and click "Save Platform Fees". Verify that `api.put` is called with target `"/api/v1/admin/settings"` and values `{ deliveryCharge: "45.00", serviceCharge: "25.00" }`.
-  - [ ] **Run — confirm RED (settings form card does not exist).**
+- [x] **RED — Unit (`apps/web/src/pages/admin/AdminDashboardPage.test.tsx`):**
+  - [x] Test: Render settings section. Assert inputs for "Delivery Charge" and "Service Charge" are rendered.
+  - [x] Test: Update inputs and click "Save Platform Fees". Verify that `api.put` is called with target `"/api/v1/admin/settings"` and values `{ deliveryCharge: "45.00", serviceCharge: "25.00" }`.
+  - [x] **Run — confirm RED (settings form card does not exist).**
 
-- [ ] **GREEN — Frontend (Component):**
-  - [ ] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx` (or a dedicated settings page component), implement a form containing fields for Delivery Fee and Service Fee. Fetch current settings list on load and populate the fields. Wire the save button to a mutation calling `PUT /api/v1/admin/settings`.
-  - [ ] Run unit test — **confirm GREEN**.
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] In `apps/web/src/pages/admin/AdminDashboardPage.tsx` (or a dedicated settings page component), implement a form containing fields for Delivery Fee and Service Fee. Fetch current settings list on load and populate the fields. Wire the save button to a mutation calling `PUT /api/v1/admin/settings`.
+  - [x] Run unit test — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Admin changes Delivery Charge to `50` in Admin settings card → saves → buyer adds QUICK product to cart → goes to checkout → cart summary displays `Delivery Fee: Rs. 50.00` → order details database entry has `deliveryFee = 50.00` → ① Done.
+- [x] **Verification chain:**
+  - [x] Admin changes Delivery Charge to `50` in Admin settings card → saves → buyer adds QUICK product to cart → goes to checkout → cart summary displays `Delivery Fee: Rs. 50.00` → order details database entry has `deliveryFee = 50.00` → ① Done.
 
 ---
 
@@ -1486,3 +1486,13 @@ The search input in the global navigation bar does not provide autocomplete sugg
   - **RED Test Case**: Added a test asserting that `"Feature Flags"` and flag key `"WEATHER_MODE_ACTIVE"` are not rendered on `AdminDashboardPage`. Fixed an async race condition in the test (which originally resolved in the loading state, resulting in a false-positive passing test) by ensuring it waits for the dashboard to load. Verified that the test failed (RED).
   - **Component Cleanup**: Removed the Feature Flags panel JSX, `confirmingFlag` and `isUpdatingFlag` states, and `toggleFlagMutation` from `AdminDashboardPage.tsx`. Adjusted the remaining Revenue Trend Chart to span the full grid width (`lg:col-span-3`).
   - **Test/Lint Cleanup**: Removed obsolete feature flag render assertions and deleted the unused test `handles toggling feature flags...`. Resolved unused imports/variables and auto-formatted via ESLint. All tests, linters, and typechecks are completely green.
+
+### 2026-06-22: Phase 6.15.3 — Dynamic Platform Fees Manager & Cart/Timeslot Frontends
+- **Goal**: Implement dynamic platform fees (delivery and service charges) and real-time WebSocket sync.
+- **Problem**: Changing values in the admin panel did not reflect in the buyer's cart drawer (`CartDrawer.tsx`) and booking timeslot page (`BookingTimeslotPage.tsx`) because these views used hardcoded constants or did not query the settings. Additionally, shared database settings pollution from `admin.settings.test.ts` broke 5 integration tests in other files.
+- **Solution**:
+  - Refactored `CartDrawer.tsx` to read the dynamic `DELIVERY_CHARGE` via `useSystemSettings()`.
+  - Refactored `BookingTimeslotPage.tsx` to query `SERVICE_CHARGE` via `useSystemSettings()`, render it in the receipt summary, and sum it in `finalTotal`.
+  - Added cleanups to `booking.controller.integration.test.ts`, `booking.discount.test.ts`, and `order.controller.test.ts` to execute `await db.systemSetting.deleteMany()` before/after runs.
+- **Result**: Checked and confirmed that all 81 test files with all 661 tests pass cleanly, and both API and Web packages are fully lint-free.
+

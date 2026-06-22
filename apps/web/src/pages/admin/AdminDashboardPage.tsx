@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Clock,
@@ -8,7 +8,8 @@ import {
   Users
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 
@@ -71,9 +72,45 @@ type StoresListResponse = {
 };
 
 export function AdminDashboardPage(): ReactElement {
+  const queryClient = useQueryClient();
 
+  const [deliveryCharge, setDeliveryCharge] = useState("");
+  const [serviceCharge, setServiceCharge] = useState("");
+  const [hasSetDefaults, setHasSetDefaults] = useState(false);
 
+  const { data: settings } = useQuery<Array<{ key: string; value: string }>>({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: Array<{ key: string; value: string }> }>("/api/v1/admin/settings");
+      return res.data.data;
+    }
+  });
 
+  useEffect(() => {
+    if (Array.isArray(settings) && !hasSetDefaults) {
+      const delivery = settings.find(s => s.key === "DELIVERY_CHARGE")?.value || "";
+      const service = settings.find(s => s.key === "SERVICE_CHARGE")?.value || "";
+      setDeliveryCharge(delivery);
+      setServiceCharge(service);
+      setHasSetDefaults(true);
+    }
+  }, [settings, hasSetDefaults]);
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (payload: { deliveryCharge: string; serviceCharge: string }) => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.put<{ success: boolean; data: Array<{ key: string; value: string }> }>("/api/v1/admin/settings", payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success("Platform fees updated successfully");
+      queryClient.setQueryData(["admin", "settings"], data.data);
+    },
+    onError: () => {
+      toast.error("Failed to update platform fees");
+    }
+  });
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
@@ -816,6 +853,61 @@ export function AdminDashboardPage(): ReactElement {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Platform Fees Settings Card */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm">
+        <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-2">
+          Platform Fees Settings
+        </h2>
+        <p className="text-xs text-gorola-slate mb-6 font-dm-sans">
+          Configure the delivery fees for quick commerce and service charges for bookings.
+        </p>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            updateSettingsMutation.mutate({
+              deliveryCharge,
+              serviceCharge
+            });
+          }}
+          className="space-y-4 max-w-sm font-dm-sans"
+        >
+          <div className="space-y-1.5">
+            <label htmlFor="delivery-charge-input" className="text-xs font-bold text-gorola-charcoal block">
+              Delivery Charge (₹)
+            </label>
+            <input
+              id="delivery-charge-input"
+              type="text"
+              value={deliveryCharge}
+              onChange={(e) => setDeliveryCharge(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="service-charge-input" className="text-xs font-bold text-gorola-charcoal block">
+              Service Charge (₹)
+            </label>
+            <input
+              id="service-charge-input"
+              type="text"
+              value={serviceCharge}
+              onChange={(e) => setServiceCharge(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={updateSettingsMutation.isPending}
+            className="bg-gorola-pine hover:bg-gorola-pine/90 text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer transition-all duration-300 disabled:opacity-50"
+          >
+            {updateSettingsMutation.isPending ? "Saving..." : "Save Platform Fees"}
+          </button>
+        </form>
       </div>
 
       {/* Stores performance breakdown table */}

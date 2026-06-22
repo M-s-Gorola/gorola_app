@@ -9,12 +9,11 @@ import {
   type MapCoordinates,
   MUSSOORIE_AREA_CENTER,
   OlaAddressMapPicker as AddressMapPicker} from "@/components/buyer/OlaAddressMapPicker";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
-
-const DELIVERY_FEE = 30;
 
 type AddrRow = {
   id: string;
@@ -40,6 +39,8 @@ function loadRazorpayScript(): Promise<boolean> {
 export function CheckoutPage(): ReactElement {
   const navigate = useNavigate();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const { data: settings } = useSystemSettings();
+  const deliveryFee = Number(settings?.DELIVERY_CHARGE ?? "30");
   const lines = useCartStore((s) => s.lines);
   const discountCode = useCartStore((s) => s.discountCode);
   const discountSavedAmount = useCartStore((s) => s.discountSavedAmount);
@@ -143,7 +144,7 @@ export function CheckoutPage(): ReactElement {
     return appliedOffers.reduce((acc, o) => acc + o.savedAmount, 0);
   }, [appliedOffers]);
 
-  const total = Math.max(subtotal + DELIVERY_FEE - discountSavedAmount - offerSavedAmount, 0);
+  const total = Math.max(subtotal + deliveryFee - discountSavedAmount - offerSavedAmount, 0);
 
   const selectedAddressLabel = useMemo(() => {
     if (deliveryChoice === "new") {
@@ -503,7 +504,7 @@ export function CheckoutPage(): ReactElement {
               </div>
               <div className="flex justify-between">
                 <span className="text-gorola-slate">Delivery fee:</span>
-                <span className="font-medium">Rs {DELIVERY_FEE.toFixed(2)}</span>
+                <span className="font-medium">Rs {deliveryFee.toFixed(2)}</span>
               </div>
               {(() => {
                 const totalDiscount = offerSavedAmount + discountSavedAmount;

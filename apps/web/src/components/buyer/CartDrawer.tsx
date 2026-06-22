@@ -4,6 +4,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api, getFeatureFlag } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
@@ -12,10 +13,10 @@ import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { useFeatureFlagsStore } from "@/store/feature-flags.store";
 
-const DELIVERY_FEE = 30;
-
 export function CartDrawer(): ReactElement | null {
   const navigate = useNavigate();
+  const { data: settings } = useSystemSettings();
+  const deliveryFee = Number(settings?.DELIVERY_CHARGE ?? "30");
   const isOpen = useCartStore((s) => s.isOpen);
   const close = useCartStore((s) => s.close);
   const lines = useCartStore((s) => s.lines);
@@ -164,7 +165,7 @@ export function CartDrawer(): ReactElement | null {
     return appliedOffers.reduce((acc, o) => acc + o.savedAmount, 0);
   }, [appliedOffers]);
 
-  const total = Math.max(subtotal + DELIVERY_FEE - savedAmount - offerSavedAmount, 0);
+  const total = Math.max(subtotal + deliveryFee - savedAmount - offerSavedAmount, 0);
 
   return (
     <>
@@ -334,7 +335,7 @@ export function CartDrawer(): ReactElement | null {
               </div>
               <div className="flex justify-between">
                 <span className="font-dm-sans text-sm text-gorola-charcoal">Delivery fee</span>
-                <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {DELIVERY_FEE.toFixed(2)}</span>
+                <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {deliveryFee.toFixed(2)}</span>
               </div>
               {offerSavedAmount + savedAmount > 0 && (
                 <div className="space-y-2">

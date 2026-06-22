@@ -6,6 +6,16 @@ import { describe, expect, it, vi } from "vitest";
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
 import { useCartStore } from "@/store/cart.store";
 
+vi.mock("@/hooks/useSystemSettings", () => ({
+  useSystemSettings: () => ({
+    data: {
+      DELIVERY_CHARGE: "30",
+      SERVICE_CHARGE: "0"
+    },
+    isLoading: false
+  })
+}));
+
 describe("BuyerLayout", () => {
   it("renders nav, main content, and footer shell", () => {
     render(

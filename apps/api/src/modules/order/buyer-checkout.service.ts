@@ -13,6 +13,7 @@ import { DiscountRepository } from "../promotion/discount.repository.js";
 
 import type { PlaceBuyerOrderBody } from "./order.schema.js";
 import { OrderService } from "./order.service.js";
+import { SystemSettingService } from "../admin/system-setting.service.js";
 
 export class BuyerCheckoutService {
   public constructor(
@@ -20,7 +21,8 @@ export class BuyerCheckoutService {
     private readonly cartRepo: CartRepository,
     private readonly addressRepo: AddressRepository,
     private readonly orderService: OrderService,
-    private readonly discountRepo: DiscountRepository
+    private readonly discountRepo: DiscountRepository,
+    private readonly systemSettingService: SystemSettingService
   ) {}
 
   private computeDiscountAmount(discount: Discount, subtotal: Prisma.Decimal): Prisma.Decimal {
@@ -119,7 +121,8 @@ export class BuyerCheckoutService {
       });
     }
 
-    const deliveryFee = new Prisma.Decimal(30);
+    const deliveryChargeVal = await this.systemSettingService.getSettingValue("DELIVERY_CHARGE", "30");
+    const deliveryFee = new Prisma.Decimal(deliveryChargeVal);
     const storeId = [...storeIds][0]!;
     let appliedDiscountCode: string | null = null;
     let appliedDiscountAmount = new Prisma.Decimal(0);

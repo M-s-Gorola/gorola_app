@@ -28,6 +28,15 @@ vi.mock("@/lib/api", () => ({
   }
 }));
 
+vi.mock("@/hooks/useSystemSettings", () => ({
+  useSystemSettings: () => ({
+    data: {
+      DELIVERY_CHARGE: "30",
+      SERVICE_CHARGE: "0"
+    }
+  })
+}));
+
 vi.mock("@/components/buyer/OlaAddressMapPicker", async () => {
   const react = await import("react");
 

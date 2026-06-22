@@ -10,6 +10,7 @@ import { StoreRoutes } from "@/app/routes/store";
 import { DevWeatherToggle } from "@/components/shared/DevWeatherToggle";
 import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
+import { useSystemSettingsSocket } from "@/hooks/useSystemSettings";
 import { useWeatherSync } from "@/hooks/useWeatherSync";
 import {
   bootstrapAdminAuthSession,
@@ -19,6 +20,39 @@ import {
 import { queryClient } from "@/lib/query-client";
 import { resolveSubdomain } from "@/lib/subdomain-resolver";
 import { useWeatherStore } from "@/store/weather.store";
+
+function AppContent(): ReactElement {
+  useSystemSettingsSocket();
+
+  const { isSubdomainMode, subdomain } = resolveSubdomain(window.location.hostname);
+
+  return (
+    <>
+      <Routes>
+        {isSubdomainMode ? (
+          subdomain === "store" ? (
+            StoreRoutes({ prefix: "" })
+          ) : subdomain === "admin" ? (
+            AdminRoutes({ prefix: "" })
+          ) : subdomain === "rider" ? (
+            RiderRoutes({ prefix: "" })
+          ) : (
+            BuyerRoutes()
+          )
+        ) : (
+          <>
+            {BuyerRoutes()}
+            {StoreRoutes({ prefix: "/store" })}
+            {AdminRoutes({ prefix: "/admin" })}
+            {RiderRoutes({ prefix: "/rider" })}
+          </>
+        )}
+      </Routes>
+      <Toaster position="bottom-left" />
+      <DevWeatherToggle />
+    </>
+  );
+}
 
 export function App(): ReactElement {
   useGorolaMotion();
@@ -48,32 +82,9 @@ export function App(): ReactElement {
     }
   }, [isWeatherMode]);
 
-  const { isSubdomainMode, subdomain } = resolveSubdomain(window.location.hostname);
-
   return (
     <QueryClientProvider client={queryClient}>
-      <Routes>
-        {isSubdomainMode ? (
-          subdomain === "store" ? (
-            StoreRoutes({ prefix: "" })
-          ) : subdomain === "admin" ? (
-            AdminRoutes({ prefix: "" })
-          ) : subdomain === "rider" ? (
-            RiderRoutes({ prefix: "" })
-          ) : (
-            BuyerRoutes()
-          )
-        ) : (
-          <>
-            {BuyerRoutes()}
-            {StoreRoutes({ prefix: "/store" })}
-            {AdminRoutes({ prefix: "/admin" })}
-            {RiderRoutes({ prefix: "/rider" })}
-          </>
-        )}
-      </Routes>
-      <Toaster position="bottom-left" />
-      <DevWeatherToggle />
+      <AppContent />
     </QueryClientProvider>
   );
 }

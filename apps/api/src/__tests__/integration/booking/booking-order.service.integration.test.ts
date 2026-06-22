@@ -4,6 +4,8 @@ import { Decimal } from "@prisma/client/runtime/library";
 import { afterAll, beforeEach, describe, expect, it } from "vitest";
 
 import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
+import { SystemSettingRepository } from "../../../modules/admin/system-setting.repository.js";
+import { SystemSettingService } from "../../../modules/admin/system-setting.service.js";
 import { BookingOrderRepository } from "../../../modules/booking/booking-order.repository.js";
 import { BookingOrderService } from "../../../modules/booking/booking-order.service.js";
 
@@ -33,7 +35,9 @@ async function cleanDatabase(db: PrismaClient): Promise<void> {
 describe("BookingOrderService Integration", () => {
   const db = getPrismaClient();
   const repository = new BookingOrderRepository(db);
-  const service = new BookingOrderService(db, repository);
+  const systemSettingRepo = new SystemSettingRepository(db);
+  const systemSettingService = new SystemSettingService(db, systemSettingRepo);
+  const service = new BookingOrderService(db, repository, systemSettingService);
 
   let buyerUser: User;
   let bookingStore: Store;

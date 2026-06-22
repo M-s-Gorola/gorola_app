@@ -513,7 +513,7 @@ export function BookingConfirmationPage(): ReactElement {
               <span className="font-medium">Rs {booking.subtotal}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-gorola-slate">Delivery fee:</span>
+              <span className="text-gorola-slate">Service fee:</span>
               <span className="font-medium">Rs {booking.deliveryFee}</span>
             </div>
             {Number(booking.discountAmount || 0) > 0 && (
