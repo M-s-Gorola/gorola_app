@@ -34,6 +34,7 @@ async function cleanBookingControllerGraph(db: PrismaClient): Promise<void> {
   await db.store.deleteMany().catch(() => {});
   await db.subCategory.deleteMany().catch(() => {});
   await db.category.deleteMany().catch(() => {});
+  await db.systemSetting.deleteMany().catch(() => {});
 }
 
 async function signTestToken(

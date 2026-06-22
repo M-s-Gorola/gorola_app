@@ -73,6 +73,17 @@ describe("AdminDashboardPage", () => {
           }
         });
       }
+      if (url.includes("/admin/settings")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { key: "DELIVERY_CHARGE", value: "30.00" },
+              { key: "SERVICE_CHARGE", value: "0.00" }
+            ]
+          }
+        });
+      }
       return Promise.resolve({
         data: {
           success: true,
@@ -331,5 +342,76 @@ describe("AdminDashboardPage", () => {
     // Assert that the feature flags container or keys are NOT in the document
     expect(screen.queryByText("Feature Flags")).not.toBeInTheDocument();
     expect(screen.queryByText("WEATHER_MODE_ACTIVE")).not.toBeInTheDocument();
+  });
+
+  it("renders Platform Fees Settings card and updates settings on save", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/admin/settings")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { key: "DELIVERY_CHARGE", value: "30.00" },
+              { key: "SERVICE_CHARGE", value: "0.00" }
+            ]
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            totalOrdersToday: 0,
+            totalRevenueToday: 0,
+            perStoreBreakdown: [],
+            weeklyRevenue: [],
+            lowStockAlertCount: 0,
+            totalActiveBuyers: 0,
+            totalProducts: 0,
+            pendingAdApprovalsCount: 0,
+            featureFlags: []
+          }
+        }
+      });
+    });
+
+    putMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          { key: "DELIVERY_CHARGE", value: "45.00" },
+          { key: "SERVICE_CHARGE", value: "25.00" }
+        ]
+      }
+    });
+
+    renderAdminDashboard();
+
+    expect(await screen.findByText("Platform Fees Settings")).toBeInTheDocument();
+
+    const deliveryInput = screen.getByLabelText(/delivery charge/i) as HTMLInputElement;
+    const serviceInput = screen.getByLabelText(/service charge/i) as HTMLInputElement;
+    const saveButton = screen.getByRole("button", { name: /save platform fees/i });
+
+    expect(deliveryInput.value).toBe("30.00");
+    expect(serviceInput.value).toBe("0.00");
+
+    fireEvent.change(deliveryInput, { target: { value: "45.00" } });
+    fireEvent.change(serviceInput, { target: { value: "25.00" } });
+
+    expect(deliveryInput.value).toBe("45.00");
+    expect(serviceInput.value).toBe("25.00");
+
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/admin/settings", {
+        deliveryCharge: "45.00",
+        serviceCharge: "25.00"
+      });
+    });
   });
 });

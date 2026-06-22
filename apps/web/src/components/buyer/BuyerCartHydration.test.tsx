@@ -17,6 +17,16 @@ vi.mock("@/lib/api", () => ({
   getFeatureFlag: vi.fn().mockResolvedValue(false)
 }));
 
+vi.mock("@/hooks/useSystemSettings", () => ({
+  useSystemSettings: () => ({
+    data: {
+      DELIVERY_CHARGE: "30",
+      SERVICE_CHARGE: "0"
+    },
+    isLoading: false
+  })
+}));
+
 describe("BuyerCartHydration", () => {
   beforeEach(() => {
     getMock.mockReset();

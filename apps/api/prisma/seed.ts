@@ -249,6 +249,24 @@ async function main(): Promise<void> {
     skipDuplicates: true
   });
 
+  await prisma.systemSetting.createMany({
+    data: [
+      {
+        key: "DELIVERY_CHARGE",
+        value: "30",
+        description: "Quick commerce order delivery fee",
+        updatedBy: "system"
+      },
+      {
+        key: "SERVICE_CHARGE",
+        value: "0",
+        description: "Booking commerce service charge",
+        updatedBy: "system"
+      }
+    ],
+    skipDuplicates: true
+  });
+
   console.info("Seed completed", {
     stores: [storeA.name, storeB.name, storeC.name, storeD.name, storeE.name],
     admin: ADMIN_EMAIL

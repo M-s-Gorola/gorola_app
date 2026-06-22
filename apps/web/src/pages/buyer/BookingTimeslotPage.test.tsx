@@ -16,6 +16,15 @@ vi.mock("@/lib/api", () => ({
   },
 }));
 
+vi.mock("@/hooks/useSystemSettings", () => ({
+  useSystemSettings: () => ({
+    data: {
+      DELIVERY_CHARGE: "30",
+      SERVICE_CHARGE: "0"
+    }
+  })
+}));
+
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });

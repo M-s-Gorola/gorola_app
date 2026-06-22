@@ -6,7 +6,11 @@ import { NodeSDK } from "@opentelemetry/sdk-node";
 import type { SpanExporter } from "@opentelemetry/sdk-trace-base";
 import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-node";
 import { ATTR_SERVICE_NAME } from "@opentelemetry/semantic-conventions";
-import { PrismaInstrumentation } from "@prisma/instrumentation";
+import { createRequire } from "module";
+
+// @prisma/instrumentation is CJS-only — use createRequire to load it from ESM
+const _require = createRequire(import.meta.url);
+const { PrismaInstrumentation } = _require("@prisma/instrumentation") as typeof import("@prisma/instrumentation");
 
 let sdk: NodeSDK | null = null;
 

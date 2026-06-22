@@ -8,6 +8,7 @@ import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
 import { AdminService } from "./admin.service.js";
+import { SystemSettingService } from "./system-setting.service.js";
 
 function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
   return reply.getHeader("x-request-id")?.toString() ?? request.id;
@@ -40,6 +41,7 @@ export function registerAdminRoutes(
     tokenVerifier: AccessTokenVerifier;
     orderService?: OrderService;
     orders?: OrderRepository;
+    systemSettingService?: SystemSettingService;
   }
 ): void {
   const prisma = getPrismaClient();
@@ -995,4 +997,87 @@ export function registerAdminRoutes(
   app.put("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
   app.post("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
   app.delete("/api/v1/admin/audit-logs/:id", { preHandler }, methodNotAllowedHandler);
+
+  // System Settings endpoints
+  app.get("/api/v1/admin/settings", { preHandler }, async (request, reply) => {
+    if (!deps.systemSettingService) {
+      throw new ValidationError("SystemSettingService not registered");
+    }
+    const settings = await deps.systemSettingService.getSettings();
+    return {
+      success: true,
+      data: settings,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const updateSettingsSchema = z.object({
+    // eslint-disable-next-line security/detect-unsafe-regex
+    deliveryCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal amount"),
+    // eslint-disable-next-line security/detect-unsafe-regex
+    serviceCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal amount")
+  });
+
+  app.put("/api/v1/admin/settings", { preHandler }, async (request, reply) => {
+    if (!deps.systemSettingService) {
+      throw new ValidationError("SystemSettingService not registered");
+    }
+    const parsed = updateSettingsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid settings parameters", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await deps.systemSettingService.updateSettings(
+      [
+        { key: "DELIVERY_CHARGE", value: parsed.data.deliveryCharge },
+        { key: "SERVICE_CHARGE", value: parsed.data.serviceCharge }
+      ],
+      adminId,
+      ip,
+      userAgent
+    );
+
+    // Emit live WebSocket update to all connected clients
+    app.io.emit("system_settings_updated", {
+      DELIVERY_CHARGE: parsed.data.deliveryCharge,
+      SERVICE_CHARGE: parsed.data.serviceCharge
+    });
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // Public system settings read endpoint (does NOT require Admin authorization or token)
+  app.get("/api/v1/settings", async (request, reply) => {
+    if (!deps.systemSettingService) {
+      throw new ValidationError("SystemSettingService not registered");
+    }
+    const deliveryCharge = await deps.systemSettingService.getSettingValue("DELIVERY_CHARGE", "30");
+    const serviceCharge = await deps.systemSettingService.getSettingValue("SERVICE_CHARGE", "0");
+    return {
+      success: true,
+      data: {
+        DELIVERY_CHARGE: deliveryCharge,
+        SERVICE_CHARGE: serviceCharge
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }

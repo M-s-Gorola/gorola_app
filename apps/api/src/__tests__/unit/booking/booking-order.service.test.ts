@@ -55,6 +55,10 @@ const mockDb = {
   $transaction: vi.fn()
 };
 
+const mockSystemSettingService = {
+  getSettingValue: vi.fn().mockImplementation((key, defaultValue) => Promise.resolve(defaultValue))
+};
+
 describe("BookingOrderService (unit)", () => {
   let service: BookingOrderService;
 
@@ -63,7 +67,11 @@ describe("BookingOrderService (unit)", () => {
     mockDb.$transaction.mockImplementation(
       (fn: (t: never) => Promise<unknown>) => fn(mockTx)
     );
-    service = new BookingOrderService(mockDb as never, mockRepository as never);
+    service = new BookingOrderService(
+      mockDb as never,
+      mockRepository as never,
+      mockSystemSettingService as never
+    );
   });
 
   describe("placeBookingRequest", () => {
