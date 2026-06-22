@@ -1,6 +1,6 @@
 import { LogOut, MapPin, Search, ShoppingCart, UserRound } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 
 import {
@@ -11,6 +11,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
@@ -31,6 +32,31 @@ export function BuyerNav(): ReactElement {
   const phone = useAuthStore((s) => s.phone);
   const refreshToken = useAuthStore((s) => s.refreshToken);
   const clearSession = useAuthStore((s) => s.clearSession);
+
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 200);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  const { data: suggestions = [] } = useSearchSuggestions(debouncedSearch);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        setShowSuggestions(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
 
   const buyerLabel =
     name !== null && name.trim().length > 0 ? name.trim() : (phone !== null ? phone : "Buyer");
@@ -93,25 +119,72 @@ export function BuyerNav(): ReactElement {
           </div>
         </div>
 
-        <form
-          onSubmit={handleSearchSubmit}
-          className="relative flex flex-1 items-center"
-        >
-          <Search size={15} className={cn("pointer-events-none absolute left-3", isWeatherMode ? "text-white/60" : "text-gorola-charcoal/60")} />
-          <input
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-            }}
-            placeholder="Search products"
-            className={cn(
-              "w-full rounded-xl border py-2 pl-9 pr-3 text-sm outline-none transition-all",
+        <div ref={containerRef} className="relative flex flex-1">
+          <form
+            onSubmit={handleSearchSubmit}
+            className="relative flex flex-1 items-center"
+          >
+            <Search size={15} className={cn("pointer-events-none absolute left-3", isWeatherMode ? "text-white/60" : "text-gorola-charcoal/60")} />
+            <input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setShowSuggestions(true);
+              }}
+              onFocus={() => setShowSuggestions(true)}
+              placeholder="Search products"
+              className={cn(
+                "w-full rounded-xl border py-2 pl-9 pr-3 text-sm outline-none transition-all",
+                isWeatherMode
+                  ? "border-white/20 bg-white/10 text-gorola-fog placeholder:text-white/60 focus:bg-white/15 focus:border-white/30"
+                  : "border-gorola-charcoal/20 bg-white/60 text-gorola-charcoal placeholder:text-gorola-charcoal/60 focus:bg-white focus:border-gorola-charcoal/40"
+              )}
+            />
+          </form>
+
+          {showSuggestions && search.trim().length > 0 && suggestions.length > 0 && (
+            <div className={cn(
+              "absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl border shadow-xl max-h-80 overflow-y-auto backdrop-blur-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
               isWeatherMode
-                ? "border-white/20 bg-white/10 text-gorola-fog placeholder:text-white/60 focus:bg-white/15 focus:border-white/30"
-                : "border-gorola-charcoal/20 bg-white/60 text-gorola-charcoal placeholder:text-gorola-charcoal/60 focus:bg-white focus:border-gorola-charcoal/40"
-            )}
-          />
-        </form>
+                ? "bg-gorola-slate/95 border-white/10 text-gorola-fog"
+                : "bg-white/95 border-gorola-charcoal/10 text-gorola-charcoal"
+            )}>
+              <div className="p-2 space-y-1">
+                {suggestions.map((item) => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    onClick={() => {
+                      navigate(item.redirectUrl);
+                      setShowSuggestions(false);
+                      setSearch("");
+                    }}
+                    className={cn(
+                      "w-full flex items-center justify-between p-3 rounded-xl transition-all duration-200 text-left cursor-pointer",
+                      isWeatherMode
+                        ? "hover:bg-white/10 text-gorola-fog"
+                        : "hover:bg-gorola-mint/20 text-gorola-charcoal"
+                    )}
+                  >
+                    <span className="text-sm font-semibold truncate pr-4">{item.name}</span>
+                    <span className={cn(
+                      "text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full shrink-0",
+                      item.type === "product"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300"
+                        : item.type === "service"
+                        ? "bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300"
+                        : item.type === "category"
+                        ? "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
+                        : "bg-sky-100 text-sky-700 dark:bg-sky-900/50 dark:text-sky-300"
+                    )}>
+                      {item.type}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Right: Cart & Profile */}
         <div className="hidden sm:flex shrink-0 items-center gap-3">

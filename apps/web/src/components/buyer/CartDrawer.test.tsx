@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,12 +61,17 @@ describe("CartDrawer", () => {
   });
 
   function renderShell(): void {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
     render(
-      <MemoryRouter>
-        <BuyerLayout>
-          <p>Page</p>
-        </BuyerLayout>
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <BuyerLayout>
+            <p>Page</p>
+          </BuyerLayout>
+        </MemoryRouter>
+      </QueryClientProvider>
     );
   }
 
