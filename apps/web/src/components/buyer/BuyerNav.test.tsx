@@ -4,14 +4,16 @@ import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BuyerNav } from "@/components/buyer/BuyerNav";
+import { useBuyerLocation } from "@/hooks/useBuyerLocation";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 import { useWeatherStore } from "@/store/weather.store";
 
-const { postMock, getMock } = vi.hoisted(() => ({
+const { postMock, getMock, refetchMock } = vi.hoisted(() => ({
   postMock: vi.fn(),
-  getMock: vi.fn()
+  getMock: vi.fn(),
+  refetchMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
@@ -25,6 +27,16 @@ vi.mock("@/hooks/useSearchSuggestions", () => ({
   useSearchSuggestions: vi.fn().mockReturnValue({ data: [], isLoading: false })
 }));
 
+vi.mock("@/hooks/useBuyerLocation", () => ({
+  useBuyerLocation: vi.fn().mockReturnValue({
+    locationLabel: "Test Colony, Dehradun",
+    isLoading: false,
+    coords: null,
+    error: null,
+    refetch: refetchMock
+  })
+}));
+
 function SearchDebugPage() {
   const location = useLocation();
   return <p data-testid="search-location">{location.pathname + location.search}</p>;
@@ -36,16 +48,42 @@ describe("BuyerNav", () => {
     useCartStore.setState({ lines: [] });
     useWeatherStore.setState({ isWeatherMode: false });
     useAuthStore.getState().clearSession();
+    vi.mocked(useBuyerLocation).mockReturnValue({
+      locationLabel: "Test Colony, Dehradun",
+      isLoading: false,
+      coords: { lat: 30.3165, lng: 78.0322 },
+      error: null,
+      refetch: refetchMock
+    });
   });
 
-  it("renders mountain logo and location pill", () => {
+  it("renders mountain logo and location icon button", () => {
     render(
       <MemoryRouter>
         <BuyerNav />
       </MemoryRouter>
     );
     expect(screen.getByLabelText("GoRola mountain logo")).toBeInTheDocument();
-    expect(screen.getByText(/Kulri, Mussoorie/i)).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Current Location/i })).toBeInTheDocument();
+  });
+
+  it("shows loading state in popup when location is loading", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBuyerLocation).mockReturnValue({
+      locationLabel: "Mussoorie",
+      isLoading: true,
+      coords: null,
+      error: null,
+      refetch: refetchMock
+    });
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+    const locationButton = screen.getByRole("button", { name: /Current Location/i });
+    await user.click(locationButton);
+    expect(screen.getByText(/Locating your position.../i)).toBeInTheDocument();
   });
 
   it("shows cart badge count from cart store", () => {
@@ -191,17 +229,18 @@ describe("BuyerNav", () => {
     expect(form).toBeInTheDocument();
   });
 
-  it("hides branding and location pill on mobile screens", () => {
+  it("hides branding on mobile screens but keeps location pill visible", () => {
     render(
       <MemoryRouter>
         <BuyerNav />
       </MemoryRouter>
     );
     const branding = screen.getByAltText("GoRola");
-    const locationPill = screen.getByText(/Kulri, Mussoorie/i).closest("div");
+    const locationPill = screen.getByRole("button", { name: /Current Location/i });
 
     expect(branding).toHaveClass("hidden", "sm:block");
-    expect(locationPill).toHaveClass("hidden", "sm:flex");
+    expect(locationPill).toBeInTheDocument();
+    expect(locationPill).toHaveClass("flex");
   });
 
   it("hides cart and profile buttons container on mobile screens", () => {
@@ -263,6 +302,53 @@ describe("BuyerNav", () => {
     // Click it and verify navigation
     await user.click(suggestionItem);
     expect(screen.getByTestId("target")).toHaveTextContent("Product Details Page");
+  });
+
+  it("opens location popup on click and calls refetch when clicking refresh button", async () => {
+    const user = userEvent.setup();
+    refetchMock.mockClear();
+
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+
+    const locationButton = screen.getByRole("button", { name: /Current Location/i });
+    expect(screen.queryByRole("heading", { name: "Current Location" })).not.toBeInTheDocument();
+
+    await user.click(locationButton);
+
+    expect(screen.getByRole("heading", { name: "Current Location" })).toBeInTheDocument();
+    expect(screen.getByText("Test Colony, Dehradun")).toBeInTheDocument();
+    expect(screen.queryByText(/Coordinates/i)).not.toBeInTheDocument();
+
+    const refreshButton = screen.getByRole("button", { name: /Refresh Location/i });
+    await user.click(refreshButton);
+
+    expect(refetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("shows location error inside popup when geolocation permission is denied", async () => {
+    const user = userEvent.setup();
+    vi.mocked(useBuyerLocation).mockReturnValue({
+      locationLabel: "Mussoorie",
+      isLoading: false,
+      coords: null,
+      error: "PERMISSION_DENIED",
+      refetch: refetchMock
+    });
+
+    render(
+      <MemoryRouter>
+        <BuyerNav />
+      </MemoryRouter>
+    );
+
+    const locationButton = screen.getByRole("button", { name: /Current Location/i });
+    await user.click(locationButton);
+
+    expect(screen.getByText(/Location permission denied/i)).toBeInTheDocument();
   });
 });
 

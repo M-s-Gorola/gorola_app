@@ -1,6 +1,7 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useBuyerLocation } from "@/hooks/useBuyerLocation";
 import { useAuthStore } from "@/store/auth.store";
 import { useWeatherStore } from "@/store/weather.store";
 
@@ -23,6 +24,16 @@ vi.mock("gsap", () => ({
       to: vi.fn().mockReturnThis()
     }))
   }
+}));
+
+vi.mock("@/hooks/useBuyerLocation", () => ({
+  useBuyerLocation: vi.fn().mockReturnValue({
+    locationLabel: "Mussoorie",
+    isLoading: false,
+    coords: null,
+    error: null,
+    refetch: vi.fn()
+  })
 }));
 
 describe("HeroSection", () => {
@@ -73,6 +84,22 @@ describe("HeroSection", () => {
     render(<HeroSection />);
     expect(screen.getByText(/Good evening/i)).toBeInTheDocument();
     expect(screen.getByText(/Mussoorie/i)).toBeInTheDocument();
+  });
+
+  it("shows greeting with live location locality if custom location is detected for unauthenticated user", () => {
+    vi.mocked(useBuyerLocation).mockReturnValueOnce({
+      locationLabel: "Rajpur, Dehradun",
+      isLoading: false,
+      coords: null,
+      error: null,
+      refetch: vi.fn()
+    });
+    vi.setSystemTime(new Date("2026-05-07T08:00:00"));
+    act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
+    });
+    render(<HeroSection />);
+    expect(screen.getByText(/Good morning, Rajpur, Dehradun/i)).toBeInTheDocument();
   });
 
   it("shows personalized greeting for authenticated user with name", () => {

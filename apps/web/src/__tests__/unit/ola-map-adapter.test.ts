@@ -43,8 +43,10 @@ describe("OlaMapAdapter", () => {
     remove: vi.fn()
   };
 
+  const mockInit = vi.fn(() => mockMapInstance);
+
   const mockOlaMaps = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.init = vi.fn(() => mockMapInstance);
+    this.init = mockInit;
   }) as unknown as NonNullable<typeof window.OlaMaps> & {
     mockClear(): void;
     Marker: {
@@ -56,14 +58,19 @@ describe("OlaMapAdapter", () => {
     return mockMarkerInstance;
   }) as unknown as typeof mockOlaMaps.Marker & { mockClear(): void };
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let appendSpy: any;
+
   beforeEach(() => {
     container = document.createElement("div");
     adapter = new OlaMapAdapter();
     resetOlaScriptPromise();
 
     vi.stubEnv("VITE_OLA_MAPS_API_KEY", "test-api-key");
-    window.OlaMaps = mockOlaMaps as unknown as NonNullable<typeof window.OlaMaps>;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).OlaMaps;
     mockOlaMaps.mockClear();
+    mockInit.mockClear();
     mockOlaMaps.Marker.mockClear();
     mockMapInstance.remove.mockClear();
     mockMapInstance.setCenter.mockClear();
@@ -86,11 +93,19 @@ describe("OlaMapAdapter", () => {
     // Clean up document head scripts
     const scripts = document.head.querySelectorAll("script");
     scripts.forEach((s) => s.remove());
+
+    appendSpy = vi.spyOn(document.head, "appendChild").mockImplementation((node) => {
+      if (node instanceof HTMLScriptElement && node.src.includes("olamaps-web-sdk")) {
+        window.OlaMaps = mockOlaMaps as unknown as NonNullable<typeof window.OlaMaps>;
+      }
+      return node;
+    });
   });
 
   afterEach(() => {
     vi.unstubAllEnvs();
-    delete window.OlaMaps;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (window as any).OlaMaps;
     vi.restoreAllMocks();
   });
 
@@ -102,8 +117,6 @@ describe("OlaMapAdapter", () => {
   });
 
   it("injects Ola Maps script dynamically and initializes the map", async () => {
-    const appendSpy = vi.spyOn(document.head, "appendChild");
-    
     const initPromise = adapter.init(container, center, 14);
 
     // Script should be appended to head
@@ -119,8 +132,20 @@ describe("OlaMapAdapter", () => {
     expect(mockOlaMaps).toHaveBeenCalledWith({ apiKey: "test-api-key" });
   });
 
+  it("initializes map with attributionControl: true", async () => {
+    const initPromise = adapter.init(container, center, 14);
+    const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
+    script.onload?.(new Event("load"));
+    await initPromise;
+
+    expect(mockInit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributionControl: true
+      })
+    );
+  });
+
   it("adds a buyer marker to the map with saturated filter styling", async () => {
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
@@ -145,7 +170,6 @@ describe("OlaMapAdapter", () => {
   });
 
   it("adds a rider marker to the map with saturated filter styling", async () => {
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
@@ -171,7 +195,6 @@ describe("OlaMapAdapter", () => {
   });
 
   it("updates existing marker position instead of recreating it when coordinates change", async () => {
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
@@ -188,7 +211,6 @@ describe("OlaMapAdapter", () => {
   });
 
   it("draws and cleans up road route when both buyer and rider markers are added and style is loaded", async () => {
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
@@ -244,7 +266,6 @@ describe("OlaMapAdapter", () => {
   it("falls back to curved dotted route in GeoJSON format when directions API fails", async () => {
     vi.mocked(fetchOlaRoute).mockRejectedValueOnce(new Error("API Error"));
 
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
@@ -276,7 +297,6 @@ describe("OlaMapAdapter", () => {
   });
 
   it("destroys map instance and cleans up elements", async () => {
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
@@ -296,7 +316,6 @@ describe("OlaMapAdapter", () => {
     const statusCalls: boolean[] = [];
     adapter.setRouteStatusCallback?.((calculating) => statusCalls.push(calculating));
 
-    const appendSpy = vi.spyOn(document.head, "appendChild");
     const initPromise = adapter.init(container, center, 14);
     const script = appendSpy.mock.calls[0]![0] as HTMLScriptElement;
     script.onload?.(new Event("load"));
