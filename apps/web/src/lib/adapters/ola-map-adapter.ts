@@ -59,14 +59,36 @@ export function resetOlaScriptPromise(): void {
 }
 
 function loadOlaSdk(): Promise<void> {
+  if (window.OlaMaps) {
+    return Promise.resolve();
+  }
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise((resolve, reject) => {
     const existingScript = document.querySelector(
       'script[src="https://www.unpkg.com/olamaps-web-sdk@latest/dist/olamaps-web-sdk.umd.js"]'
-    );
+    ) as HTMLScriptElement | null;
+
     if (existingScript) {
-      resolve();
+      if (window.OlaMaps) {
+        resolve();
+        return;
+      }
+      const handleLoad = () => {
+        cleanup();
+        resolve();
+      };
+      const handleError = (err: unknown) => {
+        cleanup();
+        scriptPromise = null;
+        reject(err);
+      };
+      const cleanup = () => {
+        existingScript.removeEventListener("load", handleLoad);
+        existingScript.removeEventListener("error", handleError);
+      };
+      existingScript.addEventListener("load", handleLoad);
+      existingScript.addEventListener("error", handleError);
       return;
     }
 
@@ -120,7 +142,7 @@ export class OlaMapAdapter implements MapAdapter {
       zoom,
       style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
       scrollZoom: false,
-      attributionControl: false
+      attributionControl: true // [WATERMARK-CONTROL] Set false to hide Ola Maps attribution (requires white-label licence).
     });
 
     return new Promise<void>((resolve) => {

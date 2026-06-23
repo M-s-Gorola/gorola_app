@@ -22,8 +22,9 @@ const mockMarkerInstance = {
   on: vi.fn()
 };
 
+const mockInit = vi.fn(() => mockMapInstance);
 const mockOlaMapsInit = vi.fn().mockImplementation(function (this: { init: unknown }) {
-  this.init = vi.fn(() => mockMapInstance);
+  this.init = mockInit;
 });
 const mockMarkerConstructor = vi.fn().mockImplementation(function (this: unknown) {
   return mockMarkerInstance;
@@ -46,6 +47,7 @@ describe("OlaAddressMapPicker", () => {
     mockMarkerInstance.setLngLat.mockClear();
     mockMarkerInstance.addTo.mockClear();
     mockMarkerInstance.remove.mockClear();
+    mockInit.mockClear();
     vi.mocked(mockOlaMapsInit).mockClear();
     vi.mocked(mockMarkerConstructor).mockClear();
     window.OlaMaps = mockOlaMaps;
@@ -328,5 +330,24 @@ describe("OlaAddressMapPicker", () => {
 
     expect(preventDefaultSpy).toHaveBeenCalled();
     expect(stopPropagationSpy).toHaveBeenCalled();
+  });
+
+  it("initializes Ola Maps with attributionControl: false", async () => {
+    const onCoordinatesChange = vi.fn();
+    render(
+      <OlaAddressMapPicker
+        center={{ lat: 30.4598, lng: 78.0664 }}
+        onCoordinatesChange={onCoordinatesChange}
+      />
+    );
+    // Flush map initialization promises
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockInit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributionControl: true
+      })
+    );
   });
 });

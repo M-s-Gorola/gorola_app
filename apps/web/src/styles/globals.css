@@ -414,25 +414,47 @@ a.bg-gorola-hero-gradient,
   }
 }
 
-/* Hide Ola Maps attribution copyright controls */
-.maplibregl-ctrl-attribution,
-.olamaps-ctrl-attribution,
-.olamap-ctrl-attribution,
-.ola-ctrl-attribution,
-.maplibregl-ctrl-attrib {
+/* Hide Ola Maps attribution copyright controls (i icon and text) without hiding logo containers */
+.maplibregl-ctrl-attrib-button,
+.maplibregl-ctrl-attrib-inner,
+.olamaps-ctrl-attrib-button,
+.olamaps-ctrl-attrib-inner,
+.olamap-ctrl-attrib-button,
+.olamap-ctrl-attrib-inner,
+.ola-ctrl-attrib-button,
+.ola-ctrl-attrib-inner {
   display: none !important;
 }
 
-/* Hide Ola Maps logo watermark */
-.maplibregl-ctrl-logo,
-.olamaps-ctrl-logo,
-.olamap-ctrl-logo,
-.olamap-logo,
-.ola-ctrl-logo,
-.ola-maps-logo,
-.olamaps-logo,
-.maplibregl-ctrl-bottom-left div,
-.maplibregl-ctrl-bottom-left a,
-.maplibregl-ctrl-bottom-left>* {
-  display: none !important;
+/* Remove backgrounds and paddings of attribution containers to keep them invisible */
+.maplibregl-ctrl-attrib,
+.olamaps-ctrl-attribution,
+.olamap-ctrl-attribution,
+.ola-ctrl-attribution,
+.maplibregl-ctrl-attribution {
+  background: transparent !important;
+  background-color: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
 }
+
+/*
+ * [WATERMARK-CONTROL] Logo / Watermark Visibility
+ * UNCOMMENT the block below to hide the Ola Maps logo watermark.
+ * WARNING: Hiding this without a white-label licence from Ola Maps violates their Terms of Service.
+ *
+ * .maplibregl-ctrl-logo,
+ * .olamaps-ctrl-logo,
+ * .olamap-ctrl-logo,
+ * .olamap-logo,
+ * .ola-ctrl-logo,
+ * .ola-maps-logo,
+ * .olamaps-logo,
+ * .maplibregl-ctrl-bottom-left div,
+ * .maplibregl-ctrl-bottom-left a,
+ * .maplibregl-ctrl-bottom-left>* {
+ *   display: none !important;
+ * }
+ */
