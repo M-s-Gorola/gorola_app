@@ -3,12 +3,12 @@ import {
   AlertTriangle,
   Clock,
   Layers,
-  Settings,
   ShoppingBag,
   TrendingUp,
-  Users} from "lucide-react";
+  Users
+} from "lucide-react";
 import type { ReactElement } from "react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
@@ -19,6 +19,7 @@ type PerStoreBreakdownItem = {
   ordersToday: number;
   revenueToday: number;
   pendingOrdersCount: number;
+  storeType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
 };
 
 type WeeklyRevenueItem = {
@@ -48,54 +49,150 @@ type AdminDashboardEnvelope = {
   data: AdminDashboardData;
 };
 
+type TrendItem = {
+  date: string;
+  count: number;
+};
+
+type TrendEnvelope = {
+  success: boolean;
+  data: TrendItem[];
+};
+
+type AdminStoreListItem = {
+  id: string;
+  name: string;
+  storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+  isActive: boolean;
+};
+
+type StoresListResponse = {
+  success: boolean;
+  data: AdminStoreListItem[];
+};
+
 export function AdminDashboardPage(): ReactElement {
   const queryClient = useQueryClient();
 
-  const [confirmingFlag, setConfirmingFlag] = useState<{ key: string; value: boolean } | null>(null);
-  const [isUpdatingFlag, setIsUpdatingFlag] = useState(false);
+  const [deliveryCharge, setDeliveryCharge] = useState("");
+  const [serviceCharge, setServiceCharge] = useState("");
+  const [hasSetDefaults, setHasSetDefaults] = useState(false);
+
+  const { data: settings } = useQuery<Array<{ key: string; value: string }>>({
+    queryKey: ["admin", "settings"],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.get<{ success: boolean; data: Array<{ key: string; value: string }> }>("/api/v1/admin/settings");
+      return res.data.data;
+    }
+  });
+
+  useEffect(() => {
+    if (Array.isArray(settings) && !hasSetDefaults) {
+      const delivery = settings.find(s => s.key === "DELIVERY_CHARGE")?.value || "";
+      const service = settings.find(s => s.key === "SERVICE_CHARGE")?.value || "";
+      setDeliveryCharge(delivery);
+      setServiceCharge(service);
+      setHasSetDefaults(true);
+    }
+  }, [settings, hasSetDefaults]);
+
+  const updateSettingsMutation = useMutation({
+    mutationFn: async (payload: { deliveryCharge: string; serviceCharge: string }) => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.put<{ success: boolean; data: Array<{ key: string; value: string }> }>("/api/v1/admin/settings", payload);
+      return res.data;
+    },
+    onSuccess: (data) => {
+      toast.success("Platform fees updated successfully");
+      queryClient.setQueryData(["admin", "settings"], data.data);
+    },
+    onError: () => {
+      toast.error("Failed to update platform fees");
+    }
+  });
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [selectedStoreIds, setSelectedStoreIds] = useState<string[]>([]);
+  const [storePickerOpen, setStorePickerOpen] = useState(false);
+  const [storeType, setStoreType] = useState<"QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined>(undefined);
 
-  const { data: dashboard, isLoading, error } = useQuery<AdminDashboardData>({
-    queryKey: ["admin", "dashboard", range, groupBy],
+  const [volumeRange, setVolumeRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
+  const [volumeGroupBy, setVolumeGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [volumeSelectedStoreIds, setVolumeSelectedStoreIds] = useState<string[]>([]);
+  const [volumeStorePickerOpen, setVolumeStorePickerOpen] = useState(false);
+  const [volumeStoreType, setVolumeStoreType] = useState<"QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined>(undefined);
+
+  const { data: storesList } = useQuery<AdminStoreListItem[]>({
+    queryKey: ["admin", "stores"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<AdminDashboardEnvelope>(`/api/v1/admin/dashboard?range=${range}&groupBy=${groupBy}`);
+      const res = await api.get<StoresListResponse>("/api/v1/admin/stores");
+      return res.data.data;
+    },
+    staleTime: 60000
+  });
+
+  const allStores = Array.isArray(storesList) ? storesList : [];
+
+  const { data: dashboard, isLoading, error } = useQuery<AdminDashboardData>({
+    queryKey: ["admin", "dashboard", range, groupBy, selectedStoreIds, storeType],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const storeIdsParam = selectedStoreIds.length > 0 ? `&storeIds=${selectedStoreIds.join(",")}` : "";
+      const storeTypeParam = storeType ? `&storeType=${storeType}` : "";
+      const res = await api.get<AdminDashboardEnvelope>(
+        `/api/v1/admin/dashboard?range=${range}&groupBy=${groupBy}${storeIdsParam}${storeTypeParam}`
+      );
       return res.data.data;
     },
     staleTime: 30000,
     placeholderData: (prev) => prev
   });
 
-  const toggleFlagMutation = useMutation({
-    mutationFn: async ({ key, value }: { key: string; value: boolean }) => {
+  const { data: ordersTrend } = useQuery<TrendItem[]>({
+    queryKey: ["admin", "orders-trend", volumeRange, volumeGroupBy, volumeSelectedStoreIds, volumeStoreType],
+    queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      await api.patch(`/api/v1/admin/feature-flags/${key}`, { enabled: value });
+      const storeIdsParam = volumeSelectedStoreIds.length > 0 ? `&storeIds=${volumeSelectedStoreIds.join(",")}` : "";
+      const storeTypeParam = volumeStoreType ? `&storeType=${volumeStoreType}` : "";
+      const res = await api.get<TrendEnvelope>(
+        `/api/v1/admin/dashboard/orders-trend?range=${volumeRange}&groupBy=${volumeGroupBy}${storeIdsParam}${storeTypeParam}`
+      );
+      return res.data.data;
     },
-    onSuccess: (_, variables) => {
-      toast.success(`Feature flag '${variables.key}' updated successfully.`);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "dashboard"] });
-    },
-    onError: (err) => {
-      console.error("Failed to toggle feature flag", err);
-      toast.error("Failed to update feature flag.");
-    },
-    onSettled: () => {
-      setIsUpdatingFlag(false);
-      setConfirmingFlag(null);
-    }
+    staleTime: 30000,
+    placeholderData: (prev) => prev
   });
 
-  const handleToggleFlag = (key: string, currentValue: boolean) => {
-    setConfirmingFlag({ key, value: !currentValue });
-  };
+  const { data: bookingsTrend } = useQuery<TrendItem[]>({
+    queryKey: ["admin", "bookings-trend", volumeRange, volumeGroupBy, volumeSelectedStoreIds, volumeStoreType],
+    queryFn: async () => {
+      if (!api) throw new Error("API helper not initialized");
+      const storeIdsParam = volumeSelectedStoreIds.length > 0 ? `&storeIds=${volumeSelectedStoreIds.join(",")}` : "";
+      const storeTypeParam = volumeStoreType ? `&storeType=${volumeStoreType}` : "";
+      const res = await api.get<TrendEnvelope>(
+        `/api/v1/admin/dashboard/bookings-trend?range=${volumeRange}&groupBy=${volumeGroupBy}${storeIdsParam}${storeTypeParam}`
+      );
+      return res.data.data;
+    },
+    staleTime: 30000,
+    placeholderData: (prev) => prev
+  });
 
-  const confirmToggleFlag = () => {
-    if (!confirmingFlag) return;
-    setIsUpdatingFlag(true);
-    toggleFlagMutation.mutate(confirmingFlag);
-  };
+  const ordersTrendData = Array.isArray(ordersTrend) ? ordersTrend : [];
+  const bookingsTrendData = Array.isArray(bookingsTrend) ? bookingsTrend : [];
+
+  const revenueDropdownStores = allStores.filter(store => !storeType || store.storeType === storeType);
+  const volumeDropdownStores = allStores.filter(store => {
+    if (volumeStoreType && volumeStoreType !== store.storeType) {
+      return false;
+    }
+    return true;
+  });
+
+
 
   const formatCurrency = (val: number): string => {
     return `₹${val.toLocaleString("en-IN", {
@@ -160,7 +257,7 @@ export function AdminDashboardPage(): ReactElement {
     );
   }
 
-  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1);
+  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 10);
 
   const formatYAxisLabel = (val: number): string => {
     if (val >= 1000) {
@@ -194,6 +291,59 @@ export function AdminDashboardPage(): ReactElement {
     : range === "MONTH" ? "Monthly System Revenue Trend"
     : range === "YEAR" ? "Yearly System Revenue Trend"
     : "All-Time System Revenue Trend";
+
+  const volumeChartTitle =
+    volumeStoreType === "QUICK_COMMERCE"
+      ? volumeRange === "TODAY" ? "Hourly Orders Today"
+        : volumeRange === "WEEK" ? "Weekly System Orders Volume Trend"
+        : volumeRange === "MONTH" ? "Monthly System Orders Volume Trend"
+        : volumeRange === "YEAR" ? "Yearly System Orders Volume Trend"
+        : "All-Time System Orders Volume Trend"
+      : volumeStoreType === "BOOKING_COMMERCE"
+      ? volumeRange === "TODAY" ? "Hourly Bookings Today"
+        : volumeRange === "WEEK" ? "Weekly System Bookings Volume Trend"
+        : volumeRange === "MONTH" ? "Monthly System Bookings Volume Trend"
+        : volumeRange === "YEAR" ? "Yearly System Bookings Volume Trend"
+        : "All-Time System Bookings Volume Trend"
+      : volumeRange === "TODAY" ? "Hourly System Volume Today"
+        : volumeRange === "WEEK" ? "Weekly System Volume Trend"
+        : volumeRange === "MONTH" ? "Monthly System Volume Trend"
+        : volumeRange === "YEAR" ? "Yearly System Volume Trend"
+        : "All-Time System Volume Trend";
+
+  const formatCountYAxisLabel = (val: number): string => {
+    if (val % 1 === 0) {
+      return String(val);
+    }
+    return val.toFixed(1);
+  };
+
+  const volumeData = (() => {
+    if (volumeStoreType === "QUICK_COMMERCE") {
+      return ordersTrendData.map((d) => ({ date: d.date, count: d.count, label: `${d.count} orders` }));
+    }
+    if (volumeStoreType === "BOOKING_COMMERCE") {
+      return bookingsTrendData.map((d) => ({ date: d.date, count: d.count, label: `${d.count} bookings` }));
+    }
+    const maxLen = Math.max(ordersTrendData.length, bookingsTrendData.length);
+    const combined: { date: string; count: number; label: string }[] = [];
+    for (let i = 0; i < maxLen; i++) {
+      const o = ordersTrendData[i];
+      const b = bookingsTrendData[i];
+      const date = o?.date || b?.date || "";
+      const oCount = o?.count || 0;
+      const bCount = b?.count || 0;
+      combined.push({
+        date,
+        count: oCount + bCount,
+        label: `${oCount + bCount} total`
+      });
+    }
+    return combined;
+  })();
+
+  const rawVolumeMax = Math.max(...volumeData.map((d) => d.count), 4);
+  const volumeMax = rawVolumeMax % 2 === 0 ? rawVolumeMax : rawVolumeMax + 1;
 
   return (
     <div className="space-y-8">
@@ -301,14 +451,98 @@ export function AdminDashboardPage(): ReactElement {
       {/* Main Section Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Revenue Trend Chart */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden">
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+        <div className="lg:col-span-3 bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden">
+          <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
               {chartTitle}
             </h2>
 
-            {/* Range + GroupBy controls — identical to store dashboard */}
-            <div className="flex items-center gap-3">
+            {/* Range + GroupBy + Store Type + Store Multiselect controls */}
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
+              {/* Store Type Filter */}
+              <div className="relative">
+                <select
+                  data-testid="revenue-store-type-select"
+                  value={storeType || "ALL"}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setStoreType(val === "ALL" ? undefined : val as "QUICK_COMMERCE" | "BOOKING_COMMERCE");
+                    setSelectedStoreIds([]); // clear selection
+                  }}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                >
+                  <option value="ALL">All Store Types</option>
+                  <option value="QUICK_COMMERCE">Quick Commerce</option>
+                  <option value="BOOKING_COMMERCE">Booking Commerce</option>
+                </select>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
+              </div>
+
+              {/* Store Picker Dropdown */}
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={() => setStorePickerOpen(!storePickerOpen)}
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-1 sm:gap-2"
+                  aria-label="Filter by store"
+                >
+                  <span>Filter by store</span>
+                  {selectedStoreIds.length > 0 && (
+                    <span className="bg-gorola-pine text-white text-[10px] px-1.5 py-0.5 rounded-full font-sans font-bold">
+                      {selectedStoreIds.length}
+                    </span>
+                  )}
+                  <span className="text-[10px]">▼</span>
+                </button>
+
+                {storePickerOpen && (
+                  <div className="absolute right-0 mt-2 w-64 bg-white border border-gorola-charcoal/10 rounded-xl shadow-lg z-30 p-3 space-y-2 max-h-60 overflow-y-auto">
+                    <div className="flex justify-between items-center pb-2 border-b border-gorola-charcoal/5">
+                      <span className="text-xs font-bold text-gorola-charcoal">Select Stores</span>
+                      {selectedStoreIds.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setSelectedStoreIds([])}
+                          className="text-[10px] text-gorola-pine hover:underline font-bold"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+                    <div className="space-y-1.5 pt-1">
+                      {revenueDropdownStores.map((store) => {
+                        const isChecked = selectedStoreIds.includes(store.id);
+                        return (
+                          <label
+                            key={store.id}
+                            className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-gorola-mint/10 rounded-lg cursor-pointer text-xs text-gorola-charcoal font-semibold transition-colors"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={() => {
+                                if (isChecked) {
+                                  setSelectedStoreIds(selectedStoreIds.filter((id) => id !== store.id));
+                                } else {
+                                  setSelectedStoreIds([...selectedStoreIds, store.id]);
+                                }
+                              }}
+                              className="rounded text-gorola-pine focus:ring-gorola-pine/20 h-4 w-4 cursor-pointer"
+                            />
+                            <span className="truncate">{store.name}</span>
+                          </label>
+                        );
+                      })}
+                      {revenueDropdownStores.length === 0 && (
+                        <p className="text-xs text-gorola-slate/60 italic text-center py-2">
+                          No stores available
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Range Select */}
               <div className="relative">
                 <select
@@ -327,7 +561,7 @@ export function AdminDashboardPage(): ReactElement {
                       setGroupBy("YEARLY");
                     }
                   }}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
                 >
                   <option value="TODAY">Today</option>
                   <option value="WEEK">Last 7 Days</option>
@@ -335,7 +569,7 @@ export function AdminDashboardPage(): ReactElement {
                   <option value="YEAR">Current Year</option>
                   <option value="ALL">All Time</option>
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
 
               {/* GroupBy Select */}
@@ -345,7 +579,7 @@ export function AdminDashboardPage(): ReactElement {
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
                   disabled={range === "TODAY"}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {range === "TODAY" ? (
                     <option value="HOURLY">Hourly</option>
@@ -358,26 +592,26 @@ export function AdminDashboardPage(): ReactElement {
                     </>
                   )}
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
             </div>
           </div>
 
           {/* Bar Chart */}
-          <div className="flex-1 min-h-[260px] w-full flex items-stretch select-none mt-4">
+          <div className="h-72 w-full flex items-stretch select-none mt-4">
             {/* Y-Axis scale */}
-            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 text-right min-w-[50px] border-r border-gorola-charcoal/5">
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-1.5 sm:pr-2.5 pb-2 text-right min-w-[35px] sm:min-w-[50px] border-r border-gorola-charcoal/20">
               <span>{formatYAxisLabel(maxRevenue)}</span>
               <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
               <span>{formatYAxisLabel(0)}</span>
             </div>
 
             {/* Bars container */}
-            <div className="flex-1 h-full relative ml-3">
+            <div className="flex-1 h-full relative ml-1.5 sm:ml-3">
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
-                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
-                <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
-                <div className="w-full border-b border-gorola-charcoal/10" />
+                <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+                <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+                <div className="w-full border-b border-gorola-charcoal/20" />
               </div>
 
               <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${gapClass} pr-4 z-10`}>
@@ -398,7 +632,7 @@ export function AdminDashboardPage(): ReactElement {
                           {formatDateLabel(item.date)} • {formatCurrency(item.revenue)}
                         </div>
                       </div>
-                      <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-slate/60 font-semibold whitespace-nowrap mt-1 ${
+                      <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-charcoal/80 font-semibold whitespace-nowrap mt-1 ${
                         shouldShowLabel(index, dashboard.weeklyRevenue.length) ? "" : "invisible"
                       }`}>
                         {formatDateLabel(item.date)}
@@ -411,67 +645,269 @@ export function AdminDashboardPage(): ReactElement {
           </div>
         </div>
 
-        {/* Feature Flags Panel */}
-        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <div className="flex items-center gap-3 mb-6">
-              <div className="h-8 w-8 rounded-lg bg-gorola-mint/10 flex items-center justify-center text-gorola-pine">
-                <Settings className="h-4 w-4" />
-              </div>
-              <div>
-                <h2 className="font-heading text-lg font-bold text-gorola-charcoal">Feature Flags</h2>
-                <p className="text-xs text-gorola-slate font-dm-sans">Toggle system-wide feature flags.</p>
-              </div>
+
+      </div>
+
+      {/* Volume Trend Chart */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
+              {volumeChartTitle}
+            </h2>
+          </div>
+
+          {/* Range + GroupBy + Store Picker controls */}
+          <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
+            {/* Store Type Filter */}
+            <div className="relative">
+              <select
+                data-testid="volume-store-type-select"
+                value={volumeStoreType || "ALL"}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setVolumeStoreType(val === "ALL" ? undefined : val as "QUICK_COMMERCE" | "BOOKING_COMMERCE");
+                  setVolumeSelectedStoreIds([]); // clear selection
+                }}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+              >
+                <option value="ALL">All Store Types</option>
+                <option value="QUICK_COMMERCE">Quick Commerce</option>
+                <option value="BOOKING_COMMERCE">Booking Commerce</option>
+              </select>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
             </div>
+            {/* Store Picker */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setVolumeStorePickerOpen(!volumeStorePickerOpen)}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold text-gorola-charcoal hover:bg-gorola-charcoal/10 focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 flex items-center gap-1 sm:gap-2"
+                aria-label="Filter by store"
+              >
+                <span>Filter by store</span>
+                {volumeSelectedStoreIds.length > 0 && (
+                  <span className="bg-gorola-pine text-white text-[10px] px-1.5 py-0.5 rounded-full font-sans font-bold">
+                    {volumeSelectedStoreIds.length}
+                  </span>
+                )}
+                <span className="text-[10px]">▼</span>
+              </button>
 
-            <div className="space-y-4 max-h-[300px] overflow-y-auto pr-1">
-              {dashboard.featureFlags.map((flag) => (
-                <div
-                  key={flag.key}
-                  className="flex items-center justify-between p-3.5 rounded-xl border border-gorola-charcoal/5 bg-gorola-mint/5 hover:bg-gorola-mint/10 transition-colors"
-                >
-                  <div className="min-w-0 flex-1 pr-2">
-                    <span className="text-xs font-bold text-gorola-charcoal block truncate">
-                      {flag.key}
-                    </span>
-                    <span className="text-[10px] text-gorola-slate block truncate">
-                      {flag.key === "WEATHER_MODE_ACTIVE"
-                        ? "Restricts deliveries and adjusts pricing parameters."
-                        : "Toggle feature operations."}
-                    </span>
+              {volumeStorePickerOpen && (
+                <div className="absolute right-0 mt-2 w-64 bg-white border border-gorola-charcoal/10 rounded-xl shadow-lg z-30 p-3 space-y-2 max-h-60 overflow-y-auto">
+                  <div className="flex justify-between items-center pb-2 border-b border-gorola-charcoal/5">
+                    <span className="text-xs font-bold text-gorola-charcoal">Select Stores</span>
+                    {volumeSelectedStoreIds.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setVolumeSelectedStoreIds([])}
+                        className="text-[10px] text-gorola-pine hover:underline font-bold"
+                      >
+                        Clear All
+                      </button>
+                    )}
                   </div>
-
-                  <button
-                    role="switch"
-                    aria-checked={flag.value}
-                    aria-label={`Toggle flag ${flag.key}`}
-                    onClick={() => handleToggleFlag(flag.key, flag.value)}
-                    className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors focus:outline-none ${
-                      flag.value ? "bg-gorola-pine" : "bg-gorola-charcoal/20"
-                    }`}
-                  >
-                    <span
-                      className={`inline-block h-3.5 w-3.5 transform rounded-full bg-white transition-transform ${
-                        flag.value ? "translate-x-5" : "translate-x-0.5"
-                      }`}
-                    />
-                  </button>
+                  <div className="space-y-1.5 pt-1">
+                    {volumeDropdownStores.map((store) => {
+                      const isChecked = volumeSelectedStoreIds.includes(store.id);
+                      return (
+                        <label
+                          key={store.id}
+                          className="flex items-center gap-2.5 px-2 py-1.5 hover:bg-gorola-mint/10 rounded-lg cursor-pointer text-xs text-gorola-charcoal font-semibold transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => {
+                              if (isChecked) {
+                                setVolumeSelectedStoreIds(volumeSelectedStoreIds.filter((id) => id !== store.id));
+                              } else {
+                                setVolumeSelectedStoreIds([...volumeSelectedStoreIds, store.id]);
+                              }
+                            }}
+                            className="rounded text-gorola-pine focus:ring-gorola-pine/20 h-4 w-4 cursor-pointer"
+                          />
+                          <span className="truncate">{store.name}</span>
+                        </label>
+                      );
+                    })}
+                    {volumeDropdownStores.length === 0 && (
+                      <p className="text-xs text-gorola-slate/60 italic text-center py-2">
+                        No stores available
+                      </p>
+                    )}
+                  </div>
                 </div>
-              ))}
-
-              {dashboard.featureFlags.length === 0 && (
-                <p className="text-sm text-gorola-slate/60 italic text-center py-6">
-                  No feature flags currently seeded in database.
-                </p>
               )}
             </div>
-          </div>
-          <div className="mt-4 border-t border-gorola-charcoal/5 pt-3">
-            <span className="text-[10px] text-gorola-slate font-dm-sans block text-center">
-              * Note: Flag changes will propagate to Redis cache within 60s.
-            </span>
+
+            {/* Range Select */}
+            <div className="relative">
+              <select
+                data-testid="volume-range-select"
+                value={volumeRange}
+                onChange={(e) => {
+                  const nextRange = e.target.value as "TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL";
+                  setVolumeRange(nextRange);
+                  if (nextRange === "TODAY") {
+                    setVolumeGroupBy("HOURLY");
+                  } else if (nextRange === "WEEK" || nextRange === "MONTH") {
+                    setVolumeGroupBy("DAILY");
+                  } else if (nextRange === "YEAR") {
+                    setVolumeGroupBy("MONTHLY");
+                  } else {
+                    setVolumeGroupBy("YEARLY");
+                  }
+                }}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+              >
+                <option value="TODAY">Today</option>
+                <option value="WEEK">Last 7 Days</option>
+                <option value="MONTH">Last 30 Days</option>
+                <option value="YEAR">Current Year</option>
+                <option value="ALL">All Time</option>
+              </select>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
+            </div>
+
+            {/* GroupBy Select */}
+            <div className="relative">
+              <select
+                data-testid="volume-groupby-select"
+                value={volumeGroupBy}
+                onChange={(e) => setVolumeGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
+                disabled={volumeRange === "TODAY"}
+                className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {volumeRange === "TODAY" ? (
+                  <option value="HOURLY">Hourly</option>
+                ) : (
+                  <>
+                    <option value="HOURLY">Hourly (Pattern)</option>
+                    <option value="DAILY">Daily</option>
+                    <option value="MONTHLY" disabled={volumeRange === "WEEK" || volumeRange === "MONTH"}>Monthly</option>
+                    <option value="YEARLY" disabled={volumeRange !== "ALL"}>Yearly</option>
+                  </>
+                )}
+              </select>
+              <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
+            </div>
           </div>
         </div>
+
+        <div className="h-72 w-full flex items-stretch select-none mt-4">
+          {/* Y-Axis scale */}
+          <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-charcoal/80 pr-1.5 sm:pr-2.5 pb-2 text-right min-w-[20px] sm:min-w-[30px] border-r border-gorola-charcoal/20">
+            <span>{formatCountYAxisLabel(volumeMax)}</span>
+            <span>{formatCountYAxisLabel(volumeMax * 0.5)}</span>
+            <span>0</span>
+          </div>
+
+          {/* Bars container */}
+          <div className="flex-1 h-full relative ml-1.5 sm:ml-3">
+            <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
+              <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+              <div className="w-full border-t border-dashed border-gorola-charcoal/10" />
+              <div className="w-full border-b border-gorola-charcoal/20" />
+            </div>
+
+            <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${
+              volumeData.length > 20
+                ? "gap-1 sm:gap-1.5"
+                : volumeData.length > 10
+                ? "gap-2"
+                : "gap-4"
+            } pr-4 z-10`}>
+              {volumeData.map((item, index) => {
+                const heightPct = volumeMax > 0 && item.count > 0 ? (item.count / volumeMax) * 94 + 6 : 6;
+                const isLatest = index === volumeData.length - 1;
+                return (
+                  <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
+                    <div
+                      style={{ height: `${heightPct}%` }}
+                      className={`relative w-full ${
+                        volumeData.length > 20
+                          ? "max-w-[8px] sm:max-w-[12px]"
+                          : volumeData.length > 10
+                          ? "max-w-[16px]"
+                          : "max-w-[40px]"
+                      } rounded-t-sm transition-all duration-300 group-hover:opacity-90 ${
+                        isLatest
+                          ? "bg-gorola-saffron shadow-lg shadow-gorola-saffron/10"
+                          : "bg-gorola-pine"
+                      }`}
+                    >
+                      <div className="opacity-0 group-hover:opacity-100 absolute bottom-[105%] left-1/2 -translate-x-1/2 bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-20 pointer-events-none shadow-md whitespace-nowrap">
+                        {formatDateLabel(item.date)} • {item.label}
+                      </div>
+                    </div>
+                    <span className={`absolute bottom-0 translate-y-full text-[9px] sm:text-[10px] text-gorola-charcoal/80 font-semibold whitespace-nowrap mt-1 ${
+                      shouldShowLabel(index, volumeData.length) ? "" : "invisible"
+                    }`}>
+                      {formatDateLabel(item.date)}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Platform Fees Settings Card */}
+      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm">
+        <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-2">
+          Platform Fees Settings
+        </h2>
+        <p className="text-xs text-gorola-slate mb-6 font-dm-sans">
+          Configure the delivery fees for quick commerce and service charges for bookings.
+        </p>
+
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            updateSettingsMutation.mutate({
+              deliveryCharge,
+              serviceCharge
+            });
+          }}
+          className="space-y-4 max-w-sm font-dm-sans"
+        >
+          <div className="space-y-1.5">
+            <label htmlFor="delivery-charge-input" className="text-xs font-bold text-gorola-charcoal block">
+              Delivery Charge (₹)
+            </label>
+            <input
+              id="delivery-charge-input"
+              type="text"
+              value={deliveryCharge}
+              onChange={(e) => setDeliveryCharge(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="service-charge-input" className="text-xs font-bold text-gorola-charcoal block">
+              Service Charge (₹)
+            </label>
+            <input
+              id="service-charge-input"
+              type="text"
+              value={serviceCharge}
+              onChange={(e) => setServiceCharge(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <button
+            type="submit"
+            disabled={updateSettingsMutation.isPending}
+            className="bg-gorola-pine hover:bg-gorola-pine/90 text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer transition-all duration-300 disabled:opacity-50"
+          >
+            {updateSettingsMutation.isPending ? "Saving..." : "Save Platform Fees"}
+          </button>
+        </form>
       </div>
 
       {/* Stores performance breakdown table */}
@@ -526,42 +962,7 @@ export function AdminDashboardPage(): ReactElement {
         </div>
       </div>
 
-      {/* Confirmation Modal */}
-      {confirmingFlag && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform animate-in zoom-in-95 duration-200">
-            <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2">
-              <AlertTriangle className="h-5 w-5 text-red-500" />
-              Confirm Feature Flag Update
-            </h3>
-            <p className="text-sm text-gorola-slate font-dm-sans mt-3">
-              Are you sure you want to toggle the feature flag <strong>{confirmingFlag.key}</strong> to{" "}
-              <strong>{confirmingFlag.value ? "ON" : "OFF"}</strong>?
-              {confirmingFlag.key === "WEATHER_MODE_ACTIVE" && (
-                <span className="block mt-2 text-xs text-amber-700 bg-amber-50 border border-amber-100 p-2 rounded-lg font-sans">
-                  <strong>⚠️ Warning:</strong> Activating Weather Mode has high system impact, restricting rider delivery zones and altering pricing modifiers immediately.
-                </span>
-              )}
-            </p>
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                disabled={isUpdatingFlag}
-                onClick={() => setConfirmingFlag(null)}
-                className="px-4 py-2 border border-gorola-charcoal/10 hover:bg-gorola-charcoal/5 rounded-xl font-bold text-sm text-gorola-slate transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                disabled={isUpdatingFlag}
-                onClick={confirmToggleFlag}
-                className="px-4 py-2 bg-gorola-pine hover:bg-gorola-pine/90 text-white rounded-xl font-bold text-sm shadow-sm transition-colors"
-              >
-                {isUpdatingFlag ? "Updating..." : "Confirm Update"}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
     </div>
   );
 }

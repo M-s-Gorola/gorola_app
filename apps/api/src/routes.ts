@@ -10,6 +10,8 @@ import { registerBuyerAddressRoutes } from "./modules/address/address.controller
 import { AddressRepository } from "./modules/address/address.repository.js";
 import { registerAdminRoutes } from "./modules/admin/admin.controller.js";
 import { AdminRepository } from "./modules/admin/admin.repository.js";
+import { SystemSettingRepository } from "./modules/admin/system-setting.repository.js";
+import { SystemSettingService } from "./modules/admin/system-setting.service.js";
 import { AdminAuthService } from "./modules/auth/admin-auth.service.js";
 import { registerAuthRoutes } from "./modules/auth/auth.controller.js";
 import { AuthService } from "./modules/auth/auth.service.js";
@@ -168,13 +170,17 @@ export function registerAppRoutes(app: FastifyInstance): void {
     stockMovementRepoOrders,
     orderEmitter
   );
+  const systemSettingRepo = new SystemSettingRepository(prisma);
+  const systemSettingService = new SystemSettingService(prisma, systemSettingRepo);
+
   const addressRepoOrders = new AddressRepository(prisma);
   const buyerCheckout = new BuyerCheckoutService(
     prisma,
     checkoutCartRepo,
     addressRepoOrders,
     buyerOrderSvc,
-    discountRepo
+    discountRepo,
+    systemSettingService
   );
 
   registerCartRoutes(app, {
@@ -190,7 +196,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
   });
 
   const bookingRepo = new BookingOrderRepository(prisma);
-  const bookingService = new BookingOrderService(prisma, bookingRepo, orderEmitter);
+  const bookingService = new BookingOrderService(prisma, bookingRepo, systemSettingService, orderEmitter);
 
   registerBookingRoutes(app, {
     bookingService,
@@ -348,7 +354,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
   registerAdminRoutes(app, {
     tokenVerifier: tokenService,
     orderService: buyerOrderSvc,
-    orders: orderRepoOrders
+    orders: orderRepoOrders,
+    systemSettingService
   });
 
   app.get("/api/v1/stores/:id", async (request, reply) => {

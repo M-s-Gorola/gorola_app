@@ -16,6 +16,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
 
 type Address = {
@@ -51,6 +52,8 @@ export function BookingTimeslotPage(): ReactElement {
   const [searchParams] = useSearchParams();
   const productId = searchParams.get("productId") ?? "";
   const variantId = searchParams.get("variantId") ?? "";
+  const { data: settings } = useSystemSettings();
+  const serviceFee = Number(settings?.SERVICE_CHARGE ?? "0");
 
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTimeslot, setSelectedTimeslot] = useState("");
@@ -283,7 +286,7 @@ export function BookingTimeslotPage(): ReactElement {
   }
 
   const totalDiscount = couponSavedAmount + offerSavedAmount;
-  const finalTotal = Math.max(subtotal - totalDiscount, 0);
+  const finalTotal = Math.max(subtotal + serviceFee - totalDiscount, 0);
 
   const handlePlaceBooking = async (): Promise<void> => {
     if (!selectedDate || !selectedTimeslot || !selectedAddressId) return;
@@ -401,6 +404,10 @@ export function BookingTimeslotPage(): ReactElement {
           <div className="flex justify-between">
             <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
             <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {subtotal.toFixed(2)}</span>
+          </div>
+          <div className="flex justify-between">
+            <span className="font-dm-sans text-sm text-gorola-charcoal">Service fee</span>
+            <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {serviceFee.toFixed(2)}</span>
           </div>
 
           {totalDiscount > 0 && (

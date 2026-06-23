@@ -1,3 +1,4 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -27,6 +28,16 @@ vi.mock("@/lib/api", () => ({
   getFeatureFlag: vi.fn().mockResolvedValue(false)
 }));
 
+vi.mock("@/hooks/useSystemSettings", () => ({
+  useSystemSettings: () => ({
+    data: {
+      DELIVERY_CHARGE: "30",
+      SERVICE_CHARGE: "0"
+    }
+  }),
+  useSystemSettingsSocket: vi.fn()
+}));
+
 describe("CartDrawer", () => {
   beforeEach(() => {
     syncCartMock.mockReset();
@@ -50,12 +61,17 @@ describe("CartDrawer", () => {
   });
 
   function renderShell(): void {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
     render(
-      <MemoryRouter>
-        <BuyerLayout>
-          <p>Page</p>
-        </BuyerLayout>
-      </MemoryRouter>
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <BuyerLayout>
+            <p>Page</p>
+          </BuyerLayout>
+        </MemoryRouter>
+      </QueryClientProvider>
     );
   }
 

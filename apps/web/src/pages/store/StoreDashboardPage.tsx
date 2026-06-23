@@ -19,6 +19,7 @@ import { useAuthStore } from "@/store/auth.store";
 type WeeklyRevenueItem = {
   date: string;
   revenue: number;
+  count: number;
 };
 
 type TopProductItem = {
@@ -61,6 +62,7 @@ export function StoreDashboardPage(): ReactElement {
 
   const [range, setRange] = useState<"TODAY" | "WEEK" | "MONTH" | "YEAR" | "ALL">("WEEK");
   const [groupBy, setGroupBy] = useState<"HOURLY" | "DAILY" | "MONTHLY" | "YEARLY">("DAILY");
+  const [chartMode, setChartMode] = useState<"REVENUE" | "COUNT">("REVENUE");
 
   useEffect(() => {
     if (!storeId || !accessToken) return;
@@ -214,13 +216,21 @@ export function StoreDashboardPage(): ReactElement {
   }
 
   // Calculate chart metrics
-  const maxRevenue = Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 1);
+  const rawChartMaxVal = chartMode === "REVENUE"
+    ? Math.max(...dashboard.weeklyRevenue.map((d) => d.revenue), 10)
+    : Math.max(...dashboard.weeklyRevenue.map((d) => d.count ?? 0), 4);
+  const chartMaxVal = chartMode === "REVENUE"
+    ? rawChartMaxVal
+    : (rawChartMaxVal % 2 === 0 ? rawChartMaxVal : rawChartMaxVal + 1);
 
   const formatYAxisLabel = (val: number): string => {
-    if (val >= 1000) {
-      return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+    if (chartMode === "REVENUE") {
+      if (val >= 1000) {
+        return `₹${(val / 1000).toFixed(val % 1000 === 0 ? 0 : 1)}k`;
+      }
+      return `₹${Math.round(val)}`;
     }
-    return `₹${Math.round(val)}`;
+    return Math.round(val).toString();
   };
 
   const gapClass = dashboard.weeklyRevenue.length > 20
@@ -468,22 +478,58 @@ export function StoreDashboardPage(): ReactElement {
       {/* Main Panel layout Grid */}
       <div className="grid gap-6 lg:grid-cols-3">
         {/* Weekly Revenue Trend Chart */}
-        <div id="revenue-chart" className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm flex flex-col overflow-hidden`}>
-          <div className="flex flex-col sm:flex-row justify-between sm:items-center gap-4 mb-6">
+        <div id="revenue-chart" className={`${isBooking ? "lg:col-span-3" : "lg:col-span-2"} bg-white rounded-2xl border border-gorola-charcoal/10 p-4 sm:p-6 shadow-sm flex flex-col overflow-hidden`}>
+          <div className="flex flex-col lg:flex-row justify-between lg:items-center gap-4 mb-6">
             <h2 className="font-heading text-lg font-bold text-gorola-charcoal">
-              {range === "TODAY"
-                ? "Hourly Revenue Today"
-                : range === "WEEK"
-                ? "Weekly Revenue Trend"
-                : range === "MONTH"
-                ? "Monthly Revenue Trend"
-                : range === "YEAR"
-                ? "Yearly Revenue Trend"
-                : "All-Time Revenue Trend"}
+              {chartMode === "REVENUE"
+                ? (range === "TODAY"
+                  ? "Hourly Revenue Today"
+                  : range === "WEEK"
+                  ? "Weekly Revenue Trend"
+                  : range === "MONTH"
+                  ? "Monthly Revenue Trend"
+                  : range === "YEAR"
+                  ? "Yearly Revenue Trend"
+                  : "All-Time Revenue Trend")
+                : (range === "TODAY"
+                  ? `Hourly ${isBooking ? "Bookings" : "Orders"} Today`
+                  : range === "WEEK"
+                  ? `Weekly ${isBooking ? "Bookings" : "Orders"} Trend`
+                  : range === "MONTH"
+                  ? `Monthly ${isBooking ? "Bookings" : "Orders"} Trend`
+                  : range === "YEAR"
+                  ? `Yearly ${isBooking ? "Bookings" : "Orders"} Trend`
+                  : `All-Time ${isBooking ? "Bookings" : "Orders"} Trend`)
+              }
             </h2>
             
             {/* Elegant control panel */}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap sm:flex-nowrap items-center gap-1.5 sm:gap-3 w-full sm:w-auto">
+              {/* Switcher Tabs */}
+              <div className="flex items-center bg-gorola-charcoal/5 p-0.5 sm:p-1 rounded-xl">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("REVENUE")}
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all ${
+                    chartMode === "REVENUE"
+                      ? "bg-white text-gorola-charcoal shadow-sm"
+                      : "text-gorola-slate hover:text-gorola-charcoal"
+                  }`}
+                >
+                  Revenue
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("COUNT")}
+                  className={`px-2.5 sm:px-3 py-1 sm:py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all ${
+                    chartMode === "COUNT"
+                      ? "bg-white text-gorola-charcoal shadow-sm"
+                      : "text-gorola-slate hover:text-gorola-charcoal"
+                  }`}
+                >
+                  {isBooking ? "Bookings" : "Orders"}
+                </button>
+              </div>
               {/* Range Select */}
               <div className="relative">
                 <select
@@ -503,7 +549,7 @@ export function StoreDashboardPage(): ReactElement {
                       setGroupBy("YEARLY");
                     }
                   }}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300"
                 >
                   <option value="TODAY">Today</option>
                   <option value="WEEK">Last 7 Days</option>
@@ -511,7 +557,7 @@ export function StoreDashboardPage(): ReactElement {
                   <option value="YEAR">Current Year</option>
                   <option value="ALL">All Time</option>
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
 
               {/* GroupBy Select */}
@@ -521,7 +567,7 @@ export function StoreDashboardPage(): ReactElement {
                   value={groupBy}
                   onChange={(e) => setGroupBy(e.target.value as "HOURLY" | "DAILY" | "MONTHLY" | "YEARLY")}
                   disabled={range === "TODAY"}
-                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 pr-8 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                  className="appearance-none bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-2.5 sm:px-4 py-1.5 sm:py-2 pr-6 sm:pr-8 text-[11px] sm:text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine cursor-pointer transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {range === "TODAY" ? (
                     <option value="HOURLY">Hourly</option>
@@ -534,21 +580,21 @@ export function StoreDashboardPage(): ReactElement {
                     </>
                   )}
                 </select>
-                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[10px]">▼</div>
+                <div className="absolute right-2 sm:right-3 top-1/2 -translate-y-1/2 pointer-events-none text-gorola-slate/60 text-[8px] sm:text-[10px]">▼</div>
               </div>
             </div>
           </div>
           {/* Custom SVG Bar Chart */}
           <div className="flex-1 min-h-[260px] w-full select-none flex items-stretch mt-4">
             {/* Y-Axis Scale Labels */}
-            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-2.5 pb-2 select-none text-right min-w-[50px] border-r border-gorola-charcoal/5">
-              <span>{formatYAxisLabel(maxRevenue)}</span>
-              <span>{formatYAxisLabel(maxRevenue * 0.5)}</span>
+            <div className="flex flex-col justify-between h-[calc(100%-24px)] text-[9px] font-bold text-gorola-slate/40 pr-1.5 sm:pr-2.5 pb-2 select-none text-right min-w-[35px] sm:min-w-[50px] border-r border-gorola-charcoal/5">
+              <span>{formatYAxisLabel(chartMaxVal)}</span>
+              <span>{formatYAxisLabel(chartMaxVal * 0.5)}</span>
               <span>{formatYAxisLabel(0)}</span>
             </div>
 
             {/* Chart Area with Gridlines & Bars */}
-            <div className="flex-1 h-full relative ml-3">
+            <div className="flex-1 h-full relative ml-1.5 sm:ml-3">
               {/* Gridlines */}
               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none h-[calc(100%-24px)] pb-2 pr-4">
                 <div className="w-full border-t border-dashed border-gorola-charcoal/5" />
@@ -559,7 +605,8 @@ export function StoreDashboardPage(): ReactElement {
               {/* Bars container */}
               <div className={`relative h-[calc(100%-24px)] w-full flex items-end ${gapClass} pr-4 z-10`}>
                 {dashboard.weeklyRevenue.map((item, index) => {
-                  const barHeightPct = maxRevenue > 0 && item.revenue > 0 ? (item.revenue / maxRevenue) * 94 + 6 : 6;
+                  const val = chartMode === "REVENUE" ? item.revenue : (item.count ?? 0);
+                  const barHeightPct = chartMaxVal > 0 && val > 0 ? (val / chartMaxVal) * 94 + 6 : 6;
                   const isToday = index === dashboard.weeklyRevenue.length - 1;
                   return (
                     <div key={item.date} className="relative flex-1 min-w-0 h-full flex flex-col justify-end items-center group">
@@ -574,7 +621,7 @@ export function StoreDashboardPage(): ReactElement {
                       >
                         {/* Tooltip on hover */}
                         <div className="opacity-0 group-hover:opacity-100 absolute bottom-[105%] left-1/2 -translate-x-1/2 bg-gorola-charcoal text-white text-xs py-1.5 px-3 rounded-lg font-bold transition-all duration-200 z-20 pointer-events-none shadow-md whitespace-nowrap">
-                          {formatDateLabel(item.date)} • {formatCurrency(item.revenue)}
+                          {formatDateLabel(item.date)} • {chartMode === "REVENUE" ? formatCurrency(item.revenue) : `${val} ${isBooking ? "bookings" : "orders"}`}
                         </div>
                       </div>
 

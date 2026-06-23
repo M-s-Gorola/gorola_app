@@ -44,4 +44,50 @@ export function registerSearchRoutes(app: FastifyInstance): void {
     const data = await searchRepo.searchGlobally(parsed.data.q, parsed.data.limit);
     return success(request, reply, data);
   });
+
+  app.get("/api/v1/search/suggestions", async (request, reply) => {
+    const parsed = searchQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid search query", parsed.error.flatten());
+    }
+
+    const rawData = await searchRepo.getSearchSuggestions(parsed.data.q, parsed.data.limit);
+
+    const suggestions: Array<{
+      id: string;
+      name: string;
+      type: "category" | "subcategory" | "product" | "service";
+      redirectUrl: string;
+    }> = [];
+
+    for (const cat of rawData.categories) {
+      suggestions.push({
+        id: cat.id,
+        name: cat.name,
+        type: "category",
+        redirectUrl: `/categories/${cat.slug}`
+      });
+    }
+
+    for (const sub of rawData.subcategories) {
+      suggestions.push({
+        id: sub.id,
+        name: sub.name,
+        type: "subcategory",
+        redirectUrl: `/categories/${sub.category.slug}/${sub.slug}`
+      });
+    }
+
+    for (const prod of rawData.products) {
+      const isService = prod.store?.storeType === "BOOKING_COMMERCE";
+      suggestions.push({
+        id: prod.id,
+        name: prod.name,
+        type: isService ? "service" : "product",
+        redirectUrl: `/products/${prod.id}`
+      });
+    }
+
+    return success(request, reply, suggestions);
+  });
 }

@@ -341,4 +341,386 @@ describe("Admin Dashboard Integration Tests", () => {
     expect(data.weeklyRevenue).toBeInstanceOf(Array);
     expect(data.weeklyRevenue.length).toBe(7);
   });
+
+  it("should return 200 and correct orders trend filtered by storeIds", async () => {
+    const storeA = await db.store.create({
+      data: {
+        name: "Store A",
+        description: "Organic Groceries",
+        phone: "+919999999911",
+        address: "Store A Street",
+        storeType: "QUICK_COMMERCE"
+      }
+    });
+    const storeB = await db.store.create({
+      data: {
+        name: "Store B",
+        description: "Fast Foods",
+        phone: "+919999999912",
+        address: "Store B Street",
+        storeType: "QUICK_COMMERCE"
+      }
+    });
+    const storeC = await db.store.create({
+      data: {
+        name: "Store C",
+        description: "Other Shop",
+        phone: "+919999999913",
+        address: "Store C Street",
+        storeType: "QUICK_COMMERCE"
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: {
+        name: "Test Buyer",
+        phone: "+919876543211",
+        isVerified: true
+      }
+    });
+
+    // Create Quick commerce orders for Store A, Store B, Store C
+    await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeA.id,
+        status: "DELIVERED",
+        subtotal: 100.0,
+        deliveryFee: 20.0,
+        total: 120.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near park"
+      }
+    });
+    await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeB.id,
+        status: "PLACED",
+        subtotal: 200.0,
+        deliveryFee: 20.0,
+        total: 220.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near park"
+      }
+    });
+    // Order for Store C (should be filtered out when querying for storeA, storeB)
+    await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeC.id,
+        status: "DELIVERED",
+        subtotal: 300.0,
+        deliveryFee: 20.0,
+        total: 320.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near park"
+      }
+    });
+
+    const token = await generateAccessToken("admin-123", "ADMIN");
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/dashboard/orders-trend?range=WEEK&groupBy=DAILY&storeIds=${storeA.id},${storeB.id}`,
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data).toBeInstanceOf(Array);
+    
+    // Sum counts to verify only Store A and Store B orders are aggregated
+    const totalCount = body.data.reduce((acc: number, item: { count: number }) => acc + item.count, 0);
+    expect(totalCount).toBe(2);
+  });
+
+  it("should return 200 and correct bookings trend filtered by storeIds", async () => {
+    const storeC = await db.store.create({
+      data: {
+        name: "Store C",
+        description: "Services Store",
+        phone: "+919999999914",
+        address: "Store C Street",
+        storeType: "BOOKING_COMMERCE"
+      }
+    });
+    const storeD = await db.store.create({
+      data: {
+        name: "Store D",
+        description: "Other Services",
+        phone: "+919999999915",
+        address: "Store D Street",
+        storeType: "BOOKING_COMMERCE"
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: {
+        name: "Test Buyer",
+        phone: "+919876543212",
+        isVerified: true
+      }
+    });
+
+    // Create booking orders
+    const createBooking = async (storeId: string, status: "APPROVED" | "PENDING_APPROVAL") => {
+      const order = await db.order.create({
+        data: {
+          userId: buyer.id,
+          storeId,
+          status: "PLACED",
+          orderType: "BOOKING",
+          subtotal: 500.0,
+          deliveryFee: 50.0,
+          total: 550.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near park"
+        }
+      });
+      await db.bookingOrder.create({
+        data: {
+          orderId: order.id,
+          scheduledDate: new Date(),
+          timeslot: "09:00-11:00",
+          approvalStatus: status
+        }
+      });
+    };
+
+    await createBooking(storeC.id, "APPROVED");
+    await createBooking(storeC.id, "PENDING_APPROVAL");
+    // Booking for Store D (filtered out)
+    await createBooking(storeD.id, "APPROVED");
+
+    const token = await generateAccessToken("admin-123", "ADMIN");
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/dashboard/bookings-trend?range=WEEK&groupBy=DAILY&storeIds=${storeC.id}`,
+      headers: {
+        authorization: `Bearer ${token}`
+      }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data).toBeInstanceOf(Array);
+    
+    // Sum counts to verify only Store C bookings (APPROVED/PENDING_APPROVAL) are aggregated
+    const totalCount = body.data.reduce((acc: number, item: { count: number }) => acc + item.count, 0);
+    expect(totalCount).toBe(2);
+  });
+
+  it("should return 200 and correct dashboard metrics filtered by storeType and storeIds", async () => {
+    const storeA = await db.store.create({
+      data: {
+        name: "Quick Store A",
+        description: "Organic Groceries",
+        phone: "+919999999905",
+        address: "Store A Street",
+        storeType: "QUICK_COMMERCE"
+      }
+    });
+
+    const storeB = await db.store.create({
+      data: {
+        name: "Booking Store B",
+        description: "Services Store",
+        phone: "+919999999906",
+        address: "Store B Street",
+        storeType: "BOOKING_COMMERCE"
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: {
+        name: "Test Buyer X",
+        phone: "+919876543209",
+        isVerified: true
+      }
+    });
+
+    // Order for Store A (Quick)
+    await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeA.id,
+        status: "DELIVERED",
+        subtotal: 150.0,
+        deliveryFee: 20.0,
+        total: 170.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near park"
+      }
+    });
+
+    // Booking for Store B (Booking)
+    const bookingOrder = await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeB.id,
+        status: "PLACED",
+        orderType: "BOOKING",
+        subtotal: 500.0,
+        deliveryFee: 50.0,
+        total: 550.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near park"
+      }
+    });
+    await db.bookingOrder.create({
+      data: {
+        orderId: bookingOrder.id,
+        scheduledDate: new Date(),
+        timeslot: "09:00-11:00",
+        approvalStatus: "APPROVED"
+      }
+    });
+
+    const token = await generateAccessToken("admin-123", "ADMIN");
+
+    // 1. Request with storeType = QUICK_COMMERCE
+    const resQuick = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/dashboard?storeType=QUICK_COMMERCE",
+      headers: { authorization: `Bearer ${token}` }
+    });
+
+    expect(resQuick.statusCode).toBe(200);
+    const bodyQuick = resQuick.json().data;
+    expect(bodyQuick.totalOrdersToday).toBe(1);
+    expect(bodyQuick.totalRevenueToday).toBe(170.0);
+    expect(bodyQuick.perStoreBreakdown).toHaveLength(1);
+    expect(bodyQuick.perStoreBreakdown[0].storeId).toBe(storeA.id);
+
+    // 2. Request with storeIds = storeB.id
+    const resStoreB = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/dashboard?storeIds=${storeB.id}`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+
+    expect(resStoreB.statusCode).toBe(200);
+    const bodyStoreB = resStoreB.json().data;
+    expect(bodyStoreB.totalOrdersToday).toBe(1);
+    expect(bodyStoreB.totalRevenueToday).toBe(550.0);
+    expect(bodyStoreB.perStoreBreakdown).toHaveLength(1);
+    expect(bodyStoreB.perStoreBreakdown[0].storeId).toBe(storeB.id);
+  });
+
+  it("should support storeType filter in orders-trend and bookings-trend endpoints", async () => {
+    const storeA = await db.store.create({
+      data: {
+        name: "Quick Store A",
+        description: "Organic Groceries",
+        phone: "+919999999907",
+        address: "Store A Street",
+        storeType: "QUICK_COMMERCE"
+      }
+    });
+
+    const storeB = await db.store.create({
+      data: {
+        name: "Booking Store B",
+        description: "Services Store",
+        phone: "+919999999908",
+        address: "Store B Street",
+        storeType: "BOOKING_COMMERCE"
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: {
+        name: "Test Buyer Y",
+        phone: "+919876543208",
+        isVerified: true
+      }
+    });
+
+    // Create a Quick Order for Store A
+    await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeA.id,
+        status: "DELIVERED",
+        subtotal: 100.0,
+        deliveryFee: 20.0,
+        total: 120.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near park"
+      }
+    });
+
+    // Create a Booking Order for Store B
+    const bookingOrder = await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: storeB.id,
+        status: "PLACED",
+        orderType: "BOOKING",
+        subtotal: 300.0,
+        deliveryFee: 30.0,
+        total: 330.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near school"
+      }
+    });
+    await db.bookingOrder.create({
+      data: {
+        orderId: bookingOrder.id,
+        scheduledDate: new Date(),
+        timeslot: "09:00-11:00",
+        approvalStatus: "APPROVED"
+      }
+    });
+
+    const token = await generateAccessToken("admin-123", "ADMIN");
+
+    // 1. orders-trend with storeType=BOOKING_COMMERCE (should return 0 orders because bookings aren't QUICK orders)
+    const resOrdersBookingType = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/dashboard/orders-trend?storeType=BOOKING_COMMERCE",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(resOrdersBookingType.statusCode).toBe(200);
+    const dataOrdersBookingType = resOrdersBookingType.json().data;
+    const totalCountOrdersBooking = dataOrdersBookingType.reduce((acc: number, item: { count: number }) => acc + item.count, 0);
+    expect(totalCountOrdersBooking).toBe(0);
+
+    // 2. orders-trend with storeType=QUICK_COMMERCE (should return 1 order)
+    const resOrdersQuickType = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/dashboard/orders-trend?storeType=QUICK_COMMERCE",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(resOrdersQuickType.statusCode).toBe(200);
+    const dataOrdersQuickType = resOrdersQuickType.json().data;
+    const totalCountOrdersQuick = dataOrdersQuickType.reduce((acc: number, item: { count: number }) => acc + item.count, 0);
+    expect(totalCountOrdersQuick).toBe(1);
+
+    // 3. bookings-trend with storeType=QUICK_COMMERCE (should return 0 bookings)
+    const resBookingsQuickType = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/dashboard/bookings-trend?storeType=QUICK_COMMERCE",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(resBookingsQuickType.statusCode).toBe(200);
+    const dataBookingsQuickType = resBookingsQuickType.json().data;
+    const totalCountBookingsQuick = dataBookingsQuickType.reduce((acc: number, item: { count: number }) => acc + item.count, 0);
+    expect(totalCountBookingsQuick).toBe(0);
+
+    // 4. bookings-trend with storeType=BOOKING_COMMERCE (should return 1 booking)
+    const resBookingsBookingType = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/dashboard/bookings-trend?storeType=BOOKING_COMMERCE",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(resBookingsBookingType.statusCode).toBe(200);
+    const dataBookingsBookingType = resBookingsBookingType.json().data;
+    const totalCountBookingsBooking = dataBookingsBookingType.reduce((acc: number, item: { count: number }) => acc + item.count, 0);
+    expect(totalCountBookingsBooking).toBe(1);
+  });
 });

@@ -1,12 +1,14 @@
 import { AppError, ForbiddenError, NotFoundError, ValidationError } from "@gorola/shared";
 import { type Order, Prisma, type PrismaClient } from "@prisma/client";
 
+import { SystemSettingService } from "../admin/system-setting.service.js";
 import { BookingOrderRepository } from "./booking-order.repository.js";
 
 export class BookingOrderService {
   public constructor(
     private readonly db: PrismaClient,
     public readonly repository: BookingOrderRepository,
+    private readonly systemSettingService: SystemSettingService,
     private readonly orderEmitter?: { emitStatusChanged: (orderId: string, status: string) => void }
   ) {}
 
@@ -222,8 +224,11 @@ export class BookingOrderService {
       }
     }
 
+    const serviceChargeVal = await this.systemSettingService.getSettingValue("SERVICE_CHARGE", "0");
+    const serviceCharge = new Prisma.Decimal(serviceChargeVal);
+
     const total = Prisma.Decimal.max(
-      subtotal.sub(appliedDiscountAmount).sub(appliedOfferAmount),
+      subtotal.add(serviceCharge).sub(appliedDiscountAmount).sub(appliedOfferAmount),
       new Prisma.Decimal(0)
     );
 
@@ -243,7 +248,7 @@ export class BookingOrderService {
           status: "PENDING_APPROVAL",
           orderType: "BOOKING",
           subtotal,
-          deliveryFee: new Prisma.Decimal(0),
+          deliveryFee: serviceCharge,
           total,
           paymentMethod: "COD",
           landmarkDescription: address.landmarkDescription,

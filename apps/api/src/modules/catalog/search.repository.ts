@@ -83,4 +83,59 @@ export class SearchRepository {
       products: mappedProducts
     };
   }
+
+  public async getSearchSuggestions(query: string, limit: number = 5) {
+    const [categories, subcategories, products] = await Promise.all([
+      this.db.category.findMany({
+        where: {
+          isActive: true,
+          name: { contains: query, mode: "insensitive" }
+        },
+        take: limit,
+        select: { id: true, name: true, slug: true }
+      }),
+      this.db.subCategory.findMany({
+        where: {
+          isActive: true,
+          name: { contains: query, mode: "insensitive" }
+        },
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          category: {
+            select: { slug: true }
+          }
+        }
+      }),
+      this.db.product.findMany({
+        where: {
+          isActive: true,
+          isDeleted: false,
+          store: {
+            isActive: true,
+            isDeleted: false
+          },
+          name: { contains: query, mode: "insensitive" }
+        },
+        take: limit,
+        select: {
+          id: true,
+          name: true,
+          store: {
+            select: {
+              storeType: true
+            }
+          }
+        }
+      })
+    ]);
+
+    return {
+      categories,
+      subcategories,
+      products
+    };
+  }
 }

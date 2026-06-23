@@ -424,6 +424,16 @@ model FeatureFlag {
   @@index([key, value])
 }
 
+model SystemSetting {
+  id          String   @id @default(cuid())
+  key         String   @unique
+  value       String
+  description String?
+  updatedBy   String
+  updatedAt   DateTime @updatedAt
+}
+
+
 
 model AuditLog {
   id         String    @id @default(cuid())

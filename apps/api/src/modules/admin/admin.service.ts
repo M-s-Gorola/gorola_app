@@ -49,8 +49,9 @@ export type AdminDashboardData = {
     ordersToday: number;
     revenueToday: number;
     pendingOrdersCount: number;
+    storeType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
   }[];
-  weeklyRevenue: { date: string; revenue: number }[];
+  weeklyRevenue: { date: string; revenue: number; count: number }[];
   lowStockAlertCount: number;
   totalActiveBuyers: number;
   totalProducts: number;
@@ -71,7 +72,9 @@ export class AdminService {
 
   public async getDashboard(
     range = "WEEK",
-    groupBy = "DAILY"
+    groupBy = "DAILY",
+    storeIds: string[] = [],
+    storeType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE"
   ): Promise<AdminDashboardData> {
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
@@ -80,15 +83,22 @@ export class AdminService {
 
     // 1. Fetch all stores
     const stores = await this.db.store.findMany({
-      where: { isDeleted: false },
-      select: { id: true, name: true }
+      where: {
+        isDeleted: false,
+        ...(storeType ? { storeType } : {})
+      },
+      select: { id: true, name: true, storeType: true }
     });
 
     // 2. Fetch all orders created today across active stores
     const ordersToday = await this.db.order.findMany({
       where: {
         createdAt: { gte: startOfToday, lte: endOfToday },
-        store: { isDeleted: false }
+        store: {
+          isDeleted: false,
+          ...(storeType ? { storeType } : {}),
+          ...(storeIds.length > 0 ? { id: { in: storeIds } } : {})
+        }
       },
       select: {
         storeId: true,
@@ -119,7 +129,7 @@ export class AdminService {
       .reduce((acc, o) => acc + Number(o.total), 0);
 
     // 3. Dynamic revenue trend — same logic as StoreDashboardPage
-    const weeklyRevenue: { date: string; revenue: number }[] = [];
+    const weeklyRevenue: { date: string; revenue: number; count: number }[] = [];
     const now = new Date();
     let rangeStart = new Date(now);
     let rangeEnd = new Date(now);
@@ -146,7 +156,11 @@ export class AdminService {
 
     const trendOrders = await this.db.order.findMany({
       where: {
-        store: { isDeleted: false },
+        store: {
+          isDeleted: false,
+          ...(storeType ? { storeType } : {}),
+          ...(storeIds.length > 0 ? { id: { in: storeIds } } : {})
+        },
         OR: [
           { orderType: "QUICK", status: { in: ["DELIVERED", "PLACED"] } },
           {
@@ -164,10 +178,9 @@ export class AdminService {
     if (resolvedGroupBy === "HOURLY") {
       for (let hour = 0; hour < 24; hour++) {
         const label = `${String(hour).padStart(2, "0")}:00`;
-        const sum = trendOrders
-          .filter((o) => new Date(o.createdAt).getHours() === hour)
-          .reduce((acc, o) => acc + Number(o.total), 0);
-        weeklyRevenue.push({ date: label, revenue: sum });
+        const groupOrders = trendOrders.filter((o) => new Date(o.createdAt).getHours() === hour);
+        const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: label, revenue: sum, count: groupOrders.length });
       }
     } else if (resolvedGroupBy === "DAILY") {
       if (range === "WEEK") {
@@ -181,10 +194,9 @@ export class AdminService {
           dayStart.setHours(0, 0, 0, 0);
           const dayEnd = new Date(d);
           dayEnd.setHours(23, 59, 59, 999);
-          const sum = trendOrders
-            .filter((o) => { const oct = new Date(o.createdAt); return oct >= dayStart && oct <= dayEnd; })
-            .reduce((acc, o) => acc + Number(o.total), 0);
-          weeklyRevenue.push({ date: `${year}-${month}-${date}`, revenue: sum });
+          const groupOrders = trendOrders.filter((o) => { const oct = new Date(o.createdAt); return oct >= dayStart && oct <= dayEnd; });
+          const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+          weeklyRevenue.push({ date: `${year}-${month}-${date}`, revenue: sum, count: groupOrders.length });
         }
       } else if (range === "MONTH") {
         for (let i = 29; i >= 0; i--) {
@@ -195,44 +207,44 @@ export class AdminService {
           dayStart.setHours(0, 0, 0, 0);
           const dayEnd = new Date(d);
           dayEnd.setHours(23, 59, 59, 999);
-          const sum = trendOrders
-            .filter((o) => { const oct = new Date(o.createdAt); return oct >= dayStart && oct <= dayEnd; })
-            .reduce((acc, o) => acc + Number(o.total), 0);
-          weeklyRevenue.push({ date: label, revenue: sum });
+          const groupOrders = trendOrders.filter((o) => { const oct = new Date(o.createdAt); return oct >= dayStart && oct <= dayEnd; });
+          const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+          weeklyRevenue.push({ date: label, revenue: sum, count: groupOrders.length });
         }
       } else {
         // YEAR / ALL — group by weekday pattern
         const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
         for (const w of weekdays) {
-          const sum = trendOrders
-            .filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" }) === w)
-            .reduce((acc, o) => acc + Number(o.total), 0);
-          weeklyRevenue.push({ date: w, revenue: sum });
+          const groupOrders = trendOrders.filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" }) === w);
+          const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+          weeklyRevenue.push({ date: w, revenue: sum, count: groupOrders.length });
         }
       }
     } else if (resolvedGroupBy === "MONTHLY") {
       const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
       for (const m of months) {
-        const sum = trendOrders
-          .filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" }) === m)
-          .reduce((acc, o) => acc + Number(o.total), 0);
-        weeklyRevenue.push({ date: m, revenue: sum });
+        const groupOrders = trendOrders.filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" }) === m);
+        const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: m, revenue: sum, count: groupOrders.length });
       }
     } else if (resolvedGroupBy === "YEARLY") {
       const currentYear = now.getFullYear();
       for (let i = 4; i >= 0; i--) {
         const targetYear = currentYear - i;
-        const sum = trendOrders
-          .filter((o) => new Date(o.createdAt).getFullYear() === targetYear)
-          .reduce((acc, o) => acc + Number(o.total), 0);
-        weeklyRevenue.push({ date: String(targetYear), revenue: sum });
+        const groupOrders = trendOrders.filter((o) => new Date(o.createdAt).getFullYear() === targetYear);
+        const sum = groupOrders.reduce((acc, o) => acc + Number(o.total), 0);
+        weeklyRevenue.push({ date: String(targetYear), revenue: sum, count: groupOrders.length });
       }
     }
 
     // 4. Pending orders across all active stores
     const pendingOrders = await this.db.order.findMany({
       where: {
-        store: { isDeleted: false },
+        store: {
+          isDeleted: false,
+          ...(storeType ? { storeType } : {}),
+          ...(storeIds.length > 0 ? { id: { in: storeIds } } : {})
+        },
         OR: [
           { status: "PLACED", orderType: "QUICK" },
           { bookingOrder: { approvalStatus: "PENDING_APPROVAL" }, orderType: "BOOKING" }
@@ -242,7 +254,7 @@ export class AdminService {
     });
 
     // 5. Per-store breakdown (in-memory, no N+1)
-    const perStoreBreakdown = stores.map((s) => {
+    let perStoreBreakdown = stores.map((s) => {
       const storeOrders = ordersToday.filter((o) => o.storeId === s.id);
       const revenue = storeOrders.filter(isRevenueOrder).reduce((acc, o) => acc + Number(o.total), 0);
       const pendingCount = pendingOrders.filter((o) => o.storeId === s.id).length;
@@ -251,9 +263,14 @@ export class AdminService {
         storeName: s.name,
         ordersToday: storeOrders.length,
         revenueToday: revenue,
-        pendingOrdersCount: pendingCount
+        pendingOrdersCount: pendingCount,
+        storeType: s.storeType as "QUICK_COMMERCE" | "BOOKING_COMMERCE"
       };
     });
+
+    if (storeIds.length > 0) {
+      perStoreBreakdown = perStoreBreakdown.filter((item) => storeIds.includes(item.storeId));
+    }
 
     // 6. Platform-wide metrics
     const [lowStockAlertCount, totalActiveBuyers, totalProducts, pendingAdApprovalsCount, flags] =
@@ -1864,6 +1881,236 @@ export class AdminService {
 
       return updatedRider;
     });
+  }
+
+  public async getOrdersTrend(params: {
+    range?: string;
+    groupBy?: string;
+    storeIds?: string[];
+    storeType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined;
+  }): Promise<{ date: string; count: number }[]> {
+    const range = params.range ?? "WEEK";
+    const groupBy = params.groupBy ?? "DAILY";
+    const storeIds = params.storeIds ?? [];
+
+    const now = new Date();
+    let rangeStart = new Date(now);
+    let rangeEnd = new Date(now);
+
+    if (range === "TODAY") {
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "WEEK") {
+      rangeStart.setDate(now.getDate() - 6);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "MONTH") {
+      rangeStart.setDate(now.getDate() - 29);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "YEAR") {
+      rangeStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      rangeEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else {
+      // ALL
+      rangeStart = new Date(2020, 0, 1, 0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    }
+
+    const orders = await this.db.order.findMany({
+      where: {
+        orderType: "QUICK",
+        status: { in: ["DELIVERED", "PLACED"] },
+        store: { 
+          isDeleted: false, 
+          storeType: params.storeType ?? "QUICK_COMMERCE" 
+        },
+        ...(storeIds.length > 0 ? { storeId: { in: storeIds } } : {}),
+        createdAt: { gte: rangeStart, lte: rangeEnd }
+      },
+      select: { createdAt: true }
+    });
+
+    const resolvedGroupBy = range === "TODAY" ? "HOURLY" : groupBy;
+    const trend: { date: string; count: number }[] = [];
+
+    if (resolvedGroupBy === "HOURLY") {
+      for (let hour = 0; hour < 24; hour++) {
+        const label = `${String(hour).padStart(2, "0")}:00`;
+        const count = orders.filter((o) => new Date(o.createdAt).getHours() === hour).length;
+        trend.push({ date: label, count });
+      }
+    } else if (resolvedGroupBy === "DAILY") {
+      if (range === "WEEK") {
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const date = String(d.getDate()).padStart(2, "0");
+          const dayStart = new Date(d);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(d);
+          dayEnd.setHours(23, 59, 59, 999);
+          const count = orders.filter((o) => {
+            const oct = new Date(o.createdAt);
+            return oct >= dayStart && oct <= dayEnd;
+          }).length;
+          trend.push({ date: `${year}-${month}-${date}`, count });
+        }
+      } else if (range === "MONTH") {
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+          const dayStart = new Date(d);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(d);
+          dayEnd.setHours(23, 59, 59, 999);
+          const count = orders.filter((o) => {
+            const oct = new Date(o.createdAt);
+            return oct >= dayStart && oct <= dayEnd;
+          }).length;
+          trend.push({ date: label, count });
+        }
+      } else {
+        const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        for (const w of weekdays) {
+          const count = orders.filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" }) === w).length;
+          trend.push({ date: w, count });
+        }
+      }
+    } else if (resolvedGroupBy === "MONTHLY") {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      for (const m of months) {
+        const count = orders.filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" }) === m).length;
+        trend.push({ date: m, count });
+      }
+    } else if (resolvedGroupBy === "YEARLY") {
+      const currentYear = now.getFullYear();
+      for (let i = 4; i >= 0; i--) {
+        const targetYear = currentYear - i;
+        const count = orders.filter((o) => new Date(o.createdAt).getFullYear() === targetYear).length;
+        trend.push({ date: String(targetYear), count });
+      }
+    }
+
+    return trend;
+  }
+
+  public async getBookingsTrend(params: {
+    range?: string;
+    groupBy?: string;
+    storeIds?: string[];
+    storeType?: "QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined;
+  }): Promise<{ date: string; count: number }[]> {
+    const range = params.range ?? "WEEK";
+    const groupBy = params.groupBy ?? "DAILY";
+    const storeIds = params.storeIds ?? [];
+
+    const now = new Date();
+    let rangeStart = new Date(now);
+    let rangeEnd = new Date(now);
+
+    if (range === "TODAY") {
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "WEEK") {
+      rangeStart.setDate(now.getDate() - 6);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "MONTH") {
+      rangeStart.setDate(now.getDate() - 29);
+      rangeStart.setHours(0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    } else if (range === "YEAR") {
+      rangeStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0, 0);
+      rangeEnd = new Date(now.getFullYear(), 11, 31, 23, 59, 59, 999);
+    } else {
+      // ALL
+      rangeStart = new Date(2020, 0, 1, 0, 0, 0, 0);
+      rangeEnd.setHours(23, 59, 59, 999);
+    }
+
+    const bookings = await this.db.order.findMany({
+      where: {
+        orderType: "BOOKING",
+        bookingOrder: { approvalStatus: { in: ["APPROVED", "PENDING_APPROVAL"] } },
+        store: { 
+          isDeleted: false, 
+          storeType: params.storeType ?? "BOOKING_COMMERCE" 
+        },
+        ...(storeIds.length > 0 ? { storeId: { in: storeIds } } : {}),
+        createdAt: { gte: rangeStart, lte: rangeEnd }
+      },
+      select: { createdAt: true }
+    });
+
+    const resolvedGroupBy = range === "TODAY" ? "HOURLY" : groupBy;
+    const trend: { date: string; count: number }[] = [];
+
+    if (resolvedGroupBy === "HOURLY") {
+      for (let hour = 0; hour < 24; hour++) {
+        const label = `${String(hour).padStart(2, "0")}:00`;
+        const count = bookings.filter((o) => new Date(o.createdAt).getHours() === hour).length;
+        trend.push({ date: label, count });
+      }
+    } else if (resolvedGroupBy === "DAILY") {
+      if (range === "WEEK") {
+        for (let i = 6; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const year = d.getFullYear();
+          const month = String(d.getMonth() + 1).padStart(2, "0");
+          const date = String(d.getDate()).padStart(2, "0");
+          const dayStart = new Date(d);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(d);
+          dayEnd.setHours(23, 59, 59, 999);
+          const count = bookings.filter((o) => {
+            const oct = new Date(o.createdAt);
+            return oct >= dayStart && oct <= dayEnd;
+          }).length;
+          trend.push({ date: `${year}-${month}-${date}`, count });
+        }
+      } else if (range === "MONTH") {
+        for (let i = 29; i >= 0; i--) {
+          const d = new Date();
+          d.setDate(d.getDate() - i);
+          const label = d.toLocaleDateString("en-IN", { day: "numeric", month: "short" });
+          const dayStart = new Date(d);
+          dayStart.setHours(0, 0, 0, 0);
+          const dayEnd = new Date(d);
+          dayEnd.setHours(23, 59, 59, 999);
+          const count = bookings.filter((o) => {
+            const oct = new Date(o.createdAt);
+            return oct >= dayStart && oct <= dayEnd;
+          }).length;
+          trend.push({ date: label, count });
+        }
+      } else {
+        const weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+        for (const w of weekdays) {
+          const count = bookings.filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { weekday: "short" }) === w).length;
+          trend.push({ date: w, count });
+        }
+      }
+    } else if (resolvedGroupBy === "MONTHLY") {
+      const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+      for (const m of months) {
+        const count = bookings.filter((o) => new Date(o.createdAt).toLocaleDateString("en-US", { month: "short" }) === m).length;
+        trend.push({ date: m, count });
+      }
+    } else if (resolvedGroupBy === "YEARLY") {
+      const currentYear = now.getFullYear();
+      for (let i = 4; i >= 0; i--) {
+        const targetYear = currentYear - i;
+        const count = bookings.filter((o) => new Date(o.createdAt).getFullYear() === targetYear).length;
+        trend.push({ date: String(targetYear), count });
+      }
+    }
+
+    return trend;
   }
 }
 

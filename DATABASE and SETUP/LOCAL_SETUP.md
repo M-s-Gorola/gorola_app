@@ -36,8 +36,9 @@ docker run -d --name gorola-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_D
 
 ## 3. Environment Variables
 
+### Root Environment Variables (`.env`)
 1.  Navigate to the `GoRola_app` directory.
-2.  Copy the example env file:
+2.  Copy the root example env file:
     ```powershell
     cp .env.example .env
     ```
@@ -46,6 +47,49 @@ docker run -d --name gorola-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_D
     DATABASE_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
     DATABASE_URL_TEST="postgresql://postgres:postgres@localhost:5432/gorola_test"
     REDIS_URL="redis://localhost:6379"
+    ```
+4.  *(Optional for local dev, Required for production)* **Generate JWT RS256 Keys**:
+    In local dev, the API automatically generates ephemeral RSA keys if they are left blank. However, if you need to test with persistent keys, generate a 2048-bit RSA public/private key pair:
+
+    *   **Option A: Using Node.js (Easiest & cross-platform)**
+        ```powershell
+        node -e "const crypto = require('crypto'); const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, modulusLength: 2048 }); console.log('JWT_PRIVATE_KEY:\n' + privateKey); console.log('JWT_PUBLIC_KEY:\n' + publicKey);"
+        ```
+    *   **Option B: Using OpenSSL**
+        ```bash
+        openssl genrsa -out private.pem 2048
+        openssl rsa -in private.pem -pubout -out public.pem
+        ```
+    
+    Paste the generated multiline PEM strings into `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` respectively in your `.env` file.
+
+    > [!IMPORTANT]
+    > In production/PaaS environments (like Railway), these variables are **required** in the host configuration. Missing JWT keys in production will prevent the API from starting, resulting in `502 Bad Gateway` and/or CORS errors.
+
+
+### API Environment Variables (`apps/api/.env`)
+The Prisma CLI runs with the working directory `apps/api`, so it loads `apps/api/.env` for commands like migrations and seeding.
+1.  Copy the API example env file:
+    ```powershell
+    cp apps/api/.env.example apps/api/.env
+    ```
+2.  Update the `apps/api/.env` file with the connection strings:
+    ```env
+    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
+    DIRECT_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
+    ```
+
+### Web Environment Variables (`apps/web/.env`)
+The Vite development server runs in `apps/web`, loading `apps/web/.env` for the frontend.
+1.  Copy the Web example env file:
+    ```powershell
+    cp apps/web/.env.example apps/web/.env
+    ```
+2.  Ensure or update the `apps/web/.env` file with:
+    ```env
+    VITE_API_BASE_URL=http://localhost:3001
+    VITE_MAP_PROVIDER=leaflet
+    VITE_OLA_MAPS_API_KEY=
     ```
 
 ---
@@ -107,7 +151,7 @@ pnpm --filter @gorola/web dev
 ```
 
 The app will be available at:
-- **Frontend**: http://localhost:5173
+- **Frontend**: http://localhost:5180
 - **API**: http://localhost:3001
 
 ---

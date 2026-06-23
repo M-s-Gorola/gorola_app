@@ -949,7 +949,7 @@ export function StoreBookingsPage(): ReactElement {
                 <span className="font-semibold">Rs {Number(selectedBooking.subtotal || 0).toFixed(2)}</span>
               </div>
               <div className="flex justify-between items-center text-xs text-gorola-slate">
-                <span>Delivery Fee</span>
+                <span>Service Fee</span>
                 <span className="font-semibold">Rs {Number(selectedBooking.deliveryFee || 0).toFixed(2)}</span>
               </div>
               {Number(selectedBooking.discountAmount || 0) > 0 && (

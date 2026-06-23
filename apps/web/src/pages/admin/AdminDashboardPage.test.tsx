@@ -58,6 +58,58 @@ describe("AdminDashboardPage", () => {
       userId: "mock-admin-id",
       twoFactorVerified: true
     });
+
+    // Default mock implementation to prevent queries from failing
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { id: "store-a", name: "Organic Shop", storeType: "QUICK_COMMERCE", isActive: true },
+              { id: "store-b", name: "Tech Hub", storeType: "QUICK_COMMERCE", isActive: true },
+              { id: "store-c", name: "Services Store", storeType: "BOOKING_COMMERCE", isActive: true }
+            ]
+          }
+        });
+      }
+      if (url.includes("/admin/settings")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { key: "DELIVERY_CHARGE", value: "30.00" },
+              { key: "SERVICE_CHARGE", value: "0.00" }
+            ]
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            totalOrdersToday: 24,
+            totalRevenueToday: 3450.75,
+            perStoreBreakdown: [
+              {
+                storeId: "store-a",
+                storeName: "Organic Shop",
+                ordersToday: 14,
+                revenueToday: 1850.5,
+                pendingOrdersCount: 2,
+                storeType: "QUICK_COMMERCE"
+              }
+            ],
+            weeklyRevenue: [],
+            lowStockAlertCount: 3,
+            totalActiveBuyers: 150,
+            totalProducts: 45,
+            pendingAdApprovalsCount: 2,
+            featureFlags: []
+          }
+        }
+      });
+    });
   });
 
   it("renders skeletons during loading state", () => {
@@ -71,7 +123,7 @@ describe("AdminDashboardPage", () => {
   });
 
   it("renders error message when API call fails", async () => {
-    getMock.mockRejectedValueOnce(new Error("Network Error"));
+    getMock.mockImplementation(() => Promise.reject(new Error("Network Error")));
 
     renderAdminDashboard();
 
@@ -90,14 +142,16 @@ describe("AdminDashboardPage", () => {
             storeName: "Organic Shop",
             ordersToday: 14,
             revenueToday: 1850.5,
-            pendingOrdersCount: 2
+            pendingOrdersCount: 2,
+            storeType: "QUICK_COMMERCE"
           },
           {
             storeId: "store-b",
             storeName: "Tech Hub",
             ordersToday: 10,
             revenueToday: 1600.25,
-            pendingOrdersCount: 1
+            pendingOrdersCount: 1,
+            storeType: "QUICK_COMMERCE"
           }
         ],
         weeklyRevenue: [
@@ -120,7 +174,20 @@ describe("AdminDashboardPage", () => {
       }
     };
 
-    getMock.mockResolvedValueOnce({ data: mockDashboardData });
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { id: "store-a", name: "Organic Shop", storeType: "QUICK_COMMERCE", isActive: true },
+              { id: "store-b", name: "Tech Hub", storeType: "QUICK_COMMERCE", isActive: true }
+            ]
+          }
+        });
+      }
+      return Promise.resolve({ data: mockDashboardData });
+    });
 
     renderAdminDashboard();
 
@@ -143,51 +210,208 @@ describe("AdminDashboardPage", () => {
     expect(screen.getByText("10")).toBeInTheDocument();
     expect(screen.getByText("₹1,600.25")).toBeInTheDocument();
 
-    // Verify Feature Flags section
-    expect(screen.getByText("WEATHER_MODE_ACTIVE")).toBeInTheDocument();
-    expect(screen.getByText("RIDER_INTERFACE_ENABLED")).toBeInTheDocument();
+
   });
 
-  it("handles toggling feature flags with confirmation dialogs and triggers PUT requests", async () => {
+
+  it("renders Orders Volume and Bookings Volume charts with store multi-select picker and triggers endpoint calls", async () => {
     const mockDashboardData = {
       success: true,
       data: {
-        totalOrdersToday: 0,
-        totalRevenueToday: 0,
-        perStoreBreakdown: [],
+        totalOrdersToday: 24,
+        totalRevenueToday: 3450.75,
+        perStoreBreakdown: [
+          {
+            storeId: "store-a",
+            storeName: "Organic Shop",
+            ordersToday: 14,
+            revenueToday: 1850.5,
+            pendingOrdersCount: 2,
+            storeType: "QUICK_COMMERCE"
+          }
+        ],
         weeklyRevenue: [],
-        lowStockAlertCount: 0,
-        totalActiveBuyers: 0,
-        totalProducts: 0,
-        pendingAdApprovalsCount: 0,
-        featureFlags: [
-          { key: "WEATHER_MODE_ACTIVE", value: false }
-        ]
+        lowStockAlertCount: 3,
+        totalActiveBuyers: 150,
+        totalProducts: 45,
+        pendingAdApprovalsCount: 2,
+        featureFlags: []
       }
     };
 
-    getMock.mockResolvedValue({ data: mockDashboardData });
-    patchMock.mockResolvedValueOnce({ data: { success: true } });
+    const mockOrdersTrend = {
+      success: true,
+      data: [
+        { date: "2026-05-18", count: 5 },
+        { date: "2026-05-19", count: 10 }
+      ]
+    };
+    const mockBookingsTrend = {
+      success: true,
+      data: [
+        { date: "2026-05-18", count: 2 },
+        { date: "2026-05-19", count: 4 }
+      ]
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { id: "store-a", name: "Organic Shop", storeType: "QUICK_COMMERCE", isActive: true }
+            ]
+          }
+        });
+      }
+      if (url.includes("/admin/dashboard/orders-trend")) {
+        return Promise.resolve({ data: mockOrdersTrend });
+      }
+      if (url.includes("/admin/dashboard/bookings-trend")) {
+        return Promise.resolve({ data: mockBookingsTrend });
+      }
+      return Promise.resolve({ data: mockDashboardData });
+    });
 
     renderAdminDashboard();
 
-    const toggleButton = await screen.findByRole("switch", { name: /toggle flag WEATHER_MODE_ACTIVE/i });
-    expect(toggleButton).toBeInTheDocument();
-    expect(toggleButton).toHaveAttribute("aria-checked", "false");
+    // Verify Volume chart title is initially 'Weekly System Volume Trend'
+    expect(await screen.findByText("Weekly System Volume Trend")).toBeInTheDocument();
 
-    // Click toggle to turn on
-    fireEvent.click(toggleButton);
+    // Verify Orders Volume and Bookings Volume toggle buttons are not rendered
+    expect(screen.queryByRole("button", { name: "Orders Volume" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Bookings Volume" })).not.toBeInTheDocument();
 
-    // Verify confirmation modal is shown
-    expect(screen.getByText("Confirm Feature Flag Update")).toBeInTheDocument();
-    expect(screen.getByText(/Activating Weather Mode has high system impact/i)).toBeInTheDocument();
+    const storePickerButtons = screen.getAllByRole("button", { name: /filter by store/i });
+    expect(storePickerButtons).toHaveLength(2);
 
-    const confirmButton = screen.getByRole("button", { name: "Confirm Update" });
-    fireEvent.click(confirmButton);
+    // Verify volume-store-type-select exists
+    const volumeStoreTypeSelect = screen.getByTestId("volume-store-type-select") as HTMLSelectElement;
+    expect(volumeStoreTypeSelect).toBeInTheDocument();
+    expect(volumeStoreTypeSelect.value).toBe("ALL");
 
-    // Verify PATCH request is made
+    // Change volume store type to QUICK_COMMERCE
+    fireEvent.change(volumeStoreTypeSelect, { target: { value: "QUICK_COMMERCE" } });
+    expect(volumeStoreTypeSelect.value).toBe("QUICK_COMMERCE");
+
+    // Verify Volume chart title changes to 'Weekly System Orders Volume Trend'
+    expect(screen.getByText("Weekly System Orders Volume Trend")).toBeInTheDocument();
+
     await waitFor(() => {
-      expect(patchMock).toHaveBeenCalledWith("/api/v1/admin/feature-flags/WEATHER_MODE_ACTIVE", { enabled: true });
+      // It should call orders-trend with storeType parameter
+      expect(getMock).toHaveBeenCalledWith(
+        expect.stringContaining("/api/v1/admin/dashboard/orders-trend?")
+      );
+      expect(getMock).toHaveBeenCalledWith(
+        expect.stringContaining("storeType=QUICK_COMMERCE")
+      );
+    });
+  });
+
+  it("does not render the Feature Flags panel or toggles on the dashboard", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            totalOrdersToday: 0,
+            totalRevenueToday: 0,
+            perStoreBreakdown: [],
+            weeklyRevenue: [],
+            lowStockAlertCount: 0,
+            totalActiveBuyers: 0,
+            totalProducts: 0,
+            pendingAdApprovalsCount: 0,
+            featureFlags: [
+              { key: "WEATHER_MODE_ACTIVE", value: false }
+            ]
+          }
+        }
+      });
+    });
+
+    renderAdminDashboard();
+
+    // Wait for the dashboard to finish loading
+    expect(await screen.findByText("System Dashboard")).toBeInTheDocument();
+
+    // Assert that the feature flags container or keys are NOT in the document
+    expect(screen.queryByText("Feature Flags")).not.toBeInTheDocument();
+    expect(screen.queryByText("WEATHER_MODE_ACTIVE")).not.toBeInTheDocument();
+  });
+
+  it("renders Platform Fees Settings card and updates settings on save", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/admin/stores")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/admin/settings")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: [
+              { key: "DELIVERY_CHARGE", value: "30.00" },
+              { key: "SERVICE_CHARGE", value: "0.00" }
+            ]
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            totalOrdersToday: 0,
+            totalRevenueToday: 0,
+            perStoreBreakdown: [],
+            weeklyRevenue: [],
+            lowStockAlertCount: 0,
+            totalActiveBuyers: 0,
+            totalProducts: 0,
+            pendingAdApprovalsCount: 0,
+            featureFlags: []
+          }
+        }
+      });
+    });
+
+    putMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          { key: "DELIVERY_CHARGE", value: "45.00" },
+          { key: "SERVICE_CHARGE", value: "25.00" }
+        ]
+      }
+    });
+
+    renderAdminDashboard();
+
+    expect(await screen.findByText("Platform Fees Settings")).toBeInTheDocument();
+
+    const deliveryInput = screen.getByLabelText(/delivery charge/i) as HTMLInputElement;
+    const serviceInput = screen.getByLabelText(/service charge/i) as HTMLInputElement;
+    const saveButton = screen.getByRole("button", { name: /save platform fees/i });
+
+    expect(deliveryInput.value).toBe("30.00");
+    expect(serviceInput.value).toBe("0.00");
+
+    fireEvent.change(deliveryInput, { target: { value: "45.00" } });
+    fireEvent.change(serviceInput, { target: { value: "25.00" } });
+
+    expect(deliveryInput.value).toBe("45.00");
+    expect(serviceInput.value).toBe("25.00");
+
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(putMock).toHaveBeenCalledWith("/api/v1/admin/settings", {
+        deliveryCharge: "45.00",
+        serviceCharge: "25.00"
+      });
     });
   });
 });
