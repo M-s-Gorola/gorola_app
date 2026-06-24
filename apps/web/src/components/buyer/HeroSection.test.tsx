@@ -25,6 +25,16 @@ vi.mock("gsap", () => ({
   }
 }));
 
+vi.mock("@/hooks/useBuyerLocation", () => ({
+  useBuyerLocation: vi.fn().mockReturnValue({
+    locationLabel: "Mussoorie",
+    isLoading: false,
+    coords: null,
+    error: null,
+    refetch: vi.fn()
+  })
+}));
+
 describe("HeroSection", () => {
   beforeEach(() => {
     revertSpy.mockClear();
@@ -73,6 +83,15 @@ describe("HeroSection", () => {
     render(<HeroSection />);
     expect(screen.getByText(/Good evening/i)).toBeInTheDocument();
     expect(screen.getByText(/Mussoorie/i)).toBeInTheDocument();
+  });
+
+  it("shows default Mussoorie greeting even if custom location is detected for unauthenticated user", () => {
+    vi.setSystemTime(new Date("2026-05-07T08:00:00"));
+    act(() => {
+      useAuthStore.setState({ isBootstrapPending: false });
+    });
+    render(<HeroSection />);
+    expect(screen.getByText(/Good morning, Mussoorie/i)).toBeInTheDocument();
   });
 
   it("shows personalized greeting for authenticated user with name", () => {

@@ -265,7 +265,7 @@ export function SavedAddressesPage(): ReactElement {
       )}
 
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-md gap-6">
+        <DialogContent className="sm:max-w-xl gap-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-playfair text-xl">
               {editingAddress ? "Edit Address" : "Add New Address"}
@@ -320,12 +320,10 @@ export function SavedAddressesPage(): ReactElement {
 
             <div className="space-y-1 pt-2">
               <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Pinpoint location (optional)</p>
-              <div className="h-48 overflow-hidden rounded-xl border border-gorola-pine/20">
-                <AddressMapPicker
-                  center={mapCoords ?? MUSSOORIE_AREA_CENTER}
-                  onCoordinatesChange={setMapCoords}
-                />
-              </div>
+              <AddressMapPicker
+                center={mapCoords ?? MUSSOORIE_AREA_CENTER}
+                onCoordinatesChange={setMapCoords}
+              />
             </div>
 
             {formError && (

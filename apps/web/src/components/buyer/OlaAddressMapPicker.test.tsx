@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { OlaAddressMapPicker } from "./OlaAddressMapPicker";
@@ -22,8 +22,9 @@ const mockMarkerInstance = {
   on: vi.fn()
 };
 
+const mockInit = vi.fn(() => mockMapInstance);
 const mockOlaMapsInit = vi.fn().mockImplementation(function (this: { init: unknown }) {
-  this.init = vi.fn(() => mockMapInstance);
+  this.init = mockInit;
 });
 const mockMarkerConstructor = vi.fn().mockImplementation(function (this: unknown) {
   return mockMarkerInstance;
@@ -36,6 +37,7 @@ const mockOlaMaps = Object.assign(mockOlaMapsInit, {
 describe("OlaAddressMapPicker", () => {
   beforeEach(() => {
     vi.stubEnv("VITE_OLA_MAPS_API_KEY", "test-api-key");
+    vi.stubGlobal("fetch", mockFetch);
     vi.useFakeTimers();
     mockFetch.mockReset();
     mockMapInstance.remove.mockClear();
@@ -46,6 +48,7 @@ describe("OlaAddressMapPicker", () => {
     mockMarkerInstance.setLngLat.mockClear();
     mockMarkerInstance.addTo.mockClear();
     mockMarkerInstance.remove.mockClear();
+    mockInit.mockClear();
     vi.mocked(mockOlaMapsInit).mockClear();
     vi.mocked(mockMarkerConstructor).mockClear();
     window.OlaMaps = mockOlaMaps;
@@ -64,10 +67,12 @@ describe("OlaAddressMapPicker", () => {
 
   afterEach(() => {
     vi.unstubAllEnvs();
+    vi.unstubAllGlobals();
     vi.restoreAllMocks();
     vi.useRealTimers();
     delete window.OlaMaps;
   });
+
 
   it("renders a search input and a map container", () => {
     const onCoordinatesChange = vi.fn();
@@ -329,4 +334,188 @@ describe("OlaAddressMapPicker", () => {
     expect(preventDefaultSpy).toHaveBeenCalled();
     expect(stopPropagationSpy).toHaveBeenCalled();
   });
+
+  it("initializes Ola Maps with attributionControl: false", async () => {
+    const onCoordinatesChange = vi.fn();
+    render(
+      <OlaAddressMapPicker
+        center={{ lat: 30.4598, lng: 78.0664 }}
+        onCoordinatesChange={onCoordinatesChange}
+      />
+    );
+    // Flush map initialization promises
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mockInit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        attributionControl: true
+      })
+    );
+  });
+
+  describe("Use My Location", () => {
+    let getCurrentPositionSpy: ReturnType<typeof vi.fn>;
+
+    beforeEach(() => {
+      vi.useRealTimers();
+      getCurrentPositionSpy = vi.fn();
+      vi.stubGlobal("navigator", {
+        geolocation: {
+          getCurrentPosition: getCurrentPositionSpy,
+        },
+      });
+      vi.stubGlobal("fetch", mockFetch);
+    });
+
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it("renders a button with data-testid='use-my-location-btn' and text containing 'Use My Location'", () => {
+      const onCoordinatesChange = vi.fn();
+      render(
+        <OlaAddressMapPicker
+          center={{ lat: 30.4598, lng: 78.0664 }}
+          onCoordinatesChange={onCoordinatesChange}
+        />
+      );
+      const button = screen.getByTestId("use-my-location-btn");
+      expect(button).toBeInTheDocument();
+      expect(button).toHaveTextContent(/use my location/i);
+    });
+
+    it("pans the map, moves marker, triggers callback, and updates search input to geocoded locality on success", async () => {
+      getCurrentPositionSpy.mockImplementation((successCb) => {
+        successCb({
+          coords: {
+            latitude: 30.46,
+            longitude: 78.07,
+            accuracy: 0,
+            altitude: null,
+            altitudeAccuracy: null,
+            heading: null,
+            speed: null,
+          },
+          timestamp: Date.now(),
+        });
+      });
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: [
+            {
+              address_components: [
+                { long_name: "Landour", types: ["locality"] }
+              ]
+            }
+          ]
+        })
+      });
+
+      const onCoordinatesChange = vi.fn();
+      render(
+        <OlaAddressMapPicker
+          center={{ lat: 30.4598, lng: 78.0664 }}
+          onCoordinatesChange={onCoordinatesChange}
+        />
+      );
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      const button = screen.getByTestId("use-my-location-btn");
+      
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      expect(getCurrentPositionSpy).toHaveBeenCalled();
+
+      await waitFor(() => {
+        expect(onCoordinatesChange).toHaveBeenLastCalledWith({ lat: 30.46, lng: 78.07 });
+        expect(mockMapInstance.setCenter).toHaveBeenCalledWith([78.07, 30.46]);
+        expect(mockMarkerInstance.setLngLat).toHaveBeenCalledWith([78.07, 30.46]);
+        const input = screen.getByTestId("location-search-input");
+        expect(input).toHaveValue("Landour");
+      });
+    });
+
+    it("disables the button and shows Locating... while resolving position", async () => {
+      let triggerSuccess: (pos: { coords: { latitude: number; longitude: number } }) => void;
+      getCurrentPositionSpy.mockImplementation((successCb) => {
+        triggerSuccess = successCb;
+      });
+
+      const onCoordinatesChange = vi.fn();
+      render(
+        <OlaAddressMapPicker
+          center={{ lat: 30.4598, lng: 78.0664 }}
+          onCoordinatesChange={onCoordinatesChange}
+        />
+      );
+
+      const button = screen.getByTestId("use-my-location-btn");
+      
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      expect(button).toBeDisabled();
+      expect(button).toHaveTextContent(/locating.../i);
+
+      mockFetch.mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ results: [] })
+      });
+
+      await act(async () => {
+        triggerSuccess({
+          coords: { latitude: 30.46, longitude: 78.07 }
+        });
+      });
+
+      await waitFor(() => {
+        expect(button).not.toBeDisabled();
+        expect(button).toHaveTextContent(/use my location/i);
+      });
+    });
+
+    it("displays error alert when geolocation is denied/unavailable and hides it after 4 seconds", async () => {
+      vi.useFakeTimers();
+      getCurrentPositionSpy.mockImplementation((_successCb, errorCb) => {
+        errorCb({
+          code: 1,
+          message: "User denied location"
+        });
+      });
+
+      const onCoordinatesChange = vi.fn();
+      render(
+        <OlaAddressMapPicker
+          center={{ lat: 30.4598, lng: 78.0664 }}
+          onCoordinatesChange={onCoordinatesChange}
+        />
+      );
+
+      const button = screen.getByTestId("use-my-location-btn");
+      
+      await act(async () => {
+        fireEvent.click(button);
+      });
+
+      const alert = screen.getByRole("alert");
+      expect(alert).toBeInTheDocument();
+      expect(alert).toHaveTextContent(/location unavailable/i);
+
+      await act(async () => {
+        vi.advanceTimersByTime(4001);
+      });
+
+      expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    });
+  });
 });
+

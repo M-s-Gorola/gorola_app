@@ -1,3 +1,4 @@
+import gsap from "gsap";
 import { LogOut, MapPin, Search, ShoppingCart, UserRound } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
@@ -11,6 +12,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { useBuyerLocation } from "@/hooks/useBuyerLocation";
 import { useSearchSuggestions } from "@/hooks/useSearchSuggestions";
 import { api } from "@/lib/api";
 import { cn } from "@/lib/utils";
@@ -24,6 +26,38 @@ import logoSmallScreen from "../shared/logo_small_screen_new_cropped.png";
 export function BuyerNav(): ReactElement {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
+  const { locationLabel, isLoading, error, refetch, coords } = useBuyerLocation();
+  const [isLocationOpen, setIsLocationOpen] = useState(false);
+  const locationRef = useRef<HTMLDivElement | null>(null);
+  const pinRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!coords || !pinRef.current) return;
+
+    const ctx = gsap.context(() => {
+      gsap.to(".location-pin-icon", {
+        y: -4,
+        duration: 0.6,
+        repeat: -1,
+        yoyo: true,
+        ease: "power1.inOut"
+      });
+    }, pinRef);
+
+    return () => ctx.revert();
+  }, [coords]);
+
+  useEffect(() => {
+    function handleClickOutsideLocation(event: MouseEvent) {
+      if (locationRef.current && !locationRef.current.contains(event.target as Node)) {
+        setIsLocationOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutsideLocation);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutsideLocation);
+    };
+  }, []);
   const count = useCartStore((s) => s.totalItemCount());
   const openCart = useCartStore((s) => s.open);
   const isWeatherMode = useWeatherStore((s) => s.isWeatherMode);
@@ -110,12 +144,90 @@ export function BuyerNav(): ReactElement {
             </span>
           </Link>
 
-          <div className={cn(
-            "hidden sm:flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm",
-            isWeatherMode ? "bg-white/10 text-gorola-fog" : "bg-gorola-charcoal/10 text-gorola-charcoal"
-          )}>
-            <MapPin size={14} className="text-gorola-saffron" />
-            <span>Kulri, Mussoorie</span>
+          <div
+            ref={locationRef}
+            className="relative shrink-0"
+          >
+            {coords && (
+              <button
+                type="button"
+                onClick={() => setIsLocationOpen(!isLocationOpen)}
+                aria-label="Current Location"
+                className="flex items-center justify-center rounded-xl p-1 hover:bg-gorola-charcoal/5 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0 bg-transparent"
+              >
+                <div ref={pinRef}>
+                  <img
+                    src="/buyer.png"
+                    alt="Current Location"
+                    className="location-pin-icon h-8 w-8 shrink-0 object-contain"
+                  />
+                </div>
+              </button>
+            )}
+
+            {isLocationOpen && (
+              <div
+                className={cn(
+                  "absolute top-full left-0 mt-2 w-64 md:w-80 rounded-2xl border p-4 shadow-xl z-50 backdrop-blur-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
+                  isWeatherMode
+                    ? "bg-gorola-slate/95 border-white/10 text-gorola-fog"
+                    : "bg-white/95 border-gorola-charcoal/10 text-gorola-charcoal"
+                )}
+              >
+                <h4 className="font-playfair text-base font-semibold mb-2">Current Location</h4>
+                
+                <div className="space-y-2 text-xs">
+                  {isLoading ? (
+                    <div className="flex items-center gap-2 text-gorola-saffron animate-pulse py-2">
+                      <span className="h-2 w-2 rounded-full bg-gorola-saffron animate-ping" />
+                      <span>Locating your position...</span>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="flex items-start gap-2">
+                        <MapPin size={14} className="text-gorola-saffron shrink-0 mt-0.5" />
+                        <div>
+                          <p className="font-semibold text-sm">{locationLabel}</p>
+                        </div>
+                      </div>
+
+                      {error && (
+                        <div className="rounded-lg bg-red-500/10 border border-red-500/20 p-2 text-red-500 mt-2">
+                          {error === "PERMISSION_DENIED" && (
+                            <p>Location permission denied. Using default: Mussoorie.</p>
+                          )}
+                          {error === "POSITION_UNAVAILABLE" && (
+                            <p>GPS position unavailable. Using default: Mussoorie.</p>
+                          )}
+                          {error === "TIMEOUT" && (
+                            <p>Location request timed out. Using default: Mussoorie.</p>
+                          )}
+                          {error === "GEOCODE_ERROR" && (
+                            <p>Could not reverse-geocode. Using default: Mussoorie.</p>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    refetch();
+                  }}
+                  disabled={isLoading}
+                  className={cn(
+                    "mt-4 w-full rounded-xl py-2 text-xs font-semibold transition-all cursor-pointer flex items-center justify-center gap-1.5",
+                    isWeatherMode
+                      ? "bg-white/10 hover:bg-white/20 text-gorola-fog disabled:opacity-50"
+                      : "bg-gorola-saffron text-white hover:bg-gorola-saffron/90 disabled:opacity-50"
+                  )}
+                >
+                  {isLoading ? "Locating..." : "📍 Refresh Location"}
+                </button>
+              </div>
+            )}
           </div>
         </div>
 

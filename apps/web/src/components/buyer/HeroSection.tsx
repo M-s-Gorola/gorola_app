@@ -55,7 +55,7 @@ export function HeroSection(): ReactElement {
   // Fallback logic: 
   // 1. Show '...' while checking session.
   // 2. If logged in but name is missing (rare), show '...' to avoid Mussoorie flicker.
-  // 3. If confirmed anonymous (role is null), show 'Mussoorie'.
+  // 3. If confirmed anonymous (role is null), show the default "Mussoorie" branding greeting.
   const displayName = useMemo(() => {
     if (isBootstrapPending) return "...";
     if (name && name.trim().length > 0) return name.trim();

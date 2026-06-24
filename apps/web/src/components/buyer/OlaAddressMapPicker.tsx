@@ -24,14 +24,36 @@ export const MUSSOORIE_AREA_CENTER = {
 let scriptPromise: Promise<void> | null = null;
 
 function loadOlaSdk(): Promise<void> {
+  if (window.OlaMaps) {
+    return Promise.resolve();
+  }
   if (scriptPromise) return scriptPromise;
 
   scriptPromise = new Promise((resolve, reject) => {
     const existingScript = document.querySelector(
       'script[src="https://www.unpkg.com/olamaps-web-sdk@latest/dist/olamaps-web-sdk.umd.js"]'
-    );
+    ) as HTMLScriptElement | null;
+
     if (existingScript) {
-      resolve();
+      if (window.OlaMaps) {
+        resolve();
+        return;
+      }
+      const handleLoad = () => {
+        cleanup();
+        resolve();
+      };
+      const handleError = (err: unknown) => {
+        cleanup();
+        scriptPromise = null;
+        reject(err);
+      };
+      const cleanup = () => {
+        existingScript.removeEventListener("load", handleLoad);
+        existingScript.removeEventListener("error", handleError);
+      };
+      existingScript.addEventListener("load", handleLoad);
+      existingScript.addEventListener("error", handleError);
       return;
     }
 
@@ -66,6 +88,8 @@ export function OlaAddressMapPicker({
   const [searchQuery, setSearchQuery] = useState("");
   const [suggestions, setSuggestions] = useState<Array<{ description: string; place_id: string }>>([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   const apiKey = import.meta.env.VITE_OLA_MAPS_API_KEY;
 
@@ -137,7 +161,7 @@ export function OlaAddressMapPicker({
           zoom,
           style: "https://api.olamaps.io/tiles/vector/v1/styles/default-light-standard/style.json",
           scrollZoom: false,
-          attributionControl: false
+          attributionControl: true // [WATERMARK-CONTROL] Set false to hide Ola Maps attribution (requires white-label licence).
         });
 
         mapRef.current = map;
@@ -305,6 +329,91 @@ export function OlaAddressMapPicker({
     }
   };
 
+  const handleUseMyLocation = () => {
+    if (!navigator.geolocation) {
+      setLocationError("Location unavailable");
+      setTimeout(() => setLocationError(null), 4000);
+      return;
+    }
+
+    setIsLocating(true);
+    setLocationError(null);
+
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const lat = position.coords.latitude;
+        const lng = position.coords.longitude;
+        const coords = { lat, lng };
+
+        if (mapRef.current) {
+          mapRef.current.setCenter([coords.lng, coords.lat]);
+          mapRef.current.setZoom(15);
+        }
+
+        if (markerRef.current) {
+          markerRef.current.setLngLat([coords.lng, coords.lat]);
+        }
+
+        lastCoordsRef.current = coords;
+        onCoordsRef.current(coords);
+
+        if (apiKey) {
+          try {
+            const url = `https://api.olamaps.io/places/v1/reverse-geocode?latlng=${lat},${lng}&api_key=${apiKey}`;
+            const response = await fetch(url);
+            if (response.ok) {
+              const data = await response.json();
+              const firstResult = data.results?.[0];
+              if (firstResult) {
+                let sublocality = "";
+                let locality = "";
+
+                const components = firstResult.address_components || [];
+                for (const comp of components) {
+                  if (comp.types?.includes("sublocality") || comp.types?.some((t: string) => t.startsWith("sublocality"))) {
+                    sublocality = comp.long_name;
+                  }
+                  if (comp.types?.includes("locality")) {
+                    locality = comp.long_name;
+                  }
+                }
+
+                let label = "";
+                if (sublocality && locality) {
+                  label = `${sublocality}, ${locality}`;
+                } else if (locality) {
+                  label = locality;
+                } else if (sublocality) {
+                  label = sublocality;
+                }
+
+                if (label) {
+                  shouldAutocompleteRef.current = false;
+                  setSearchQuery(label);
+                }
+              }
+            }
+          } catch (err) {
+            console.error("Error during reverse geocoding in map picker:", err);
+          }
+        }
+
+        setIsLocating(false);
+      },
+      (error) => {
+        console.error("Geolocation error in map picker:", error);
+        setIsLocating(false);
+        setLocationError("Location unavailable");
+        setTimeout(() => setLocationError(null), 4000);
+      },
+      {
+        enableHighAccuracy: true,
+        timeout: 8000,
+        maximumAge: 60000
+      }
+    );
+  };
+
   // Guard: missing API key
   if (!apiKey) {
     return (
@@ -353,11 +462,24 @@ export function OlaAddressMapPicker({
         )}
       </div>
 
+      <button
+        type="button"
+        data-testid="use-my-location-btn"
+        onClick={handleUseMyLocation}
+        disabled={isLocating}
+        className="flex items-center gap-1.5 self-start rounded-lg border border-gorola-pine/20 bg-gorola-fog px-3 py-1.5 text-xs font-medium text-gorola-pine transition hover:bg-gorola-pine/5 disabled:opacity-50"
+      >
+        {isLocating ? "Locating..." : "📍 Use My Location"}
+      </button>
+      {locationError && (
+        <p role="alert" className="text-xs text-red-500 mt-1">{locationError}</p>
+      )}
+
       {/* Map Element */}
       <div
         ref={containerRef}
         aria-label="Delivery location map"
-        className="h-56 w-full overflow-hidden rounded-xl border border-gorola-pine/15 bg-gorola-fog"
+        className="h-72 w-full overflow-hidden rounded-xl border border-gorola-pine/15 bg-gorola-fog"
       />
     </div>
   );

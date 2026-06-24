@@ -23,4 +23,8 @@ export interface MapAdapter {
 
   /** Register a callback for route status change (calculating route). */
   setRouteStatusCallback?(cb: (calculating: boolean) => void): void;
+
+  /** Force the map to resize/recalculate its viewport bounds. */
+  resize?(): void;
 }
+
