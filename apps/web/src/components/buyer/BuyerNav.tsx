@@ -26,12 +26,14 @@ import logoSmallScreen from "../shared/logo_small_screen_new_cropped.png";
 export function BuyerNav(): ReactElement {
   const navigate = useNavigate();
   const [search, setSearch] = useState("");
-  const { locationLabel, isLoading, error, refetch } = useBuyerLocation();
+  const { locationLabel, isLoading, error, refetch, coords } = useBuyerLocation();
   const [isLocationOpen, setIsLocationOpen] = useState(false);
   const locationRef = useRef<HTMLDivElement | null>(null);
   const pinRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
+    if (!coords || !pinRef.current) return;
+
     const ctx = gsap.context(() => {
       gsap.to(".location-pin-icon", {
         y: -4,
@@ -43,7 +45,7 @@ export function BuyerNav(): ReactElement {
     }, pinRef);
 
     return () => ctx.revert();
-  }, []);
+  }, [coords]);
 
   useEffect(() => {
     function handleClickOutsideLocation(event: MouseEvent) {
@@ -146,20 +148,22 @@ export function BuyerNav(): ReactElement {
             ref={locationRef}
             className="relative shrink-0"
           >
-            <button
-              type="button"
-              onClick={() => setIsLocationOpen(!isLocationOpen)}
-              aria-label="Current Location"
-              className="flex items-center justify-center rounded-xl p-1 hover:bg-gorola-charcoal/5 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0 bg-transparent"
-            >
-              <div ref={pinRef}>
-                <img
-                  src="/buyer.png"
-                  alt="Current Location"
-                  className="location-pin-icon h-8 w-8 shrink-0 object-contain"
-                />
-              </div>
-            </button>
+            {coords && (
+              <button
+                type="button"
+                onClick={() => setIsLocationOpen(!isLocationOpen)}
+                aria-label="Current Location"
+                className="flex items-center justify-center rounded-xl p-1 hover:bg-gorola-charcoal/5 dark:hover:bg-white/5 transition-colors cursor-pointer shrink-0 bg-transparent"
+              >
+                <div ref={pinRef}>
+                  <img
+                    src="/buyer.png"
+                    alt="Current Location"
+                    className="location-pin-icon h-8 w-8 shrink-0 object-contain"
+                  />
+                </div>
+              </button>
+            )}
 
             {isLocationOpen && (
               <div

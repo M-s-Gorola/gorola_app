@@ -37,6 +37,7 @@ export function useBuyerLocation(): BuyerLocation {
         const lat = position.coords.latitude;
         const lng = position.coords.longitude;
         setCoords({ lat, lng });
+        setError(null);
 
         if (!apiKey) {
           setLocationLabel("Mussoorie");
@@ -88,6 +89,7 @@ export function useBuyerLocation(): BuyerLocation {
       },
       (geoError) => {
         console.error("[useBuyerLocation] Geolocation error:", geoError);
+        setCoords(null);
         if (geoError.code === 1) {
           setError("PERMISSION_DENIED");
         } else if (geoError.code === 2) {

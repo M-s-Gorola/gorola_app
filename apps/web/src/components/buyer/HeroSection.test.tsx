@@ -1,7 +1,6 @@
 import { act, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import { useBuyerLocation } from "@/hooks/useBuyerLocation";
 import { useAuthStore } from "@/store/auth.store";
 import { useWeatherStore } from "@/store/weather.store";
 
@@ -86,20 +85,13 @@ describe("HeroSection", () => {
     expect(screen.getByText(/Mussoorie/i)).toBeInTheDocument();
   });
 
-  it("shows greeting with live location locality if custom location is detected for unauthenticated user", () => {
-    vi.mocked(useBuyerLocation).mockReturnValueOnce({
-      locationLabel: "Rajpur, Dehradun",
-      isLoading: false,
-      coords: null,
-      error: null,
-      refetch: vi.fn()
-    });
+  it("shows default Mussoorie greeting even if custom location is detected for unauthenticated user", () => {
     vi.setSystemTime(new Date("2026-05-07T08:00:00"));
     act(() => {
       useAuthStore.setState({ isBootstrapPending: false });
     });
     render(<HeroSection />);
-    expect(screen.getByText(/Good morning, Rajpur, Dehradun/i)).toBeInTheDocument();
+    expect(screen.getByText(/Good morning, Mussoorie/i)).toBeInTheDocument();
   });
 
   it("shows personalized greeting for authenticated user with name", () => {
