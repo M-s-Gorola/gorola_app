@@ -317,7 +317,7 @@ export function BookingTimeslotPage(): ReactElement {
   const isFormComplete = selectedDate && selectedTimeslot && selectedAddressId && !isSubmitting;
 
   return (
-    <div className="mx-auto max-w-lg space-y-6 px-4 py-8">
+    <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
       {/* Product Detail, Offers, and Receipt Card */}
       <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
         {/* Product Detail */}
@@ -614,7 +614,7 @@ export function BookingTimeslotPage(): ReactElement {
 
       {/* Address Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
-        <DialogContent className="max-w-md gap-6">
+        <DialogContent className="sm:max-w-xl gap-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-playfair text-xl">Add New Address</DialogTitle>
             <DialogDescription>
@@ -667,12 +667,10 @@ export function BookingTimeslotPage(): ReactElement {
 
             <div className="space-y-1 pt-2">
               <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Pinpoint location (optional)</p>
-              <div className="h-48 overflow-hidden rounded-xl border border-gorola-pine/20">
-                <AddressMapPicker
-                  center={mapCoords ?? MUSSOORIE_AREA_CENTER}
-                  onCoordinatesChange={setMapCoords}
-                />
-              </div>
+              <AddressMapPicker
+                center={mapCoords ?? MUSSOORIE_AREA_CENTER}
+                onCoordinatesChange={setMapCoords}
+              />
             </div>
 
             {formError && (

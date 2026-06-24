@@ -386,7 +386,7 @@ export function RiderOrdersPage(): ReactElement {
           onClick={() => setSelectedOrder(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-md max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6 animate-in zoom-in-95 duration-200"
+            className="bg-white rounded-3xl w-full sm:max-w-xl max-w-md max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6 animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
@@ -479,11 +479,11 @@ export function RiderOrdersPage(): ReactElement {
                 </button>
 
                 {expandedOrderId === selectedOrder.id && (
-                  <div className="mt-3 relative h-64 w-full rounded-xl border border-gorola-fog overflow-hidden shadow-inner animate-in fade-in slide-in-from-top-1 duration-200">
+                  <div className="mt-3 relative h-80 w-full rounded-xl border border-gorola-fog overflow-hidden shadow-inner animate-in fade-in slide-in-from-top-1 duration-200">
                     <OrderRouteMap
                       buyerCoords={{ lat: selectedOrder.deliveryAddress.lat, lng: selectedOrder.deliveryAddress.lng }}
                       riderCoords={selectedOrder.status === "OUT_FOR_DELIVERY" ? (riderCoords ?? null) : null}
-                      className="h-full w-full border-0 rounded-none min-h-[256px]"
+                      className="h-full w-full border-0 rounded-none min-h-[320px]"
                     />
                   </div>
                 )}

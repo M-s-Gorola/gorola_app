@@ -67,8 +67,7 @@ describe("BuyerNav", () => {
     expect(screen.getByRole("button", { name: /Current Location/i })).toBeInTheDocument();
   });
 
-  it("shows loading state in popup when location is loading", async () => {
-    const user = userEvent.setup();
+  it("does not render the location icon button when location is loading", () => {
     vi.mocked(useBuyerLocation).mockReturnValue({
       locationLabel: "Mussoorie",
       isLoading: true,
@@ -81,9 +80,7 @@ describe("BuyerNav", () => {
         <BuyerNav />
       </MemoryRouter>
     );
-    const locationButton = screen.getByRole("button", { name: /Current Location/i });
-    await user.click(locationButton);
-    expect(screen.getByText(/Locating your position.../i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Current Location/i })).not.toBeInTheDocument();
   });
 
   it("shows cart badge count from cart store", () => {
@@ -329,8 +326,7 @@ describe("BuyerNav", () => {
     expect(refetchMock).toHaveBeenCalledOnce();
   });
 
-  it("shows location error inside popup when geolocation permission is denied", async () => {
-    const user = userEvent.setup();
+  it("does not render the location icon button when permission is denied", () => {
     vi.mocked(useBuyerLocation).mockReturnValue({
       locationLabel: "Mussoorie",
       isLoading: false,
@@ -345,10 +341,7 @@ describe("BuyerNav", () => {
       </MemoryRouter>
     );
 
-    const locationButton = screen.getByRole("button", { name: /Current Location/i });
-    await user.click(locationButton);
-
-    expect(screen.getByText(/Location permission denied/i)).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Current Location/i })).not.toBeInTheDocument();
   });
 });
 

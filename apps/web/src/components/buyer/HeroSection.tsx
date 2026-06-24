@@ -2,7 +2,6 @@ import gsap from "gsap";
 import { type ReactElement, useEffect, useMemo, useRef } from "react";
 
 import { TopographicBg } from "@/components/shared/TopographicBg";
-import { useBuyerLocation } from "@/hooks/useBuyerLocation";
 import { cn } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useWeatherStore } from "@/store/weather.store";
@@ -53,17 +52,15 @@ export function HeroSection(): ReactElement {
   if (hour >= 5 && hour < 12) greeting = "Good morning";
   else if (hour >= 12 && hour < 17) greeting = "Good afternoon";
 
-  const { locationLabel } = useBuyerLocation();
-
   // Fallback logic: 
   // 1. Show '...' while checking session.
   // 2. If logged in but name is missing (rare), show '...' to avoid Mussoorie flicker.
-  // 3. If confirmed anonymous (role is null), show the resolved location label.
+  // 3. If confirmed anonymous (role is null), show the default "Mussoorie" branding greeting.
   const displayName = useMemo(() => {
     if (isBootstrapPending) return "...";
     if (name && name.trim().length > 0) return name.trim();
-    return locationLabel;
-  }, [name, isBootstrapPending, locationLabel]);
+    return "Mussoorie";
+  }, [name, isBootstrapPending]);
 
   useEffect(() => {
     const ctx = gsap.context(() => {
