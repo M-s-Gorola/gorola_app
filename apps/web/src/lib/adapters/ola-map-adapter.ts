@@ -110,6 +110,8 @@ export class OlaMapAdapter implements MapAdapter {
   private _markers: OlaMarkerInstance[] = [];
   private _buyerMarker: OlaMarkerInstance | null = null;
   private _riderMarker: OlaMarkerInstance | null = null;
+  private _buyerMarkerEl: HTMLDivElement | null = null;
+  private _riderMarkerEl: HTMLDivElement | null = null;
   private _buyerCoords: { lat: number; lng: number } | null = null;
   private _riderCoords: { lat: number; lng: number } | null = null;
   private _routeSourceId = "route-source";
@@ -190,6 +192,7 @@ export class OlaMapAdapter implements MapAdapter {
         markerEl.style.backgroundRepeat = "no-repeat";
         markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
 
+        this._buyerMarkerEl = markerEl;
         this._buyerMarker = new OlaMaps.Marker({ element: markerEl, anchor: "bottom" })
           .setLngLat([coords.lng, coords.lat])
           .addTo(this._map);
@@ -208,10 +211,39 @@ export class OlaMapAdapter implements MapAdapter {
         markerEl.style.backgroundRepeat = "no-repeat";
         markerEl.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
 
+        this._riderMarkerEl = markerEl;
         this._riderMarker = new OlaMaps.Marker({ element: markerEl, anchor: "bottom" })
           .setLngLat([coords.lng, coords.lat])
           .addTo(this._map);
         this._markers.push(this._riderMarker);
+      }
+    }
+
+    const isTogether = this._buyerCoords !== null && this._riderCoords !== null &&
+      Math.abs(this._buyerCoords.lat - this._riderCoords.lat) < 0.00015 &&
+      Math.abs(this._buyerCoords.lng - this._riderCoords.lng) < 0.00015;
+
+    if (isTogether) {
+      if (this._buyerMarkerEl) {
+        this._buyerMarkerEl.style.width = "24px";
+        this._buyerMarkerEl.style.height = "24px";
+        this._buyerMarkerEl.style.marginLeft = "-14px";
+      }
+      if (this._riderMarkerEl) {
+        this._riderMarkerEl.style.width = "24px";
+        this._riderMarkerEl.style.height = "24px";
+        this._riderMarkerEl.style.marginLeft = "14px";
+      }
+    } else {
+      if (this._buyerMarkerEl) {
+        this._buyerMarkerEl.style.width = "40px";
+        this._buyerMarkerEl.style.height = "40px";
+        this._buyerMarkerEl.style.marginLeft = "0px";
+      }
+      if (this._riderMarkerEl) {
+        this._riderMarkerEl.style.width = "40px";
+        this._riderMarkerEl.style.height = "40px";
+        this._riderMarkerEl.style.marginLeft = "0px";
       }
     }
 
@@ -222,10 +254,12 @@ export class OlaMapAdapter implements MapAdapter {
     if (this._buyerMarker) {
       this._buyerMarker.remove();
       this._buyerMarker = null;
+      this._buyerMarkerEl = null;
     }
     if (this._riderMarker) {
       this._riderMarker.remove();
       this._riderMarker = null;
+      this._riderMarkerEl = null;
     }
     this._markers = [];
     if (this._map) {
@@ -304,6 +338,30 @@ export class OlaMapAdapter implements MapAdapter {
     const map = this._map as unknown as OlaMapExtended;
     if (typeof map.isStyleLoaded !== "function") return;
     if (!map.isStyleLoaded()) return;
+
+    const isTogether = Math.abs(this._buyerCoords.lat - this._riderCoords.lat) < 0.00015 &&
+      Math.abs(this._buyerCoords.lng - this._riderCoords.lng) < 0.00015;
+
+    if (isTogether) {
+      try {
+        if (typeof map.getLayer === "function" && map.getLayer(this._routeLayerId)) {
+          map.removeLayer(this._routeLayerId);
+        }
+        if (typeof map.getSource === "function" && map.getSource(this._routeSourceId)) {
+          map.removeSource(this._routeSourceId);
+        }
+        if (typeof map.getLayer === "function" && map.getLayer(this._routePlaceholderLayerId)) {
+          map.removeLayer(this._routePlaceholderLayerId);
+        }
+        if (typeof map.getSource === "function" && map.getSource(this._routePlaceholderSourceId)) {
+          map.removeSource(this._routePlaceholderSourceId);
+        }
+      } catch {
+        // ignore
+      }
+      this._routeStatusCallback?.(false);
+      return;
+    }
 
     // Clean up solid route if exists
     try {

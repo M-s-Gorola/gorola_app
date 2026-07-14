@@ -44,11 +44,33 @@ export class LeafletMapAdapter implements MapAdapter {
   addMarker(coords: { lat: number; lng: number }, icon: MarkerIconType): void {
     if (!this._map) return;
 
-    const leafletIcon = icon === "buyer"
+    if (icon === "buyer") {
+      this._buyerCoords = coords;
+    } else {
+      this._riderCoords = coords;
+    }
+
+    const isTogether = this._buyerCoords !== null && this._riderCoords !== null &&
+      Math.abs(this._buyerCoords.lat - this._riderCoords.lat) < 0.00015 &&
+      Math.abs(this._buyerCoords.lng - this._riderCoords.lng) < 0.00015;
+
+    const buyerIcon = isTogether
       ? L.icon({
+          iconUrl: "/buyer.png",
+          iconSize: [24, 24],
+          iconAnchor: [26, 24]
+        })
+      : L.icon({
           iconUrl: "/buyer.png",
           iconSize: [40, 40],
           iconAnchor: [20, 40]
+        });
+
+    const riderIcon = isTogether
+      ? L.icon({
+          iconUrl: "/rider.png",
+          iconSize: [24, 24],
+          iconAnchor: [-2, 24]
         })
       : L.icon({
           iconUrl: "/rider.png",
@@ -57,11 +79,10 @@ export class LeafletMapAdapter implements MapAdapter {
         });
 
     if (icon === "buyer") {
-      this._buyerCoords = coords;
       if (this._buyerMarker) {
         this._buyerMarker.setLatLng([coords.lat, coords.lng]);
       } else {
-        this._buyerMarker = L.marker([coords.lat, coords.lng], { icon: leafletIcon }).addTo(
+        this._buyerMarker = L.marker([coords.lat, coords.lng], { icon: buyerIcon }).addTo(
           this._map
         );
         this._markers.push(this._buyerMarker);
@@ -71,11 +92,10 @@ export class LeafletMapAdapter implements MapAdapter {
         }
       }
     } else {
-      this._riderCoords = coords;
       if (this._riderMarker) {
         this._riderMarker.setLatLng([coords.lat, coords.lng]);
       } else {
-        this._riderMarker = L.marker([coords.lat, coords.lng], { icon: leafletIcon }).addTo(
+        this._riderMarker = L.marker([coords.lat, coords.lng], { icon: riderIcon }).addTo(
           this._map
         );
         this._markers.push(this._riderMarker);
@@ -84,6 +104,13 @@ export class LeafletMapAdapter implements MapAdapter {
           element.style.filter = "drop-shadow(0px 2px 6px rgba(0,0,0,0.5)) saturate(2) contrast(1.2)";
         }
       }
+    }
+
+    if (this._buyerMarker) {
+      this._buyerMarker.setIcon(buyerIcon);
+    }
+    if (this._riderMarker) {
+      this._riderMarker.setIcon(riderIcon);
     }
 
     this._fitBounds();
@@ -136,6 +163,22 @@ export class LeafletMapAdapter implements MapAdapter {
 
   private async _drawRoute(): Promise<void> {
     if (!this._map || !this._buyerCoords || !this._riderCoords) return;
+
+    const isTogether = Math.abs(this._buyerCoords.lat - this._riderCoords.lat) < 0.00015 &&
+      Math.abs(this._buyerCoords.lng - this._riderCoords.lng) < 0.00015;
+
+    if (isTogether) {
+      if (this._placeholderLine) {
+        this._placeholderLine.remove();
+        this._placeholderLine = null;
+      }
+      if (this._routeLine) {
+        this._routeLine.remove();
+        this._routeLine = null;
+      }
+      this._routeStatusCallback?.(false);
+      return;
+    }
 
     // Only draw placeholder line if we don't already have a route line
     if (!this._routeLine) {

@@ -38,7 +38,7 @@ describe("RiderLayout", () => {
     mockRiderType = "DELIVERY";
   });
 
-  it("renders bottom tab bar with 'Orders' and 'Account' tabs", () => {
+  it("renders bottom tab bar with 'Orders', 'Earnings' and 'Account' tabs", () => {
     render(
       <MemoryRouter initialEntries={["/rider/orders"]}>
         <RiderLayout>
@@ -52,10 +52,11 @@ describe("RiderLayout", () => {
 
     // Verify navigation tabs exist
     expect(screen.getByRole("link", { name: /orders/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /earnings/i })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /account/i })).toBeInTheDocument();
   });
 
-  it("renders bottom tab bar with 'Services' and 'Account' tabs for FIELD_TECHNICIAN", () => {
+  it("renders bottom tab bar with 'Services', 'Earnings' and 'Account' tabs for FIELD_TECHNICIAN", () => {
     mockRiderType = "FIELD_TECHNICIAN";
     render(
       <MemoryRouter initialEntries={["/rider/orders"]}>
@@ -66,6 +67,7 @@ describe("RiderLayout", () => {
     );
 
     expect(screen.getByRole("link", { name: /services/i })).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /earnings/i })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: /orders/i })).not.toBeInTheDocument();
   });
 

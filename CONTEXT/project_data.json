@@ -53,11 +53,11 @@
       ]
     },
     "delivery_rider": {
-      "description": "Under active development in Phase 5. Authentication, session management, and active orders feed are implemented, allowing riders to view preparing and out-for-delivery orders scoped strictly to their store.",
+      "description": "Phase 5.1–5.6 complete. Riders log in (email/password, RIDER JWT), view their active orders feed (scoped to their assigned stores via RiderStore junction table), update order status (PREPARING→OUT_FOR_DELIVERY→DELIVERED), push live GPS location, and see dual-mode UI (delivery orders vs. field technician booking visits). Earnings page (Phase 5.7) pending.",
       "platforms": [
-        "web (rider panel page)"
+        "web (rider panel — mobile-first, bottom tab bar)"
       ],
-      "status": "In Progress (Phase 5.1 & 5.2 complete)"
+      "status": "In Progress (Phase 5.1–5.6 complete; 5.7 Earnings Page remaining)"
     }
   },
   "categories_v1": [
@@ -137,9 +137,10 @@
     "cod_default": true
   },
   "delivery": {
-    "model": "Delivery riders assigned to stores log in to view active orders feed, accept/prepare/deliver orders, and push live location updates (Phase 5).",
-    "tracking": "Real-time updates via Rider Interface (in progress). Active orders feed implemented.",
-    "real_time_location": "In Progress — Socket.IO namespace /rider ready for location integration in Phase 5.4.",
+    "model": "Riders assigned to stores via RiderStore junction table. DELIVERY riders handle QUICK orders (pickup from store → buyer). FIELD_TECHNICIAN riders handle BOOKING orders (direct to buyer address at scheduled timeslot). Multi-store assignment supported via RiderStore (one primary store for JWT scoping).",
+    "tracking": "Fully implemented. PUT /api/v1/rider/location upserts RiderLocation. Socket.IO /rider namespace emits rider_location_update to order:{orderId} room. OrderConfirmationPage fetches last-known location on mount and updates live via socket.",
+    "real_time_location": "Complete — Socket.IO /rider namespace active. RiderLocation table upserted on each GPS push. GET /api/v1/orders/:orderId/rider-location returns last-known position for mid-delivery page loads.",
+    "earning_model": "Phase 5.7 (pending) — PER_ORDER model: rider earns riderEarningRatePct% of Order.deliveryFee. Rate configurable globally via SystemSetting(RIDER_EARNING_RATE_PCT) with per-store override via Store.riderEarningRatePct. Migration path to PER_KM available without schema changes (see DECISION-056).",
     "eta": "Manually configured per store + distance estimate"
   },
   "observability": {
@@ -171,33 +172,46 @@
     "secrets": "Environment variables only — never in source. dotenv-safe enforces all required vars.",
     "uploads": "Multer + file type validation + virus scan stub (ClamAV future)"
   },
+  "database_schema_enums": [
+    "OrderStatus (PLACED | PREPARING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED | PENDING_APPROVAL | APPROVED)",
+    "StoreType (QUICK_COMMERCE | BOOKING_COMMERCE)",
+    "OrderType (QUICK | BOOKING)",
+    "BookingApprovalStatus (PENDING_APPROVAL | APPROVED | REJECTED | COMPLETED | CANCELLED)",
+    "RiderType (DELIVERY | FIELD_TECHNICIAN)",
+    "PaymentMethod (COD | UPI | CARD)",
+    "PaymentStatus (PENDING | CAPTURED | FAILED)",
+    "DiscountType (PERCENTAGE | FLAT)",
+    "ActorRole (ADMIN | STORE_OWNER | BUYER | SYSTEM)",
+    "StockMovementType (SALE | CANCELLATION_RESTORE | REFILL | ADJUSTMENT | INITIAL)",
+    "EarningType (PER_ORDER | PER_KM) — PLANNED Phase 5.7"
+  ],
   "database_schema_entities": [
-    "User (buyer)",
-    "Store (with storeType, bookingLeadDays, isAcceptingBookings)",
-    "StoreOwner",
-    "Admin",
-    "Category",
-    "SubCategory",
-    "Product",
-    "ProductVariant (with allowedTimeslots, requiresFasting)",
-    "Cart",
-    "CartItem",
-    "Order (with orderType, scheduledFor, rating, ratingComment)",
-    "OrderItem",
-    "OrderStatusHistory",
-    "Address",
-    "Advertisement",
-    "Offer",
-    "Discount",
-    "FeatureFlag",
-    "OTPLog",
-    "AuditLog",
-    "DeliveryRider (with riderType)",
-    "RiderLocation (stub — empty table, ready for future)",
-    "StockMovement (append-only inventory ledger — every stock change recorded)",
-    "BookingOrder (links scheduledDate, timeslot, requiresFasting, approvalStatus, assignedTechnicianId to Order)",
-    "ConsentLog",
-    "ProductVariant fields to add: lowStockThreshold (Int default 5), isLowStock (Boolean default false), isInStock (Boolean default true)"
+    "User — id, phone (unique), name, isVerified, isActive, isDeleted, createdAt, updatedAt",
+    "Store — id, name, description, phone, address, isActive, weatherModeDeliveryWindow, storeType, bookingLeadDays, isAcceptingBookings, isAcceptingOrders, isDeleted, riderEarningRatePct (Decimal? — PLANNED Phase 5.7: % of deliveryFee paid to rider; null = use global SystemSetting)",
+    "StoreOwner — id, email (unique), passwordHash, storeId (FK Store), totpSecret, totpEnabled, isDeleted",
+    "Admin — id, email (unique), passwordHash, totpSecret, isDeleted",
+    "Category — id, slug (unique), name, imageUrl, icon, displayOrder, isActive, commerceType (StoreType)",
+    "SubCategory — id, slug (unique), name, imageUrl, displayOrder, isActive, categoryId (FK Category)",
+    "Product — id, storeId, categoryId, subCategoryId, name, description, imageUrl, isActive, isDeleted",
+    "ProductVariant — id, productId, label, price (Decimal 10,2), stockQty, lowStockThreshold (Int default 5), isLowStock, isInStock, unit, isActive, isAvailableForBooking, allowedTimeslots (String[]), requiresFasting",
+    "StockMovement — id, productVariantId, orderId?, type (StockMovementType), quantity, stockQtyBefore, stockQtyAfter, note, reason — append-only inventory ledger",
+    "Cart — id, userId (unique FK User)",
+    "CartItem — id, cartId, productVariantId, quantity — unique(cartId, productVariantId)",
+    "Order — id, userId, storeId, riderId?, status (OrderStatus), orderType (OrderType), subtotal, deliveryFee, total (all Decimal 10,2), paymentMethod, paymentStatus, razorpayOrderId?, razorpayPaymentId?, landmarkDescription, addressLabel?, flatRoom?, deliveryNote?, deliveryLat? (Decimal 10,7), deliveryLng? (Decimal 10,7), scheduledFor?, rating? (Decimal 2,1), ratingComment?, appliedDiscountCode?",
+    "OrderItem — id, orderId, productVariantId, productName, variantLabel, price (Decimal 10,2), quantity",
+    "OrderStatusHistory — id, orderId, status (OrderStatus), note?, changedBy (string — format: 'buyer', 'store-owner:{id}', 'rider:{id}', 'admin:{id}'), changedAt",
+    "Address — id, userId, label, landmarkDescription, flatRoom?, lat? (Decimal 10,7), lng? (Decimal 10,7), isDefault, isDeleted",
+    "Advertisement — id, storeId, title, imageUrl, linkUrl?, startsAt, endsAt, isApproved, isActive",
+    "Offer — id, storeId, title, description, discountType (DiscountType), discountValue, minOrderAmount?, maxDiscount?, startsAt, endsAt, isActive",
+    "Discount — id, storeId, code, discountType, discountValue, usageLimit?, usedCount, minOrderAmount?, startsAt, endsAt, isActive — unique(storeId, code)",
+    "FeatureFlag — id, key (unique), value (Boolean), description?, updatedBy, updatedAt",
+    "SystemSetting — id, key (unique), value (String), description?, updatedBy, updatedAt — used for DELIVERY_CHARGE, RIDER_EARNING_RATE_PCT (Phase 5.7), etc.",
+    "AuditLog — id, actorId, actorRole (ActorRole), action, entityType, entityId, oldValue (Json?), newValue (Json?), ip, userAgent, createdAt",
+    "DeliveryRider — id, name, phone, email (unique), passwordHash, isActive, riderType (RiderType default DELIVERY), isDeleted",
+    "RiderStore — id, riderId (FK DeliveryRider), storeId (FK Store), isPrimary (Boolean) — junction table for multi-store rider assignment; unique(riderId, storeId)",
+    "RiderLocation — id, riderId (FK DeliveryRider), lat (Decimal 10,7), lng (Decimal 10,7), updatedAt — upserted on each GPS push",
+    "BookingOrder — id, orderId (unique FK Order), scheduledDate, timeslot, requiresFasting, approvalStatus (BookingApprovalStatus), approvedAt?, approvedByOwnerId?, rejectionReason?, assignedTechnicianId?",
+    "RiderEarning — id, riderId (FK DeliveryRider), orderId (unique FK Order), amount (Decimal 10,2), earningType (EarningType default PER_ORDER), distanceKm (Decimal 8,3 — null for PER_ORDER; km for future PER_KM), createdAt — PLANNED Phase 5.7; see DECISION-056"
   ],
   "api_versioning": "URL prefix — /api/v1/...",
   "test_strategy": {

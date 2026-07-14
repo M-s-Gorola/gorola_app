@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { RiderAuthService } from "../auth/rider-auth.service.js";
 import type { RiderRepository } from "./rider.repository.js";
+import type { RiderEarningsService } from "./rider-earnings.service.js";
 import type { RiderLocationService } from "./rider-location.service.js";
 import type { RiderOrderService } from "./rider-order.service.js";
 
@@ -118,6 +119,7 @@ export function registerRiderRoutes(
     riderOrderService: RiderOrderService;
     riderLocationService: RiderLocationService;
     riderRepository: RiderRepository;
+    riderEarningsService: RiderEarningsService;
   }
 ): void {
   const preHandler = [requireAuth(deps.tokenVerifier), requireRole(["RIDER"])];
@@ -380,6 +382,44 @@ export function registerRiderRoutes(
     return {
       success: true,
       data: location,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/rider/earnings/summary
+  app.get("/api/v1/rider/earnings/summary", { preHandler }, async (request, reply) => {
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const summary = await deps.riderEarningsService.getSummary(riderId);
+
+    return {
+      success: true,
+      data: summary,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/rider/earnings/history
+  app.get("/api/v1/rider/earnings/history", { preHandler }, async (request, reply) => {
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const query = request.query as { cursor?: string; limit?: string; startDate?: string; endDate?: string };
+    const parsedLimit = query.limit ? parseInt(query.limit, 10) : undefined;
+    const history = await deps.riderEarningsService.getHistory(riderId, query.cursor, parsedLimit, query.startDate, query.endDate);
+
+    return {
+      success: true,
+      data: history,
       meta: {
         requestId: getRequestId(request, reply)
       }

@@ -1613,3 +1613,115 @@ Rider, store owner, and admin status transitions were logged using mixed convent
 **Alternatives Considered:**
 1. Changing the database schema to store a JSON object of the actor details — rejected: too invasive.
 2. Storing raw database IDs without entity prefixes — rejected: requires searching multiple tables (User, Store, Rider) to identify the actor type.
+
+---
+
+## [DECISION-056] Rider Earnings Architecture — Per-Order Model with Configurable Rate, Migration-Safe Per-KM Path
+
+**Date:** 2026-07-13
+**Status:** Accepted
+
+**Context:**
+Phase 5.7 requires a rider earnings system so riders can see their payout per delivery, their daily/weekly/monthly totals, and a historical list. Two competing earnings models exist in the market:
+
+1. **Per-order (flat):** Rider earns a fixed amount (or percentage of delivery fee) per delivered order. Simple, requires no GPS distance data.
+2. **Per-KM (variable):** Rider earns a base amount plus a per-kilometre rate for the distance from store to buyer. Requires knowing the distance of the route.
+
+Quick-commerce platforms like Blinkit and Zepto typically start with per-order models for simplicity and migrate to per-KM or hybrid models as they grow and want to incentivise efficient routing. GoRola will do the same.
+
+Additionally, the platform operator (GoRola) does not necessarily pass 100% of the buyer's delivery charge to the rider — the platform takes a margin. This percentage needs to be configurable without a deployment.
+
+**Decision:**
+Build Phase 5.7 using the **PER_ORDER model**, but design every layer to be a single-function swap away from the PER_KM model. Specifically:
+
+1. **`EarningType` enum** (`PER_ORDER | PER_KM`) stored on every `RiderEarning` row. This is the audit trail — every historical row knows which model generated it, so switching models mid-flight does not corrupt historical reports.
+
+2. **`distanceKm Decimal?`** added as a nullable field to `RiderEarning` at creation time. It is `null` for all PER_ORDER rows. When the platform switches to PER_KM, this field is populated from `Order.deliveryLat/Lng` vs the store's coordinates (both already stored in the DB since Phase 5.4.1). Adding the column now means **zero schema migration is needed** when switching to PER_KM.
+
+3. **`RiderEarningCalculator`** — a single pure function `calculateRiderEarning(input: EarningInput): EarningOutput` in `rider-earning-calculator.ts`. All earning math lives here. The commented-out PER_KM formula is included alongside the live PER_ORDER formula. Switching models requires uncommenting 4 lines and deleting 1 — no other file changes.
+
+4. **Configurable earning rate (`riderEarningRatePct`)** at two levels:
+   - **Global default** — stored as system setting key `RIDER_EARNING_RATE_PCT` (e.g. `"80"` = 80%). Admin panel sets this. Default value if never configured: `"100"` (rider gets full delivery charge).
+   - **Per-store override** — `Store.riderEarningRatePct Decimal? @db.Decimal(5, 2)`. When set, this overrides the global default for orders from that store. When `null`, the global setting applies.
+
+   The formula for PER_ORDER: `riderAmount = Order.deliveryFee × (riderEarningRatePct / 100)`.
+
+5. **Access control for rate config:** Only Admins can set either the global rate or a store-level override. Store owners can view (read-only) their effective rate. No write endpoint is exposed to store owners.
+
+6. **Non-fatal earning write:** The `RiderEarning` row is created automatically when `PUT /api/v1/rider/orders/:id/status` transitions to `DELIVERED`. This write is wrapped in a `try/catch` — a failure does NOT roll back the order status update. The order delivery is more critical than the earning record. Any failure is logged for async investigation.
+
+**Rationale:**
+- Starting with PER_ORDER avoids the complexity of distance calculation (Haversine or routing API calls) before the rider GPS pipeline is battle-tested in production.
+- Storing `EarningType` and nullable `distanceKm` from day 1 keeps the DB self-describing and migration-free.
+- A single calculator function is the minimum abstraction needed to guarantee the rest of the system never needs to change when the model changes.
+- Configurable earning rates avoid hardcoding a business decision (the platform cut) into code.
+
+**Tradeoffs:**
+- PER_ORDER model does not incentivise shorter, more efficient routes — a rider who travels 5 km earns the same as one who travels 0.5 km to the same store. Accepted for v1; addressed by migrating to PER_KM when operational data justifies it.
+- The non-fatal earning write means there is a small window where an order is `DELIVERED` in the DB but no `RiderEarning` row exists. Operational monitoring (via Pino logs) is relied upon to detect and manually reconcile these rare cases.
+
+**Alternatives Considered:**
+1. Build PER_KM from the start — rejected: requires Haversine or Ola Maps Directions API calls in the critical delivery status path; adds latency and a new external dependency before the product has validated delivery volume.
+2. Store all configuration in code constants — rejected: changing the platform margin would require a deployment. A DB-backed system setting is safer.
+3. Separate earnings service with its own DB transaction wrapping the status update — rejected: distributed transaction complexity is unjustified at this scale. Non-fatal write with logging is sufficient.
+
+**Migration Path to PER_KM (future):**
+1. Uncomment the PER_KM branch in `rider-earning-calculator.ts`.
+2. In `createEarningForDelivery`, compute `distanceKm` using Haversine formula from `Order.deliveryLat/Lng` and the store's lat/lng.
+3. Pass `distanceKm` to the calculator and save it to `RiderEarning.distanceKm`.
+4. Update `EarningType @default` to `PER_KM` in Prisma schema (one migration, no data changes).
+5. All historical `PER_ORDER` rows remain accurate and labelled correctly.
+
+---
+
+## [DECISION-057] Order Lifecycle Refactoring — Rider Acceptance Flow, Dispatch and Delivery Lockouts, and Customer Name Visibility
+
+**Date:** 2026-07-13
+**Status:** Accepted
+
+**Context:**
+The previous order lifecycle allowed overlapping operations and exposed security/operational loopholes:
+1. Both store owners and riders had the option to mark an order as `DELIVERED`. This could lead to premature completions from the store dashboard, leaving riders without actual delivery control.
+2. Riders could directly mark an order as `OUT_FOR_DELIVERY` (dispatched) without confirmation that the store owner had handed them the items.
+3. Multiple riders in the same store could view and attempt to fulfill the same order at the same time, leading to coordination chaos.
+4. Store owners had no live tracking view to see where the rider was once the order was dispatched.
+5. Store owners and riders saw only masked phone numbers on cards, with no customer names, showing generic placeholders even when the user had provided a profile name.
+
+**Decision:**
+Refactor the order fulfillment lifecycle and user exposure patterns:
+
+1. **Rider Acceptance Flow (`Order.riderId`):**
+   - Add a nullable `riderId` field to the `Order` model in the database schema.
+   - Introduce an "Accept Order" action (`PUT /api/v1/rider/orders/:orderId/accept`) in the rider API.
+   - When a rider accepts an order:
+     - The order is assigned to them (`order.riderId = currentRiderId`).
+     - A log entry is created in `OrderStatusHistory` with `changedBy: "rider:${riderId}"`, status `PREPARING` (retains current status), and note `"Order accepted by rider: <Rider Name>"`.
+     - Other riders' active order feeds are filtered to exclude accepted orders (only show `PREPARING` orders where `riderId IS NULL` or `riderId === currentRiderId`).
+     - A real-time Socket.IO event is broadcast to notify other connected riders.
+
+2. **Rider Dispatch and Delivery Lockouts:**
+   - **Rider Lockout:** Riders can no longer transition orders from `PREPARING` to `OUT_FOR_DELIVERY`. Only the store owner is authorized to dispatch.
+   - **Store Owner Lockout:** Store owners can no longer transition orders from `OUT_FOR_DELIVERY` to `DELIVERED`. Only the assigned rider is authorized to deliver.
+   - **Store Dispatch Validation:** Store owners can only dispatch an order (`OUT_FOR_DELIVERY`) if a rider has accepted it (`order.riderId !== null`).
+
+3. **Store Owner Live Tracking Map:**
+   - Integrate the live tracking map (`<OrderRouteMap />`) into the store owner's order details drawer/modal for dispatched orders (`OUT_FOR_DELIVERY`).
+   - Expose the `GET /api/v1/orders/:orderId/rider-location` endpoint to `STORE_OWNER` role, verifying that the order belongs to their store.
+   - Allow `STORE_OWNER` to join `order:${orderId}` socket rooms to receive live `rider_location_update` events in real-time.
+
+4. **Customer Name Visibility:**
+   - Expose `buyerName` (`user.name`) to both the store owner orders list and the rider active orders list.
+   - In frontend views, if `buyerName` is null or empty, display `"Registered User"`.
+
+**Rationale:**
+- Adding `riderId` directly to the `Order` model is the cleanest relational database design to enforce order-rider ownership before dispatch.
+- Limiting "Dispatch" to the store owner ensures inventory is physically handed over to the right rider first.
+- Limiting "Delivery" to the rider ensures the payment (especially COD) and physical handover to the buyer is completed by the actor at the destination.
+- Sharing the tracking map with the store owner reduces operational friction (store owners don't need to call riders to ask where they are).
+- Storing the rider's name inside the audit log `note` at the moment of acceptance preserves a permanent record without complex relational joins.
+
+**Tradeoffs:**
+- Existing E2E Playwright tests and integration tests that assumed the merchant could perform the entire placed-to-delivered flow will break. These tests must be rewritten to simulate multi-actor interactions (Merchant prepares -> Rider accepts -> Merchant dispatches -> Rider delivers).
+- The map requires importing Leaflet or Ola Maps inside the store owner panel, which could cause test JSDOM failures if the component is not mocked. We will explicitly mock the map component in `StoreOrdersPage.test.tsx`.
+
+

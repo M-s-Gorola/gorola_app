@@ -55,6 +55,7 @@ type SettingsApiResponse = {
     weatherModeDeliveryWindowEnd: string;
     email: string;
     totpEnabled: boolean;
+    riderEarningRatePct?: number | null;
   };
 };
 
