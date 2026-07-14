@@ -16,6 +16,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
+import { OrderRouteMap } from "@/components/shared/OrderRouteMap";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -25,6 +26,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useOrderSocket } from "@/hooks/useOrderSocket";
 import { api } from "@/lib/api";
 import { lenis } from "@/lib/lenis";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
@@ -51,6 +53,7 @@ type OrderStatusHistory = {
   status: OrderStatus;
   changedAt: string;
   changedBy: string;
+  note?: string | null;
 };
 
 type Order = {
@@ -70,6 +73,13 @@ type Order = {
   items: OrderItem[];
   statusHistory: OrderStatusHistory[];
   appliedDiscountCode?: string | null;
+  riderId?: string | null;
+  deliveryLat?: number | null;
+  deliveryLng?: number | null;
+  user?: {
+    name: string | null;
+    phone: string;
+  } | null;
 };
 
 type OrdersEnvelope = {
@@ -83,9 +93,13 @@ type OrdersEnvelope = {
   };
 };
 
-function formatChangedBy(changedBy: string): string {
+function formatChangedBy(changedBy: string, note?: string | null): string {
   if (!changedBy) return "System";
   const normalized = changedBy.toUpperCase();
+  if (note && note.toLowerCase().includes("accepted by rider:")) {
+    const parts = note.split(/accepted by rider:/i);
+    if (parts[1]) return parts[1].trim();
+  }
   if (normalized === "BUYER" || normalized.startsWith("BUYER:")) return "Buyer";
   if (normalized === "RIDER" || normalized.startsWith("RIDER:")) return "Rider";
   if (
@@ -155,6 +169,43 @@ export function StoreOrdersPage(): ReactElement {
   selectedOrderRef.current = selectedOrder;
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
   const [confirmingOrderUpdate, setConfirmingOrderUpdate] = useState<{ orderId: string; status: OrderStatus } | null>(null);
+
+  const [riderCoords, setRiderCoords] = useState<{ lat: number; lng: number } | null>(null);
+
+  useEffect(() => {
+    if (selectedOrder && selectedOrder.status === "OUT_FOR_DELIVERY") {
+      api?.get<{ success: boolean; data: { lat: string; lng: string } | null }>(
+        `/api/v1/orders/${selectedOrder.id}/rider-location`
+      )
+        .then((res) => {
+          if (res.data?.success && res.data.data) {
+            setRiderCoords({
+              lat: Number(res.data.data.lat),
+              lng: Number(res.data.data.lng)
+            });
+          } else {
+            setRiderCoords(null);
+          }
+        })
+        .catch(() => {
+          setRiderCoords(null);
+        });
+    } else {
+      setRiderCoords(null);
+    }
+  }, [selectedOrder?.id, selectedOrder?.status]);
+
+  useOrderSocket(
+    selectedOrder?.id,
+    (statusUpdate) => {
+      if (selectedOrder && selectedOrder.id === statusUpdate.orderId) {
+        setSelectedOrder((prev) => prev ? { ...prev, status: statusUpdate.status as OrderStatus } : null);
+      }
+    },
+    (loc) => {
+      setRiderCoords({ lat: loc.lat, lng: loc.lng });
+    }
+  );
 
   useEffect(() => {
     if (selectedOrder) {
@@ -320,16 +371,18 @@ interface StoreOffer {
       });
     });
 
-    socket.on("store:order_updated", (payload?: { orderId: string; status: OrderStatus; statusHistory?: OrderStatusHistory[] }) => {
+    socket.on("store:order_updated", (payload?: { orderId: string; status: OrderStatus; riderId?: string | null; statusHistory?: OrderStatusHistory[] }) => {
       console.log("🔌 [StoreSocket] Event: store:order_updated received!", payload);
       triggerRefresh();
       if (payload?.orderId && selectedOrderRef.current?.id === payload.orderId) {
+        const { status, riderId, statusHistory } = payload;
         setSelectedOrder((prev) => {
           if (!prev) return null;
           return {
             ...prev,
-            status: payload.status,
-            statusHistory: payload.statusHistory ?? prev.statusHistory
+            status,
+            riderId: riderId !== undefined ? riderId : (prev.riderId ?? null),
+            statusHistory: statusHistory ?? prev.statusHistory
           };
         });
       }
@@ -385,6 +438,7 @@ interface StoreOffer {
       if (updatedOrder) {
         if (
           updatedOrder.status !== selectedOrder.status ||
+          updatedOrder.riderId !== selectedOrder.riderId ||
           updatedOrder.statusHistory?.length !== selectedOrder.statusHistory?.length
         ) {
           setSelectedOrder(updatedOrder);
@@ -476,7 +530,7 @@ interface StoreOffer {
       case "PREPARING":
         return ["OUT_FOR_DELIVERY", "CANCELLED"];
       case "OUT_FOR_DELIVERY":
-        return ["DELIVERED"];
+        return [];
       default:
         return [];
     }
@@ -770,7 +824,7 @@ interface StoreOffer {
                     </div>
                     <div>
                       <p className="text-[10px] text-gorola-slate font-bold">Buyer Profile</p>
-                      <p className="text-xs font-black text-gorola-charcoal">Registered User</p>
+                      <p className="text-xs font-black text-gorola-charcoal">{selectedOrder.user?.name || "Registered User"}</p>
                     </div>
                   </div>
 
@@ -798,6 +852,20 @@ interface StoreOffer {
                       </p>
                     </div>
                   </div>
+
+                  {selectedOrder.status === "OUT_FOR_DELIVERY" &&
+                    selectedOrder.deliveryLat &&
+                    selectedOrder.deliveryLng && (
+                      <div className="mt-4 border border-gorola-mint/15 rounded-2xl overflow-hidden h-[200px]" data-testid="store-order-map">
+                        <OrderRouteMap
+                          buyerCoords={{
+                            lat: Number(selectedOrder.deliveryLat),
+                            lng: Number(selectedOrder.deliveryLng)
+                          }}
+                          riderCoords={riderCoords}
+                        />
+                      </div>
+                    )}
                 </div>
               </div>
 
@@ -818,10 +886,11 @@ interface StoreOffer {
                         }`}
                       />
                       <p className="text-xs font-black text-gorola-charcoal">
-                        {formatStatusLabel(hist.status)}
+                        {hist.note?.toLowerCase().includes("accepted by rider:") ? "Order Accepted" : formatStatusLabel(hist.status)}
                       </p>
                       <p className="text-[10px] text-gorola-slate mt-0.5">
-                        By {formatChangedBy(hist.changedBy)} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
+                        By {formatChangedBy(hist.changedBy, hist.note)} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
+                        {!hist.note?.toLowerCase().includes("accepted by rider:") && hist.note && ` - ${hist.note}`}
                       </p>
                     </div>
                   ))}
@@ -936,22 +1005,28 @@ interface StoreOffer {
               <div className="pt-4 border-t border-gorola-mint/10 flex flex-wrap gap-3">
                 {allowedTransitions(selectedOrder.status).map((nextStatus) => {
                   const isCancel = nextStatus === "CANCELLED";
+                  const isDispatch = nextStatus === "OUT_FOR_DELIVERY";
+                  const isDispatchDisabled = isDispatch && !selectedOrder.riderId;
                   return (
                     <button
                       key={nextStatus}
-                      disabled={updateStatusMutation.isPending}
+                      disabled={updateStatusMutation.isPending || isDispatchDisabled}
                       onClick={() =>
                         setConfirmingOrderUpdate({ orderId: selectedOrder.id, status: nextStatus })
                       }
                       className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
                         isCancel
                           ? "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 disabled:opacity-50"
-                          : "bg-gorola-pine text-white hover:bg-gorola-pine/90 disabled:opacity-50 shadow-md shadow-gorola-pine/15"
+                          : isDispatchDisabled
+                            ? "bg-gorola-mint/20 text-gorola-slate border border-gorola-mint/30 cursor-not-allowed"
+                            : "bg-gorola-pine text-white hover:bg-gorola-pine/90 disabled:opacity-50 shadow-md shadow-gorola-pine/15"
                       }`}
                     >
                       {updateStatusMutation.isPending
                         ? "Updating..."
-                        : getTransitionButtonLabel(nextStatus)}
+                        : isDispatchDisabled
+                          ? "Dispatch (Assign Rider First)"
+                          : getTransitionButtonLabel(nextStatus)}
                     </button>
                   );
                 })}

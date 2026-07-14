@@ -22,7 +22,8 @@ export const orderRelationsInclude = {
   statusHistory: { orderBy: { changedAt: "asc" as const } },
   store: { select: { id: true, name: true, phone: true, storeType: true } },
   bookingOrder: true,
-  user: { select: { phone: true, name: true } }
+  user: { select: { phone: true, name: true } },
+  rider: { select: { id: true, name: true, phone: true } }
 } satisfies Prisma.OrderInclude;
 
 export type OrderWithRelations = Prisma.OrderGetPayload<{
@@ -199,17 +200,34 @@ export class OrderRepository {
   }
 
 
+  public async assignRider(
+    orderId: string,
+    riderId: string,
+    tx?: Prisma.TransactionClient
+  ): Promise<OrderWithRelations> {
+    const db: DbLike = tx ?? this.db;
+    await db.order.update({
+      where: { id: orderId },
+      data: { riderId }
+    });
+    return getOrderWithRelations(db, orderId);
+  }
+
   public async updateStatus(
     orderId: string,
     status: OrderStatus,
     changedBy: string,
     note?: string,
-    tx?: Prisma.TransactionClient
+    tx?: Prisma.TransactionClient,
+    riderId?: string | null
   ): Promise<OrderWithRelations> {
     const apply = async (db: DbLike): Promise<void> => {
       await db.order.update({
         where: { id: orderId },
-        data: { status }
+        data: {
+          status,
+          ...(riderId !== undefined ? { riderId } : {})
+        }
       });
       await db.orderStatusHistory.create({
         data: {

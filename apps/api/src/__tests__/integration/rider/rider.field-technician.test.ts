@@ -42,6 +42,7 @@ describe("Rider Field Technician Route Integration", () => {
   let deliveryToken: string;
   let categoryId: string;
   let subCategoryId: string;
+  let technicianRiderId: string;
 
   beforeAll(async () => {
     server = createServer({
@@ -102,6 +103,7 @@ describe("Rider Field Technician Route Integration", () => {
         riderType: "FIELD_TECHNICIAN"
       }
     });
+    technicianRiderId = technicianRider.id;
 
     await db.riderStore.create({
       data: {
@@ -364,7 +366,8 @@ describe("Rider Field Technician Route Integration", () => {
           create: {
             scheduledDate: new Date(Date.now() + 24 * 60 * 60 * 1000),
             timeslot: "09:00-11:00",
-            approvalStatus: "APPROVED"
+            approvalStatus: "APPROVED",
+            assignedTechnicianId: technicianRiderId
           }
         }
       }

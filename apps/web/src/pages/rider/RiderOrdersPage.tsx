@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, MapPin, Phone, RefreshCw, ShoppingBag } from "lucide-react";
+import { Clock, MapPin, Phone, RefreshCw, ShoppingBag, User } from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
 import { toast } from "sonner";
 
@@ -35,8 +35,13 @@ type ActiveOrder = {
     requiresFasting: boolean;
   } | null;
   buyerMaskedPhone: string;
+  buyerName?: string | null;
+  riderId?: string | null;
+  storeName?: string | null;
   deliveryAddress: {
     landmark: string;
+    flatRoom?: string | null;
+    deliveryNote?: string | null;
     lat: number | null;
     lng: number | null;
   };
@@ -71,13 +76,17 @@ export function RiderOrdersPage(): ReactElement {
     id: string;
     status: "OUT_FOR_DELIVERY" | "DELIVERED";
   } | null>(null);
+  const [confirmingAcceptOrder, setConfirmingAcceptOrder] = useState<{ id: string } | null>(null);
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [activeTrackingId, setActiveTrackingId] = useState<string | undefined>(undefined);
+  const selectedOrderRef = useRef(selectedOrder);
+  selectedOrderRef.current = selectedOrder;
 
   const queryClient = useQueryClient();
 
   const storeId = useAuthStore((s) => s.storeId);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const currentRiderId = useAuthStore((s) => s.userId);
 
   const { data: profileData } = useQuery<RiderProfileResponse>({
     queryKey: ["riderProfile"],
@@ -126,8 +135,19 @@ export function RiderOrdersPage(): ReactElement {
       toast.success(isFieldTechnician ? "🔔 New Service Received! Action required." : "🔔 New Order Received! Action required.");
     });
 
-    socket.on("store:order_updated", () => {
+    socket.on("store:order_updated", (payload?: { orderId: string; status: string; riderId?: string | null }) => {
       triggerRefresh();
+      if (payload?.orderId && selectedOrderRef.current?.id === payload.orderId) {
+        const { status, riderId } = payload;
+        setSelectedOrder((prev) => {
+          if (!prev) return null;
+          return {
+            ...prev,
+            status: status as ActiveOrder["status"],
+            riderId: riderId !== undefined ? riderId : (prev.riderId ?? null)
+          };
+        });
+      }
     });
 
     return () => {
@@ -167,6 +187,25 @@ export function RiderOrdersPage(): ReactElement {
     }
   });
 
+  const acceptOrderMutation = useMutation({
+    mutationFn: async (orderId: string) => {
+      if (!api) throw new Error("API not configured");
+      const res = await api.put<{ success: boolean }>(`/api/v1/rider/orders/${orderId}/accept`);
+      return res.data;
+    },
+    onSuccess: (_, orderId) => {
+      queryClient.invalidateQueries({ queryKey: ["riderActiveOrders"] });
+      toast.success(isFieldTechnician ? "Booking accepted!" : "Order accepted!");
+      setConfirmingAcceptOrder(null);
+      setSelectedOrder((prev) => (prev && prev.id === orderId ? { ...prev, riderId: currentRiderId } : prev));
+    },
+    onError: (err: unknown) => {
+      const ax = err as { response?: { data?: { error?: { message?: string } } } };
+      const errMsg = ax?.response?.data?.error?.message ?? (isFieldTechnician ? "Failed to accept booking." : "Failed to accept order.");
+      toast.error(errMsg);
+    }
+  });
+
   const handleConfirmStatusUpdate = () => {
     if (confirmingOrder) {
       updateStatusMutation.mutate({
@@ -190,6 +229,20 @@ export function RiderOrdersPage(): ReactElement {
   const orders = data?.data ?? [];
   const preparingOrders = orders.filter((o) => o.status === "PREPARING" || o.status === "APPROVED");
   const deliveringOrders = orders.filter((o) => o.status === "OUT_FOR_DELIVERY");
+
+  useEffect(() => {
+    if (selectedOrder && orders) {
+      const updatedOrder = orders.find((o) => o.id === selectedOrder.id);
+      if (updatedOrder) {
+        if (
+          updatedOrder.status !== selectedOrder.status ||
+          updatedOrder.riderId !== selectedOrder.riderId
+        ) {
+          setSelectedOrder(updatedOrder);
+        }
+      }
+    }
+  }, [orders, selectedOrder?.id]);
 
   useEffect(() => {
     if (deliveringOrders.length > 0) {
@@ -221,6 +274,11 @@ export function RiderOrdersPage(): ReactElement {
         onClick={() => setSelectedOrder(order)}
         className="flex flex-col gap-3 rounded-2xl border border-gorola-fog bg-white p-4 shadow-sm transition hover:shadow-md cursor-pointer hover:border-gorola-pine/20"
       >
+        {order.riderId === currentRiderId && (
+          <div className="bg-gorola-pine/10 text-gorola-pine text-[11px] font-bold px-3 py-1.5 rounded-xl border border-gorola-pine/20">
+            ✓ Accepted (Go pick from {order.storeName || "store"})
+          </div>
+        )}
         <div className="flex items-center justify-between border-b border-gorola-fog pb-2">
           <span className="font-heading text-xs font-semibold text-gorola-charcoal">
             {isBooking ? "Service" : "Order"} #{order.id.slice(-6).toUpperCase()}
@@ -249,9 +307,10 @@ export function RiderOrdersPage(): ReactElement {
           <div className="flex items-start gap-2">
             <MapPin className="mt-0.5 h-3.5 w-3.5 text-gorola-pine shrink-0" />
             <div className="flex flex-col">
-              <span className="text-[10px] text-muted-foreground font-medium">Landmark</span>
+              <span className="text-[10px] text-muted-foreground font-medium">Address</span>
               <span className="text-xs text-gorola-charcoal font-semibold">
-                {order.deliveryAddress.landmark || "No landmark specified"}
+                {order.deliveryAddress.flatRoom ? `${order.deliveryAddress.flatRoom}, ` : ""}
+                {order.deliveryAddress.landmark || "No address specified"}
               </span>
             </div>
           </div>
@@ -434,6 +493,14 @@ export function RiderOrdersPage(): ReactElement {
               )}
 
               <div className="flex items-start gap-2.5">
+                <User className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
+                <div className="flex flex-col">
+                  <span className="text-xs text-muted-foreground font-medium">Customer Name</span>
+                  <span className="text-sm font-semibold text-gorola-charcoal">{selectedOrder.buyerName || "Registered Customer"}</span>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-2.5">
                 <Phone className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
                 <div className="flex flex-col">
                   <span className="text-xs text-muted-foreground font-medium">Buyer Contact</span>
@@ -444,10 +511,16 @@ export function RiderOrdersPage(): ReactElement {
               <div className="flex items-start gap-2.5">
                 <MapPin className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-xs text-muted-foreground font-medium">Delivery Landmark</span>
+                  <span className="text-xs text-muted-foreground font-medium">Delivery Address</span>
                   <span className="text-sm text-gorola-charcoal font-semibold">
-                    {selectedOrder.deliveryAddress.landmark || "No landmark specified"}
+                    {selectedOrder.deliveryAddress.flatRoom ? `${selectedOrder.deliveryAddress.flatRoom}, ` : ""}
+                    {selectedOrder.deliveryAddress.landmark || "No address specified"}
                   </span>
+                  {selectedOrder.deliveryAddress.deliveryNote && (
+                    <span className="text-xs text-muted-foreground italic mt-0.5">
+                      Note: {selectedOrder.deliveryAddress.deliveryNote}
+                    </span>
+                  )}
                 </div>
               </div>
 
@@ -467,7 +540,7 @@ export function RiderOrdersPage(): ReactElement {
             </div>
 
             {/* Collapsible Map Section */}
-            {selectedOrder.deliveryAddress.lat && selectedOrder.deliveryAddress.lng && (
+            {selectedOrder.status === "OUT_FOR_DELIVERY" && selectedOrder.deliveryAddress.lat && selectedOrder.deliveryAddress.lng && (
               <div className="border-t border-gorola-fog pt-4">
                 <button
                   onClick={() => setExpandedOrderId(expandedOrderId === selectedOrder.id ? null : selectedOrder.id)}
@@ -492,24 +565,33 @@ export function RiderOrdersPage(): ReactElement {
 
             {/* Action buttons footer */}
             <div className="pt-4 border-t border-gorola-fog flex w-full">
-              {selectedOrder.status === "PREPARING" ? (
-                <Button
-                  className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
-                  onClick={() =>
-                    setConfirmingOrder({ id: selectedOrder.id, status: "OUT_FOR_DELIVERY" })
-                  }
-                >
-                  Mark as Out for Delivery
-                </Button>
-              ) : selectedOrder.status === "APPROVED" ? (
-                <Button
-                  className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
-                  onClick={() =>
-                    setConfirmingOrder({ id: selectedOrder.id, status: "OUT_FOR_DELIVERY" })
-                  }
-                >
-                  Mark as Departed
-                </Button>
+              {selectedOrder.status === "PREPARING" || selectedOrder.status === "APPROVED" ? (
+                !selectedOrder.riderId ? (
+                  <Button
+                    className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
+                    onClick={() =>
+                      setConfirmingAcceptOrder({ id: selectedOrder.id })
+                    }
+                  >
+                    {selectedOrder.orderType === "BOOKING" ? "Accept Visit" : "Accept Order"}
+                  </Button>
+                ) : selectedOrder.riderId === currentRiderId ? (
+                  <Button
+                    disabled
+                    className="w-full bg-gorola-fog text-muted-foreground py-3 px-4 text-xs font-bold rounded-xl cursor-not-allowed whitespace-normal h-auto min-h-11"
+                  >
+                    {selectedOrder.orderType === "BOOKING"
+                      ? `Visit Accepted (Go to store: ${selectedOrder.storeName || "Store"})`
+                      : `Accepted (Go pick the order from the store: ${selectedOrder.storeName || "Store"})`}
+                  </Button>
+                ) : (
+                  <Button
+                    disabled
+                    className="w-full bg-gorola-fog text-muted-foreground py-4 text-sm font-semibold h-11 rounded-xl cursor-not-allowed"
+                  >
+                    Accepted by other rider
+                  </Button>
+                )
               ) : selectedOrder.status === "OUT_FOR_DELIVERY" ? (
                 <Button
                   className="w-full bg-gorola-pine text-white hover:bg-gorola-pine-dark py-4 text-sm font-semibold h-11 rounded-xl cursor-pointer"
@@ -558,6 +640,42 @@ export function RiderOrdersPage(): ReactElement {
                 disabled={updateStatusMutation.isPending}
               >
                 {updateStatusMutation.isPending ? "Updating..." : "Confirm"}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {confirmingAcceptOrder && (
+        <Dialog open={!!confirmingAcceptOrder} onOpenChange={(open) => !open && setConfirmingAcceptOrder(null)}>
+          <DialogContent className="sm:max-w-sm rounded-2xl p-6" showCloseButton={false}>
+            <DialogHeader className="gap-2">
+              <DialogTitle className="font-heading text-lg font-bold text-gorola-charcoal">
+                Confirm Status Update
+              </DialogTitle>
+              <DialogDescription className="font-sans text-sm text-muted-foreground">
+                Are you sure you want to accept this {selectedOrder?.orderType === "BOOKING" ? "service" : "order"}?
+              </DialogDescription>
+            </DialogHeader>
+            <DialogFooter className="mt-4 flex gap-2">
+              <Button
+                variant="outline"
+                className="w-full sm:w-auto rounded-xl"
+                onClick={() => setConfirmingAcceptOrder(null)}
+                disabled={acceptOrderMutation.isPending}
+              >
+                Cancel
+              </Button>
+              <Button
+                className="w-full sm:w-auto bg-gorola-pine text-white hover:bg-gorola-pine-dark rounded-xl"
+                onClick={() => {
+                  if (confirmingAcceptOrder) {
+                    acceptOrderMutation.mutate(confirmingAcceptOrder.id);
+                  }
+                }}
+                disabled={acceptOrderMutation.isPending}
+              >
+                {acceptOrderMutation.isPending ? "Updating..." : "Confirm"}
               </Button>
             </DialogFooter>
           </DialogContent>

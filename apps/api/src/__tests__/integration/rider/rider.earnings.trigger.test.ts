@@ -184,7 +184,8 @@ describe("Rider Earnings Status Trigger Integration Tests", () => {
         subtotal: 100,
         deliveryFee: 60.00,
         total: 160.00,
-        landmarkDescription: "Test Landmark"
+        landmarkDescription: "Test Landmark",
+        riderId: riderId
       }
     });
 
@@ -250,7 +251,8 @@ describe("Rider Earnings Status Trigger Integration Tests", () => {
         subtotal: 100,
         deliveryFee: 60.00,
         total: 160.00,
-        landmarkDescription: "Test Landmark"
+        landmarkDescription: "Test Landmark",
+        riderId: riderId
       }
     });
 
@@ -293,7 +295,8 @@ describe("Rider Earnings Status Trigger Integration Tests", () => {
         subtotal: 100,
         deliveryFee: 60.00,
         total: 160.00,
-        landmarkDescription: "Test Landmark"
+        landmarkDescription: "Test Landmark",
+        riderId: riderId
       }
     });
 

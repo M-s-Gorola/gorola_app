@@ -300,6 +300,8 @@ model Order {
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   store               Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  riderId             String?
+  rider               DeliveryRider?       @relation(fields: [riderId], references: [id], onDelete: SetNull)
   items               OrderItem[]
   statusHistory       OrderStatusHistory[]
   stockMovements      StockMovement[]
@@ -469,6 +471,7 @@ model DeliveryRider {
   locations    RiderLocation[]
   stores       RiderStore[]
   earnings     RiderEarning[]
+  orders       Order[]
 
   @@index([isActive, isDeleted])
 }

@@ -24,13 +24,13 @@ async function generateAccessToken(userId: string, role: string, storeId?: strin
 }
 
 async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<void> {
-  await db.bookingOrder.deleteMany();
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
-  await db.deliveryRider.deleteMany();
+  await db.riderStore.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
   await db.order.deleteMany();
+  await db.deliveryRider.deleteMany();
   await db.cartItem.deleteMany();
   await db.cart.deleteMany();
   await db.address.deleteMany();
@@ -42,11 +42,12 @@ async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<
   await db.offer.deleteMany();
   await db.discount.deleteMany();
   await db.store.deleteMany();
+  await db.admin.deleteMany();
   await db.subCategory.deleteMany();
   await db.category.deleteMany();
-  await db.admin.deleteMany();
   await db.featureFlag.deleteMany();
   await db.auditLog.deleteMany();
+  await db.bookingOrder.deleteMany();
 }
 
 describe("Admin Orders Integration Tests", () => {
@@ -164,6 +165,17 @@ describe("Admin Orders Integration Tests", () => {
       }
     });
 
+    // Create rider
+    const rider = await db.deliveryRider.create({
+      data: {
+        name: "Rider Bob",
+        phone: "+919000000003",
+        email: "riderbob@gorola.in",
+        passwordHash: "dummy-hash",
+        isActive: true
+      }
+    });
+
     // 4. Create orders
     const order1 = await db.order.create({
       data: {
@@ -175,6 +187,7 @@ describe("Admin Orders Integration Tests", () => {
         total: 50.0,
         paymentMethod: "COD",
         landmarkDescription: "Gate 1",
+        riderId: rider.id,
         items: {
           create: {
             productVariantId: variantA.id,
@@ -234,6 +247,14 @@ describe("Admin Orders Integration Tests", () => {
     expect(first).toHaveProperty("paymentMethod");
     expect(first.buyerMaskedPhone).toBe("*********3210");
 
+    const itemWithRider = bodyAll.data.items.find((item: { id: string }) => item.id === order1.id);
+    expect(itemWithRider).toHaveProperty("riderName");
+    expect(itemWithRider.riderName).toBe("Rider Bob");
+
+    const itemWithoutRider = bodyAll.data.items.find((item: { id: string }) => item.id === order2.id);
+    expect(itemWithoutRider).toHaveProperty("riderName");
+    expect(itemWithoutRider.riderName).toBeNull();
+
     // Test: GET order detail by ID
     const resDetail = await server.inject({
       method: "GET",
@@ -246,6 +267,7 @@ describe("Admin Orders Integration Tests", () => {
     expect(bodyDetail.data.id).toBe(order1.id);
     expect(bodyDetail.data.items.length).toBe(1);
     expect(bodyDetail.data.buyerMaskedPhone).toBe("*********3210");
+    expect(bodyDetail.data.riderName).toBe("Rider Bob");
 
     // Test: GET with store filter
     const resStoreA = await server.inject({

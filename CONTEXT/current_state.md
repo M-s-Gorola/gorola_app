@@ -18,7 +18,7 @@
 |-------|------|--------|-------|
 | Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | ✅ COMPLETE    | 2.1–2.23 complete. **File locked.** |
 | Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | ✅ COMPLETE    | Phase 3 and Phase 4 fully complete. All E2E runs passing cleanly. |
-| Phase 5 | [`phase5_state.md`](./phase5_state.md) | 🟡 IN PROGRESS | Phase 5.1 to 5.6.2 complete. Earnings page and E2E journeys remaining. |
+| Phase 5 | [`phase5_state.md`](./phase5_state.md) | ✅ COMPLETE    | Phase 5.1 to 5.7.5 complete. Earnings page, order accepting, names, map displays, and lockouts complete. |
 | Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing, UX refinement, and TDD parity. |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
 | Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🔴 NOT STARTED | DPDP Act 2023 Compliance |
@@ -33,7 +33,7 @@
  | Phase 2 | Buyer Web Experience | ✅ COMPLETE    | 2.1–2.23 complete. |
  | Phase 3 | Store Owner Panel    | ✅ COMPLETE    | Phase 3.1–3.10.1 complete. All E2E tests passing. |
  | Phase 4 | Admin Panel          | ✅ COMPLETE    | All Phase 4.1–4.10 items complete. |
- | Phase 5 | Rider Interface      | 🟡 IN PROGRESS | Phase 5.1 to 5.6.2 complete. |
+ | Phase 5 | Rider Interface      | ✅ COMPLETE    | Phase 5.1 to 5.7.5 complete. |
 | Phase 6 | Subdomain Routing    | ✅ COMPLETE    | All 6.1–6.9 checklists and UX refinements complete. |
 | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
 | Phase 8 | DPDP Act Compliance  | 🔴 NOT STARTED | Must be complete before production launch.    |
