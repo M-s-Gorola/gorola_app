@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { ClipboardList, User } from "lucide-react";
+import { ClipboardList, TrendingUp, User } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
 
@@ -29,11 +29,13 @@ export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
   const riderName = profileData?.data?.name;
 
   const ordersPath = getScopedPath("/rider/orders", "rider", isSubdomainMode);
+  const earningsPath = getScopedPath("/rider/earnings", "rider", isSubdomainMode);
   const accountPath = getScopedPath("/rider/account", "rider", isSubdomainMode);
 
   // Helper to determine if a route is active.
   // We check if the pathname starts with the tab path (except root / fallbacks)
   const isOrdersActive = location.pathname === ordersPath || location.pathname.startsWith(ordersPath + "/");
+  const isEarningsActive = location.pathname === earningsPath || location.pathname.startsWith(earningsPath + "/");
   const isAccountActive = location.pathname === accountPath || location.pathname.startsWith(accountPath + "/");
 
   return (
@@ -76,6 +78,19 @@ export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
         >
           <ClipboardList className="h-5 w-5" />
           <span className="text-[10px] tracking-wide">{isFieldTechnician ? "Services" : "Orders"}</span>
+        </Link>
+
+        <Link
+          to={earningsPath}
+          className={`flex flex-col items-center justify-center gap-1 w-20 py-2 h-12 rounded-xl transition-colors select-none ${
+            isEarningsActive
+              ? "text-gorola-pine font-bold"
+              : "text-muted-foreground hover:text-gorola-charcoal"
+          }`}
+          aria-label="Earnings"
+        >
+          <TrendingUp className="h-5 w-5" />
+          <span className="text-[10px] tracking-wide">Earnings</span>
         </Link>
 
         <Link

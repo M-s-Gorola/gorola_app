@@ -1623,7 +1623,8 @@ export class StoreOwnerService {
       weatherModeDeliveryWindowStart,
       weatherModeDeliveryWindowEnd,
       email: owner.email,
-      totpEnabled: owner.totpEnabled
+      totpEnabled: owner.totpEnabled,
+      riderEarningRatePct: store.riderEarningRatePct ? Number(store.riderEarningRatePct) : null
     };
   }
 

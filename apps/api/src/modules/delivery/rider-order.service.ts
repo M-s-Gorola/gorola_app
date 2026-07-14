@@ -3,6 +3,7 @@ import { type OrderStatus } from "@prisma/client";
 
 import type { OrderRepository, OrderWithRelations } from "../order/order.repository.js";
 import type { RiderRepository } from "./rider.repository.js";
+import type { RiderEarningsService } from "./rider-earnings.service.js";
 
 export type RiderOrderEventEmitter = {
   emitStatusChanged: (orderId: string, status: string) => void | Promise<void>;
@@ -12,7 +13,8 @@ export class RiderOrderService {
   public constructor(
     private readonly orders: OrderRepository,
     private readonly riders: RiderRepository,
-    private readonly emitter?: RiderOrderEventEmitter
+    private readonly emitter?: RiderOrderEventEmitter,
+    private readonly riderEarnings?: RiderEarningsService
   ) {}
 
   public async getActiveOrders(storeIds: string[], riderId: string): Promise<OrderWithRelations[]> {
@@ -96,6 +98,20 @@ export class RiderOrderService {
     }
 
     const updated = await this.orders.updateStatus(orderId, newStatus, changedBy);
+
+    if (newStatus === "DELIVERED" && this.riderEarnings) {
+      try {
+        const riderId = changedBy.startsWith("rider:") ? changedBy.substring(6) : changedBy;
+        await this.riderEarnings.createEarningForDelivery(
+          riderId,
+          orderId,
+          order.deliveryFee,
+          order.storeId
+        );
+      } catch (err) {
+        console.error("Failed to create rider earning:", err);
+      }
+    }
 
     if (this.emitter) {
       void this.emitter.emitStatusChanged(orderId, newStatus);

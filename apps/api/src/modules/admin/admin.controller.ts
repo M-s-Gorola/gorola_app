@@ -1080,4 +1080,87 @@ export function registerAdminRoutes(
       }
     };
   });
+
+  const updateRiderEarningSettingSchema = z.object({
+    value: z.string().refine((val) => {
+      const num = Number(val);
+      return !isNaN(num) && num >= 0;
+    }, "Must be a valid decimal amount")
+  });
+
+  app.put("/api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT", { preHandler }, async (request, reply) => {
+    if (!deps.systemSettingService) {
+      throw new ValidationError("SystemSettingService not registered");
+    }
+    const parsed = updateRiderEarningSettingSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid rate value", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await deps.systemSettingService.updateSettings(
+      [
+        { key: "RIDER_EARNING_RATE_PCT", value: parsed.data.value }
+      ],
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const updateStoreRiderRateSchema = z.object({
+    riderEarningRatePct: z.number().min(0, "Rate must be non-negative").nullable()
+  });
+
+  app.put("/api/v1/admin/stores/:storeId/rider-earning-rate", { preHandler }, async (request, reply) => {
+    const { storeId } = request.params as { storeId: string };
+    const parsed = updateStoreRiderRateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid store rider earning rate override payload", parsed.error.flatten());
+    }
+
+    const prisma = getPrismaClient();
+
+    // Check if store exists
+    const store = await prisma.store.findUnique({
+      where: { id: storeId }
+    });
+    if (!store) {
+      return reply.code(404).send({ success: false, error: "Store not found" });
+    }
+
+    const updated = await prisma.store.update({
+      where: { id: storeId },
+      data: {
+        riderEarningRatePct: parsed.data.riderEarningRatePct
+      }
+    });
+
+    return {
+      success: true,
+      data: {
+        id: updated.id,
+        riderEarningRatePct: updated.riderEarningRatePct ? Number(updated.riderEarningRatePct) : null
+      },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
 }
+

@@ -32,6 +32,8 @@ import { registerSubCategoryRoutes } from "./modules/catalog/sub-category.contro
 import { ProductVariantRepository } from "./modules/catalog/variant.repository.js";
 import { registerRiderRoutes } from "./modules/delivery/rider.controller.js";
 import { RiderRepository } from "./modules/delivery/rider.repository.js";
+import { RiderEarningsRepository } from "./modules/delivery/rider-earnings.repository.js";
+import { RiderEarningsService } from "./modules/delivery/rider-earnings.service.js";
 import { RiderLocationService } from "./modules/delivery/rider-location.service.js";
 import { RiderOrderService } from "./modules/delivery/rider-order.service.js";
 import { registerFeatureFlagRoutes } from "./modules/feature-flag/feature-flag.controller.js";
@@ -331,7 +333,19 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenService: riderTokenService
   });
 
-  const riderOrderService = new RiderOrderService(orderRepoOrders, riderRepository, orderEmitter);
+  const riderEarningsRepo = new RiderEarningsRepository(prisma);
+  const riderEarningsService = new RiderEarningsService(
+    prisma,
+    riderEarningsRepo,
+    systemSettingService
+  );
+
+  const riderOrderService = new RiderOrderService(
+    orderRepoOrders,
+    riderRepository,
+    orderEmitter,
+    riderEarningsService
+  );
   const riderLocationService = new RiderLocationService(riderRepository, () => app.io);
 
   registerAuthRoutes(app, {
@@ -374,7 +388,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
     riderAuthService,
     riderOrderService,
     riderLocationService,
-    riderRepository
+    riderRepository,
+    riderEarningsService
   });
 
   const paymentService = new PaymentService(prisma);

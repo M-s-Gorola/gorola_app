@@ -11,15 +11,15 @@
 
 | Phase   | Name              | Status      | Notes |
 | ------- | ----------------- | ----------- | ----- |
-| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.6.3-D are complete. Earnings page, and E2E journeys remaining. |
+| Phase 5 | Rider Interface   | IN PROGRESS | Phase 5.1 to 5.7 are complete. Phase 5.7.5 and E2E journeys (5.8) remaining. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-18
-- **Session Summary:** Implemented key branding and UI polish changes: integrated the favicon, configured a global blurred topographic background image, styled the buyer Hero section with a dark overlay and white text, made the hero section responsive by decreasing its mobile height and padding, left-aligned the mobile "Shop Now" button to prevent stretching, and copied the navbar's blue-white gradient style to the footer.
-- **Next Session Must Start With:** Phase 5.7 (Rider Earnings Page)
+- **Date:** 2026-07-14
+- **Session Summary:** Completed Phase 5.7 (Rider Earnings Page: summary periods, 10-order pagination, filters dropdown for Today, Yesterday, This Week, This Month, and Custom Date Range, compact aggregates header). Fixed typescript compilations, eslint fixes, and resolved PostgreSQL delete foreign key violations by adding onDelete: Cascade to RiderEarning relations.
+- **Next Session Must Start With:** Phase 5.7.5 (Order Lifecycle Refactoring)
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -71,10 +71,10 @@ navigate(getScopedPath("/rider/orders", "rider", isSubdomainMode));
 
 ## Mandatory API Contract Gate (all Phase 5 items)
 
-- [ ] Required backend endpoint(s) fully implemented (not 501)
-- [ ] Backend integration tests verify: endpoint contract, HTTP status codes, auth/role guards, real-time behavior
-- [ ] Endpoint routes registered and returning correct responses (not `NOT_IMPLEMENTED`)
-- [ ] Frontend/client tests verify: expected API/socket envelope, loading state, empty state, error state
+- [x] Required backend endpoint(s) fully implemented (not 501)
+- [x] Backend integration tests verify: endpoint contract, HTTP status codes, auth/role guards, real-time behavior
+- [x] Endpoint routes registered and returning correct responses (not `NOT_IMPLEMENTED`)
+- [x] Frontend/client tests verify: expected API/socket envelope, loading state, empty state, error state
 
 ---
 
@@ -1100,48 +1100,48 @@ export function calculateRiderEarning(input: EarningInput): EarningOutput {
 
 ---
 
-- [ ] **RED — Integration (`rider.earnings.test.ts`):**
-  - [ ] Test setup: seed 1 store with `riderEarningRatePct: null` (uses global default). Seed system setting `RIDER_EARNING_RATE_PCT = "80"`. Seed 1 `DeliveryRider`. Seed 3 `Order` rows all `status: DELIVERED`, `deliveryFee: 50.00`. Seed 3 `RiderEarning` rows with `amount: 40.00` (= 50 × 80%), `earningType: PER_ORDER`, `distanceKm: null` (create rows directly in test seed — do not rely on 5.3 trigger yet).
-  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a valid RIDER JWT for that rider → HTTP 200; response shape `{ success: true, data: { today: { count: number, total: string }, thisWeek: { count: number, total: string }, thisMonth: { count: number, total: string } } }`. With 3 deliveries all created today, all three period totals must equal `"120.00"` (3 × ₹40) and count `3`.
-  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a BUYER JWT → HTTP 403.
-  - [ ] Test: `GET /api/v1/rider/earnings/summary` with a RIDER JWT for a **different** rider who has no earnings → HTTP 200; all totals `"0.00"` and counts `0` (strict rider scope — no cross-rider data leakage).
-  - [ ] Test: `GET /api/v1/rider/earnings/history` with a valid RIDER JWT → HTTP 200; response shape `{ success: true, data: { items: [{ id, orderId, amount, earningType, distanceKm, createdAt }], nextCursor: string | null } }`; `items` length is `3`; `amount` on each item is `"40.00"`; `earningType` is `"PER_ORDER"`; `distanceKm` is `null`; items ordered newest-first.
-  - [ ] Test: `GET /api/v1/rider/earnings/history?cursor=<cursorFromPreviousResponse>` → returns next page (empty array if no more records); `nextCursor` is `null`.
-  - [ ] Test: `GET /api/v1/rider/earnings/history` with a RIDER JWT for a different rider → returns `items: []` (no cross-rider leakage).
-  - [ ] **Test — Per-store override:** Seed a second store with `riderEarningRatePct: 100.00`. Seed a `RiderEarning` row for a rider in that store with `amount: 50.00` (= 50 × 100%). Assert that `GET /api/v1/rider/earnings/history` for that rider returns `amount: "50.00"` — not `"40.00"`.
-  - [ ] **Run — confirm RED (both endpoints return 404 today).**
+- [x] **RED — Integration (`rider.earnings.test.ts`):**
+  - [x] Test setup: seed 1 store with `riderEarningRatePct: null` (uses global default). Seed system setting `RIDER_EARNING_RATE_PCT = "80"`. Seed 1 `DeliveryRider`. Seed 3 `Order` rows all `status: DELIVERED`, `deliveryFee: 50.00`. Seed 3 `RiderEarning` rows with `amount: 40.00` (= 50 × 80%), `earningType: PER_ORDER`, `distanceKm: null` (create rows directly in test seed — do not rely on 5.3 trigger yet).
+  - [x] Test: `GET /api/v1/rider/earnings/summary` with a valid RIDER JWT for that rider → HTTP 200; response shape `{ success: true, data: { today: { count: number, total: string }, thisWeek: { count: number, total: string }, thisMonth: { count: number, total: string } } }`. With 3 deliveries all created today, all three period totals must equal `"120.00"` (3 × ₹40) and count `3`.
+  - [x] Test: `GET /api/v1/rider/earnings/summary` with a BUYER JWT → HTTP 403.
+  - [x] Test: `GET /api/v1/rider/earnings/summary` with a RIDER JWT for a **different** rider who has no earnings → HTTP 200; all totals `"0.00"` and counts `0` (strict rider scope — no cross-rider data leakage).
+  - [x] Test: `GET /api/v1/rider/earnings/history` with a valid RIDER JWT → HTTP 200; response shape `{ success: true, data: { items: [{ id, orderId, amount, earningType, distanceKm, createdAt }], nextCursor: string | null } }`; `items` length is `3`; `amount` on each item is `"40.00"`; `earningType` is `"PER_ORDER"`; `distanceKm` is `null`; items ordered newest-first.
+  - [x] Test: `GET /api/v1/rider/earnings/history?cursor=<cursorFromPreviousResponse>` → returns next page (empty array if no more records); `nextCursor` is `null`.
+  - [x] Test: `GET /api/v1/rider/earnings/history` with a RIDER JWT for a different rider → returns `items: []` (no cross-rider leakage).
+  - [x] **Test — Per-store override:** Seed a second store with `riderEarningRatePct: 100.00`. Seed a `RiderEarning` row for a rider in that store with `amount: 50.00` (= 50 × 100%). Assert that `GET /api/v1/rider/earnings/history` for that rider returns `amount: "50.00"` — not `"40.00"`.
+  - [x] **Run — confirm RED (both endpoints return 404 today).**
 
-- [ ] **RED — Integration (`rider.earnings.trigger.test.ts` — new file):**
+- [x] **RED — Integration (`rider.earnings.trigger.test.ts` — new file):**
   > Verifies that the 5.3 status-update endpoint **automatically** creates a `RiderEarning` row when transitioning to `DELIVERED`, using the correct earning rate.
-  - [ ] Test setup: seed store with `riderEarningRatePct: null`. Seed system setting `RIDER_EARNING_RATE_PCT = "75"`. Seed rider + order with `status: OUT_FOR_DELIVERY`, `deliveryFee: 60.00`.
-  - [ ] Test: `PUT /api/v1/rider/orders/:id/status` with `{ status: 'DELIVERED' }` (RIDER JWT) → HTTP 200; a `RiderEarning` row now exists in DB with `riderId`, `orderId`, `amount = "45.00"` (= 60 × 75%), `earningType = "PER_ORDER"`, `distanceKm = null`.
-  - [ ] Test: repeat `PUT .../status` with `{ status: 'DELIVERED' }` → HTTP 422 `INVALID_STATUS_TRANSITION` (idempotency — no duplicate `RiderEarning` row created; `orderId @unique` enforces this at DB level).
-  - [ ] Test: store with `riderEarningRatePct: 90.00` → delivering a ₹60 order creates `RiderEarning.amount = "54.00"` (= 60 × 90%).
-  - [ ] Test: if `RiderEarning.createEarning` throws (e.g. simulate DB error), `PUT .../status` still returns HTTP 200 (earning write failure is non-fatal — logged, not surfaced to rider).
-  - [ ] **Run — confirm RED (no `RiderEarning` is created by 5.3 today).**
+  - [x] Test setup: seed store with `riderEarningRatePct: null`. Seed system setting `RIDER_EARNING_RATE_PCT = "75"`. Seed rider + order with `status: OUT_FOR_DELIVERY`, `deliveryFee: 60.00`.
+  - [x] Test: `PUT /api/v1/rider/orders/:id/status` with `{ status: 'DELIVERED' }` (RIDER JWT) → HTTP 200; a `RiderEarning` row now exists in DB with `riderId`, `orderId`, `amount = "45.00"` (= 60 × 75%), `earningType = "PER_ORDER"`, `distanceKm = null`.
+  - [x] Test: repeat `PUT .../status` with `{ status: 'DELIVERED' }` → HTTP 422 `INVALID_STATUS_TRANSITION` (idempotency — no duplicate `RiderEarning` row created; `orderId @unique` enforces this at DB level).
+  - [x] Test: store with `riderEarningRatePct: 90.00` → delivering a ₹60 order creates `RiderEarning.amount = "54.00"` (= 60 × 90%).
+  - [x] Test: if `RiderEarning.createEarning` throws (e.g. simulate DB error), `PUT .../status` still returns HTTP 200 (earning write failure is non-fatal — logged, not surfaced to rider).
+  - [x] **Run — confirm RED (no `RiderEarning` is created by 5.3 today).**
 
-- [ ] **RED — Integration (`admin.rider-earning-config.test.ts` — new file):**
-  - [ ] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with body `{ value: "85" }` (ADMIN JWT) → HTTP 200; persisted in DB.
-  - [ ] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with body `{ value: "150" }` → HTTP 200 (no hard cap — admin is trusted).
-  - [ ] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with body `{ value: "abc" }` → HTTP 400 `VALIDATION_ERROR`.
-  - [ ] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with STORE_OWNER JWT → HTTP 403.
-  - [ ] Test: `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with body `{ riderEarningRatePct: 100 }` (ADMIN JWT) → HTTP 200; `Store.riderEarningRatePct = 100.00` in DB.
-  - [ ] Test: `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with body `{ riderEarningRatePct: null }` → HTTP 200; `Store.riderEarningRatePct = null` in DB (reverts to global default).
-  - [ ] Test: `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with STORE_OWNER JWT → HTTP 403.
-  - [ ] Test: `GET /api/v1/store/settings` (STORE_OWNER JWT) → HTTP 200; response includes `riderEarningRatePct: <number or null>` (read-only field — no write endpoint exposed to store owners).
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`admin.rider-earning-config.test.ts` — new file):**
+  - [x] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with body `{ value: "85" }` (ADMIN JWT) → HTTP 200; persisted in DB.
+  - [x] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with body `{ value: "150" }` → HTTP 200 (no hard cap — admin is trusted).
+  - [x] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with body `{ value: "abc" }` → HTTP 400 `VALIDATION_ERROR`.
+  - [x] Test: `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with STORE_OWNER JWT → HTTP 403.
+  - [x] Test: `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with body `{ riderEarningRatePct: 100 }` (ADMIN JWT) → HTTP 200; `Store.riderEarningRatePct = 100.00` in DB.
+  - [x] Test: `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with body `{ riderEarningRatePct: null }` → HTTP 200; `Store.riderEarningRatePct = null` in DB (reverts to global default).
+  - [x] Test: `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with STORE_OWNER JWT → HTTP 403.
+  - [x] Test: `GET /api/v1/store/settings` (STORE_OWNER JWT) → HTTP 200; response includes `riderEarningRatePct: <number or null>` (read-only field — no write endpoint exposed to store owners).
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Schema → Calculator → Repository → Service → Controller):**
+- [x] **GREEN — Backend (Schema → Calculator → Repository → Service → Controller):**
 
   **Step 1 — Schema**
-  - [ ] [Schema] Add `EarningType` enum to `schema.prisma`:
+  - [x] [Schema] Add `EarningType` enum to `schema.prisma`:
     ```prisma
     enum EarningType {
       PER_ORDER
       PER_KM
     }
     ```
-  - [ ] [Schema] Add `RiderEarning` model to `schema.prisma`:
+  - [x] [Schema] Add `RiderEarning` model to `schema.prisma`:
     ```prisma
     model RiderEarning {
       id          String        @id @default(cuid())
@@ -1158,12 +1158,12 @@ export function calculateRiderEarning(input: EarningInput): EarningOutput {
     }
     ```
     Also add `earnings RiderEarning[]` back-relation to `DeliveryRider` and `earning RiderEarning?` to `Order`.
-  - [ ] [Schema] Add `riderEarningRatePct Decimal? @db.Decimal(5, 2)` to the `Store` model. `null` = use global system setting.
-  - [ ] Run: `pnpm --filter @gorola/api prisma migrate dev --name add_rider_earning_and_rate`.
+  - [x] [Schema] Add `riderEarningRatePct Decimal? @db.Decimal(5, 2)` to the `Store` model. `null` = use global system setting.
+  - [x] Run: `pnpm --filter @gorola/api prisma migrate dev --name add_rider_earning_and_rate`.
 
   **Step 2 — Calculator (pure logic, no DB)**
-  - [ ] [Calculator] Create `apps/api/src/modules/delivery/rider-earning-calculator.ts` (full spec in Decision C above).
-  - [ ] [Unit Tests] Create `src/__tests__/unit/delivery/rider-earning-calculator.test.ts` — write these FIRST (RED), then implement the function:
+  - [x] [Calculator] Create `apps/api/src/modules/delivery/rider-earning-calculator.ts` (full spec in Decision C above).
+  - [x] [Unit Tests] Create `src/__tests__/unit/delivery/rider-earning-calculator.test.ts` — write these FIRST (RED), then implement the function:
     - Test: `PER_ORDER`, `deliveryFee=50`, `earningRatePct=80` → `amount="40.00"`.
     - Test: `PER_ORDER`, `deliveryFee=50`, `earningRatePct=100` → `amount="50.00"`.
     - Test: `PER_ORDER`, `deliveryFee=50`, `earningRatePct=0` → `amount="0.00"`.
@@ -1171,13 +1171,13 @@ export function calculateRiderEarning(input: EarningInput): EarningOutput {
     - Test: unknown `model` value → throws `Error`.
 
   **Step 3 — Repository**
-  - [ ] [Repository] Create `apps/api/src/modules/delivery/rider-earnings.repository.ts`:
+  - [x] [Repository] Create `apps/api/src/modules/delivery/rider-earnings.repository.ts`:
     - `createEarning(data: { riderId, orderId, amount: Decimal, earningType: EarningType, distanceKm?: Decimal })` — `prisma.riderEarning.create`.
     - `getSummary(riderId)` — three `prisma.riderEarning.aggregate` calls with `_sum` and `_count`, filtered by `riderId` + `createdAt >= startOfDay/Week/Month` UTC boundaries.
     - `getHistory(riderId, cursor?, take = 20)` — `findMany` with `orderBy: { createdAt: 'desc' }`, cursor-based pagination on `id` field.
 
   **Step 4 — Service**
-  - [ ] [Service] Create `apps/api/src/modules/delivery/rider-earnings.service.ts`:
+  - [x] [Service] Create `apps/api/src/modules/delivery/rider-earnings.service.ts`:
     - `getSummary(riderId)` — calls repository; formats all `Decimal` totals to `.toFixed(2)` strings.
     - `getHistory(riderId, cursor?)` — calls repository; formats `amount` to string, passes `distanceKm` as string or `null`.
     - `createEarningForDelivery(riderId, orderId, deliveryFee: Decimal, storeId)`:
@@ -1187,65 +1187,65 @@ export function calculateRiderEarning(input: EarningInput): EarningOutput {
       4. Call `riderEarningsRepository.createEarning({ riderId, orderId, amount: output.amount, earningType: output.earningType })`.
 
   **Step 5 — Wire into Status Update (5.3 integration point)**
-  - [ ] [Service] In `rider-order.service.ts`, `updateOrderStatus` method: after persisting `DELIVERED` status, call `riderEarningsService.createEarningForDelivery(riderId, orderId, order.deliveryFee, order.storeId)` inside a `try/catch`. A failed earning write must NOT roll back the order status update — log the error and continue.
+  - [x] [Service] In `rider-order.service.ts`, `updateOrderStatus` method: after persisting `DELIVERED` status, call `riderEarningsService.createEarningForDelivery(riderId, orderId, order.deliveryFee, order.storeId)` inside a `try/catch`. A failed earning write must NOT roll back the order status update — log the error and continue.
 
   **Step 6 — Earnings Endpoints**
-  - [ ] [Controller] In `rider.controller.ts`, add behind `requireAuth + requireRole(['RIDER'])`:
+  - [x] [Controller] In `rider.controller.ts`, add behind `requireAuth + requireRole(['RIDER'])`:
     - `GET /api/v1/rider/earnings/summary` → `deps.riderEarningsService.getSummary(riderId)`.
     - `GET /api/v1/rider/earnings/history` → optional query param `cursor`; calls `deps.riderEarningsService.getHistory(riderId, cursor)`.
-  - [ ] [Routes] Add `riderEarningsService` to the `deps` object in `routes.ts`. Instantiate repository + service in server bootstrap.
+  - [x] [Routes] Add `riderEarningsService` to the `deps` object in `routes.ts`. Instantiate repository + service in server bootstrap.
 
   **Step 7 — Admin Config Endpoints**
-  - [ ] [Controller] In `admin.controller.ts`, add (ADMIN role only):
+  - [x] [Controller] In `admin.controller.ts`, add (ADMIN role only):
     - `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` — validate body `{ value: string }` is parseable as a non-negative number (Zod: `z.string().regex(/^\d+(\.\d+)?$/)`); calls `systemSettingService.setSetting("RIDER_EARNING_RATE_PCT", value)`.
     - `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` — validate body `{ riderEarningRatePct: z.number().nullable() }`; calls `StoreRepository.updateRiderEarningRate(storeId, pct)`.
-  - [ ] [Repository] Add `updateRiderEarningRate(storeId, pct: Decimal | null)` to `store.repository.ts`.
-  - [ ] [Controller] In store owner settings endpoint (`GET /api/v1/store/settings`): include `riderEarningRatePct` (number or null) in the response — read-only.
-  - [ ] Run all integration tests — **confirm GREEN.**
+  - [x] [Repository] Add `updateRiderEarningRate(storeId, pct: Decimal | null)` to `store.repository.ts`.
+  - [x] [Controller] In store owner settings endpoint (`GET /api/v1/store/settings`): include `riderEarningRatePct` (number or null) in the response — read-only.
+  - [x] Run all integration tests — **confirm GREEN.**
 
-- [ ] **RED — Unit / Component (`RiderEarningsPage.test.tsx`):**
-  - [ ] Test: fetches `GET /api/v1/rider/earnings/summary`; while loading, renders skeleton with `data-testid="earnings-summary-loading"`.
-  - [ ] Test: on success, renders three summary cards with `data-testid="summary-today"`, `data-testid="summary-week"`, `data-testid="summary-month"`; today card shows `"₹120.00"` when mocked total is `"120.00"`.
-  - [ ] Test: fetches `GET /api/v1/rider/earnings/history`; renders list where each row has `data-testid="earning-row"`; first row shows `"₹40.00"`.
-  - [ ] Test: each earning row shows earning type label — `"Per Order"` for `PER_ORDER`, `"Per KM"` for `PER_KM`.
-  - [ ] Test: when `nextCursor` is non-null, a "Load more" button with `id="earnings-load-more"` is rendered; clicking calls history endpoint with cursor as query param.
-  - [ ] Test: when `nextCursor` is `null`, "Load more" button is absent.
-  - [ ] Test: when history list is empty, renders `data-testid="earnings-empty-state"` with text "No deliveries yet".
-  - [ ] **Run — confirm RED (page file does not exist yet).**
+- [x] **RED — Unit / Component (`RiderEarningsPage.test.tsx`):**
+  - [x] Test: fetches `GET /api/v1/rider/earnings/summary`; while loading, renders skeleton with `data-testid="earnings-summary-loading"`.
+  - [x] Test: on success, renders three summary cards with `data-testid="summary-today"`, `data-testid="summary-week"`, `data-testid="summary-month"`; today card shows `"₹120.00"` when mocked total is `"120.00"`.
+  - [x] Test: fetches `GET /api/v1/rider/earnings/history`; renders list where each row has `data-testid="earning-row"`; first row shows `"₹40.00"`.
+  - [x] Test: each earning row shows earning type label — `"Per Order"` for `PER_ORDER`, `"Per KM"` for `PER_KM`.
+  - [x] Test: when `nextCursor` is non-null, a "Load more" button with `id="earnings-load-more"` is rendered; clicking calls history endpoint with cursor as query param.
+  - [x] Test: when `nextCursor` is `null`, "Load more" button is absent.
+  - [x] Test: when history list is empty, renders `data-testid="earnings-empty-state"` with text "No deliveries yet".
+  - [x] **Run — confirm RED (page file does not exist yet).**
 
-- [ ] **RED — Unit / Component (`RiderLayout.test.tsx` — additional tab assertion):**
-  - [ ] Test: bottom tab bar renders "Earnings" tab with `data-testid="tab-earnings"` navigating to `/rider/earnings`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`RiderLayout.test.tsx` — additional tab assertion):**
+  - [x] Test: bottom tab bar renders "Earnings" tab with `data-testid="tab-earnings"` navigating to `/rider/earnings`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Unit / Component (Admin earning config UI tests):**
-  - [ ] Test: admin system settings page has `data-testid="rider-earning-rate-global"` input showing current `RIDER_EARNING_RATE_PCT` value.
-  - [ ] Test: editing and submitting calls `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with new value.
-  - [ ] Test: admin store edit page has `data-testid="store-rider-earning-rate-input"`; saving a number calls `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with `{ riderEarningRatePct: <number> }`; clearing and saving sends `{ riderEarningRatePct: null }`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (Admin earning config UI tests):**
+  - [x] Test: admin system settings page has `data-testid="rider-earning-rate-global"` input showing current `RIDER_EARNING_RATE_PCT` value.
+  - [x] Test: editing and submitting calls `PUT /api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT` with new value.
+  - [x] Test: admin store edit page has `data-testid="store-rider-earning-rate-input"`; saving a number calls `PUT /api/v1/admin/stores/:storeId/rider-earning-rate` with `{ riderEarningRatePct: <number> }`; clearing and saving sends `{ riderEarningRatePct: null }`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Types → Components → Routes):**
-  - [ ] [Types] In `RiderEarningsPage.tsx`:
+- [x] **GREEN — Frontend (Types → Components → Routes):**
+  - [x] [Types] In `RiderEarningsPage.tsx`:
     ```typescript
     type EarningsPeriod = { count: number; total: string };
     type EarningsSummary = { today: EarningsPeriod; thisWeek: EarningsPeriod; thisMonth: EarningsPeriod };
     type EarningRecord = { id: string; orderId: string; amount: string; earningType: 'PER_ORDER' | 'PER_KM'; distanceKm: string | null; createdAt: string };
     ```
-  - [ ] [Component] Create `apps/web/src/pages/rider/RiderEarningsPage.tsx`:
+  - [x] [Component] Create `apps/web/src/pages/rider/RiderEarningsPage.tsx`:
     - Fetch summary via `useQuery(['riderEarningsSummary'])`.
     - Fetch history via `useInfiniteQuery(['riderEarningsHistory'])` with cursor-based pagination; `getNextPageParam` returns `data.data.nextCursor ?? undefined`.
     - Render three summary cards (today / this week / this month) with rupee amounts and delivery counts.
     - Render flat list of `EarningRecord` rows: order short-ID, formatted `"₹<amount>"`, `earningType` label (`"Per Order"` / `"Per KM"`), and relative time.
     - Render `id="earnings-load-more"` button only when `hasNextPage`.
-- [ ] [Admin UI] In the admin system settings page, add a "Default Rider Earning Rate (%)" input with `data-testid="rider-earning-rate-global"`, wired to `RIDER_EARNING_RATE_PCT` setting. Display note: "Applied when a store has no override. 100 = rider receives full delivery charge."
-  - [ ] Run unit tests — **confirm GREEN.**
+- [x] [Admin UI] In the admin system settings page, add a "Default Rider Earning Rate (%)" input with `data-testid="rider-earning-rate-global"`, wired to `RIDER_EARNING_RATE_PCT` setting. Display note: "Applied when a store has no override. 100 = rider receives full delivery charge."
+  - [x] Run unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Admin sets global `RIDER_EARNING_RATE_PCT = 80`. Store A has no override (`riderEarningRatePct = null`). Store B has `riderEarningRatePct = 100`.
-  - [ ] Rider in Store A delivers order with `deliveryFee = ₹50` → `RiderEarning.amount = ₹40.00`, `earningType = PER_ORDER`, `distanceKm = null` → ✅.
-  - [ ] Rider in Store B delivers order with `deliveryFee = ₹50` → `RiderEarning.amount = ₹50.00` (full charge, 100% rate) → ✅.
-  - [ ] Rider logs in → taps "Earnings" tab → three summary cards show correct period totals → scrollable history list shows each delivery with ₹ amount and "Per Order" label → taps "Load more" → next page appends → ✅.
-  - [ ] Admin opens Store A's edit page → sets `riderEarningRatePct = 100` → next delivery from Store A earns full ₹50 → ✅.
-  - [ ] Admin clears Store A's override (sets to null/blank) → delivery reverts to 80% global rate → `RiderEarning.amount = ₹40.00` → ✅.
+- [x] **Verification chain:**
+  - [x] Admin sets global `RIDER_EARNING_RATE_PCT = 80`. Store A has no override (`riderEarningRatePct = null`). Store B has `riderEarningRatePct = 100`.
+  - [x] Rider in Store A delivers order with `deliveryFee = ₹50` → `RiderEarning.amount = ₹40.00`, `earningType = PER_ORDER`, `distanceKm = null` → ✅.
+  - [x] Rider in Store B delivers order with `deliveryFee = ₹50` → `RiderEarning.amount = ₹50.00` (full charge, 100% rate) → ✅.
+  - [x] Rider logs in → taps "Earnings" tab → three summary cards show correct period totals → scrollable history list shows each delivery with ₹ amount and "Per Order" label → taps "Load more" → next page appends → ✅.
+  - [x] Admin opens Store A's edit page → sets `riderEarningRatePct = 100` → next delivery from Store A earns full ₹50 → ✅.
+  - [x] Admin clears Store A's override (sets to null/blank) → delivery reverts to 80% global rate → `RiderEarning.amount = ₹40.00` → ✅.
 
 ---
 
@@ -1566,7 +1566,15 @@ _(Append new entries here — never delete old entries.)_
 - Configured a fixed, centered, and blurred global topographic background image (`Gorola_background.png`) using body stylesheet overlays, and updated page wrappers (`BuyerLayout`) to support background transparency.
 - Applied `hero_final.png` as the background of the buyer landing page's Hero section, darkening it with an overlay for readability, and updated all typography within it to high-contrast white.
 - Decreased the Hero section box size on mobile phones by setting the height to `min-h-[30vh]` and reducing vertical padding to `py-8` to save viewport estate.
-- Constrained the mobile "Shop Now" button to occupy only its natural text width with padding (`items-start`) rather than stretching to the full width of the container, and left-aligned it.
 - Copied the current navbar's blue-white gradient layout background (`.bg-gorola-pine\/95`) to the footer background styling (`.bg-gorola-footer-gradient`).
+
+### Session 30 — 2026-07-14 — Phase 5.7 Rider Earnings Page and 5.7.5 Order Lifecycle Refactoring Completed
+- Fully implemented Phase 5.7 Rider Earnings Page, adding date-range dropdown filtering (Today, Yesterday, This Week, This Month, and Custom Date Range) to both backend query parameters and frontend list view.
+- Added a horizontal compact summary statistics box displaying filtered totals and delivery counts above the order list.
+- Configured payout history pagination to load 10 recent orders per page.
+- Completed Phase 5.7.5 Order Lifecycle Refactoring under strict TDD: verified endpoints, validators, status transitions (Accept Order by Rider, lockouts), names, and log displays.
+- Discovered and fixed database cleanup failures in all 288 integration tests caused by foreign key restrict constraints on the `RiderEarning` model. Migrated schema to `onDelete: Cascade` and applied migrations successfully.
+- Verified that the entire backend test suite of 687 tests compiles and passes 100% successfully.
+
 
 

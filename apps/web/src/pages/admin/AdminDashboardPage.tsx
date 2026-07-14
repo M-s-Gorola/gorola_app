@@ -76,6 +76,7 @@ export function AdminDashboardPage(): ReactElement {
 
   const [deliveryCharge, setDeliveryCharge] = useState("");
   const [serviceCharge, setServiceCharge] = useState("");
+  const [riderEarningRateGlobal, setRiderEarningRateGlobal] = useState("");
   const [hasSetDefaults, setHasSetDefaults] = useState(false);
 
   const { data: settings } = useQuery<Array<{ key: string; value: string }>>({
@@ -91,8 +92,10 @@ export function AdminDashboardPage(): ReactElement {
     if (Array.isArray(settings) && !hasSetDefaults) {
       const delivery = settings.find(s => s.key === "DELIVERY_CHARGE")?.value || "";
       const service = settings.find(s => s.key === "SERVICE_CHARGE")?.value || "";
+      const rate = settings.find(s => s.key === "RIDER_EARNING_RATE_PCT")?.value || "";
       setDeliveryCharge(delivery);
       setServiceCharge(service);
+      setRiderEarningRateGlobal(rate);
       setHasSetDefaults(true);
     }
   }, [settings, hasSetDefaults]);
@@ -109,6 +112,21 @@ export function AdminDashboardPage(): ReactElement {
     },
     onError: () => {
       toast.error("Failed to update platform fees");
+    }
+  });
+
+  const updateGlobalRiderEarningRateMutation = useMutation({
+    mutationFn: async (value: string) => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.put<{ success: boolean; data: unknown }>("/api/v1/admin/system-settings/RIDER_EARNING_RATE_PCT", { value });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success("Global rider earning rate updated successfully");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "settings"] });
+    },
+    onError: () => {
+      toast.error("Failed to update global rider earning rate");
     }
   });
 
@@ -871,6 +889,7 @@ export function AdminDashboardPage(): ReactElement {
               deliveryCharge,
               serviceCharge
             });
+            updateGlobalRiderEarningRateMutation.mutate(riderEarningRateGlobal);
           }}
           className="space-y-4 max-w-sm font-dm-sans"
         >
@@ -900,12 +919,26 @@ export function AdminDashboardPage(): ReactElement {
             />
           </div>
 
+          <div className="space-y-1.5">
+            <label htmlFor="rider-earning-rate-global" className="text-xs font-bold text-gorola-charcoal block">
+              Default Rider Earning Rate (%)
+            </label>
+            <input
+              id="rider-earning-rate-global"
+              data-testid="rider-earning-rate-global"
+              type="text"
+              value={riderEarningRateGlobal}
+              onChange={(e) => setRiderEarningRateGlobal(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
           <button
             type="submit"
-            disabled={updateSettingsMutation.isPending}
+            disabled={updateSettingsMutation.isPending || updateGlobalRiderEarningRateMutation.isPending}
             className="bg-gorola-pine hover:bg-gorola-pine/90 text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer transition-all duration-300 disabled:opacity-50"
           >
-            {updateSettingsMutation.isPending ? "Saving..." : "Save Platform Fees"}
+            {updateSettingsMutation.isPending || updateGlobalRiderEarningRateMutation.isPending ? "Saving..." : "Save Platform Fees"}
           </button>
         </form>
       </div>
