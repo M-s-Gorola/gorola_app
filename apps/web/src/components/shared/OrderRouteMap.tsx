@@ -38,6 +38,7 @@ export function OrderRouteMap({
     const adapter = createMapAdapter(provider);
     adapterRef.current = adapter;
     let active = true;
+    let hovered = false;
 
     if (typeof adapter.setRouteStatusCallback === "function") {
       adapter.setRouteStatusCallback((calculating) => {
@@ -47,14 +48,20 @@ export function OrderRouteMap({
       });
     }
 
+    const isValidCoords = (c: { lat: number; lng: number } | null | undefined): c is { lat: number; lng: number } => {
+      return !!c && typeof c.lat === "number" && typeof c.lng === "number" && !isNaN(c.lat) && !isNaN(c.lng);
+    };
+
     async function initMap() {
       try {
         setError(null);
         await adapter.init(node!, buyerCoords, 14);
         if (!active) return;
         
-        adapter.addMarker(buyerCoords, "buyer");
-        if (riderCoords) {
+        if (isValidCoords(buyerCoords)) {
+          adapter.addMarker(buyerCoords, "buyer");
+        }
+        if (isValidCoords(riderCoords)) {
           adapter.addMarker(riderCoords, "rider");
           lastRiderCoordsRef.current = riderCoords;
         }
@@ -71,11 +78,6 @@ export function OrderRouteMap({
       }
     }
 
-    let hovered = node.matches(":hover");
-    if (hovered) {
-      adapter.enableScrollZoom();
-    }
-
     const handleMouseEnter = () => {
       hovered = true;
       adapter.enableScrollZoom();
@@ -90,6 +92,11 @@ export function OrderRouteMap({
         e.stopPropagation();
       }
     };
+
+    hovered = node.matches(":hover");
+    if (hovered) {
+      handleMouseEnter();
+    }
 
     node.addEventListener("mouseenter", handleMouseEnter);
     node.addEventListener("mouseleave", handleMouseLeave);
@@ -111,7 +118,11 @@ export function OrderRouteMap({
 
   useEffect(() => {
     const adapter = adapterRef.current;
-    if (isInitialized && adapter && riderCoords) {
+    const isValidCoords = (c: { lat: number; lng: number } | null | undefined): c is { lat: number; lng: number } => {
+      return !!c && typeof c.lat === "number" && typeof c.lng === "number" && !isNaN(c.lat) && !isNaN(c.lng);
+    };
+
+    if (isInitialized && adapter && isValidCoords(riderCoords)) {
       if (
         !lastRiderCoordsRef.current ||
         lastRiderCoordsRef.current.lat !== riderCoords.lat ||

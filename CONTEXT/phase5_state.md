@@ -17,9 +17,9 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-07-14
-- **Session Summary:** Completed Phase 5.7 (Rider Earnings Page: summary periods, 10-order pagination, filters dropdown for Today, Yesterday, This Week, This Month, and Custom Date Range, compact aggregates header). Fixed typescript compilations, eslint fixes, and resolved PostgreSQL delete foreign key violations by adding onDelete: Cascade to RiderEarning relations.
-- **Next Session Must Start With:** Phase 5.7.5 (Order Lifecycle Refactoring)
+- **Date:** 2026-07-15
+- **Session Summary:** Completed Phase 5.7.5 (Order Lifecycle Refactoring): added TDD-verified active orders filtering and field mapping (storeName, flatRoom, deliveryNote), updated Rider UI with full addresses and conditional map visibility, cleaned up timeline status labels and notes formatting across store and admin views, and resolved real-time UI/button updating issues and Registered User customer profile placeholders.
+- **Next Session Must Start With:** Phase 5.8 (End-to-End Rider & Store owner lifecycle journeys)
 - **In Progress Right Now:** None.
 - **Current Blocker:** None.
 
@@ -1568,13 +1568,37 @@ _(Append new entries here — never delete old entries.)_
 - Decreased the Hero section box size on mobile phones by setting the height to `min-h-[30vh]` and reducing vertical padding to `py-8` to save viewport estate.
 - Copied the current navbar's blue-white gradient layout background (`.bg-gorola-pine\/95`) to the footer background styling (`.bg-gorola-footer-gradient`).
 
-### Session 30 — 2026-07-14 — Phase 5.7 Rider Earnings Page and 5.7.5 Order Lifecycle Refactoring Completed
+### Session 30 — 2026-07-14 — Phase 5.7 Rider Earnings Page Completed
 - Fully implemented Phase 5.7 Rider Earnings Page, adding date-range dropdown filtering (Today, Yesterday, This Week, This Month, and Custom Date Range) to both backend query parameters and frontend list view.
 - Added a horizontal compact summary statistics box displaying filtered totals and delivery counts above the order list.
 - Configured payout history pagination to load 10 recent orders per page.
-- Completed Phase 5.7.5 Order Lifecycle Refactoring under strict TDD: verified endpoints, validators, status transitions (Accept Order by Rider, lockouts), names, and log displays.
 - Discovered and fixed database cleanup failures in all 288 integration tests caused by foreign key restrict constraints on the `RiderEarning` model. Migrated schema to `onDelete: Cascade` and applied migrations successfully.
 - Verified that the entire backend test suite of 687 tests compiles and passes 100% successfully.
 
+### Session 31 — 2026-07-14 — Phase 5.7.5 Order Lifecycle Refactoring Completed
+- Implemented and verified the order acceptance API endpoint (`/accept`) and safety validation rules for riders.
+- Restricted rider status transitions (`OUT_FOR_DELIVERY`, `DELIVERED`) to only the assigned rider.
+- Exposed unmasked customer (`buyerName`) and rider (`riderName`) names in the order responses.
+- Implemented the order acceptance, customer names exposure, and dispatch lockout frontend workflows on Store, Rider, and Admin dashboard pages.
+- Added map route tracking on the Store dashboard for orders in transit.
+- Added a "Rider" column to the Platform Orders table and detailed information modal in the Admin panel.
+- Verified both backend integration tests and frontend component tests pass 100% successfully.
 
+### Session 32 — 2026-07-15 — Integration Test Fixes and Schema Migrations Completed
+- Migrated database schema relation of `rider` on `Order` to `onDelete: SetNull` via the `set_null_rider_on_delete` migration, unblocking `DeliveryRider` deletions during integration test teardowns.
+- Bootstrapped and deployed schema migrations to the local test database (`gorola_test`).
+- Fixed a compilation scope issue with `technicianRider` in `rider.field-technician.test.ts` by declaring and assigning a global `technicianRiderId`.
+- Resolved a status transition lockout bug for field technicians on booking orders in `rider-order.service.ts` by querying `getRiderIdByOrderId` from `RiderRepository` instead of comparing against `order.riderId` directly.
+- Verified that all workspace TypeScript compilation, linting, and modified integration tests pass 100% cleanly.
+
+### Session 33 — 2026-07-15 — Rider UI, Timeline Note Cleanups & Real-time Synchronization Completed
+- Implemented TDD-verified active orders backend filtering to exclude quick commerce orders accepted by other riders.
+- Mapped `storeName`, `riderId`, `flatRoom`, and `deliveryNote` fields on active orders endpoints.
+- Removed collapsible map from the rider modal for preparing/approved orders, rendering it conditionally only for active deliveries (`OUT_FOR_DELIVERY` status).
+- Exposed the customer's full address (`flatRoom` + `landmarkDescription`) on both compact cards and detailed overlays.
+- Configured timeline status transformation on Store, Booking, and Admin dashboards to show `"Order Accepted"` / `"Booking Accepted"` instead of duplicate status entries.
+- Parsed and extracted rider/technician names directly from acceptance status history logs, hiding redundant raw notes.
+- Reformatted timeline note rendering on all dashboards to display note inline directly as ` - ${note}` without `"Reason:"` or enclosing quotes.
+- Fixed real-time button/card updating issues by broadcasting `riderId` on socket status updates and binding state hook synchronization listeners.
+- Resolved hardcoded `"Registered User"` profile labels by mapping and displaying actual customer names from Prisma user relations.
 

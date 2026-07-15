@@ -261,6 +261,26 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('Store is picking items', { timeout: 20000 });
 
+    // Spawn Rider context and log in
+    const riderContext = await context.browser()!.newContext();
+    const riderPage = await riderContext.newPage();
+    await riderPage.addInitScript(() => {
+      (window as any).isE2E = true;
+    });
+    await riderPage.goto("http://rider.gorola.com:5180/login");
+    await riderPage.locator('#rider-email').fill('rider1@gorola.in');
+    await riderPage.locator('#rider-password').fill('Rider#123');
+    await riderPage.getByRole('button', { name: "Login" }).click();
+    await expect(riderPage.locator('h1', { hasText: 'Shift Orders' })).toBeVisible({ timeout: 15000 });
+
+    // Rider accepts the preparing order
+    const riderOrderCard = riderPage.locator(`[data-testid="order-card-${orderId}"]`);
+    await expect(riderOrderCard).toBeVisible({ timeout: 20000 });
+    await riderOrderCard.click();
+    await riderPage.getByRole("button", { name: "Accept Order" }).click();
+    await riderPage.getByRole("button", { name: "Confirm" }).click();
+    await expect(riderPage.getByRole("button", { name: /Accepted \(Go pick/i })).toBeVisible({ timeout: 15000 });
+
     // 4. Merchant transitions status PREPARING -> OUT_FOR_DELIVERY (Dispatch)
     await page.bringToFront();
     const dispatchOrderBtn = page.getByRole("button", { name: "Dispatch Order" });
@@ -277,15 +297,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('On the way', { timeout: 20000 });
 
-    // 5. Merchant transitions status OUT_FOR_DELIVERY -> DELIVERED
-    await page.bringToFront();
-    const markDeliveredBtn = page.getByRole("button", { name: "Mark Delivered" });
+    // 5. Rider transitions status OUT_FOR_DELIVERY -> DELIVERED
+    await riderPage.bringToFront();
+    const markDeliveredBtn = riderPage.getByRole("button", { name: "Mark as Delivered" });
     await expect(markDeliveredBtn).toBeVisible({ timeout: 15000 });
-    await expect(markDeliveredBtn).toBeEnabled({ timeout: 15000 });
-    await markDeliveredBtn.dispatchEvent('click');
+    await markDeliveredBtn.click();
 
     // Click Confirm on the confirmation Dialog
-    const confirmBtn3 = page.getByRole("button", { name: "Confirm" });
+    const confirmBtn3 = riderPage.getByRole("button", { name: "Confirm" });
     await expect(confirmBtn3).toBeVisible({ timeout: 10000 });
     await confirmBtn3.click();
 
@@ -293,6 +312,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.bringToFront();
     await expect(buyerPage.locator('#occ-heading')).toHaveText('Order Delivered', { timeout: 20000 });
     await buyerContext.close();
+    await riderContext.close();
   });
 
   // E2E-023: Inventory Restock & Audit History Logging

@@ -147,6 +147,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
         where: { id: orderId },
         select: {
           storeId: true,
+          riderId: true,
           statusHistory: {
             orderBy: { changedAt: "asc" }
           }
@@ -156,6 +157,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
           app.io.to(`store:${o.storeId}`).emit("store:order_updated", {
             orderId,
             status,
+            riderId: o.riderId,
             statusHistory: o.statusHistory
           });
         }

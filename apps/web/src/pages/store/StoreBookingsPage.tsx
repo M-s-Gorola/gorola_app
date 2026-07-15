@@ -7,6 +7,7 @@ import {
   Phone,
   RefreshCw,
   Truck,
+  User,
   XCircle
 } from "lucide-react";
 import type { ReactElement } from "react";
@@ -77,6 +78,10 @@ type Booking = {
   addressLabel?: string | null;
   items: BookingItem[];
   statusHistory?: BookingStatusHistory[];
+  user?: {
+    name: string | null;
+    phone: string;
+  } | null;
   bookingOrder: {
     scheduledDate: string;
     timeslot: string;
@@ -255,8 +260,7 @@ export function StoreBookingsPage(): ReactElement {
   useEffect(() => {
     if (!storeId || !accessToken) return;
 
-    const host = window.location.hostname;
-    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
     const socket = io(baseURL, {
       auth: { token: accessToken },
@@ -812,6 +816,18 @@ export function StoreBookingsPage(): ReactElement {
                   Buyer & Appointment
                 </h3>
                 <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 space-y-3 shadow-inner">
+                  <div className="flex items-center gap-3">
+                    <div className="h-8 w-8 bg-gorola-pine/10 rounded-lg flex items-center justify-center text-gorola-pine">
+                      <User className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-gorola-slate font-bold">Buyer Profile</p>
+                      <p className="text-xs font-black text-gorola-charcoal">
+                        {selectedBooking.user?.name || "Registered User"}
+                      </p>
+                    </div>
+                  </div>
+
                   <div className="flex items-center gap-3">
                     <div className="h-8 w-8 bg-gorola-pine/10 rounded-lg flex items-center justify-center text-gorola-pine">
                       <Calendar className="h-4 w-4" />

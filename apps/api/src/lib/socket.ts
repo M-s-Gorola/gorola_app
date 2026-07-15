@@ -61,7 +61,11 @@ export const socketPlugin = fp(async (app: FastifyInstance, options: SocketPlugi
           return;
         }
 
-        if (order.userId !== user.sub && user.role !== "ADMIN") {
+        const isBuyerOfOrder = order.userId === user.sub;
+        const isAdmin = user.role === "ADMIN";
+        const isStoreOwnerOfOrder = user.role === "STORE_OWNER" && order.storeId === user.storeId;
+
+        if (!isBuyerOfOrder && !isAdmin && !isStoreOwnerOfOrder) {
           socket.emit("error", { message: "Unauthorized access to order" });
           return;
         }

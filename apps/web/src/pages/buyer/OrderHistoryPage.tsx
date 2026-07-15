@@ -121,8 +121,7 @@ export function OrderHistoryPage() {
     if (activeOrders.length === 0) return;
 
     console.log("🔌 [OrderHistorySocket] Found active orders to monitor:", activeOrders.map(o => o.id));
-    const host = window.location.hostname;
-    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     
     const socket = io(baseURL, {
       auth: { token: accessToken },

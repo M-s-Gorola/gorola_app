@@ -12,10 +12,10 @@ async function cleanStoreGraph(db: ReturnType<typeof getPrismaClient>): Promise<
   await db.stockMovement.deleteMany();
   await db.riderLocation.deleteMany();
   await db.riderStore.deleteMany();
-  await db.deliveryRider.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
   await db.order.deleteMany();
+  await db.deliveryRider.deleteMany();
   await db.cartItem.deleteMany();
   await db.cart.deleteMany();
   await db.address.deleteMany();
@@ -182,7 +182,7 @@ describe("Rider Order Status Update Integration", () => {
     variantId1 = variant.id;
   });
 
-  it("should return 501 on status update in RED state, then pass after implementation", async () => {
+  it("should return 422 when rider attempts OUT_FOR_DELIVERY transition directly", async () => {
     const order = await db.order.create({
       data: {
         userId: buyerId,
@@ -213,24 +213,12 @@ describe("Rider Order Status Update Integration", () => {
       }
     });
 
-    // In RED state, this will return 501.
-    // In GREEN state, this will return 200.
-    // Since we write test first, we assert 200 to watch it fail (expecting 200, but getting 501).
-    expect(response.statusCode).toBe(200);
-    const body = response.json();
-    expect(body.success).toBe(true);
-    expect(body.data.status).toBe("OUT_FOR_DELIVERY");
-
-    // Check DB
-    const dbOrder = await db.order.findUnique({
-      where: { id: order.id },
-      include: { statusHistory: true }
-    });
-    expect(dbOrder?.status).toBe("OUT_FOR_DELIVERY");
-    expect(dbOrder?.statusHistory.map(h => h.status)).toContain("OUT_FOR_DELIVERY");
+    expect(response.statusCode).toBe(422);
+    expect(response.json().error.code).toBe("INVALID_STATUS_TRANSITION");
   });
 
   it("should transition OUT_FOR_DELIVERY order to DELIVERED successfully", async () => {
+    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
     const order = await db.order.create({
       data: {
         userId: buyerId,
@@ -240,6 +228,7 @@ describe("Rider Order Status Update Integration", () => {
         deliveryFee: 30.00,
         total: 180.00,
         landmarkDescription: "Near Central Park",
+        riderId: rider?.id ?? null,
         items: {
           create: {
             productVariantId: variantId1,
@@ -266,15 +255,17 @@ describe("Rider Order Status Update Integration", () => {
   });
 
   it("should fail transition to PLACED (backward transition forbidden) with 422", async () => {
+    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
     const order = await db.order.create({
       data: {
         userId: buyerId,
         storeId: storeId1,
-        status: "PREPARING",
+        status: "OUT_FOR_DELIVERY",
         subtotal: 150.00,
         deliveryFee: 30.00,
         total: 180.00,
         landmarkDescription: "Near Central Park",
+        riderId: rider?.id ?? null,
         items: {
           create: {
             productVariantId: variantId1,
@@ -301,15 +292,17 @@ describe("Rider Order Status Update Integration", () => {
   });
 
   it("should reject rider cancellations (CANCELLED) with 403", async () => {
+    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
     const order = await db.order.create({
       data: {
         userId: buyerId,
         storeId: storeId1,
-        status: "PREPARING",
+        status: "OUT_FOR_DELIVERY",
         subtotal: 150.00,
         deliveryFee: 30.00,
         total: 180.00,
         landmarkDescription: "Near Central Park",
+        riderId: rider?.id ?? null,
         items: {
           create: {
             productVariantId: variantId1,
@@ -335,15 +328,17 @@ describe("Rider Order Status Update Integration", () => {
   });
 
   it("should forbid updating an order belonging to a different store", async () => {
+    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
     const order = await db.order.create({
       data: {
         userId: buyerId,
         storeId: storeId2,
-        status: "PREPARING",
+        status: "OUT_FOR_DELIVERY",
         subtotal: 150.00,
         deliveryFee: 30.00,
         total: 180.00,
         landmarkDescription: "Near Central Park",
+        riderId: rider?.id ?? null,
         items: {
           create: {
             productVariantId: variantId1,
@@ -359,7 +354,7 @@ describe("Rider Order Status Update Integration", () => {
     const response = await server.inject({
       method: "PUT",
       url: `/api/v1/rider/orders/${order.id}/status`,
-      payload: { status: "OUT_FOR_DELIVERY" },
+      payload: { status: "DELIVERED" },
       headers: {
         authorization: `Bearer ${riderTokenStore1}`
       }
@@ -369,15 +364,17 @@ describe("Rider Order Status Update Integration", () => {
   });
 
   it("should save status update with rider:<riderId> prefix in the database status history log", async () => {
+    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
     const order = await db.order.create({
       data: {
         userId: buyerId,
         storeId: storeId1,
-        status: "PREPARING",
+        status: "OUT_FOR_DELIVERY",
         subtotal: 150.00,
         deliveryFee: 30.00,
         total: 180.00,
         landmarkDescription: "Near Central Park",
+        riderId: rider?.id ?? null,
         items: {
           create: {
             productVariantId: variantId1,
@@ -393,7 +390,7 @@ describe("Rider Order Status Update Integration", () => {
     const response = await server.inject({
       method: "PUT",
       url: `/api/v1/rider/orders/${order.id}/status`,
-      payload: { status: "OUT_FOR_DELIVERY" },
+      payload: { status: "DELIVERED" },
       headers: {
         authorization: `Bearer ${riderTokenStore1}`
       }
@@ -404,11 +401,10 @@ describe("Rider Order Status Update Integration", () => {
     const history = await db.orderStatusHistory.findFirst({
       where: {
         orderId: order.id,
-        status: "OUT_FOR_DELIVERY"
+        status: "DELIVERED"
       }
     });
 
-    const rider = await db.deliveryRider.findFirst({ where: { email: "rider1@gorola.in" } });
     expect(history?.changedBy).toBe(`rider:${rider?.id}`);
   });
 });
