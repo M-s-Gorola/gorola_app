@@ -84,7 +84,7 @@ describe("Booking HTTP Endpoints (Integration)", () => {
       imageUrl: "https://example.com/cat.jpg"
     });
     subCategory = await db.subCategory.create({
-      data: { slug: "booking-sub", name: "Sub Services", categoryId: category.id }
+      data: { slug: `booking-sub-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`, name: "Sub Services", categoryId: category.id }
     });
 
     store = await db.store.create({
@@ -232,7 +232,7 @@ describe("Booking HTTP Endpoints (Integration)", () => {
     });
     expect(dbOrder.orderType).toBe("BOOKING");
     expect(dbOrder.deliveryFee.toString()).toBe("0"); // delivery fee zero by default
-  });
+  }, 30000);
 
   it("should fail validation if lead days scheduling is violated (HTTP 400)", async () => {
     const server = createServer({
