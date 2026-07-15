@@ -57,6 +57,8 @@ const leafletMocks = vi.hoisted(() => {
   api.markerFactory.mockImplementation(() => ({
     addTo: vi.fn().mockReturnThis(),
     getLatLng: vi.fn(() => ({ lat: 30.454, lng: 78.066 })),
+    setLatLng: vi.fn().mockReturnThis(),
+    setIcon: vi.fn().mockReturnThis(),
     off: vi.fn(),
     on: vi.fn(),
     remove: vi.fn(),

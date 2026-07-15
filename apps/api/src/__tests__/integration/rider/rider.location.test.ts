@@ -127,7 +127,8 @@ describe("Rider Geolocation Tracking Integration", () => {
         subtotal: 150.00,
         deliveryFee: 30.00,
         total: 180.00,
-        landmarkDescription: "Near Clock Tower"
+        landmarkDescription: "Near Clock Tower",
+        riderId: riderId1
       }
     });
     orderId = order.id;

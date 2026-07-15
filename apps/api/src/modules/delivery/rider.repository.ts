@@ -135,22 +135,22 @@ export class RiderRepository {
   }
 
   public async getRiderIdByOrderId(orderId: string): Promise<string | null> {
-    const booking = await this.db.bookingOrder.findUnique({
-      where: { orderId },
-      select: { assignedTechnicianId: true }
+    const order = await this.db.order.findUnique({
+      where: { id: orderId },
+      select: {
+        riderId: true,
+        orderType: true,
+        bookingOrder: {
+          select: { assignedTechnicianId: true }
+        }
+      }
     });
-    if (booking?.assignedTechnicianId) {
-      return booking.assignedTechnicianId;
-    }
+    if (!order) return null;
 
-    const history = await this.db.orderStatusHistory.findFirst({
-      where: {
-        orderId,
-        status: "OUT_FOR_DELIVERY"
-      },
-      select: { changedBy: true }
-    });
-    return history?.changedBy || null;
+    if (order.orderType === "BOOKING") {
+      return order.bookingOrder?.assignedTechnicianId || null;
+    }
+    return order.riderId;
   }
 
   public async getLocationByOrderId(

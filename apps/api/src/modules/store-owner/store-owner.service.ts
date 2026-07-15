@@ -162,7 +162,7 @@ export class StoreOwnerService {
     const VALID_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
       PLACED: ["PREPARING", "CANCELLED"],
       PREPARING: ["OUT_FOR_DELIVERY", "CANCELLED"],
-      OUT_FOR_DELIVERY: ["DELIVERED"],
+      OUT_FOR_DELIVERY: [],
       DELIVERED: [],
       CANCELLED: [],
       PENDING_APPROVAL: ["APPROVED", "CANCELLED"],
@@ -175,6 +175,13 @@ export class StoreOwnerService {
     if (!allowed.includes(newStatus)) {
       throw new AppError(`Invalid status transition from ${currentStatus} to ${newStatus}`, {
         code: "INVALID_STATUS_TRANSITION",
+        statusCode: 422
+      });
+    }
+
+    if (newStatus === "OUT_FOR_DELIVERY" && !order.riderId) {
+      throw new AppError("No rider assigned to this order", {
+        code: "NO_RIDER_ASSIGNED",
         statusCode: 422
       });
     }
@@ -1623,7 +1630,8 @@ export class StoreOwnerService {
       weatherModeDeliveryWindowStart,
       weatherModeDeliveryWindowEnd,
       email: owner.email,
-      totpEnabled: owner.totpEnabled
+      totpEnabled: owner.totpEnabled,
+      riderEarningRatePct: store.riderEarningRatePct ? Number(store.riderEarningRatePct) : null
     };
   }
 

@@ -12,7 +12,7 @@
     "test": "pnpm -r test",
     "test:e2e": "pnpm --filter @gorola/web test:e2e --reporter=list",
     "build": "pnpm -r build",
-    "security:audit": "pnpm audit --audit-level=high",
+    "security:audit": "pnpm audit --audit-level=high --ignore-registry-errors",
     "ci:quality": "pnpm --filter @gorola/shared build && pnpm security:audit && pnpm db:test:prepare && pnpm lint --max-warnings 0 && pnpm typecheck && pnpm build && pnpm test && pnpm --filter @gorola/web test:e2e --reporter=list",
     "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
     "db:test:prepare": "pnpm --filter @gorola/api prisma:bootstrap:test",

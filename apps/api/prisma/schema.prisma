@@ -106,6 +106,7 @@ model Store {
   offers                    Offer[]
   discounts                 Discount[]
   riders                    RiderStore[]
+  riderEarningRatePct       Decimal?        @db.Decimal(5, 2)
 
   @@index([name])
   @@index([isActive, isDeleted])
@@ -299,10 +300,13 @@ model Order {
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
   store               Store                @relation(fields: [storeId], references: [id], onDelete: Restrict)
+  riderId             String?
+  rider               DeliveryRider?       @relation(fields: [riderId], references: [id], onDelete: SetNull)
   items               OrderItem[]
   statusHistory       OrderStatusHistory[]
   stockMovements      StockMovement[]
   bookingOrder        BookingOrder?
+  earning             RiderEarning?
 
   @@index([userId, createdAt])
   @@index([storeId, status, createdAt])
@@ -466,6 +470,8 @@ model DeliveryRider {
   updatedAt    DateTime        @updatedAt
   locations    RiderLocation[]
   stores       RiderStore[]
+  earnings     RiderEarning[]
+  orders       Order[]
 
   @@index([isActive, isDeleted])
 }
@@ -510,4 +516,24 @@ model BookingOrder {
   updatedAt            DateTime              @updatedAt
   order                Order                 @relation(fields: [orderId], references: [id], onDelete: Cascade)
 }
+
+model RiderEarning {
+  id          String        @id @default(cuid())
+  riderId     String
+  orderId     String        @unique
+  amount      Decimal       @db.Decimal(10, 2)
+  earningType EarningType   @default(PER_ORDER)
+  distanceKm  Decimal?      @db.Decimal(8, 3)
+  createdAt   DateTime      @default(now())
+  rider       DeliveryRider @relation(fields: [riderId], references: [id], onDelete: Cascade)
+  order       Order         @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  @@index([riderId, createdAt])
+}
+
+enum EarningType {
+  PER_ORDER
+  PER_KM
+}
+
 

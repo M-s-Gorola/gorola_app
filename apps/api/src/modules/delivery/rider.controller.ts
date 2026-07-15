@@ -7,6 +7,7 @@ import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { RiderAuthService } from "../auth/rider-auth.service.js";
 import type { RiderRepository } from "./rider.repository.js";
+import type { RiderEarningsService } from "./rider-earnings.service.js";
 import type { RiderLocationService } from "./rider-location.service.js";
 import type { RiderOrderService } from "./rider-order.service.js";
 
@@ -118,6 +119,7 @@ export function registerRiderRoutes(
     riderOrderService: RiderOrderService;
     riderLocationService: RiderLocationService;
     riderRepository: RiderRepository;
+    riderEarningsService: RiderEarningsService;
   }
 ): void {
   const preHandler = [requireAuth(deps.tokenVerifier), requireRole(["RIDER"])];
@@ -218,10 +220,15 @@ export function registerRiderRoutes(
         })),
         deliveryAddress: {
           landmark: o.landmarkDescription,
+          flatRoom: o.flatRoom,
+          deliveryNote: o.deliveryNote,
           lat: o.deliveryLat ? Number(o.deliveryLat) : null,
           lng: o.deliveryLng ? Number(o.deliveryLng) : null
         },
         buyerMaskedPhone: maskPhone(o.user?.phone ?? ""),
+        buyerName: o.user?.name ?? null,
+        riderId: o.riderId,
+        storeName: o.store?.name ?? null,
         createdAt: o.createdAt
       };
     });
@@ -229,6 +236,42 @@ export function registerRiderRoutes(
     return {
       success: true,
       data: mapped,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // PUT /api/v1/rider/orders/:id/accept
+  app.put("/api/v1/rider/orders/:id/accept", { preHandler }, async (request, reply) => {
+    const paramsParsed = updateStatusParamsSchema.safeParse(request.params);
+    if (!paramsParsed.success) {
+      throw new ValidationError("Invalid parameters", paramsParsed.error.flatten());
+    }
+
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const storeIds = await deps.riderRepository.getAllStoreIds(riderId);
+    if (storeIds.length === 0) {
+      return reply.code(403).send({ success: false, error: "You are not authorized to update this order" });
+    }
+
+    const order = await deps.riderOrderService.acceptOrder(
+      storeIds,
+      paramsParsed.data.id,
+      riderId
+    );
+
+    return {
+      success: true,
+      data: {
+        id: order.id,
+        status: order.status,
+        riderId: order.riderId
+      },
       meta: {
         requestId: getRequestId(request, reply)
       }
@@ -354,11 +397,11 @@ export function registerRiderRoutes(
 
   // GET /api/v1/orders/:orderId/rider-location
   app.get("/api/v1/orders/:orderId/rider-location", {
-    preHandler: [requireAuth(deps.tokenVerifier), requireRole(["BUYER"])]
+    preHandler: [requireAuth(deps.tokenVerifier), requireRole(["BUYER", "STORE_OWNER"])]
   }, async (request, reply) => {
     const { orderId } = request.params as { orderId: string };
-    const buyerId = request.user?.sub;
-    if (!buyerId) {
+    const user = request.user;
+    if (!user) {
       return reply.code(400).send({ success: false, error: "Authentication context missing" });
     }
 
@@ -371,7 +414,11 @@ export function registerRiderRoutes(
       return reply.code(404).send({ success: false, error: "Order not found" });
     }
 
-    if (order.userId !== buyerId) {
+    if (user.role === "BUYER" && order.userId !== user.sub) {
+      return reply.code(403).send({ success: false, error: "You are not authorized to view this order's rider location" });
+    }
+
+    if (user.role === "STORE_OWNER" && order.storeId !== user.storeId) {
       return reply.code(403).send({ success: false, error: "You are not authorized to view this order's rider location" });
     }
 
@@ -380,6 +427,44 @@ export function registerRiderRoutes(
     return {
       success: true,
       data: location,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/rider/earnings/summary
+  app.get("/api/v1/rider/earnings/summary", { preHandler }, async (request, reply) => {
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const summary = await deps.riderEarningsService.getSummary(riderId);
+
+    return {
+      success: true,
+      data: summary,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  // GET /api/v1/rider/earnings/history
+  app.get("/api/v1/rider/earnings/history", { preHandler }, async (request, reply) => {
+    const riderId = request.user?.sub;
+    if (!riderId) {
+      return reply.code(400).send({ success: false, error: "Authentication context missing" });
+    }
+
+    const query = request.query as { cursor?: string; limit?: string; startDate?: string; endDate?: string };
+    const parsedLimit = query.limit ? parseInt(query.limit, 10) : undefined;
+    const history = await deps.riderEarningsService.getHistory(riderId, query.cursor, parsedLimit, query.startDate, query.endDate);
+
+    return {
+      success: true,
+      data: history,
       meta: {
         requestId: getRequestId(request, reply)
       }

@@ -1,6 +1,6 @@
 /* eslint-disable simple-import-sort/imports */
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { InitialEntry } from "react-router-dom";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -79,7 +79,8 @@ describe("AdminOrdersPage", () => {
             total: 250.0,
             status: "PLACED",
             createdAt: "2026-06-04T12:00:00.000Z",
-            paymentMethod: "COD"
+            paymentMethod: "COD",
+            riderName: "Rider Bob"
           }
         ],
         nextCursor: null,
@@ -103,6 +104,7 @@ describe("AdminOrdersPage", () => {
     // Verify row items
     expect(screen.getAllByText("Dairy Plaza")).toHaveLength(2);
     expect(screen.getByText("******9001")).toBeInTheDocument();
+    expect(screen.getByText("Rider Bob")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("₹250.00")).toBeInTheDocument();
     expect(screen.getByText("PLACED")).toBeInTheDocument();
@@ -127,7 +129,8 @@ describe("AdminOrdersPage", () => {
         ],
         statusHistory: [
           { id: "hist-1", status: "PLACED", changedBy: "BUYER", changedAt: "2026-06-04T12:00:00.000Z" }
-        ]
+        ],
+        riderName: "Rider Bob"
       }
     };
 
@@ -138,10 +141,12 @@ describe("AdminOrdersPage", () => {
     fireEvent.click(viewBtn);
 
     // Verify modal content
-    expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
-    expect(await screen.findByText(/Room 10/)).toBeInTheDocument();
-    expect(await screen.findByText(/Near Mall/)).toBeInTheDocument();
-    expect(await screen.findByText("Milk")).toBeInTheDocument();
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText(/Room 10/)).toBeInTheDocument();
+    expect(within(modal).getByText(/Near Mall/)).toBeInTheDocument();
+    expect(within(modal).getByText("Milk")).toBeInTheDocument();
+    expect(within(modal).getByText(/Rider Bob/)).toBeInTheDocument();
   });
 
   it("handles status force update validation and PUT trigger", async () => {

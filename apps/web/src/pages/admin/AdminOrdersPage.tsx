@@ -48,6 +48,7 @@ type OrderListItem = {
   status: OrderStatus;
   createdAt: string;
   paymentMethod: string;
+  riderName?: string | null;
 };
 
 type StoreOption = {
@@ -90,6 +91,8 @@ type OrderDetailResponse = {
     };
     items: OrderItem[];
     statusHistory: OrderStatusHistory[];
+    riderName?: string | null;
+    orderType?: string | null;
   };
 };
 
@@ -388,6 +391,7 @@ export function AdminOrdersPage(): ReactElement {
                 <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Date</th>
                 <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Store</th>
                 <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Buyer Phone</th>
+                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Rider</th>
                 <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Items</th>
                 <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Total</th>
                 <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Status</th>
@@ -410,6 +414,7 @@ export function AdminOrdersPage(): ReactElement {
                   </td>
                   <td className="p-4 text-xs font-bold text-gorola-charcoal">{order.storeName}</td>
                   <td className="p-4 text-xs font-bold text-gorola-slate">{order.buyerMaskedPhone}</td>
+                  <td className="p-4 text-xs font-bold text-gorola-slate">{order.riderName || "-"}</td>
                   <td className="p-4 text-xs font-bold text-gorola-charcoal text-center">{order.itemsCount}</td>
                   <td className="p-4 text-xs font-black text-gorola-charcoal text-right">
                     {formatCurrency(order.total)}
@@ -562,6 +567,16 @@ export function AdminOrdersPage(): ReactElement {
                             </p>
                           </div>
                         </div>
+
+                        {orderDetail.riderName && (
+                          <div className="flex items-center gap-3">
+                            <User className="h-4 w-4 text-gorola-slate" />
+                            <div>
+                              <p className="text-[10px] text-gorola-slate font-bold">Assigned Rider</p>
+                              <p className="text-xs font-black text-gorola-charcoal">{orderDetail.riderName}</p>
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -580,10 +595,14 @@ export function AdminOrdersPage(): ReactElement {
                                   : "bg-gorola-mint"
                               }`}
                             />
-                            <p className="text-xs font-black text-gorola-charcoal">{hist.status}</p>
+                            <p className="text-xs font-black text-gorola-charcoal">
+                              {hist.note?.toLowerCase().includes("accepted by")
+                                ? (orderDetail.orderType === "BOOKING" ? "Booking Accepted" : "Order Accepted")
+                                : hist.status}
+                            </p>
                             <p className="text-[10px] text-gorola-slate mt-0.5">
                               By {hist.changedBy} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
-                              {hist.note && ` • Reason: "${hist.note}"`}
+                              {hist.note && ` - ${hist.note}`}
                             </p>
                           </div>
                         ))}

@@ -508,4 +508,152 @@ describe("StoreOrdersPage", () => {
     const dateFilter = await screen.findByTestId("order-date-filter");
     expect(dateFilter).toHaveValue("TODAY");
   });
+
+  it("restricts status transitions and disables dispatch button if no rider is assigned", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-no-rider",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PREPARING",
+          subtotal: 150.0,
+          deliveryFee: 30.0,
+          total: 180.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near park",
+          flatRoom: "Room 404",
+          addressLabel: "Office",
+          createdAt: new Date(Date.now() - 300000).toISOString(),
+          buyerMaskedPhone: "*********3210",
+          riderId: null,
+          deliveryLat: 12.9715987,
+          deliveryLng: 77.5945627,
+          items: [],
+          statusHistory: []
+        },
+        {
+          id: "order-with-rider",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "OUT_FOR_DELIVERY",
+          subtotal: 150.0,
+          deliveryFee: 30.0,
+          total: 180.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near park",
+          flatRoom: "Room 404",
+          addressLabel: "Office",
+          createdAt: new Date(Date.now() - 300000).toISOString(),
+          buyerMaskedPhone: "*********3210",
+          riderId: "rider-1",
+          deliveryLat: 12.9715987,
+          deliveryLng: 77.5945627,
+          items: [],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 2, page: 1, limit: 10, hasMore: false }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({ data: { success: true, data: { storeType: "QUICK_COMMERCE" } } });
+      }
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: mockOrdersData });
+      }
+      if (url.includes("/rider-location")) {
+        return Promise.resolve({ data: { success: true, data: { lat: "12.9716", lng: "77.5946" } } });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderStoreOrders();
+
+    // 1. Check order without rider (status PREPARING)
+    const cardNoRider = await screen.findByTestId("order-card-order-no-rider");
+    fireEvent.click(cardNoRider);
+
+    expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
+    
+    // The "Dispatch Order" button should be disabled
+    const dispatchBtn = screen.getByRole("button", { name: /dispatch/i });
+    expect(dispatchBtn).toBeDisabled();
+    expect(dispatchBtn).toHaveTextContent(/Assign Rider First/i);
+
+    // Close modal
+    fireEvent.click(screen.getByLabelText("Close modal"));
+
+    // 2. Check order with rider (status OUT_FOR_DELIVERY)
+    const cardWithRider = await screen.findByTestId("order-card-order-with-rider");
+    fireEvent.click(cardWithRider);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    
+    // Delivered button should NOT be present (since Store Owners cannot deliver)
+    const deliveredBtn = within(modal).queryByRole("button", { name: /delivered/i });
+    expect(deliveredBtn).not.toBeInTheDocument();
+  });
+
+  it("formats status transition log for rider order acceptance and extracts rider name from note", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-test-log",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PREPARING",
+          subtotal: 100.0,
+          deliveryFee: 10.0,
+          total: 110.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Clock Tower",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Apple", variantLabel: "1kg", price: 100.0, quantity: 1 }],
+          statusHistory: [
+            {
+              id: "hist-1",
+              status: "PLACED",
+              changedAt: new Date().toISOString(),
+              changedBy: "BUYER"
+            },
+            {
+              id: "hist-2",
+              status: "PREPARING",
+              changedAt: new Date().toISOString(),
+              changedBy: "rider:rider-123",
+              note: "Order accepted by rider: Hillside Rider"
+            }
+          ]
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockResolvedValue({ data: mockOrdersData });
+
+    renderStoreOrders();
+
+    // Click the card to open modal
+    const card = await screen.findByTestId("order-card-order-test-log");
+    fireEvent.click(card);
+
+    // Verify detail modal is open
+    expect(await screen.findByTestId("order-details-modal")).toBeInTheDocument();
+
+    // Verify timeline formatting:
+    // It should render "Order Accepted" instead of "Preparing"
+    expect(screen.getByText("Order Accepted")).toBeInTheDocument();
+    
+    // It should format "rider:rider-123" using the rider's name "Hillside Rider"
+    expect(screen.getByText(/By Hillside Rider at/i)).toBeInTheDocument();
+  });
 });

@@ -1,4 +1,4 @@
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
@@ -12,7 +12,9 @@ import {
   User,
 } from "lucide-react";
 import type { ReactElement } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
+import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
@@ -36,6 +38,7 @@ type StoreDetail = {
   productCount: number;
   orderCount: number;
   owners: StoreOwnerItem[];
+  riderEarningRatePct?: number | null;
 };
 
 type StoreDetailResponse = {
@@ -46,7 +49,10 @@ type StoreDetailResponse = {
 export function AdminStoreDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
+
+  const [riderEarningRate, setRiderEarningRate] = useState<string>("");
 
   const { data: store, isLoading, isError, isFetching, refetch } = useQuery<StoreDetail>({
     queryKey: ["admin", "store-detail", id],
@@ -56,6 +62,29 @@ export function AdminStoreDetailPage(): ReactElement {
       return res.data.data;
     },
     enabled: !!id,
+  });
+
+  useEffect(() => {
+    if (store) {
+      setRiderEarningRate(store.riderEarningRatePct !== null && store.riderEarningRatePct !== undefined ? String(store.riderEarningRatePct) : "");
+    }
+  }, [store]);
+
+  const updateRiderRateMutation = useMutation({
+    mutationFn: async (rate: number | null) => {
+      if (!api) throw new Error("API helper not initialized");
+      const res = await api.put<{ success: boolean; data: unknown }>(`/api/v1/admin/stores/${id}/rider-earning-rate`, {
+        riderEarningRatePct: rate
+      });
+      return res.data;
+    },
+    onSuccess: () => {
+      toast.success("Rider earning rate override updated successfully");
+      void queryClient.invalidateQueries({ queryKey: ["admin", "store-detail", id] });
+    },
+    onError: () => {
+      toast.error("Failed to update store rider earning rate");
+    }
   });
 
   const formatCurrency = (val: number): string => {
@@ -255,6 +284,54 @@ export function AdminStoreDetailPage(): ReactElement {
                 ))}
               </div>
             )}
+          </div>
+        </section>
+
+        {/* Rider Earning Rate Override */}
+        <section className="space-y-6">
+          <div className="bg-white border border-gorola-charcoal/10 rounded-2xl p-6 shadow-sm space-y-4">
+            <h2 className="font-heading text-lg font-bold text-gorola-charcoal border-b border-gorola-charcoal/5 pb-3">
+              Rider Earning Rate Override
+            </h2>
+            <p className="text-xs text-gorola-slate font-dm-sans leading-relaxed">
+              Specify a custom percentage rate of the delivery charge that riders for this store will receive. Leave blank to inherit the global rate.
+            </p>
+
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                const value = riderEarningRate.trim() === "" ? null : Number(riderEarningRate);
+                if (value !== null && (isNaN(value) || value < 0)) {
+                  toast.error("Please enter a valid percentage rate");
+                  return;
+                }
+                updateRiderRateMutation.mutate(value);
+              }}
+              className="space-y-4 font-dm-sans"
+            >
+              <div className="space-y-1.5">
+                <label htmlFor="store-rider-earning-rate-input" className="text-xs font-bold text-gorola-charcoal block">
+                  Store Earning Rate (%)
+                </label>
+                <input
+                  id="store-rider-earning-rate-input"
+                  data-testid="store-rider-earning-rate-input"
+                  type="text"
+                  value={riderEarningRate}
+                  onChange={(e) => setRiderEarningRate(e.target.value)}
+                  className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+                  placeholder="e.g. 90"
+                />
+              </div>
+
+              <button
+                type="submit"
+                disabled={updateRiderRateMutation.isPending}
+                className="w-full bg-gorola-pine hover:bg-gorola-pine/90 text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer transition-all duration-300 disabled:opacity-50"
+              >
+                {updateRiderRateMutation.isPending ? "Saving..." : "Save Earning Rate"}
+              </button>
+            </form>
           </div>
         </section>
       </div>

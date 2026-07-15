@@ -1,5 +1,5 @@
 import type { PrismaClient, Store, User } from "@prisma/client";
-import { afterAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
 import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
 import { StoreRepository } from "../../../modules/store/store.repository.js";
@@ -56,9 +56,23 @@ describe("Promotion controller offers auth", () => {
   const db = getPrismaClient();
   const userRepo = new UserRepository(db);
   const storeRepo = new StoreRepository(db);
+  let server: ReturnType<typeof createServer>;
 
   let user: User;
   let store: Store;
+
+  beforeAll(async () => {
+    server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+    await server.ready();
+  });
+
+  afterAll(async () => {
+    await server.close();
+    await disconnectPrisma();
+  });
 
   beforeEach(async () => {
     await cleanPromotionIntegrationGraph(db);
@@ -71,31 +85,18 @@ describe("Promotion controller offers auth", () => {
     });
   });
 
-  afterAll(async () => {
-    await disconnectPrisma();
-  });
-
   it("returns HTTP 401 UNAUTHORIZED when no token is provided", async () => {
-    const server = createServer({
-      disableRedis: true,
-      registerRoutes: registerAppRoutes
-    });
-
     const res = await server.inject({
       method: "GET",
       url: `/api/v1/promotions/store/${store.id}/offers`
     });
 
     expect(res.statusCode).toBe(401);
-    await server.close();
   });
 
   it("returns HTTP 200 and serializes offers correctly when a valid token is provided", async () => {
     process.env.GOROLA_TEST_OTP = "111222";
-    const server = createServer({
-      disableRedis: true,
-      registerRoutes: registerAppRoutes
-    });
+
     const { accessToken } = await getBuyerAccessToken(server, user.phone);
 
     const now = new Date();
@@ -149,16 +150,11 @@ describe("Promotion controller offers auth", () => {
       isActive: true
     });
 
-    await server.close();
     delete process.env.GOROLA_TEST_OTP;
   });
 
   it("returns HTTP 200 with an empty list when store has no offers", async () => {
     process.env.GOROLA_TEST_OTP = "111222";
-    const server = createServer({
-      disableRedis: true,
-      registerRoutes: registerAppRoutes
-    });
     const { accessToken } = await getBuyerAccessToken(server, user.phone);
 
     const res = await server.inject({
@@ -175,7 +171,6 @@ describe("Promotion controller offers auth", () => {
     expect(body.success).toBe(true);
     expect(body.data).toEqual([]);
 
-    await server.close();
     delete process.env.GOROLA_TEST_OTP;
   });
 });

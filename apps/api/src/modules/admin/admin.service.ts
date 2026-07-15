@@ -332,7 +332,8 @@ export class AdminService {
       include: {
         store: { select: { id: true, name: true } },
         user: { select: { phone: true } },
-        items: true
+        items: true,
+        rider: { select: { name: true } }
       }
     });
 
@@ -349,7 +350,8 @@ export class AdminService {
         total: Number(o.total),
         status: o.status,
         createdAt: o.createdAt.toISOString(),
-        paymentMethod: o.paymentMethod
+        paymentMethod: o.paymentMethod,
+        riderName: o.rider?.name ?? null
       };
     });
 
@@ -429,7 +431,8 @@ export class AdminService {
         store: { select: { id: true, name: true, phone: true, storeType: true } },
         user: { select: { phone: true, name: true } },
         items: true,
-        statusHistory: { orderBy: { changedAt: "asc" } }
+        statusHistory: { orderBy: { changedAt: "asc" } },
+        rider: { select: { name: true } }
       }
     });
     if (!order) {
@@ -441,7 +444,8 @@ export class AdminService {
       buyerMaskedPhone: maskPhone(order.user?.phone ?? ""),
       total: Number(order.total),
       subtotal: Number(order.subtotal),
-      deliveryFee: Number(order.deliveryFee)
+      deliveryFee: Number(order.deliveryFee),
+      riderName: order.rider?.name ?? null
     };
   }
 
