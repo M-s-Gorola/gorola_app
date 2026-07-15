@@ -120,6 +120,7 @@ export class StoreOwnerService {
       const { user, ...rest } = o;
       return {
         ...rest,
+        user: user ? { name: user.name } : null,
         buyerMaskedPhone: maskPhone(user?.phone ?? "")
       };
     });

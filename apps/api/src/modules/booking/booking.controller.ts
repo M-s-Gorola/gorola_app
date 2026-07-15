@@ -136,6 +136,7 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     deliveryLat: order.deliveryLat ? Number(order.deliveryLat) : null,
     deliveryLng: order.deliveryLng ? Number(order.deliveryLng) : null,
     buyerMaskedPhone: order.user ? maskPhone(order.user.phone) : "",
+    user: order.user ? { name: order.user.name, phone: order.user.phone } : null,
     paymentMethod: "COD",
     store: {
       id: order.store.id,
