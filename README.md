@@ -106,9 +106,19 @@ Run these from `GoRola_app` root:
 # Quality Gates
 pnpm ci:quality   # Full pipeline: Lint -> Typecheck -> Build -> Unit -> E2E
 
-# Testing
+# Testing (All Workspace)
 pnpm test         # Run all Vitest unit/integration tests
 pnpm test:e2e     # Run all Playwright E2E tests
+
+# Testing (Backend Only)
+pnpm --filter @gorola/api test        # Run all backend unit/integration tests
+pnpm --filter @gorola/api test run <file> # Run specific backend test file
+
+# Testing (Frontend Only)
+pnpm --filter @gorola/web test        # Run all frontend unit tests
+pnpm --filter @gorola/web test run <file> # Run specific frontend unit test file
+pnpm --filter @gorola/web test:e2e     # Run all Playwright E2E tests
+pnpm --filter @gorola/web test:e2e <file> # Run specific E2E test file
 
 # Maintenance
 pnpm lint         # Lint all packages

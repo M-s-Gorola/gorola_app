@@ -260,8 +260,7 @@ export function StoreBookingsPage(): ReactElement {
   useEffect(() => {
     if (!storeId || !accessToken) return;
 
-    const host = window.location.hostname;
-    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
 
     const socket = io(baseURL, {
       auth: { token: accessToken },

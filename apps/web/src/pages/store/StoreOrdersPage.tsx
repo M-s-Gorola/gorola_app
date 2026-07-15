@@ -240,17 +240,17 @@ export function StoreOrdersPage(): ReactElement {
     enabled: !!storeId
   });
 
-interface StoreOffer {
-  id: string;
-  title: string;
-  discountType: "PERCENTAGE" | "FLAT";
-  discountValue: number;
-  minOrderAmount?: number | null;
-  maxDiscount?: number | null;
-  startsAt: string;
-  endsAt: string;
-  isActive: boolean;
-}
+  interface StoreOffer {
+    id: string;
+    title: string;
+    discountType: "PERCENTAGE" | "FLAT";
+    discountValue: number;
+    minOrderAmount?: number | null;
+    maxDiscount?: number | null;
+    startsAt: string;
+    endsAt: string;
+    isActive: boolean;
+  }
 
   const { data: offersResponse } = useQuery({
     queryKey: ["store", "offers"],
@@ -332,10 +332,9 @@ interface StoreOffer {
       return;
     }
 
-    const host = window.location.hostname;
-    const baseURL = import.meta.env.VITE_API_BASE_URL || `${window.location.protocol}//${host}:3001`;
+    const baseURL = import.meta.env.VITE_API_BASE_URL || window.location.origin;
     console.log("🔌 [StoreSocket] Connecting to socket at:", baseURL);
-    
+
     const socket = io(baseURL, {
       auth: { token: accessToken },
       withCredentials: true,
@@ -589,11 +588,10 @@ interface StoreOffer {
               <button
                 key={tab}
                 onClick={() => handleTabChange(tab)}
-                className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide whitespace-nowrap transition-all ${
-                  isActive
+                className={`flex-1 px-4 py-2.5 rounded-xl text-xs font-extrabold uppercase tracking-wide whitespace-nowrap transition-all ${isActive
                     ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/15"
                     : "text-gorola-slate hover:bg-gorola-mint/10 hover:text-gorola-charcoal"
-                }`}
+                  }`}
               >
                 {tab === "ALL" ? "All Orders" : formatStatusLabel(tab)}
               </button>
@@ -879,11 +877,10 @@ interface StoreOffer {
                     <div key={hist.id} className="relative">
                       {/* Timeline dot */}
                       <span
-                        className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full ${
-                          idx === selectedOrder.statusHistory.length - 1
+                        className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full ${idx === selectedOrder.statusHistory.length - 1
                             ? "bg-gorola-pine scale-125"
                             : "bg-gorola-mint"
-                        }`}
+                          }`}
                       />
                       <p className="text-xs font-black text-gorola-charcoal">
                         {hist.note?.toLowerCase().includes("accepted by rider:") ? "Order Accepted" : formatStatusLabel(hist.status)}
@@ -1014,13 +1011,12 @@ interface StoreOffer {
                       onClick={() =>
                         setConfirmingOrderUpdate({ orderId: selectedOrder.id, status: nextStatus })
                       }
-                      className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${
-                        isCancel
+                      className={`flex-1 min-w-[140px] px-5 py-3 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-sm ${isCancel
                           ? "bg-rose-50 text-rose-700 border border-rose-200 hover:bg-rose-100 disabled:opacity-50"
                           : isDispatchDisabled
                             ? "bg-gorola-mint/20 text-gorola-slate border border-gorola-mint/30 cursor-not-allowed"
                             : "bg-gorola-pine text-white hover:bg-gorola-pine/90 disabled:opacity-50 shadow-md shadow-gorola-pine/15"
-                      }`}
+                        }`}
                     >
                       {updateStatusMutation.isPending
                         ? "Updating..."

@@ -210,7 +210,8 @@ describe("Rider Field Technician Route Integration", () => {
             scheduledDate: new Date(), // today
             timeslot: "09:00-11:00",
             requiresFasting: true,
-            approvalStatus: "APPROVED"
+            approvalStatus: "APPROVED",
+            assignedTechnicianId: technicianRiderId
           }
         }
       }
