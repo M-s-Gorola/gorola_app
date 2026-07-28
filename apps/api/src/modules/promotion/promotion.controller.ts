@@ -302,6 +302,93 @@ export function registerPromotionRoutes(
 
       return success(request, reply, { reset: true });
     });
+
+    app.post("/api/v1/test/rider/reset", async (request, reply) => {
+      const prisma = getPrismaClient();
+      const { hash } = await import("bcryptjs");
+      const riderPwHash = await hash("Rider#123", 10);
+
+      const testRiders = await prisma.deliveryRider.findMany({
+        where: { email: { in: ["rider1@gorola.in", "rider_iso@gorola.in"] } },
+        select: { id: true }
+      });
+      const testRiderIds = testRiders.map((r) => r.id);
+      if (testRiderIds.length > 0) {
+        await prisma.riderEarning.deleteMany({
+          where: { riderId: { in: testRiderIds } }
+        });
+      }
+
+      const rider1 = await prisma.deliveryRider.upsert({
+        where: { email: "rider1@gorola.in" },
+        update: { passwordHash: riderPwHash, isActive: true },
+        create: {
+          name: "Hillside Rider",
+          phone: "+919000000001",
+          email: "rider1@gorola.in",
+          passwordHash: riderPwHash,
+          riderType: "DELIVERY",
+          isActive: true,
+          stores: {
+            create: {
+              storeId: "store_gorola_hillside_mart",
+              isPrimary: true
+            }
+          }
+        }
+      });
+
+      await prisma.riderStore.upsert({
+        where: {
+          riderId_storeId: {
+            riderId: rider1.id,
+            storeId: "store_gorola_hillside_mart"
+          }
+        },
+        update: { isPrimary: true },
+        create: {
+          riderId: rider1.id,
+          storeId: "store_gorola_hillside_mart",
+          isPrimary: true
+        }
+      });
+
+      const riderIso = await prisma.deliveryRider.upsert({
+        where: { email: "rider_iso@gorola.in" },
+        update: { passwordHash: riderPwHash, isActive: true },
+        create: {
+          name: "Isolation Rider",
+          phone: "+919000000099",
+          email: "rider_iso@gorola.in",
+          passwordHash: riderPwHash,
+          riderType: "DELIVERY",
+          isActive: true,
+          stores: {
+            create: {
+              storeId: "store_gorola_hillside_mart",
+              isPrimary: true
+            }
+          }
+        }
+      });
+
+      await prisma.riderStore.upsert({
+        where: {
+          riderId_storeId: {
+            riderId: riderIso.id,
+            storeId: "store_gorola_hillside_mart"
+          }
+        },
+        update: { isPrimary: true },
+        create: {
+          riderId: riderIso.id,
+          storeId: "store_gorola_hillside_mart",
+          isPrimary: true
+        }
+      });
+
+      return success(request, reply, { reset: true });
+    });
   }
 }
 
