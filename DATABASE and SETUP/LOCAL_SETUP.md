@@ -45,6 +45,20 @@ docker exec -i gorola-postgres psql -U postgres -d gorola_dev -c "CREATE ROLE db
 docker exec -i gorola-postgres psql -U postgres -d gorola_test -c "GRANT ALL PRIVILEGES ON DATABASE gorola_test TO db_owner; GRANT CONNECT ON DATABASE gorola_test TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;"
 ```
 
+#### Remote Railway Database Role Setup
+> ⚠️ Note: Railway's Web UI Query bar automatically appends `LIMIT 500` to all input, which causes `syntax error at or near "LIMIT"` on `GRANT` / `DO $$` statements.
+> Where to find `<RAILWAY_POSTGRES_PUBLIC_URL>`: Log into Railway → Open your **PostgreSQL Service** → Click **Connect** (or **Variables** tab) → Copy the Public Connection URL.
+> To configure remote Railway databases safely without committing secrets to Git, run the setup script passing URL and passwords as CLI arguments:
+
+```bash
+pnpm --filter @gorola/api setup:railway:roles \
+  "<RAILWAY_POSTGRES_PUBLIC_URL>" \
+  "<DB_OWNER_PASSWORD>" \
+  "<APP_SERVICE_PASSWORD>"
+```
+
+
+
 
 ## 3. Environment Variables
 

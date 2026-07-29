@@ -115,7 +115,7 @@ scoped to Preview (staging) or Production as appropriate.
 |---|---|---|
 | `DATABASE_URL` | Staging DB connection string (`app_service` DML role) | Prod DB connection string (`app_service` DML role) |
 | `DIRECT_URL` | Staging DB direct DDL URL (`db_owner` role) | Prod DB direct DDL URL (`db_owner` role) |
-| `MIGRATION_DATABASE_URL` | Staging DB migration URL (`db_owner` DDL owner role) | Prod DB migration URL (`db_owner` DDL owner role) |
+| `MIGRATION_DATABASE_URL` | Staging DB migration URL (`db_owner` role) | Prod DB migration URL (`db_owner` role) |
 | `REDIS_URL` | Staging Redis URL | Prod Redis URL |
 | `JWT_SECRET` | Any strong random string | Different strong random string |
 | `FRONTEND_URL` | Staging Vercel preview URL | Your production domain |
@@ -123,9 +123,11 @@ scoped to Preview (staging) or Production as appropriate.
 | `STRIPE_WEBHOOK_SECRET` | Stripe test webhook secret | Stripe live webhook secret |
 | *(other third-party keys)* | Sandbox / test credentials | Live credentials |
 
-> ⚠️ **Prisma Migrations & Database Role Separation (DPDP Act Sec 8(5))**:
-> - `DATABASE_URL` uses the restricted `app_service` user (DML operations: SELECT, INSERT, UPDATE, DELETE).
-> - `DIRECT_URL` and `MIGRATION_DATABASE_URL` MUST use the `db_owner` database owner role so that `prisma migrate deploy` can execute DDL schema migrations (`CREATE`, `ALTER`, `DROP`) during API startup and deployment.
+> ⚠️ **GitHub Environment Secret Setup for `MIGRATION_DATABASE_URL`**:
+> Set `MIGRATION_DATABASE_URL` under GitHub **Settings → Environments → staging / production → Environment secrets**:
+> - **Staging Environment Secret**: `postgresql://db_owner:your_staging_owner_password@<staging_host>:<port>/railway`
+> - **Production Environment Secret**: `postgresql://db_owner:your_production_owner_password@<production_host>:<port>/railway`
+
 
 
 > ⚠️ **Never share a database between staging and production.**
