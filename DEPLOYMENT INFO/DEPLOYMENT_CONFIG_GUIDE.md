@@ -163,7 +163,17 @@ DATABASE_URL_TEST="postgresql://app_service:<APP_SERVICE_PASSWORD>@<host>:<port>
 # Migration & Direct connection (db_owner DDL role)
 DIRECT_URL="postgresql://db_owner:<DB_OWNER_PASSWORD>@<host>:<port>/railway"
 MIGRATION_DATABASE_URL="postgresql://db_owner:<DB_OWNER_PASSWORD>@<host>:<port>/railway"
+
+# PII Encryption & Blind Indexing (DPDP Act Compliance)
+ENCRYPTION_KEY="your_32_byte_random_hex_string"
+HMAC_SECRET="your_32_byte_random_hex_string"
 ```
+
+> **How to Generate `ENCRYPTION_KEY` & `HMAC_SECRET`**:
+> Run in terminal / PowerShell:
+> `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+> Or simply create any strong 32+ character random string per environment.
+
 
 
 ### Step 3: Configure GitHub Environment Secrets for Migration Pipeline

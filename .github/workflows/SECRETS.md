@@ -117,16 +117,33 @@ scoped to Preview (staging) or Production as appropriate.
 | `DIRECT_URL` | Staging DB direct DDL URL (`db_owner` role) | Prod DB direct DDL URL (`db_owner` role) |
 | `MIGRATION_DATABASE_URL` | Staging DB migration URL (`db_owner` role) | Prod DB migration URL (`db_owner` role) |
 | `REDIS_URL` | Staging Redis URL | Prod Redis URL |
+| `ENCRYPTION_KEY` | 32-byte random hex key for AES PII encryption | Different 32-byte random hex key |
+| `HMAC_SECRET` | 32-byte random hex key for HMAC blind index | Different 32-byte random hex key |
 | `JWT_SECRET` | Any strong random string | Different strong random string |
 | `FRONTEND_URL` | Staging Vercel preview URL | Your production domain |
 | `STRIPE_SECRET_KEY` | Stripe **test** mode key (`sk_test_...`) | Stripe **live** key (`sk_live_...`) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe test webhook secret | Stripe live webhook secret |
 | *(other third-party keys)* | Sandbox / test credentials | Live credentials |
 
+### Generating `ENCRYPTION_KEY` and `HMAC_SECRET`
+
+You can generate 32-byte (64 hex character) cryptographically secure random keys using Node.js or OpenSSL from your terminal:
+
+**Via Node.js (Terminal / PowerShell):**
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**Via OpenSSL:**
+```bash
+openssl rand -hex 32
+```
+
 > ⚠️ **GitHub Environment Secret Setup for `MIGRATION_DATABASE_URL`**:
 > Set `MIGRATION_DATABASE_URL` under GitHub **Settings → Environments → staging / production → Environment secrets**:
 > - **Staging Environment Secret**: `postgresql://db_owner:your_staging_owner_password@<staging_host>:<port>/railway`
 > - **Production Environment Secret**: `postgresql://db_owner:your_production_owner_password@<production_host>:<port>/railway`
+
 
 
 
