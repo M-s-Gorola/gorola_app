@@ -91,4 +91,58 @@ The following scripts are used by the deployment pipeline:
 
 ---
 
+---
+
+## 8. Railway Least-Privilege Database Role Setup (DPDP Act Compliance)
+
+To satisfy DPDP Act 2023 Sec 8(5) least-privilege security requirements, the production Railway PostgreSQL instance must use two distinct database roles:
+
+### Step 1: Execute Role Setup SQL in Railway Query Editor
+Log into Railway → Open your PostgreSQL Service → Open **Data / Query Editor** (or connect via `psql`) and run:
+
+```sql
+-- 1. Create db_owner role (DDL owner for migrations)
+CREATE ROLE db_owner WITH LOGIN PASSWORD 'your_secure_owner_password';
+GRANT ALL PRIVILEGES ON DATABASE railway TO db_owner;
+
+-- 2. Create app_service role (DML restricted role for API runtime)
+CREATE ROLE app_service WITH LOGIN PASSWORD 'your_secure_app_password';
+GRANT CONNECT ON DATABASE railway TO app_service;
+GRANT USAGE ON SCHEMA public TO app_service;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;
+```
+
+### Step 2: Configure Railway Environment Variables
+In Railway → API Service → **Variables**, set:
+
+```env
+# Runtime API connection (app_service DML role)
+DATABASE_URL="postgresql://app_service:your_secure_app_password@<host>:<port>/railway"
+
+# Migration & Direct connection (db_owner DDL role)
+DIRECT_URL="postgresql://db_owner:your_secure_owner_password@<host>:<port>/railway"
+MIGRATION_DATABASE_URL="postgresql://db_owner:your_secure_owner_password@<host>:<port>/railway"
+```
+
+### Step 3: Configure GitHub Actions Secrets for Migration Pipeline
+In GitHub → Repository **Settings** → **Secrets and variables** → **Actions** (or Environment Secrets):
+1. Add a secret named **`MIGRATION_DATABASE_URL`** containing the `db_owner` DDL connection string:
+   `postgresql://db_owner:your_secure_owner_password@<public_host>:<port>/railway`
+2. In deployment workflows (`.github/workflows/deploy-railway.yml` or API startup scripts), ensure `prisma migrate deploy` executes with `MIGRATION_DATABASE_URL` / `db_owner` permissions:
+
+```yaml
+- name: Deploy Database Migrations
+  env:
+    DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+    MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+  run: pnpm --filter @gorola/api prisma migrate deploy
+```
+
+---
+
 GoRola - Infrastructure as Code.
+
+

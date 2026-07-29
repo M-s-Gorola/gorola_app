@@ -42,6 +42,13 @@ if (!testUrl) {
   );
 }
 
+const testMigrationUrl =
+  process.env.MIGRATION_DATABASE_URL_TEST ??
+  process.env.MIGRATION_DATABASE_URL ??
+  process.env.DIRECT_URL ??
+  testUrl;
+
 process.env.DATABASE_URL = testUrl;
-process.env.DIRECT_URL = testUrl;
+process.env.DIRECT_URL = testMigrationUrl;
+
 

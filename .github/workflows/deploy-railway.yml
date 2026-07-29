@@ -63,6 +63,18 @@ jobs:
       - name: Install Railway CLI
         run: npm install --global @railway/cli@latest
 
+      # Database Migration Step (DPDP Act Sec 8(5) Least Privilege):
+      # If secrets.MIGRATION_DATABASE_URL is set in GitHub Environment secrets,
+      # execute `prisma migrate deploy` using db_owner DDL credentials prior to CLI upload.
+      - name: Deploy Database Migrations (db_owner)
+        if: ${{ secrets.MIGRATION_DATABASE_URL != '' }}
+        env:
+          DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          DIRECT_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+          MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+        run: pnpm --filter @gorola/api exec prisma migrate deploy
+
+
       # Deploy to the Railway environment matching this workflow's input.
       # Label format: "<branch> <short-sha>" for traceability in the Railway dashboard.
       # Retry logic: catches the known log-streaming flake; non-transient errors exit immediately.

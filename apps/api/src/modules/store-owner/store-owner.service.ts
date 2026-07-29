@@ -2,6 +2,7 @@ import { AppError, ForbiddenError, NotFoundError, UnauthorizedError } from "@gor
 import { type OrderStatus, Prisma, type PrismaClient } from "@prisma/client";
 import { compare, hash } from "bcryptjs";
 
+import { maskPhone } from "../../lib/crypto.js";
 import { ProductVariantRepository } from "../catalog/variant.repository.js";
 import { StockMovementRepository } from "../inventory/stock-movement.repository.js";
 
@@ -17,11 +18,7 @@ export type DashboardKpiSummary = {
   activeDiscountsCount: number;
 };
 
-function maskPhone(phone: string): string {
-  if (!phone) return "";
-  if (phone.length <= 4) return "****";
-  return "*".repeat(phone.length - 4) + phone.slice(-4);
-}
+
 
 export class StoreOwnerService {
   public constructor(private readonly db: PrismaClient) {}

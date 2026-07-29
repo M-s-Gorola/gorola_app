@@ -262,7 +262,25 @@ Browser Request
 
 ---
 
+## Database Tier & Data Security Architecture (DPDP Act Compliance)
+
+### 1. Database Role Separation (Least Privilege)
+To comply with DPDP Act 2023 Sec 8(5) safeguard regulations, PostgreSQL connections operate under strict role separation:
+
+- **`app_service` (Runtime DML Connection via `DATABASE_URL`)**: Restricted to DML operations (`SELECT`, `INSERT`, `UPDATE`, `DELETE`). It cannot execute DDL commands (`CREATE`, `ALTER`, `DROP`, `TRUNCATE`). Used by Fastify API backend application queries.
+- **`db_owner` (Migration DDL Connection via `DIRECT_URL` & `MIGRATION_DATABASE_URL`)**: Full database owner. Used exclusively during `prisma migrate dev` / `prisma migrate deploy` and administrative tools (`prisma:studio`).
+
+### 2. PII Field Encryption at Rest & HMAC Blind Indexing
+Personal Identifiable Information (PII) fields like `phone` on `User` and `DeliveryRider` models are protected at rest:
+- **AES-256-GCM Field Encryption**: Ciphertexts are prefixed with `enc:<iv_hex>:<ciphertext_hex>:<authTag_hex>`.
+- **HMAC-SHA256 Blind Indexing (`phoneHash`)**: A 64-character deterministic HMAC-SHA256 hex digest stored in `@unique` column `phoneHash` enables fast, indexed exact-match lookups (`WHERE phoneHash = ...`) without exposing raw PII in database indexes.
+- **Prisma Client Extension (`$extends`)**: Intercepts queries in [`apps/api/src/lib/prisma.ts`](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/lib/prisma.ts). Automatically encrypts writes, maps queries to `phoneHash`, and transparently decrypts outputs back to plaintext for application code and repositories.
+- **Centralized Masking**: `maskPhone(phone)` decrypts `enc:...` before returning formatted strings (`*********3210`) for API responses.
+
+---
+
 ## Module Map
+
 
 ```
 apps/api/src/modules/
