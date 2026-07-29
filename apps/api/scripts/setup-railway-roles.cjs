@@ -40,15 +40,24 @@ async function main() {
   console.log("Connecting to PostgreSQL database...");
 
   const queries = [
-    `DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'db_owner') THEN CREATE ROLE db_owner WITH LOGIN PASSWORD '${escapedOwnerPass}'; ELSE ALTER ROLE db_owner WITH PASSWORD '${escapedOwnerPass}'; END IF; END $$;`,
+    // CREATEDB is required: `prisma migrate dev` creates a temporary shadow database
+    // (a whole new PostgreSQL database) to diff migrations. Without CREATEDB this fails with P3014.
+    `DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'db_owner') THEN CREATE ROLE db_owner WITH LOGIN CREATEDB PASSWORD '${escapedOwnerPass}'; ELSE ALTER ROLE db_owner WITH LOGIN CREATEDB PASSWORD '${escapedOwnerPass}'; END IF; END $$;`,
     `DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'app_service') THEN CREATE ROLE app_service WITH LOGIN PASSWORD '${escapedAppPass}'; ELSE ALTER ROLE app_service WITH PASSWORD '${escapedAppPass}'; END IF; END $$;`,
     `GRANT ALL PRIVILEGES ON DATABASE railway TO db_owner`,
+    // PostgreSQL 15+ removed the default CREATE privilege on the public schema.
+    // Without these, `prisma migrate dev` fails with "permission denied for schema public".
+    `GRANT ALL ON SCHEMA public TO db_owner`,
+    `ALTER SCHEMA public OWNER TO db_owner`,
     `GRANT CONNECT ON DATABASE railway TO app_service`,
     `GRANT USAGE ON SCHEMA public TO app_service`,
     `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service`,
     `GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service`,
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service`,
-    `ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service`
+    // FOR ROLE db_owner is critical: tables are created by db_owner during migrations.
+    // Without it, auto-grants only fire for tables created by the current user,
+    // so app_service gets no access to migrated tables → permission denied on seed/queries.
+    `ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service`,
+    `ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service`
   ];
 
   for (const sql of queries) {

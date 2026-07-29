@@ -132,8 +132,14 @@ Connect to Railway via `psql` or database GUI tool (TablePlus, DBeaver) using Ra
 
 ```sql
 -- 1. Create db_owner role (DDL owner for migrations)
-CREATE ROLE db_owner WITH LOGIN PASSWORD 'your_secure_owner_password';
+-- CREATEDB is required: `prisma migrate dev` creates a shadow database (a whole new DB)
+-- to calculate migration diffs safely. Without CREATEDB this fails with P3014.
+CREATE ROLE db_owner WITH LOGIN CREATEDB PASSWORD 'your_secure_owner_password';
 GRANT ALL PRIVILEGES ON DATABASE railway TO db_owner;
+-- Required on PostgreSQL 15+: public schema no longer grants CREATE by default.
+-- Without these, `prisma migrate dev` fails with "permission denied for schema public".
+GRANT ALL ON SCHEMA public TO db_owner;
+ALTER SCHEMA public OWNER TO db_owner;
 
 -- 2. Create app_service role (DML restricted role for API runtime)
 CREATE ROLE app_service WITH LOGIN PASSWORD 'your_secure_app_password';
@@ -141,10 +147,19 @@ GRANT CONNECT ON DATABASE railway TO app_service;
 GRANT USAGE ON SCHEMA public TO app_service;
 GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;
-ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;
+-- FOR ROLE db_owner is critical: tables are created by db_owner during migrations.
+-- Without it, auto-grants only fire for tables created by the current user (postgres),
+-- so app_service gets no access to migrated tables and queries fail with permission denied.
+ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;
+ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;
 ```
 
+> [!TIP]
+> **`db_owner` already exists without `CREATEDB`?** If the role was previously created without `CREATEDB` (e.g. from an older setup), migrations fail with `P3014`. Fix it without recreating the role:
+> ```sql
+> ALTER ROLE db_owner CREATEDB;
+> ```
+> The automated CLI script (`setup:railway:roles`) already handles this — it uses `ALTER ROLE ... WITH LOGIN CREATEDB` in its `ELSE` branch, so re-running the script is safe and idempotent.
 
 ### Step 2: Configure Railway Environment Variables
 In Railway → API Service → **Variables**, set the connection strings.
@@ -188,7 +203,26 @@ To ensure staging and production databases remain completely isolated during CI/
    - **Secret (Staging)**: `postgresql://db_owner:your_staging_owner_password@<staging_host>:<port>/railway`
    - **Secret (Production)**: `postgresql://db_owner:your_production_owner_password@<production_host>:<port>/railway`
 
-5. When `.github/workflows/deploy-railway.yml` runs, GitHub automatically pulls the secret from the target environment (`staging` or `production`), running schema migrations using the matching database owner credentials:
+5. When `.github/workflows/deploy-railway.yml` runs, GitHub automatically pulls the secret from the target environment (`staging` or `production`), running schema migrations using the matching database owner credentials.
+
+> [!IMPORTANT]
+> **`pnpm` and workspace dependencies must be installed in the same job before the migration step.** GitHub Actions runner images do not include `pnpm` by default, and `prisma` is a workspace devDependency — it is not available without `pnpm install`. The following steps must appear **before** the migration step in the job:
+> ```yaml
+> - name: Install pnpm
+>   uses: pnpm/action-setup@v4
+>   with:
+>     version: 10
+>
+> - name: Setup Node.js
+>   uses: actions/setup-node@v4
+>   with:
+>     node-version: '22'
+>     cache: 'pnpm'
+>
+> - name: Install dependencies
+>   run: pnpm install --frozen-lockfile --prefer-offline
+> ```
+> Without these steps, the migration command fails with `pnpm: command not found` (exit code 127).
 
 ```yaml
 - name: Deploy Database Migrations (db_owner)

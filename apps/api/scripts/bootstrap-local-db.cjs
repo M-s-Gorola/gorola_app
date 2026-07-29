@@ -1,7 +1,7 @@
 /**
  * Loads GoRola_app/.env and runs local DB bootstrap:
- *   1) prisma migrate deploy
- *   2) prisma db seed
+ *   1) prisma migrate deploy  — runs as db_owner (MIGRATION_DATABASE_URL)
+ *   2) prisma db seed         — runs as app_service (DATABASE_URL)
  *
  * This is intended for local development to ensure dummy data exists.
  */
@@ -27,19 +27,29 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-if (!process.env.DATABASE_URL) {
-  throw new Error("Set DATABASE_URL in GoRola_app/.env for local bootstrap");
-}
-if (!process.env.DIRECT_URL) {
-  process.env.DIRECT_URL = process.env.DATABASE_URL;
-}
+// Use db_owner for migrations — app_service lacks CREATE privilege on the schema.
+// prisma migrate deploy fails with "permission denied for schema public" as app_service.
+const migrationUrl =
+  process.env.MIGRATION_DATABASE_URL ||
+  process.env.DIRECT_URL ||
+  "postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev";
+
+const appUrl = process.env.DATABASE_URL || migrationUrl;
 
 const apiRoot = path.join(__dirname, "..");
+
+// Step 1: Migrate as db_owner
+process.env.DATABASE_URL = migrationUrl;
+process.env.DIRECT_URL = migrationUrl;
 execSync("npx prisma migrate deploy", {
   stdio: "inherit",
   cwd: apiRoot,
   env: process.env
 });
+
+// Step 2: Seed as app_service (runtime role, least privilege)
+process.env.DATABASE_URL = appUrl;
+process.env.DIRECT_URL = appUrl;
 execSync("npx prisma db seed", {
   stdio: "inherit",
   cwd: apiRoot,
