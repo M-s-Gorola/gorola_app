@@ -13,7 +13,7 @@
     "prisma:generate": "prisma generate",
     "prisma:format": "prisma format",
     "prisma:validate": "prisma validate",
-    "prisma:migrate:dev": "prisma migrate dev",
+    "prisma:migrate:dev": "node ./scripts/migrate-dev.cjs",
     "prisma:seed": "prisma db seed",
     "prisma:bootstrap:local": "node ./scripts/bootstrap-local-db.cjs",
     "prisma:bootstrap:test": "node ./scripts/bootstrap-test-db.cjs",
@@ -21,9 +21,11 @@
     "dev": "tsx watch src/app.ts",
     "start": "prisma migrate deploy && node dist/app.js",
     "prisma:studio": "node ./scripts/run-studio.cjs",
+    "prisma:reset": "node ./scripts/reset-db.cjs",
     "setup:railway:roles": "node ./scripts/setup-railway-roles.cjs",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:test-db": "node ./scripts/migrate-test-db.cjs"
+
   },
 
   "prisma": {

@@ -17,9 +17,11 @@
     "ci:prisma": "pnpm --filter @gorola/api exec prisma generate && pnpm --filter @gorola/api exec prisma migrate deploy",
     "db:test:prepare": "pnpm --filter @gorola/api prisma:bootstrap:test",
     "db:local:bootstrap": "pnpm --filter @gorola/api prisma:bootstrap:local",
+    "db:local:reset": "pnpm --filter @gorola/api prisma:reset",
     "db:local:seed": "pnpm --filter @gorola/api prisma:seed",
     "db:local:verify-seed": "pnpm --filter @gorola/api prisma:verify:seed"
   },
+
   "devDependencies": {
     "@eslint/js": "^9.24.0",
     "@types/dotenv-safe": "^9.1.0",

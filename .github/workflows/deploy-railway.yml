@@ -60,6 +60,20 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      # pnpm version is read from root package.json "packageManager" field automatically.
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile --prefer-offline
+
       - name: Install Railway CLI
         run: npm install --global @railway/cli@latest
 

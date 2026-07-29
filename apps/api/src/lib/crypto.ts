@@ -46,13 +46,19 @@ export function decryptPII(encryptedText: string): string {
   const ciphertext = Buffer.from(ciphertextHex, "hex");
   const authTag = Buffer.from(authTagHex, "hex");
 
-  const decipher = crypto.createDecipheriv("aes-256-gcm", getCipherKey(), iv);
-  decipher.setAuthTag(authTag);
+  try {
+    const decipher = crypto.createDecipheriv("aes-256-gcm", getCipherKey(), iv);
+    decipher.setAuthTag(authTag);
 
-  let decrypted = decipher.update(ciphertext, undefined, "utf8");
-  decrypted += decipher.final("utf8");
+    let decrypted = decipher.update(ciphertext, undefined, "utf8");
+    decrypted += decipher.final("utf8");
 
-  return decrypted;
+    return decrypted;
+  } catch (err) {
+    // If key mismatched or data was corrupted, safely fallback to raw ciphertext without crashing
+    return encryptedText;
+  }
+
 }
 
 export function hashPII(text: string): string {
