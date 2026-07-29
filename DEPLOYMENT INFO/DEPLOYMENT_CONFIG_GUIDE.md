@@ -203,7 +203,26 @@ To ensure staging and production databases remain completely isolated during CI/
    - **Secret (Staging)**: `postgresql://db_owner:your_staging_owner_password@<staging_host>:<port>/railway`
    - **Secret (Production)**: `postgresql://db_owner:your_production_owner_password@<production_host>:<port>/railway`
 
-5. When `.github/workflows/deploy-railway.yml` runs, GitHub automatically pulls the secret from the target environment (`staging` or `production`), running schema migrations using the matching database owner credentials:
+5. When `.github/workflows/deploy-railway.yml` runs, GitHub automatically pulls the secret from the target environment (`staging` or `production`), running schema migrations using the matching database owner credentials.
+
+> [!IMPORTANT]
+> **`pnpm` and workspace dependencies must be installed in the same job before the migration step.** GitHub Actions runner images do not include `pnpm` by default, and `prisma` is a workspace devDependency — it is not available without `pnpm install`. The following steps must appear **before** the migration step in the job:
+> ```yaml
+> - name: Install pnpm
+>   uses: pnpm/action-setup@v4
+>   with:
+>     version: 10
+>
+> - name: Setup Node.js
+>   uses: actions/setup-node@v4
+>   with:
+>     node-version: '22'
+>     cache: 'pnpm'
+>
+> - name: Install dependencies
+>   run: pnpm install --frozen-lockfile --prefer-offline
+> ```
+> Without these steps, the migration command fails with `pnpm: command not found` (exit code 127).
 
 ```yaml
 - name: Deploy Database Migrations (db_owner)

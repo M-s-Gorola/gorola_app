@@ -54,7 +54,7 @@ export function decryptPII(encryptedText: string): string {
     decrypted += decipher.final("utf8");
 
     return decrypted;
-  } catch (err) {
+  } catch {
     // If key mismatched or data was corrupted, safely fallback to raw ciphertext without crashing
     return encryptedText;
   }
