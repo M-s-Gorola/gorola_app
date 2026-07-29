@@ -182,13 +182,18 @@ To ensure staging and production databases remain completely isolated during CI/
 
 ```yaml
 - name: Deploy Database Migrations (db_owner)
-  if: ${{ secrets.MIGRATION_DATABASE_URL != '' }}
   env:
-    DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-    DIRECT_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
     MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
-  run: pnpm --filter @gorola/api exec prisma migrate deploy
+  shell: bash
+  run: |
+    if [ -n "$MIGRATION_DATABASE_URL" ]; then
+      echo "Executing database schema migrations with MIGRATION_DATABASE_URL (db_owner)..."
+      DATABASE_URL="$MIGRATION_DATABASE_URL" DIRECT_URL="$MIGRATION_DATABASE_URL" pnpm --filter @gorola/api exec prisma migrate deploy
+    else
+      echo "MIGRATION_DATABASE_URL secret is not set; skipping pre-deploy migration step."
+    fi
 ```
+
 
 
 ---
