@@ -18,23 +18,22 @@ Use this when the **Railway** PostgreSQL database exists but has **no catalog da
 
 The Prisma CLI runs with working directory **`apps/api`**, so it loads **`GoRola_app/apps/api/.env`**. Define at least:
 
-| Variable       | Purpose |
-|----------------|---------|
-| `DATABASE_URL` | Railway **public** Postgres URL (paste from Railway → Postgres → *Variables* / *Connect*). |
-| `DIRECT_URL`   | Same value as **`DATABASE_URL`** when you use a **single direct** connection (no separate pooler). Prisma requires both; see `prisma/schema.prisma`. |
+| Variable | Purpose |
+|----------|---------|
+| `DATABASE_URL` | Railway **public** Postgres URL (`app_service` DML role or `db_owner` role). |
+| `DIRECT_URL` / `MIGRATION_DATABASE_URL` | Railway **public** Postgres URL (`db_owner` DDL owner role). Required for `prisma migrate deploy` and administrative seeding. |
 
 **Example shape (never commit real URLs):**
 
 ```env
-DATABASE_URL="postgresql://…"
-DIRECT_URL="postgresql://…"
+DATABASE_URL="postgresql://app_service:password@<host>:<port>/railway"
+DIRECT_URL="postgresql://db_owner:password@<host>:<port>/railway"
+MIGRATION_DATABASE_URL="postgresql://db_owner:password@<host>:<port>/railway"
 ```
 
-Use the **`DATABASE_PUBLIC_URL`** (or equivalent **public**) string Railway exposes—**not** the internal-only URL—so `migrate`/`seed` from your machine can connect.
+> [!NOTE]
+> **PII Encryption at Rest (DPDP Compliance)**: `prisma/seed.ts` automatically encrypts phone numbers (`encryptPII`) and generates HMAC-SHA256 blind indices (`hashPII`) for seeded riders and buyers, ensuring sample data conforms to DPDP Act Section 8.1 standards.
 
-Optional: mirror the same `DATABASE_URL` / `DIRECT_URL` in the monorepo root **`GoRola_app/.env`** so `pnpm dev` for the API and seed stay aligned; the loader in `apps/api/src/config/env.ts` reads **root** `.env` at runtime.
-
-**Security:** `.env` files must stay **out of git** (they are ignored). Rotate the DB password if a URL ever leaks.
 
 ---
 

@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { hash } from "bcryptjs";
+import { encryptPII, hashPII } from "../src/lib/crypto.js";
 import { seedDummyData } from "./dummy-data";
 
 const ADMIN_EMAIL = "admin@gorola.in";
@@ -139,7 +140,8 @@ async function main(): Promise<void> {
     update: { passwordHash: riderPwHash },
     create: {
       name: "Hillside Rider",
-      phone: "+919000000001",
+      phone: encryptPII("+919000000001"),
+      phoneHash: hashPII("+919000000001"),
       email: "rider1@gorola.in",
       passwordHash: riderPwHash,
       riderType: "DELIVERY",
@@ -158,7 +160,8 @@ async function main(): Promise<void> {
     update: { passwordHash: riderPwHash },
     create: {
       name: "Aarna Technician",
-      phone: "+919000000002",
+      phone: encryptPII("+919000000002"),
+      phoneHash: hashPII("+919000000002"),
       email: "rider2@gorola.in",
       passwordHash: riderPwHash,
       riderType: "FIELD_TECHNICIAN",
@@ -171,6 +174,7 @@ async function main(): Promise<void> {
       }
     }
   });
+
 
   // ── System Admin Account ──────────────────────────────────────────────────
   // Created once. If the row already exists it is left untouched.

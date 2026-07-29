@@ -2,6 +2,7 @@ import { AppError, ConflictError, NotFoundError, ValidationError } from "@gorola
 import { type ActorRole, type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
+import { maskPhone } from "../../lib/crypto.js";
 import { getRedisClient } from "../../lib/redis.js";
 import { AuditRepository } from "../audit/audit.repository.js";
 import { CategoryRepository } from "../catalog/category.repository.js";
@@ -9,11 +10,7 @@ import { SubCategoryRepository } from "../catalog/sub-category.repository.js";
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
 
-function maskPhone(phone: string): string {
-  if (!phone) return "";
-  if (phone.length <= 4) return "****";
-  return "*".repeat(phone.length - 4) + phone.slice(-4);
-}
+
 
 function maskEmail(email: string): string {
   if (!email) return "";
@@ -505,13 +502,9 @@ export class AdminService {
 
   public async getUsers(filters: { phone?: string | undefined }) {
     const { phone } = filters;
-    const where: Prisma.UserWhereInput = {
-      isDeleted: false,
-      ...(phone ? { phone: { contains: phone } } : {})
-    };
 
     const users = await this.db.user.findMany({
-      where,
+      where: { isDeleted: false },
       orderBy: { createdAt: "desc" },
       include: {
         orders: {
@@ -522,7 +515,11 @@ export class AdminService {
       }
     });
 
-    return users.map((u) => {
+    const filteredUsers = phone
+      ? users.filter((u) => u.phone && u.phone.includes(phone))
+      : users;
+
+    return filteredUsers.map((u) => {
       const orderCount = u.orders.length;
       const totalSpent = u.orders.reduce((sum, o) => sum + Number(o.total), 0);
       return {
@@ -536,6 +533,7 @@ export class AdminService {
       };
     });
   }
+
 
   public async getUserDetail(userId: string) {
     const user = await this.db.user.findFirst({

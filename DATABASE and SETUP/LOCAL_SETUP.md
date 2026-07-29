@@ -32,7 +32,33 @@ docker run -d --name gorola-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_D
 > - **Host**: `localhost`
 > - **Port**: `5432`
 
----
+### 2.1 Database Least-Privilege Role Setup (DPDP Compliance)
+To comply with DPDP Act Sec 8(5) least-privilege security, application connections must use `app_service` (DML only) while migrations use `db_owner` (DDL owner).
+
+Run these `docker exec` commands to set up the roles on both `gorola_dev` and `gorola_test`:
+
+```powershell
+# 1. Set up roles on development database (gorola_dev)
+docker exec -i gorola-postgres psql -U postgres -d gorola_dev -c "CREATE ROLE db_owner WITH LOGIN PASSWORD 'postgres_owner_123'; GRANT ALL PRIVILEGES ON DATABASE gorola_dev TO db_owner; CREATE ROLE app_service WITH LOGIN PASSWORD 'postgres_app_123'; GRANT CONNECT ON DATABASE gorola_dev TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;"
+
+# 2. Set up permissions on test database (gorola_test)
+docker exec -i gorola-postgres psql -U postgres -d gorola_test -c "GRANT ALL PRIVILEGES ON DATABASE gorola_test TO db_owner; GRANT CONNECT ON DATABASE gorola_test TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;"
+```
+
+#### Remote Railway Database Role Setup
+> ⚠️ Note: Railway's Web UI Query bar automatically appends `LIMIT 500` to all input, which causes `syntax error at or near "LIMIT"` on `GRANT` / `DO $$` statements.
+> Where to find `<RAILWAY_POSTGRES_PUBLIC_URL>`: Log into Railway → Open your **PostgreSQL Service** → Click **Connect** (or **Variables** tab) → Copy the Public Connection URL.
+> To configure remote Railway databases safely without committing secrets to Git, run the setup script passing URL and passwords as CLI arguments:
+
+```bash
+pnpm --filter @gorola/api setup:railway:roles \
+  "<RAILWAY_POSTGRES_PUBLIC_URL>" \
+  "<DB_OWNER_PASSWORD>" \
+  "<APP_SERVICE_PASSWORD>"
+```
+
+
+
 
 ## 3. Environment Variables
 
@@ -44,10 +70,15 @@ docker run -d --name gorola-postgres -e POSTGRES_PASSWORD=postgres -e POSTGRES_D
     ```
 3.  Update the `.env` file with these values (using quotes for safety):
     ```env
-    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
-    DATABASE_URL_TEST="postgresql://postgres:postgres@localhost:5432/gorola_test"
+    DATABASE_URL="postgresql://app_service:postgres_app_123@localhost:5432/gorola_dev"
+    DATABASE_URL_TEST="postgresql://app_service:postgres_app_123@localhost:5432/gorola_test"
+    DIRECT_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
+    MIGRATION_DATABASE_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
+    MIGRATION_DATABASE_URL_TEST="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_test"
     REDIS_URL="redis://localhost:6379"
     ```
+
+
 4.  *(Optional for local dev, Required for production)* **Generate JWT RS256 Keys**:
     In local dev, the API automatically generates ephemeral RSA keys if they are left blank. However, if you need to test with persistent keys, generate a 2048-bit RSA public/private key pair:
 
@@ -73,11 +104,16 @@ The Prisma CLI runs with the working directory `apps/api`, so it loads `apps/api
     ```powershell
     cp apps/api/.env.example apps/api/.env
     ```
-2.  Update the `apps/api/.env` file with the connection strings:
+2.  Update the `apps/api/.env` file with the least-privilege connection strings:
     ```env
-    DATABASE_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
-    DIRECT_URL="postgresql://postgres:postgres@localhost:5432/gorola_dev"
+    # Runtime DML connection
+    DATABASE_URL="postgresql://app_service:postgres_app_123@localhost:5432/gorola_dev"
+
+    # Migration / DDL connection
+    DIRECT_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
+    MIGRATION_DATABASE_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
     ```
+
 
 ### Web Environment Variables (`apps/web/.env`)
 The Vite development server runs in `apps/web`, loading `apps/web/.env` for the frontend.
@@ -129,7 +165,12 @@ The Quality Gate (`pnpm ci:quality`) and E2E tests run against a separate isolat
     ```powershell
     docker exec -it gorola-postgres psql -U postgres -c "CREATE DATABASE gorola_test;"
     ```
+1b. **Grant Least-Privilege Roles on Test DB** (DPDP Compliance):
+    ```powershell
+    docker exec -i gorola-postgres psql -U postgres -d gorola_test -c "GRANT ALL PRIVILEGES ON DATABASE gorola_test TO db_owner; GRANT CONNECT ON DATABASE gorola_test TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;"
+    ```
 2.  **Initialize and Seed the Test DB**:
+
     ```powershell
     pnpm db:test:prepare
     ```
@@ -158,12 +199,13 @@ The app will be available at:
 
 ## 7. Database Management (Prisma Studio)
 
-To view and edit your local database data via a GUI, you can use Prisma Studio:
-(Note: This follows the env values inside apps/api/.env not the .env file in the root directory)
+To view and edit your local database data via GUI with administrative privileges, run:
 
 ```powershell
-pnpm --filter @gorola/api exec prisma studio
+pnpm --filter @gorola/api prisma:studio
 ```
+*(This automatically connects Prisma Studio using `DIRECT_URL` / `db_owner` credentials, giving full read/write management access to all tables).*
+
 
 ### Common Development Uses:
 - **Testing Order States**: Manually change an order's `status` to `DELIVERED` to trigger the Feedback/Rating UI.

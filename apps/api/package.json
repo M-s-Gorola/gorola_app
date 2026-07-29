@@ -20,9 +20,12 @@
     "prisma:verify:seed": "node ./scripts/verify-local-seed.cjs",
     "dev": "tsx watch src/app.ts",
     "start": "prisma migrate deploy && node dist/app.js",
+    "prisma:studio": "node ./scripts/run-studio.cjs",
+    "setup:railway:roles": "node ./scripts/setup-railway-roles.cjs",
     "prisma:migrate:deploy": "prisma migrate deploy",
     "prisma:migrate:test-db": "node ./scripts/migrate-test-db.cjs"
   },
+
   "prisma": {
     "seed": "tsx prisma/seed.ts"
   },

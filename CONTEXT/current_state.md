@@ -21,7 +21,7 @@
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | ✅ COMPLETE    | Phase 5.1 to 5.8 complete. Playwright E2E multi-actor tests passing 100% green. |
 | Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing, UX refinement, and TDD parity. |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
-| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🔴 NOT STARTED | DPDP Act 2023 Compliance |
+| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1.1 & 8.1.2 complete) |
  
  ---
  
@@ -36,7 +36,8 @@
  | Phase 5 | Rider Interface      | ✅ COMPLETE    | All Phase 5.1–5.8 items complete. |
 | Phase 6 | Subdomain Routing    | ✅ COMPLETE    | All 6.1–6.9 checklists and UX refinements complete. |
 | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
-| Phase 8 | DPDP Act Compliance  | 🔴 NOT STARTED | Must be complete before production launch.    |
+| Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Section 8.1 (Least Privilege & PII Encryption) complete. |
+
 
 ---
 

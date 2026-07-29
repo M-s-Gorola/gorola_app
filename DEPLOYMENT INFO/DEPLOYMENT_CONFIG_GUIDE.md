@@ -91,4 +91,123 @@ The following scripts are used by the deployment pipeline:
 
 ---
 
+---
+
+## 8. Railway Least-Privilege Database Role Setup (DPDP Act Compliance)
+
+To satisfy DPDP Act 2023 Sec 8(5) least-privilege security requirements, the production Railway PostgreSQL instance must use two distinct database roles:
+
+### Step 1: Execute Role Setup (Node.js Script vs Railway Query Editor)
+
+> ⚠️ **IMPORTANT GOTCHA — Railway Web Query Editor UI Limitation:**
+> Running `GRANT` or `DO $$ ... $$;` procedural blocks directly inside the Railway Web Dashboard Query bar will fail with `syntax error at or near "LIMIT"`. This is because Railway's web frontend automatically appends `LIMIT 500` to every input entered in that web box (assuming search queries). `LIMIT` is invalid syntax on DDL/DCL statements.
+
+#### Option A: Automated CLI Script (Recommended)
+Run the repo's built-in helper script from your local terminal.
+
+> [!NOTE]
+> **Where to find `<RAILWAY_POSTGRES_PUBLIC_URL>`**:
+> Log into Railway → Open your **PostgreSQL Service** → Click **Connect** (or **Variables** tab) → Copy the **Public Networking Connection URL** (or `DATABASE_PUBLIC_URL` / `DATABASE_URL`). Format: `postgresql://postgres:PASSWORD@<host>:<port>/railway`.
+
+Pass connection URL and desired role passwords as arguments or env vars:
+
+```bash
+pnpm --filter @gorola/api setup:railway:roles \
+  "<RAILWAY_POSTGRES_PUBLIC_URL>" \
+  "<DB_OWNER_PASSWORD>" \
+  "<APP_SERVICE_PASSWORD>"
+```
+
+
+*Or via Environment Variables:*
+
+```bash
+DB_OWNER_PASSWORD="your_secure_owner_password" \
+APP_SERVICE_PASSWORD="your_secure_app_password" \
+pnpm --filter @gorola/api setup:railway:roles "<RAILWAY_POSTGRES_PUBLIC_URL>"
+```
+
+#### Option B: Terminal `psql` Connection
+Connect to Railway via `psql` or database GUI tool (TablePlus, DBeaver) using Railway's public URL and run:
+
+```sql
+-- 1. Create db_owner role (DDL owner for migrations)
+CREATE ROLE db_owner WITH LOGIN PASSWORD 'your_secure_owner_password';
+GRANT ALL PRIVILEGES ON DATABASE railway TO db_owner;
+
+-- 2. Create app_service role (DML restricted role for API runtime)
+CREATE ROLE app_service WITH LOGIN PASSWORD 'your_secure_app_password';
+GRANT CONNECT ON DATABASE railway TO app_service;
+GRANT USAGE ON SCHEMA public TO app_service;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;
+```
+
+
+### Step 2: Configure Railway Environment Variables
+In Railway → API Service → **Variables**, set the connection strings.
+
+> [!TIP]
+> **URL Construction Rule**:
+> Take your original Railway Postgres URL (e.g. `postgresql://postgres:ORIGINAL_PASS@host:port/railway`).
+> All you need to do is replace `postgres:ORIGINAL_PASS` with `<role>:<password>`.
+> **Everything after the `@` symbol (`@host:port/railway`) stays 100% identical!**
+
+```env
+# Runtime API connection (app_service DML role)
+DATABASE_URL="postgresql://app_service:<APP_SERVICE_PASSWORD>@<host>:<port>/railway"
+DATABASE_URL_TEST="postgresql://app_service:<APP_SERVICE_PASSWORD>@<host>:<port>/railway"
+
+# Migration & Direct connection (db_owner DDL role)
+DIRECT_URL="postgresql://db_owner:<DB_OWNER_PASSWORD>@<host>:<port>/railway"
+MIGRATION_DATABASE_URL="postgresql://db_owner:<DB_OWNER_PASSWORD>@<host>:<port>/railway"
+
+# PII Encryption & Blind Indexing (DPDP Act Compliance)
+ENCRYPTION_KEY="your_32_byte_random_hex_string"
+HMAC_SECRET="your_32_byte_random_hex_string"
+```
+
+> **How to Generate `ENCRYPTION_KEY` & `HMAC_SECRET`**:
+> Run in terminal / PowerShell:
+> `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"`
+> Or simply create any strong 32+ character random string per environment.
+
+
+
+### Step 3: Configure GitHub Environment Secrets for Migration Pipeline
+
+To ensure staging and production databases remain completely isolated during CI/CD deployments:
+
+1. Open your repository on GitHub → **Settings** → **Environments**.
+2. Click **`staging`** (or **`production`**).
+3. Under **Environment secrets**, click **Add environment secret**.
+4. Add:
+   - **Name**: `MIGRATION_DATABASE_URL`
+   - **Secret (Staging)**: `postgresql://db_owner:your_staging_owner_password@<staging_host>:<port>/railway`
+   - **Secret (Production)**: `postgresql://db_owner:your_production_owner_password@<production_host>:<port>/railway`
+
+5. When `.github/workflows/deploy-railway.yml` runs, GitHub automatically pulls the secret from the target environment (`staging` or `production`), running schema migrations using the matching database owner credentials:
+
+```yaml
+- name: Deploy Database Migrations (db_owner)
+  env:
+    MIGRATION_DATABASE_URL: ${{ secrets.MIGRATION_DATABASE_URL }}
+  shell: bash
+  run: |
+    if [ -n "$MIGRATION_DATABASE_URL" ]; then
+      echo "Executing database schema migrations with MIGRATION_DATABASE_URL (db_owner)..."
+      DATABASE_URL="$MIGRATION_DATABASE_URL" DIRECT_URL="$MIGRATION_DATABASE_URL" pnpm --filter @gorola/api exec prisma migrate deploy
+    else
+      echo "MIGRATION_DATABASE_URL secret is not set; skipping pre-deploy migration step."
+    fi
+```
+
+
+
+---
+
 GoRola - Infrastructure as Code.
+
+
