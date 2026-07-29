@@ -49,6 +49,13 @@ async function main() {
     // Without these, `prisma migrate dev` fails with "permission denied for schema public".
     `GRANT ALL ON SCHEMA public TO db_owner`,
     `ALTER SCHEMA public OWNER TO db_owner`,
+    // Transfer ownership of _prisma_migrations if it already exists (created by postgres on a
+    // previous deploy). db_owner cannot read/write it otherwise → "permission denied for table _prisma_migrations".
+    `DO $$ BEGIN IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = '_prisma_migrations') THEN EXECUTE 'ALTER TABLE public._prisma_migrations OWNER TO db_owner'; END IF; END $$;`,
+    // Transfer ownership of ALL existing tables to db_owner. Tables created by postgres before
+    // role setup cannot be altered by db_owner otherwise → "must be owner of table <X>".
+    // Safe to run on a fresh DB — the loop finds nothing and is a no-op.
+    `DO $$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' LOOP EXECUTE 'ALTER TABLE public.' || quote_ident(r.tablename) || ' OWNER TO db_owner'; END LOOP; END $$;`,
     `GRANT CONNECT ON DATABASE railway TO app_service`,
     `GRANT USAGE ON SCHEMA public TO app_service`,
     `GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service`,
