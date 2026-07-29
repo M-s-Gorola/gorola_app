@@ -231,6 +231,37 @@ pnpm --filter @gorola/api prisma:studio
 
 ---
 
+### 7.1 Truncate Database (Data-Only Reset)
+
+> [!CAUTION]
+> # ⚠️ DESTRUCTIVE — ALL DATA WILL BE PERMANENTLY DELETED
+> This command **immediately and irreversibly wipes every row** from every table in the target database. There is no undo. Use only when you intentionally want a clean slate.
+> - **Only use this on dev/test databases. Never point at Railway production unless you are 100% certain.**
+> - If you want a full schema + data reset locally, use `pnpm --filter @gorola/api exec prisma migrate reset` instead (drops DB, re-applies all migrations, and auto-seeds).
+> - Must run as `postgres` superuser — `app_service` does not have `TRUNCATE` privilege by design.
+
+**Dev DB (`gorola_dev`):**
+```powershell
+docker exec -i gorola-postgres psql -U postgres -d gorola_dev -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != '_prisma_migrations' LOOP EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
+```
+
+**Test DB (`gorola_test`):**
+```powershell
+docker exec -i gorola-postgres psql -U postgres -d gorola_test -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != '_prisma_migrations' LOOP EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
+```
+
+After truncating the dev DB, re-seed:
+```powershell
+pnpm --filter @gorola/api prisma:seed
+```
+
+After truncating the test DB, re-bootstrap:
+```powershell
+pnpm db:test:prepare
+```
+
+---
+
 ## 8. Alternative: Using Docker Compose
 If you prefer, you can create a `docker-compose.yml` in the root and run `docker-compose up -d` to start both services at once:
 

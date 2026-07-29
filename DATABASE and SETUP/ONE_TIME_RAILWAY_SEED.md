@@ -54,12 +54,16 @@ If `pnpm --filter @gorola/api exec prisma migrate deploy` fails with database er
     "TRUNCATE TABLE `"Discount`" CASCADE;" | pnpm --filter @gorola/api exec prisma db execute --stdin
     ```
 
-* **Option B: Reset the entire database (Wipes all tables)**:
-  If this is a staging/testing database where data loss is acceptable, wipe the database and re-apply all migrations from scratch:
-  ```bash
-  pnpm --filter @gorola/api exec prisma migrate reset
-  ```
-  *(Note: This command automatically triggers the default seed script `prisma/seed.ts` on success, so you do **not** need to manually run the **Main Catalog Seed** command in Step 2. You only need to run Step 3 if you wish to add the specialized medical tests).*
+* **Option B: Reset the entire database (Wipes all data — Railway)**:
+
+  > [!CAUTION]
+  > **`prisma migrate reset` no longer works for Railway** after the `db_owner` / `app_service` role separation.
+  > Previously (when `apps/api/.env` pointed directly to the `postgres` superuser URL), swapping the `.env` to Railway and running `prisma migrate reset` worked because `postgres` owns the `railway` database and has `DROPDB` rights. Now, `db_owner` has `CREATEDB` but does **not** own the `railway` database — Railway's infrastructure created it — so `DROP DATABASE` is refused.
+  >
+  > **Use the full truncate approach instead** (see *Truncate Railway Database* section below):
+  > 1. Truncate all tables via Docker psql → Railway public URL.
+  > 2. Re-apply any pending migrations: `pnpm --filter @gorola/api exec prisma migrate deploy` (with `MIGRATION_DATABASE_URL` exported).
+  > 3. Re-seed: `pnpm --filter @gorola/api prisma:seed` (with `DATABASE_URL` exported pointing to Railway).
 
 Once cleared (using Option A), run the migration command below.
 
@@ -102,6 +106,42 @@ pnpm db:local:seed
 | Seed logic | `apps/api/prisma/seed.ts` |
 | Package script | `"prisma:seed": "tsx prisma/seed.ts"` in `apps/api/package.json` |
 | Env contract | `.env.example` at monorepo root |
+
+---
+
+## Truncate Railway Database (Data-Only Reset)
+
+Use this when you want to **wipe all row data on Railway** but keep the schema and migrations intact.
+
+> [!CAUTION]
+> # ⚠️ DESTRUCTIVE — ALL RAILWAY DATA WILL BE PERMANENTLY DELETED
+> This command **immediately and irreversibly wipes every row** from the live Railway database. There is no undo and no backup unless you made one manually.
+> - **Never run `pnpm --filter @gorola/api exec prisma migrate reset` against Railway** — that command tries to `DROP DATABASE` which Railway does not allow for `db_owner`, and could corrupt the database state.
+> - The truncate commands below are the only safe data-reset method for Railway.
+> - `psql` is likely not installed locally. Use the `psql` client **inside your already-running local Docker container** — it can connect to Railway's public URL externally.
+> - Must run as `postgres` superuser — `app_service` does not have `TRUNCATE` privilege by design.
+
+**Step 1 — Truncate all tables (keeps schema & migration history):**
+```bash
+docker exec -i gorola-postgres psql "postgresql://postgres:<RAILWAY_POSTGRES_PASSWORD>@<RAILWAY_HOST>:<RAILWAY_PORT>/railway" -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != '_prisma_migrations' LOOP EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
+```
+
+Replace `<RAILWAY_POSTGRES_PASSWORD>`, `<RAILWAY_HOST>`, and `<RAILWAY_PORT>` with the values from your Railway PostgreSQL service → **Connect** tab → Public URL.
+
+**Step 2 — Re-seed catalog data:**
+```bash
+# Set DATABASE_URL to Railway (app_service or db_owner) — use export to avoid .env override
+export DATABASE_URL="postgresql://app_service:<APP_SERVICE_PASSWORD>@<RAILWAY_HOST>:<RAILWAY_PORT>/railway"
+pnpm --filter @gorola/api prisma:seed
+unset DATABASE_URL
+```
+
+**Step 3 (optional) — Re-seed medical tests:**
+```bash
+export DATABASE_URL="postgresql://app_service:<APP_SERVICE_PASSWORD>@<RAILWAY_HOST>:<RAILWAY_PORT>/railway"
+pnpm --filter @gorola/api exec tsx prisma/seed-medical-tests.ts
+unset DATABASE_URL
+```
 
 ---
 
