@@ -382,9 +382,11 @@ export function registerAdminRoutes(
 
   const bulkCategoryRowSchema = z.object({
     name: z.string().trim().min(1, "Category name is required"),
+    imageUrl: z.string().trim().url().optional().nullable(),
     subCategories: z.array(
       z.object({
-        name: z.string().trim().min(1, "Subcategory name is required")
+        name: z.string().trim().min(1, "Subcategory name is required"),
+        imageUrl: z.string().trim().url().optional().nullable()
       })
     ),
     commerceType: z.enum(["QUICK_COMMERCE", "BOOKING_COMMERCE"]).optional(),

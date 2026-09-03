@@ -27,6 +27,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { normalizeImageUrl } from "@/lib/image-utils";
 
 type SubCategory = {
   id: string;
@@ -58,7 +59,8 @@ type CategoriesListResponse = {
 
 export type BulkCategoryRow = {
   name: string;
-  subCategories: { name: string }[];
+  imageUrl?: string | null;
+  subCategories: { name: string; imageUrl?: string | null }[];
   commerceType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
   displayOrder?: number | undefined;
 };
@@ -156,7 +158,8 @@ export function AdminCategoriesPage(): ReactElement {
 
         const categoryMap = new Map<string, {
           name: string;
-          subCategories: { name: string }[];
+          imageUrl?: string;
+          subCategories: { name: string; imageUrl?: string }[];
           commerceType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
           displayOrder?: number | undefined;
         }>();
@@ -165,8 +168,14 @@ export function AdminCategoriesPage(): ReactElement {
           const catNameVal = row["Category Name"];
           const catName = (catNameVal !== undefined && catNameVal !== null) ? String(catNameVal).trim() : "";
 
+          const catImgVal = row["Category Image URL"] || row["Category Image"];
+          const catImageUrl = (catImgVal !== undefined && catImgVal !== null) ? String(catImgVal).trim() : undefined;
+
           const subNameVal = row["SubCategory Name"];
           const subName = (subNameVal !== undefined && subNameVal !== null) ? String(subNameVal).trim() : "";
+
+          const subImgVal = row["SubCategory Image URL"] || row["SubCategory Image"];
+          const subImageUrl = (subImgVal !== undefined && subImgVal !== null) ? String(subImgVal).trim() : undefined;
 
           const commTypeVal = row["Commerce Type"];
           const commType = ((commTypeVal !== undefined && commTypeVal !== null) ? String(commTypeVal).trim() : "QUICK_COMMERCE") as "QUICK_COMMERCE" | "BOOKING_COMMERCE";
@@ -180,6 +189,7 @@ export function AdminCategoriesPage(): ReactElement {
           if (!categoryMap.has(catName)) {
             categoryMap.set(catName, {
               name: catName,
+              ...(catImageUrl ? { imageUrl: catImageUrl } : {}),
               subCategories: [],
               commerceType: commType,
               displayOrder: dispOrder !== undefined && !isNaN(dispOrder) ? dispOrder : undefined
@@ -187,8 +197,14 @@ export function AdminCategoriesPage(): ReactElement {
           }
 
           const catObj = categoryMap.get(catName)!;
+          if (catImageUrl && !catObj.imageUrl) {
+            catObj.imageUrl = catImageUrl;
+          }
           if (subName) {
-            catObj.subCategories.push({ name: subName });
+            catObj.subCategories.push({
+              name: subName,
+              ...(subImageUrl ? { imageUrl: subImageUrl } : {})
+            });
           }
         }
 
@@ -811,7 +827,7 @@ export function AdminCategoriesPage(): ReactElement {
                     {/* Image / Icon Preview */}
                     <div className="h-10 w-10 sm:h-12 sm:w-12 rounded-xl bg-gorola-fog border border-gorola-charcoal/5 flex items-center justify-center overflow-hidden shrink-0">
                       {category.imageUrl ? (
-                        <img src={category.imageUrl} alt={category.name} className="h-full w-full object-cover" />
+                        <img src={normalizeImageUrl(category.imageUrl)} alt={category.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                       ) : (
                         <ImageIcon className="h-5 w-5 sm:h-6 sm:w-6 text-gorola-slate/40" />
                       )}
@@ -918,7 +934,7 @@ export function AdminCategoriesPage(): ReactElement {
                               {/* Image Preview */}
                               <div className="h-8 w-8 sm:h-9 sm:w-9 rounded-lg bg-gorola-fog border border-gorola-charcoal/5 flex items-center justify-center overflow-hidden shrink-0">
                                 {sub.imageUrl ? (
-                                  <img src={sub.imageUrl} alt={sub.name} className="h-full w-full object-cover" />
+                                  <img src={normalizeImageUrl(sub.imageUrl)} alt={sub.name} className="h-full w-full object-cover" referrerPolicy="no-referrer" />
                                 ) : (
                                   <ImageIcon className="h-4 w-4 text-gorola-slate/30" />
                                 )}

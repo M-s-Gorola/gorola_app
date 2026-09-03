@@ -377,4 +377,57 @@ describe("AdminCategoriesPage Bulk Import Integration", () => {
     });
     expect(postMock).not.toHaveBeenCalledWith(expect.stringContaining("confirm"), expect.any(Object));
   });
+
+  it("should parse Category Image URL and SubCategory Image URL from Excel rows and send in validate request", async () => {
+    renderAdminCategories();
+
+    fireEvent.click(await screen.findByTestId("import-categories-btn"));
+
+    const fileInput = screen.getByTestId("bulk-file-input");
+    const file = new File(["dummy content"], "categories.xlsx", {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    });
+
+    vi.mocked(utils.sheet_to_json).mockReturnValue([
+      {
+        "Category Name": "Beverages",
+        "Category Image URL": "https://example.com/beverages.jpg",
+        "SubCategory Name": "Tea",
+        "SubCategory Image URL": "https://example.com/tea.jpg"
+      }
+    ]);
+
+    await userEvent.upload(fileInput, file);
+
+    postMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          valid: true,
+          conflicts: [],
+          totalRows: 1,
+          totalSubCategoryRows: 1
+        }
+      }
+    });
+
+    const validateBtn = screen.getByRole("button", { name: /validate/i });
+    await waitFor(() => expect(validateBtn).toBeEnabled());
+    fireEvent.click(validateBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/admin/bulk/categories/validate", {
+        rows: [
+          {
+            name: "Beverages",
+            imageUrl: "https://example.com/beverages.jpg",
+            subCategories: [{ name: "Tea", imageUrl: "https://example.com/tea.jpg" }],
+            commerceType: "QUICK_COMMERCE",
+            displayOrder: undefined
+          }
+        ]
+      });
+    });
+  });
 });
+

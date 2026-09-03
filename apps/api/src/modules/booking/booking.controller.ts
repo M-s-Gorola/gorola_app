@@ -284,8 +284,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
 
       const result = await deps.bookingService.repository.findByStoreId(owner.storeId, {
         ...(statusFilter ? { status: statusFilter } : {}),
-        page: query.page,
-        limit: query.limit
+        ...(query.page !== undefined ? { page: query.page } : {}),
+        ...(query.limit !== undefined ? { limit: query.limit } : {})
       });
 
       return success(request, reply, {

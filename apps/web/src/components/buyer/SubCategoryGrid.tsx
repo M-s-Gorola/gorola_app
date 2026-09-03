@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { api } from "@/lib/api";
+import { normalizeImageUrl, PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/image-utils";
 import { cn } from "@/lib/utils";
 
 type SubCategoryDto = {
@@ -157,13 +158,14 @@ export function SubCategoryGrid({ categorySlug }: { categorySlug: string }): Rea
           <div className="mb-2 sm:mb-3 aspect-square w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20 shrink-0">
             {subCategory.imageUrl ? (
               <img 
-                src={subCategory.imageUrl} 
+                src={normalizeImageUrl(subCategory.imageUrl)} 
                 alt={`${subCategory.name} sub-category`} 
                 className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                referrerPolicy="no-referrer"
                 onError={(e) => {
                   const img = e.currentTarget as HTMLImageElement;
-                  if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
-                    img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                  if (img.src !== PRODUCT_PLACEHOLDER_IMAGE) {
+                    img.src = PRODUCT_PLACEHOLDER_IMAGE;
                   }
                 }}
               />
