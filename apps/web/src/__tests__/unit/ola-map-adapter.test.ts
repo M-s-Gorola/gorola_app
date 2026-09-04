@@ -38,25 +38,33 @@ describe("OlaMapAdapter", () => {
   };
 
   const mockMarkerInstance = {
-    setLngLat: vi.fn().mockReturnThis(),
-    addTo: vi.fn().mockReturnThis(),
+    setLngLat: vi.fn(() => mockMarkerInstance),
+    addTo: vi.fn(() => mockMarkerInstance),
     remove: vi.fn()
   };
 
   const mockInit = vi.fn(() => mockMapInstance);
 
-  const mockOlaMaps = vi.fn().mockImplementation(function (this: Record<string, unknown>) {
-    this.init = mockInit;
+  const mockOlaMaps = vi.fn(function () {
+    return { init: mockInit };
   }) as unknown as NonNullable<typeof window.OlaMaps> & {
     mockClear(): void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockImplementation(fn: any): void;
     Marker: {
       mockClear(): void;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      mockImplementation(fn: any): void;
     };
   };
 
   mockOlaMaps.Marker = vi.fn().mockImplementation(function () {
     return mockMarkerInstance;
-  }) as unknown as typeof mockOlaMaps.Marker & { mockClear(): void };
+  }) as unknown as typeof mockOlaMaps.Marker & {
+    mockClear(): void;
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mockImplementation(fn: any): void;
+  };
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let appendSpy: any;
@@ -71,7 +79,13 @@ describe("OlaMapAdapter", () => {
     delete (window as any).OlaMaps;
     mockOlaMaps.mockClear();
     mockInit.mockClear();
+    mockOlaMaps.mockImplementation(function () {
+      return { init: mockInit };
+    });
     mockOlaMaps.Marker.mockClear();
+    mockOlaMaps.Marker.mockImplementation(function () {
+      return mockMarkerInstance;
+    });
     mockMapInstance.remove.mockClear();
     mockMapInstance.setCenter.mockClear();
     mockMapInstance.setZoom.mockClear();
@@ -85,10 +99,17 @@ describe("OlaMapAdapter", () => {
     mockMapInstance.addLayer.mockClear();
     mockMapInstance.removeSource.mockClear();
     mockMapInstance.removeLayer.mockClear();
-    mockMarkerInstance.setLngLat.mockClear();
-    mockMarkerInstance.addTo.mockClear();
-    mockMarkerInstance.remove.mockClear();
-    vi.mocked(fetchOlaRoute).mockClear();
+    mockMarkerInstance.setLngLat.mockReset();
+    mockMarkerInstance.addTo.mockReset();
+    mockMarkerInstance.remove.mockReset();
+    mockMarkerInstance.setLngLat.mockImplementation(() => mockMarkerInstance);
+    mockMarkerInstance.addTo.mockImplementation(() => mockMarkerInstance);
+    vi.mocked(fetchOlaRoute).mockReset();
+    vi.mocked(fetchOlaRoute).mockResolvedValue([
+      [30.455, 78.068],
+      [30.452, 78.064],
+      [30.45, 78.06]
+    ]);
 
     // Clean up document head scripts
     const scripts = document.head.querySelectorAll("script");

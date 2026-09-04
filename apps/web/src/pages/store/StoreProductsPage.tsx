@@ -4,9 +4,10 @@ import {
   Edit2,
   History,
   Plus,
-  Search} from "lucide-react";
-import type { ReactElement } from "react";
-import { ChangeEvent, useEffect, useState } from "react";
+  Search,
+} from "lucide-react";
+import type { ChangeEvent, ReactElement } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 import { read, utils, write } from "xlsx";
@@ -21,6 +22,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { normalizeImageUrl } from "@/lib/image-utils";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
 type Variant = {
@@ -653,9 +655,10 @@ export function StoreProductsPage(): ReactElement {
                     >
                       <td className="p-4 flex items-center gap-4">
                         <img
-                          src={product.imageUrl || "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=120"}
+                          src={normalizeImageUrl(product.imageUrl)}
                           alt={product.name}
                           className="h-12 w-12 rounded-xl object-cover border border-gorola-mint/15 shadow-sm"
+                          referrerPolicy="no-referrer"
                           onError={(e) => {
                             (e.target as HTMLImageElement).src = "https://images.unsplash.com/photo-1542838132-92c53300491e?auto=format&fit=crop&q=80&w=120";
                           }}

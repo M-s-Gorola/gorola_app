@@ -62,7 +62,7 @@
     "razorpay": "^2.9.6",
     "socket.io": "^4.8.3",
     "uuid": "^14.0.0",
-    "zod": "^4.3.6"
+    "zod": "^3.24.2"
   },
   "devDependencies": {
     "pino-pretty": "^13.0.0",

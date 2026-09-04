@@ -1612,6 +1612,7 @@ export class AdminService {
             data: {
               name: row.name,
               slug: catSlug,
+              imageUrl: row.imageUrl ?? null,
               commerceType,
               displayOrder,
               isActive: true
@@ -1626,6 +1627,7 @@ export class AdminService {
               data: {
                 name: sub.name,
                 slug: subSlug,
+                imageUrl: sub.imageUrl ?? null,
                 categoryId: category.id,
                 displayOrder: subDisplayOrder++,
                 isActive: true
@@ -2118,7 +2120,8 @@ export class AdminService {
 
 export type BulkCategoryRow = {
   name: string;
-  subCategories: { name: string }[];
+  imageUrl?: string | null | undefined;
+  subCategories: { name: string; imageUrl?: string | null | undefined }[];
   commerceType?: StoreType | undefined;
   displayOrder?: number | undefined;
 };
