@@ -88,6 +88,34 @@ export function PrivacySettingsSection(): ReactElement {
     }
   };
 
+  const handleGrant = async (purpose: ConsentItem["purpose"]): Promise<void> => {
+    if (!api) return;
+    setActionLoading(purpose);
+    try {
+      const meta = PURPOSE_LABELS[purpose];
+      const res = await api.post<{ success: boolean; data: { consent: ConsentItem } }>("/api/v1/consent", {
+        purpose,
+        consentVersion: "1.0",
+        noticeText: meta?.description ?? purpose
+      });
+      if (res.data?.success) {
+        const refreshRes = await api.get<{ success: boolean; data: { consents: ConsentItem[] } }>("/api/v1/consent");
+        if (refreshRes.data?.success && Array.isArray(refreshRes.data.data?.consents)) {
+          setConsents(refreshRes.data.data.consents);
+        }
+        toast.success("Consent updated successfully");
+      }
+    } catch (err) {
+      let msg = "Failed to update consent";
+      if (isAxiosError(err)) {
+        msg = err.response?.data?.error?.message || msg;
+      }
+      toast.error(msg);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
   return (
     <section className="rounded-2xl border border-gorola-pine/5 bg-white/70 p-6 shadow-sm backdrop-blur-md">
       <div className="mb-6 flex items-center gap-3">
@@ -158,6 +186,17 @@ export function PrivacySettingsSection(): ReactElement {
                     >
                       <ShieldOff className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
                       {actionLoading === consent.purpose ? "Withdrawing..." : "Withdraw"}
+                    </Button>
+                  ) : !meta.essential && consent.isWithdrawn ? (
+                    <Button
+                      className="text-xs bg-gorola-pine text-white hover:bg-gorola-pine/90"
+                      data-testid={`optin-btn-${consent.purpose}`}
+                      disabled={actionLoading === consent.purpose}
+                      onClick={() => void handleGrant(consent.purpose)}
+                      size="sm"
+                    >
+                      <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                      {actionLoading === consent.purpose ? "Enabling..." : "Opt In"}
                     </Button>
                   ) : null}
                 </div>

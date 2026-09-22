@@ -97,7 +97,7 @@ describe("SavedAddressesPage", () => {
     expect(screen.getByText("DEFAULT")).toBeInTheDocument();
   });
 
-  it("opens add form and submits a new address", async () => {
+  it("opens add form, renders DPDP fulfillment notice, and submits a new address with consent logging", async () => {
     renderComponent();
 
     const addBtn = await screen.findByRole("button", { name: /Add New/i });
@@ -105,6 +105,10 @@ describe("SavedAddressesPage", () => {
 
     const dialogTitle = await screen.findByText("Add New Address");
     expect(dialogTitle).toBeInTheDocument();
+
+    const consentNotice = screen.getByTestId("order-processing-consent-notice");
+    expect(consentNotice).toBeInTheDocument();
+    expect(consentNotice).toHaveTextContent(/order fulfillment/i);
 
     const labelInput = screen.getByPlaceholderText("Home");
     const landmarkInput = screen.getByPlaceholderText("E.g. — near the red gate, behind Hotel Padmini");
@@ -120,6 +124,10 @@ describe("SavedAddressesPage", () => {
         label: "Vacation",
         landmarkDescription: "Near the beach 123",
         isDefault: false
+      }));
+      expect(apiPostSpy).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
+        purpose: "ORDER_PROCESSING",
+        consentVersion: "1.0"
       }));
     });
   });

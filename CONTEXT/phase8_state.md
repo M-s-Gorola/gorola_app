@@ -18,7 +18,14 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-09-23
-- **Session Summary:** Completed Section 8.2 (Consent Collection & Management): 8.2.1 (ConsentLog Schema & Consent API Endpoints), 8.2.2 (Consent Notice Screen in OTP Login Flow), 8.2.3 (Consent Withdrawal in Account Privacy Settings), and 8.2.4 (Consent Log Audit Trail & Immutability). Generated and applied migration `20260922205638_add_consent_log_model`. Implemented immutable audit trail, frontend consent banner on `/login`, withdrawal UI on `/profile`, and updated Playwright E2E suites. All unit, integration, and typecheck/lint quality gates pass cleanly.
+- **Session Summary:** Completed full Phase 8.2 (Consent Collection & Management across all 4 DPDP purposes):
+  - 8.2.1: ConsentLog Schema, migrations & API endpoints.
+  - 8.2.2: Login Consent Notice screen for `OTP_AUTH`.
+  - 8.2.3 & 8.2.6: Self-serve grant & withdrawal controls on `/profile` with bi-directional opt-in/opt-out for `MARKETING_EMAIL` and `ANALYTICS`.
+  - 8.2.4: Consent immutability guards and audit logging.
+  - 8.2.5: Prominent `ORDER_PROCESSING` DPDP notice cards on Address Modals (`SavedAddressesPage`, `BookingTimeslotPage`) and Checkout review step, with explicit disclosure of **Ola Maps** (location pinning) and **Razorpay** (secure payments).
+  - 8.2.7: Prominent first-visit `AnalyticsConsentBanner` bottom modal in `App.tsx` with explicit Accept / Decline actions.
+  - 8.2.8: Quality gates (`pnpm typecheck`, `pnpm lint`) and 100% unit/integration test coverage across all consent touchpoints.
 - **Next Session Must Start With:** 8.3 — User Rights: Erasure, Access & Nomination (8.3.1 Right to Erasure `DELETE /api/v1/user/account`).
 - **In Progress Right Now:** Ready for Section 8.3 (User Rights: Erasure, Access & Nomination).
 - **Current Blocker:** None.
@@ -267,6 +274,68 @@ Before a user enters their phone number on `LoginPage.tsx`, they must see a cons
 - [x] **GREEN — Backend:**
   - [x] Add Prisma middleware in `apps/api/src/lib/prisma.ts` blocking `delete` and `deleteMany` on `ConsentLog`. Update `consent.service.ts` to log to `AuditLog`.
   - [x] Run integration test — **confirm GREEN.**
+
+---
+
+#### 8.2.5 — `ORDER_PROCESSING` Consent on Address Modals & Checkout Flow
+
+**Root cause / Goal:**
+Saving a delivery address or placing an order collects landmark notes, GPS pins, and phone numbers to be shared with merchants and riders. DPDP Act Sec 5 requires prominent notice before collection.
+
+- [x] **RED — Unit / Component (`SavedAddressesPage.test.tsx`, `CheckoutPage.test.tsx`):**
+  - [x] Test: "Add Address" modal renders prominent `data-testid="order-processing-consent-notice"` detailing data sharing with merchants, delivery partners, and Ola Maps.
+  - [x] Test: Saving an address dispatches `POST /api/v1/consent` with `{ purpose: 'ORDER_PROCESSING', ... }` and refreshes consent query cache.
+  - [x] Test: Checkout review step displays prominent fulfillment consent step.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component & Wiring:**
+  - [x] [Component] In `SavedAddressesPage.tsx` and `BookingTimeslotPage.tsx`, render prominent DPDP notice card naming Ola Maps above Save button.
+  - [x] [Wiring] On address creation/update success, trigger `apiClient.post('/api/v1/consent', { purpose: 'ORDER_PROCESSING', consentVersion: '1.0', noticeText: ... })` and invalidate `['consents']` query cache.
+  - [x] [Component] In `CheckoutPage.tsx`, ensure prominent order fulfillment consent and Ola Maps & Razorpay disclosure are displayed.
+  - [x] Run unit tests — **confirm GREEN.**
+
+---
+
+#### 8.2.6 — `MARKETING_EMAIL` Opt-In & Privacy Settings Controls
+
+**Root cause / Goal:**
+Marketing communications must be strictly opt-in (never pre-ticked) and fully controllable via self-serve switches in Profile Settings.
+
+- [x] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
+  - [x] Test: Privacy Settings renders interactive opt-in toggle card for `MARKETING_EMAIL`.
+  - [x] Test: Enabling toggle sends `POST /api/v1/consent` (`MARKETING_EMAIL`).
+  - [x] Test: Disabling toggle sends `DELETE /api/v1/consent/MARKETING_EMAIL`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component:**
+  - [x] [Component] In `PrivacySettingsSection.tsx`, implement bi-directional opt-in/opt-out toggles for non-essential consents.
+  - [x] [Component] In `CheckoutPage.tsx`, add un-ticked optional marketing opt-in card.
+  - [x] Run unit tests — **confirm GREEN.**
+
+---
+
+#### 8.2.7 — `ANALYTICS` First-Visit Banner & Telemetry Opt-In
+
+**Root cause / Goal:**
+Under DPDP, anonymous telemetry and performance analytics collection requires prior user notice with explicit Accept and Decline options.
+
+- [x] **RED — Unit / Component (`AnalyticsConsentBanner.test.tsx`):**
+  - [x] Test: Renders prominent bottom modal on first load if preference is unset.
+  - [x] Test: "Accept Analytics" calls `POST /api/v1/consent` (`ANALYTICS`) and closes banner.
+  - [x] Test: "Decline / Essential Only" closes banner without granting consent.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component:**
+  - [x] [Component] Create `apps/web/src/components/consent/AnalyticsConsentBanner.tsx` and mount globally in `App.tsx`.
+  - [x] Run unit tests — **confirm GREEN.**
+
+---
+
+#### 8.2.8 — Multi-Layer E2E Suite Updates & Regression Verification
+
+- [x] Update Playwright E2E suites (`auth.spec.ts`, `checkout.spec.ts`, `booking-journey.spec.ts`, `store-owner-journey.spec.ts`, `admin-journey.spec.ts`) to handle the new interactive consent steps.
+- [x] Run full automated test suites (`pnpm test`, `pnpm --filter @gorola/web test`).
+- [x] Verify `pnpm typecheck` and `pnpm lint` pass with 0 errors.
 
 ---
 

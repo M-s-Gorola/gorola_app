@@ -172,6 +172,8 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     expect(screen.getByRole("heading", { name: /^Review$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("checkout-order-processing-consent")).toBeInTheDocument();
+    expect(screen.getByTestId("checkout-marketing-opt-in")).toBeInTheDocument();
     expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Home");
     expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Near landmark text here area tenchars");
 
@@ -183,6 +185,9 @@ describe("CheckoutPage", () => {
         addressMode: "saved",
         paymentMethod: "COD"
       });
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
+        purpose: "ORDER_PROCESSING"
+      }));
     });
 
     expect(await screen.findByTestId("confirmation")).toBeInTheDocument();

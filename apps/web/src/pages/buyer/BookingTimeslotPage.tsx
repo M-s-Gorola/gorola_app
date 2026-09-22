@@ -89,6 +89,20 @@ export function BookingTimeslotPage(): ReactElement {
       if (res?.data?.id) {
         setSelectedAddressId(res.data.id);
       }
+      // DPDP 2023: Log ORDER_PROCESSING consent when address is saved
+      try {
+        const p = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "We collect your address, landmark, and GPS coordinates solely to route deliveries and share with assigned merchant stores and riders for order fulfillment."
+        });
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+      void queryClient.invalidateQueries({ queryKey: ["consents"] });
     },
     onError: (err) => {
       if (isAxiosError(err)) {
@@ -676,6 +690,19 @@ export function BookingTimeslotPage(): ReactElement {
             {formError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
             )}
+
+            <div
+              data-testid="order-processing-consent-notice"
+              className="rounded-xl border border-gorola-pine/20 bg-gorola-sand/40 p-3 text-xs text-gorola-charcoal space-y-1"
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
+                <span>Delivery & Location Privacy Notice (DPDP Act 2023)</span>
+              </div>
+              <p className="text-gorola-slate leading-relaxed">
+                Your address, hill landmark notes, and GPS coordinates are stored securely under India&apos;s DPDP Act 2023. They will solely be shared with <strong>Ola Maps</strong> (for location pinning and route calculation) and assigned merchant stores and delivery riders for order fulfillment.
+              </p>
+            </div>
           </div>
 
           <DialogFooter>

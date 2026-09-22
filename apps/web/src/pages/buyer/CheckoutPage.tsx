@@ -68,6 +68,7 @@ export function CheckoutPage(): ReactElement {
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const [addressDefaultSet, setAddressDefaultSet] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const addressesList = addressesQuery.data ?? [];
@@ -289,6 +290,36 @@ export function CheckoutPage(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
       void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
       
+      // DPDP 2023: Log ORDER_PROCESSING consent
+      try {
+        const p1 = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "We collect your address, contact, and order details to process fulfillment with merchants and riders."
+        });
+        if (p1 && typeof p1.catch === "function") {
+          p1.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+
+      if (marketingOptIn) {
+        try {
+          const p2 = api?.post("/api/v1/consent", {
+            purpose: "MARKETING_EMAIL",
+            consentVersion: "1.0",
+            noticeText: "You agreed to receive promotional offers and seasonal discounts."
+          });
+          if (p2 && typeof p2.catch === "function") {
+            p2.catch(() => {});
+          }
+        } catch {
+          /* ignore background consent logging error */
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ["consents"] });
+
       navigate(`/orders/${orderId}`, { replace: true });
     }
   });
@@ -580,6 +611,34 @@ export function CheckoutPage(): ReactElement {
                 </p>
               </div>
             </div>
+
+            <div
+              data-testid="checkout-order-processing-consent"
+              className="rounded-xl border border-gorola-pine/20 bg-gorola-sand/40 p-3.5 text-xs text-gorola-charcoal space-y-1.5 text-left"
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
+                <span>Order Fulfillment & Data Sharing Notice (DPDP Act 2023)</span>
+              </div>
+              <p className="text-gorola-slate leading-relaxed">
+                By placing your order, you authorize GoRola to share your delivery coordinates with <strong>Ola Maps</strong> (for navigation), payment details with <strong>Razorpay</strong> (for secure processing), and contact details with assigned merchants and riders for fulfillment.
+              </p>
+            </div>
+
+            <label
+              data-testid="checkout-marketing-opt-in"
+              className="flex items-start gap-2.5 rounded-xl border border-gorola-pine/15 bg-white p-3 text-xs text-gorola-charcoal cursor-pointer hover:border-gorola-pine/30 transition-colors text-left"
+            >
+              <input
+                type="checkbox"
+                checked={marketingOptIn}
+                onChange={(e) => setMarketingOptIn(e.target.checked)}
+                className="mt-0.5 rounded border-gorola-pine/30 text-gorola-pine focus:ring-gorola-pine"
+              />
+              <span className="leading-snug text-gorola-slate">
+                <strong className="text-gorola-charcoal font-medium">Keep me updated (Optional):</strong> Send me seasonal Mussoorie harvest updates, special hill-station deals, and exclusive coupons.
+              </span>
+            </label>
           </div>
 
           <div
