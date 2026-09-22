@@ -12,6 +12,10 @@ test.describe('Booking Journey Pipeline E2E', () => {
 
   async function loginAsBuyer(page: any, phone: string) {
     await page.goto('http://127.0.0.1:5180/login');
+    const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
+    if (await consentBtn.isVisible()) {
+      await consentBtn.click();
+    }
     await page.locator('#buyer-phone').fill(phone);
     await page.locator('button', { hasText: /Send OTP/i }).click();
     

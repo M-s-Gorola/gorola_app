@@ -12,6 +12,7 @@ import { registerAdminRoutes } from "./modules/admin/admin.controller.js";
 import { AdminRepository } from "./modules/admin/admin.repository.js";
 import { SystemSettingRepository } from "./modules/admin/system-setting.repository.js";
 import { SystemSettingService } from "./modules/admin/system-setting.service.js";
+import { AuditRepository } from "./modules/audit/audit.repository.js";
 import { AdminAuthService } from "./modules/auth/admin-auth.service.js";
 import { registerAuthRoutes } from "./modules/auth/auth.controller.js";
 import { AuthService } from "./modules/auth/auth.service.js";
@@ -30,6 +31,9 @@ import { registerProductRoutes } from "./modules/catalog/product.controller.js";
 import { registerSearchRoutes } from "./modules/catalog/search.controller.js";
 import { registerSubCategoryRoutes } from "./modules/catalog/sub-category.controller.js";
 import { ProductVariantRepository } from "./modules/catalog/variant.repository.js";
+import { registerConsentRoutes } from "./modules/consent/consent.controller.js";
+import { ConsentRepository } from "./modules/consent/consent.repository.js";
+import { ConsentService } from "./modules/consent/consent.service.js";
 import { registerRiderRoutes } from "./modules/delivery/rider.controller.js";
 import { RiderRepository } from "./modules/delivery/rider.repository.js";
 import { RiderEarningsRepository } from "./modules/delivery/rider-earnings.repository.js";
@@ -211,6 +215,15 @@ export function registerAppRoutes(app: FastifyInstance): void {
 
   registerBuyerAddressRoutes(app, {
     addresses: addressRepoOrders,
+    tokenVerifier: tokenService
+  });
+
+  const auditRepo = new AuditRepository(prisma);
+  const consentRepo = new ConsentRepository(prisma);
+  const consentService = new ConsentService(consentRepo, auditRepo);
+
+  registerConsentRoutes(app, {
+    consentService,
     tokenVerifier: tokenService
   });
 

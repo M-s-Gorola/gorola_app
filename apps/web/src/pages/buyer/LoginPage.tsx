@@ -69,13 +69,16 @@ function displayCountdown(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
+const CONSENT_NOTICE_TEXT =
+  "We collect your phone number to send a one-time password (OTP) and authenticate your account.";
+
 export function LoginPage(): ReactElement {
   const navigate = useNavigate();
   const location = useLocation();
   const setBuyerSession = useAuthStore((s) => s.setBuyerSession);
 
   const shellRef = useRef<HTMLDivElement>(null);
-  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [step, setStep] = useState<"consent" | "phone" | "otp">("consent");
 
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
@@ -232,6 +235,15 @@ export function LoginPage(): ReactElement {
         userId
       });
 
+      // Record statutory OTP_AUTH consent
+      void api
+        ?.post("/api/v1/consent", {
+          consentVersion: "1.0",
+          noticeText: CONSENT_NOTICE_TEXT,
+          purpose: "OTP_AUTH"
+        })
+        .catch(() => {});
+
       const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
       let target = "/";
       if (from && typeof from.pathname === "string" && from.pathname !== "" && from.pathname !== "/login") {
@@ -283,7 +295,38 @@ export function LoginPage(): ReactElement {
       <div ref={shellRef}>
         <h1 className="font-heading text-2xl tracking-tight text-gorola-charcoal">Welcome back</h1>
 
-        {step === "phone" ? (
+        {step === "consent" ? (
+          <div className="mt-6 flex flex-col gap-5" data-testid="consent-notice-step">
+            <div className="rounded-xl border border-border/80 bg-gorola-fog/60 p-4 text-sm text-gorola-charcoal space-y-3">
+              <div className="flex items-center gap-2 font-semibold text-gorola-pine">
+                <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                Data Privacy &amp; Consent Notice
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                We collect your phone number to send a one-time password (OTP) and authenticate your account under India&apos;s Digital Personal Data Protection (DPDP) Act 2023. We do not sell your personal data.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                By continuing, you agree to our{" "}
+                <a
+                  className="font-medium text-gorola-pine underline hover:text-emerald-700"
+                  href="/privacy"
+                >
+                  Privacy Policy
+                </a>{" "}
+                and terms of service.
+              </p>
+            </div>
+
+            <Button
+              className="w-full rounded-full"
+              data-testid="consent-continue-btn"
+              onClick={() => setStep("phone")}
+              type="button"
+            >
+              Continue &amp; Accept
+            </Button>
+          </div>
+        ) : step === "phone" ? (
           <form className="mt-6 flex flex-col gap-4" onSubmit={submitPhone}>
             <div className="flex flex-col gap-2">
               <label className="text-sm leading-none font-medium" htmlFor="buyer-phone">

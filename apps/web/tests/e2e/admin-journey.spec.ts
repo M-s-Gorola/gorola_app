@@ -293,6 +293,9 @@ test.describe("Admin Panel E2E Journey", () => {
     });
 
     await buyerPage.goto(`${BASE_URL}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator("#buyer-phone").fill("9876543210");
     
     const sendOtpResponse1 = buyerPage.waitForResponse(

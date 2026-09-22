@@ -12,6 +12,10 @@ test.describe('Checkout & Account', () => {
 
   async function loginAs(page: any, phone: string) {
     await page.goto('/login');
+    const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
+    if (await consentBtn.isVisible()) {
+      await consentBtn.click();
+    }
     await page.locator('#buyer-phone').fill(phone);
     await page.locator('button', { hasText: /Send OTP/i }).click();
     

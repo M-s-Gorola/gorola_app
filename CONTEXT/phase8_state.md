@@ -17,10 +17,10 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-07-29
-- **Session Summary:** Completed Section 8.1.1 (Database Least-Privilege Credential Setup) and Section 8.1.2 (PII Field Encryption at Rest). Implemented `database.least-privilege.test.ts` and `pii.encryption.test.ts`. Built AES-256-GCM encryption & HMAC-SHA256 blind indexing in `src/lib/crypto.ts`, updated `User` and `DeliveryRider` schema with `phoneHash`, generated and deployed migration `20260729201500_add_pii_encryption_fields`, and updated `user.repository.ts`, `rider.repository.ts`, `seed.ts`, and `seed-e2e.ts`. All integration tests and quality gates (`pnpm typecheck`, `pnpm lint`) passing 100% green.
-- **Next Session Must Start With:** 8.2.1 — ConsentLog Schema & Consent API Endpoints (`POST /api/v1/consent`, `GET /api/v1/consent`, `DELETE /api/v1/consent/:purpose`).
-- **In Progress Right Now:** Section 8.2.1 (ConsentLog Schema & Consent API Endpoints).
+- **Date:** 2026-09-23
+- **Session Summary:** Completed Section 8.2 (Consent Collection & Management): 8.2.1 (ConsentLog Schema & Consent API Endpoints), 8.2.2 (Consent Notice Screen in OTP Login Flow), 8.2.3 (Consent Withdrawal in Account Privacy Settings), and 8.2.4 (Consent Log Audit Trail & Immutability). Generated and applied migration `20260922205638_add_consent_log_model`. Implemented immutable audit trail, frontend consent banner on `/login`, withdrawal UI on `/profile`, and updated Playwright E2E suites. All unit, integration, and typecheck/lint quality gates pass cleanly.
+- **Next Session Must Start With:** 8.3 — User Rights: Erasure, Access & Nomination (8.3.1 Right to Erasure `DELETE /api/v1/user/account`).
+- **In Progress Right Now:** Ready for Section 8.3 (User Rights: Erasure, Access & Nomination).
 - **Current Blocker:** None.
 
 
@@ -195,27 +195,27 @@ Create `ConsentLog` model in Prisma. Create `consent.repository.ts`, `consent.se
 
 ---
 
-- [ ] **RED — Integration (`consent.controller.test.ts`):**
-  - [ ] Test setup: Authenticated buyer JWT. ConsentLog table empty.
-  - [ ] Test: `POST /api/v1/consent` with body `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: 'We collect your phone number to send a one-time password.' }` → HTTP 201 with `{ success: true, data: { id, purpose, consentVersion, givenAt } }`.
-  - [ ] Test: Query DB and assert exactly ONE `ConsentLog` row exists with `userId`, `purpose = 'OTP_AUTH'`, `isWithdrawn = false`, `ipAddress` not null.
-  - [ ] Test: `GET /api/v1/consent` with buyer JWT → HTTP 200 returning array of user consent records.
-  - [ ] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` → HTTP 200; `ConsentLog` row updated to `isWithdrawn = true`, `withdrawnAt` set.
-  - [ ] Test: `DELETE /api/v1/consent/OTP_AUTH` → HTTP 400 `CANNOT_WITHDRAW_ESSENTIAL_CONSENT`.
-  - [ ] **Run — confirm RED (consent endpoints do not exist).**
+- [x] **RED — Integration (`consent.controller.test.ts`):**
+  - [x] Test setup: Authenticated buyer JWT. ConsentLog table empty.
+  - [x] Test: `POST /api/v1/consent` with body `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: 'We collect your phone number to send a one-time password.' }` → HTTP 201 with `{ success: true, data: { id, purpose, consentVersion, givenAt } }`.
+  - [x] Test: Query DB and assert exactly ONE `ConsentLog` row exists with `userId`, `purpose = 'OTP_AUTH'`, `isWithdrawn = false`, `ipAddress` not null.
+  - [x] Test: `GET /api/v1/consent` with buyer JWT → HTTP 200 returning array of user consent records.
+  - [x] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` → HTTP 200; `ConsentLog` row updated to `isWithdrawn = true`, `withdrawnAt` set.
+  - [x] Test: `DELETE /api/v1/consent/OTP_AUTH` → HTTP 400 `CANNOT_WITHDRAW_ESSENTIAL_CONSENT`.
+  - [x] **Run — confirm RED (consent endpoints do not exist).**
 
-- [ ] **GREEN — Backend (Schema & Migration → Repository → Service → Controller):**
-  - [ ] [Schema & Migration] Add `ConsentLog` model and `ConsentPurpose` enum (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) to `schema.prisma`. Generate physical SQL migration file: `pnpm --filter @gorola/api exec prisma migrate dev --name add_consent_log_model` using `DIRECT_URL` / `db_owner` DDL role.
-  - [ ] [DB Deployment] Apply migration SQL file to local databases (`gorola_dev` and `gorola_test`) via `pnpm --filter @gorola/api prisma:bootstrap:test` BEFORE writing implementation code or running tests.
-  - [ ] [Repository] Create `consent.repository.ts`: `create`, `findAllByUserId`, `findByUserIdAndPurpose`, `withdraw`.
-  - [ ] [Service] Create `consent.service.ts`: `recordConsent`, `getUserConsents`, `withdrawConsent` (throws `CannotWithdrawEssentialConsentError` if purpose is essential).
-  - [ ] [Controller] Create `consent.controller.ts` for `POST`, `GET`, `DELETE` routes.
-  - [ ] [Routes] Register consent routes in Fastify app with buyer JWT middleware.
-  - [ ] [Cascade & Regression Testing] Check across modules for cascading broken logic. Run full test suite (`pnpm test` / unit, integration, and E2E) and quality gates (`pnpm typecheck`, `pnpm lint`) — **confirm GREEN.**
+- [x] **GREEN — Backend (Schema & Migration → Repository → Service → Controller):**
+  - [x] [Schema & Migration] Add `ConsentLog` model and `ConsentPurpose` enum (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) to `schema.prisma`. Generate physical SQL migration file: `pnpm --filter @gorola/api exec prisma migrate dev --name add_consent_log_model` using `DIRECT_URL` / `db_owner` DDL role.
+  - [x] [DB Deployment] Apply migration SQL file to local databases (`gorola_dev` and `gorola_test`) via `pnpm --filter @gorola/api prisma:bootstrap:test` BEFORE writing implementation code or running tests.
+  - [x] [Repository] Create `consent.repository.ts`: `create`, `findAllByUserId`, `findByUserIdAndPurpose`, `withdraw`.
+  - [x] [Service] Create `consent.service.ts`: `recordConsent`, `getUserConsents`, `withdrawConsent` (throws `CannotWithdrawEssentialConsentError` if purpose is essential).
+  - [x] [Controller] Create `consent.controller.ts` for `POST`, `GET`, `DELETE` routes.
+  - [x] [Routes] Register consent routes in Fastify app with buyer JWT middleware.
+  - [x] [Cascade & Regression Testing] Check across modules for cascading broken logic. Run full test suite (`pnpm test` / unit, integration, and E2E) and quality gates (`pnpm typecheck`, `pnpm lint`) — **confirm GREEN.**
 
 
-- [ ] **Verification chain:**
-  - [ ] Buyer calls `POST /api/v1/consent` → DB row created with IP and timestamp → `GET /api/v1/consent` lists consent → `DELETE /api/v1/consent/MARKETING_EMAIL` marks `isWithdrawn = true` → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Buyer calls `POST /api/v1/consent` → DB row created with IP and timestamp → `GET /api/v1/consent` lists consent → `DELETE /api/v1/consent/MARKETING_EMAIL` marks `isWithdrawn = true` → ✅ Done.
 
 ---
 
@@ -226,47 +226,47 @@ Before a user enters their phone number on `LoginPage.tsx`, they must see a cons
 
 ---
 
-- [ ] **RED — Unit / Component (`LoginPage.test.tsx`):**
-  - [ ] Test: Initial render displays consent notice step (`data-testid="consent-notice-step"`), NOT phone input (`data-testid="phone-input"`).
-  - [ ] Test: Consent notice contains text "We collect your phone number to send a one-time password (OTP)" and link to `/privacy`.
-  - [ ] Test: Clicking "Continue & Accept" (`data-testid="consent-continue-btn"`) displays phone input step.
-  - [ ] Test: After successful OTP login, `POST /api/v1/consent` is called with `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: '...' }`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`LoginPage.test.tsx`):**
+  - [x] Test: Initial render displays consent notice step (`data-testid="consent-notice-step"`), NOT phone input (`data-testid="phone-input"`).
+  - [x] Test: Consent notice contains text "We collect your phone number to send a one-time password (OTP)" and link to `/privacy`.
+  - [x] Test: Clicking "Continue & Accept" (`data-testid="consent-continue-btn"`) displays phone input step.
+  - [x] Test: After successful OTP login, `POST /api/v1/consent` is called with `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: '...' }`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Component] In `LoginPage.tsx`, add step state `'consent' | 'phone' | 'otp' | 'done'`. Render `ConsentNoticeStep` sub-component initially.
-  - [ ] [Component] On successful OTP verification callback, call `apiClient.post('/api/v1/consent', { purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: CONSENT_NOTICE_TEXT })`.
-  - [ ] Run unit test — **confirm GREEN.**
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Component] In `LoginPage.tsx`, add step state `'consent' | 'phone' | 'otp' | 'done'`. Render `ConsentNoticeStep` sub-component initially.
+  - [x] [Component] On successful OTP verification callback, call `apiClient.post('/api/v1/consent', { purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: CONSENT_NOTICE_TEXT })`.
+  - [x] Run unit test — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] User opens `/login` → Sees consent notice with Privacy Policy link → Clicks "Continue & Accept" → Enters phone & OTP → On auth success, `ConsentLog` row created in DB → ✅ Done.
+- [x] **Verification chain:**
+  - [x] User opens `/login` → Sees consent notice with Privacy Policy link → Clicks "Continue & Accept" → Enters phone & OTP → On auth success, `ConsentLog` row created in DB → ✅ Done.
 
 ---
 
 #### 8.2.3 — Consent Withdrawal in Account Privacy Settings
 
-- [ ] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
-  - [ ] Test: Renders list of consents returned by `GET /api/v1/consent`. Non-essential consents render "Withdraw" button; essential consents (`OTP_AUTH`) render "Essential" label without button.
-  - [ ] Test: Clicking "Withdraw" on `MARKETING_EMAIL` calls `DELETE /api/v1/consent/MARKETING_EMAIL` and updates UI status to "Withdrawn".
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
+  - [x] Test: Renders list of consents returned by `GET /api/v1/consent`. Non-essential consents render "Withdraw" button; essential consents (`OTP_AUTH`) render "Essential" label without button.
+  - [x] Test: Clicking "Withdraw" on `MARKETING_EMAIL` calls `DELETE /api/v1/consent/MARKETING_EMAIL` and updates UI status to "Withdrawn".
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Component):**
-  - [ ] Create `apps/web/src/components/account/PrivacySettingsSection.tsx` and integrate into `/account` page.
-  - [ ] Run unit test — **confirm GREEN.**
+- [x] **GREEN — Frontend (Component):**
+  - [x] Create `apps/web/src/components/account/PrivacySettingsSection.tsx` and integrate into `/account` page.
+  - [x] Run unit test — **confirm GREEN.**
 
 ---
 
 #### 8.2.4 — Consent Log Audit Trail & Immutability
 
-- [ ] **RED — Integration (`consent.audit.test.ts`):**
-  - [ ] Test: `POST /api/v1/consent` creates an `AuditLog` row with `action = 'CONSENT_GIVEN'`.
-  - [ ] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` creates an `AuditLog` row with `action = 'CONSENT_WITHDRAWN'`.
-  - [ ] Test: Direct programmatic call to `prisma.consentLog.delete({ where: { id } })` throws `AppError` code `CONSENT_LOG_IMMUTABLE` (Prisma middleware guard).
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`consent.audit.test.ts`):**
+  - [x] Test: `POST /api/v1/consent` creates an `AuditLog` row with `action = 'CONSENT_GIVEN'`.
+  - [x] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` creates an `AuditLog` row with `action = 'CONSENT_WITHDRAWN'`.
+  - [x] Test: Direct programmatic call to `prisma.consentLog.delete({ where: { id } })` throws `AppError` code `CONSENT_LOG_IMMUTABLE` (Prisma middleware guard).
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend:**
-  - [ ] Add Prisma middleware in `apps/api/src/lib/prisma.ts` blocking `delete` and `deleteMany` on `ConsentLog`. Update `consent.service.ts` to log to `AuditLog`.
-  - [ ] Run integration test — **confirm GREEN.**
+- [x] **GREEN — Backend:**
+  - [x] Add Prisma middleware in `apps/api/src/lib/prisma.ts` blocking `delete` and `deleteMany` on `ConsentLog`. Update `consent.service.ts` to log to `AuditLog`.
+  - [x] Run integration test — **confirm GREEN.**
 
 ---
 

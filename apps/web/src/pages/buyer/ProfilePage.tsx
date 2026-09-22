@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 import { TopographicBg } from "@/components/shared/TopographicBg";
+import { PrivacySettingsSection } from "@/components/account/PrivacySettingsSection";
 
 const profileSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long")
@@ -198,6 +199,10 @@ export function ProfilePage(): ReactElement {
                <div className="text-red-600 transition-transform group-hover:translate-x-1">→</div>
              </button>
           </section>
+        </div>
+
+        <div className="mt-8 profile-animate">
+          <PrivacySettingsSection />
         </div>
       </div>
     </div>

@@ -7,15 +7,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfilePage } from "./ProfilePage";
 import { useAuthStore } from "@/store/auth.store";
 
-const { putMock, postMock } = vi.hoisted(() => ({
+const { putMock, postMock, getMock } = vi.hoisted(() => ({
   putMock: vi.fn(),
-  postMock: vi.fn()
+  postMock: vi.fn(),
+  getMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
     put: putMock,
-    post: postMock
+    post: postMock,
+    get: getMock
   }
 }));
 
@@ -46,6 +48,10 @@ describe("ProfilePage", () => {
   beforeEach(() => {
     putMock.mockReset();
     postMock.mockReset();
+    getMock.mockReset();
+    getMock.mockResolvedValue({
+      data: { success: true, data: { consents: [] } }
+    });
     act(() => {
       useAuthStore.getState().setBuyerSession({
         userId: "u123",

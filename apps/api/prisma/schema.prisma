@@ -80,6 +80,7 @@ model User {
   carts      Cart[]
   orders     Order[]
   addresses  Address[]
+  consents   ConsentLog[]
 
   @@index([isDeleted])
   @@index([createdAt])
@@ -538,4 +539,28 @@ enum EarningType {
   PER_KM
 }
 
+enum ConsentPurpose {
+  OTP_AUTH
+  ORDER_PROCESSING
+  MARKETING_EMAIL
+  ANALYTICS
+}
 
+model ConsentLog {
+  id             String         @id @default(cuid())
+  userId         String
+  purpose        ConsentPurpose
+  consentVersion String         @default("1.0")
+  noticeText     String
+  ipAddress      String?
+  userAgent      String?
+  isWithdrawn    Boolean        @default(false)
+  withdrawnAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([userId, isWithdrawn])
+  @@index([createdAt])
+}

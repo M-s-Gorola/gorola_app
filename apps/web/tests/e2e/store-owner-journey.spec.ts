@@ -165,6 +165,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Log in buyer
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543210');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -448,6 +451,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543211');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -693,6 +699,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543212');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -822,6 +831,9 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543214');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });

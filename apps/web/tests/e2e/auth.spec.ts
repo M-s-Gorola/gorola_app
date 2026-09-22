@@ -4,7 +4,12 @@ test.describe('Authentication', () => {
   test('E2E-006: OTP Login Flow', async ({ page }) => {
     await page.goto('/login');
 
-    // Assert phone input is visible
+    // Assert DPDP Consent Notice is visible initially
+    const consentNotice = page.locator('[data-testid="consent-notice-step"]');
+    await expect(consentNotice).toBeVisible();
+    await page.locator('[data-testid="consent-continue-btn"]').click();
+
+    // Assert phone input is visible after consent step
     const phoneInput = page.locator('#buyer-phone');
     await expect(phoneInput).toBeVisible();
 
@@ -14,7 +19,6 @@ test.describe('Authentication', () => {
     // Click "Send OTP"
     await page.locator('button', { hasText: /Send OTP/i }).click();
 
-    // Assert UI transitions to OTP input step
     // Assert UI transitions to OTP input step
     await expect(page.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
 
@@ -38,6 +42,10 @@ test.describe('Authentication', () => {
   test('E2E-007: Auth Persistence (Page Reload)', async ({ page }) => {
     // Prerequisite: Log in
     await page.goto('/login');
+    const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
+    if (await consentBtn.isVisible()) {
+      await consentBtn.click();
+    }
     await page.locator('#buyer-phone').fill('9876543211');
     await page.locator('button', { hasText: /Send OTP/i }).click();
 
