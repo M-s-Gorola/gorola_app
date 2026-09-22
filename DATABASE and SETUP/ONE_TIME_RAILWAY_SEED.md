@@ -117,16 +117,24 @@ Use this when you want to **wipe all row data on Railway** but keep the schema a
 > # ⚠️ DESTRUCTIVE — ALL RAILWAY DATA WILL BE PERMANENTLY DELETED
 > This command **immediately and irreversibly wipes every row** from the live Railway database. There is no undo and no backup unless you made one manually.
 > - **Never run `pnpm --filter @gorola/api exec prisma migrate reset` against Railway** — that command tries to `DROP DATABASE` which Railway does not allow for `db_owner`, and could corrupt the database state.
-> - The truncate commands below are the only safe data-reset method for Railway.
-> - `psql` is likely not installed locally. Use the `psql` client **inside your already-running local Docker container** — it can connect to Railway's public URL externally.
-> - Must run as `postgres` superuser — `app_service` does not have `TRUNCATE` privilege by design.
+> - The truncate command below is the recommended, cross-platform data-reset method for Railway.
+> - Must run with superuser credentials or `db_owner` credentials — `app_service` does not have `TRUNCATE` privilege by design.
 
 **Step 1 — Truncate all tables (keeps schema & migration history):**
+
+Run the built-in truncate script from the monorepo root:
+```bash
+pnpm db:remote:truncate "<RAILWAY_POSTGRES_PUBLIC_URL>"
+```
+*Or directly via api workspace:*
+```bash
+pnpm --filter @gorola/api truncate:db "<RAILWAY_POSTGRES_PUBLIC_URL>"
+```
+
+*(Alternative using Docker psql if preferred):*
 ```bash
 docker exec -i gorola-postgres psql "postgresql://postgres:<RAILWAY_POSTGRES_PASSWORD>@<RAILWAY_HOST>:<RAILWAY_PORT>/railway" -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != '_prisma_migrations' LOOP EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
 ```
-
-Replace `<RAILWAY_POSTGRES_PASSWORD>`, `<RAILWAY_HOST>`, and `<RAILWAY_PORT>` with the values from your Railway PostgreSQL service → **Connect** tab → Public URL.
 
 **Step 2 — Re-seed catalog data:**
 ```bash

@@ -76,8 +76,8 @@ overrides:
   # Overridden due to high security vulnerability (CRLF injection via unescaped multipart field names/filenames, GHSA-hmw2-7cc7-3qxx) in <4.0.6
   form-data: "^4.0.6"
 
-  # Overridden due to high security vulnerability (YAML merge-key chains forcing quadratic CPU consumption, GHSA-52cp-r559-cp3m) — requires >=4.3.0
-  js-yaml: "^4.3.0"
+  # Overridden due to high security vulnerabilities (YAML merge-key chains forcing quadratic CPU consumption, GHSA-52cp-r559-cp3m, and empty merge sources CPU DoS, GHSA-2883-xcg3-v3hh) — requires >=4.3.2
+  js-yaml: "^4.3.2"
 
   # Overridden due to low security vulnerability (arbitrary file read via sourceMappingURL comment, GHSA-4x5r-pxfx-6jf8) in <=7.29.0
   "@babel/core": "^7.29.6"
