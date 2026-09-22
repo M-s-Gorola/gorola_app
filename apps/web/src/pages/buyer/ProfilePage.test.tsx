@@ -107,7 +107,7 @@ describe("ProfilePage", () => {
 
   it("renders a Logout button and triggers logout flow on click", async () => {
     postMock.mockResolvedValueOnce({ data: { success: true } });
-    const removeSpy = vi.spyOn(Storage.prototype, "removeItem");
+    sessionStorage.setItem("gorola_subdomain_override", "buyer");
 
     renderProfile();
     const logoutBtn = screen.getByRole("button", { name: /logout/i });
@@ -120,7 +120,7 @@ describe("ProfilePage", () => {
         refreshToken: "refresh"
       });
       expect(useAuthStore.getState().accessToken).toBeNull();
-      expect(removeSpy).toHaveBeenCalledWith("gorola_subdomain_override");
+      expect(sessionStorage.getItem("gorola_subdomain_override")).toBeNull();
     });
   });
 });

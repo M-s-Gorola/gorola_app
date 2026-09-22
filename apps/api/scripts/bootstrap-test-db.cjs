@@ -30,13 +30,16 @@ if (fs.existsSync(envPath)) {
   }
 }
 
-// FORCE DATABASE_URL to use the TEST URL for this process and its children
-if (!env.DATABASE_URL_TEST) {
-  throw new Error("DATABASE_URL_TEST missing in .env. Cannot bootstrap test database.");
+// FORCE DATABASE_URL to use the MIGRATION TEST URL (db_owner) for migrations.
+// app_service (DATABASE_URL_TEST) lacks CREATE privilege on the schema, so
+// `prisma migrate deploy` fails with "permission denied for schema public".
+if (!env.MIGRATION_DATABASE_URL_TEST) {
+  throw new Error("MIGRATION_DATABASE_URL_TEST missing in .env. Cannot bootstrap test database.");
 }
 
-env.DATABASE_URL = env.DATABASE_URL_TEST;
-env.DIRECT_URL = env.DATABASE_URL_TEST; // Ensure direct connections also hit test DB
+const migrationUrl = env.MIGRATION_DATABASE_URL_TEST;
+env.DATABASE_URL = migrationUrl;
+env.DIRECT_URL = migrationUrl;
 env.NODE_ENV = 'test';
 
 const apiRoot = path.join(__dirname, "..");
@@ -47,6 +50,10 @@ console.info(`Target: ${env.DATABASE_URL.split('@')[1] || 'Internal URL'}`);
 try {
   console.info("1/3: Deploying migrations...");
   execSync("npx prisma migrate deploy", { stdio: "inherit", cwd: apiRoot, env });
+
+  // Switch to app_service for seeding (runtime role, least privilege)
+  env.DATABASE_URL = env.DATABASE_URL_TEST || migrationUrl;
+  env.DIRECT_URL = env.DATABASE_URL_TEST || migrationUrl;
 
   console.info("2/3: Seeding standard catalog...");
   execSync("npx prisma db seed", { stdio: "inherit", cwd: apiRoot, env });

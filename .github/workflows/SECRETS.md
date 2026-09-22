@@ -113,14 +113,39 @@ scoped to Preview (staging) or Production as appropriate.
 
 | Variable | Staging value | Production value |
 |---|---|---|
-| `DATABASE_URL` | Staging DB connection string | Prod DB connection string |
-| `DIRECT_URL` | Staging DB direct URL (Prisma) | Prod DB direct URL |
+| `DATABASE_URL` | Staging DB connection string (`app_service` DML role) | Prod DB connection string (`app_service` DML role) |
+| `DIRECT_URL` | Staging DB direct DDL URL (`db_owner` role) | Prod DB direct DDL URL (`db_owner` role) |
+| `MIGRATION_DATABASE_URL` | Staging DB migration URL (`db_owner` role) | Prod DB migration URL (`db_owner` role) |
 | `REDIS_URL` | Staging Redis URL | Prod Redis URL |
+| `ENCRYPTION_KEY` | 32-byte random hex key for AES PII encryption | Different 32-byte random hex key |
+| `HMAC_SECRET` | 32-byte random hex key for HMAC blind index | Different 32-byte random hex key |
 | `JWT_SECRET` | Any strong random string | Different strong random string |
 | `FRONTEND_URL` | Staging Vercel preview URL | Your production domain |
 | `STRIPE_SECRET_KEY` | Stripe **test** mode key (`sk_test_...`) | Stripe **live** key (`sk_live_...`) |
 | `STRIPE_WEBHOOK_SECRET` | Stripe test webhook secret | Stripe live webhook secret |
 | *(other third-party keys)* | Sandbox / test credentials | Live credentials |
+
+### Generating `ENCRYPTION_KEY` and `HMAC_SECRET`
+
+You can generate 32-byte (64 hex character) cryptographically secure random keys using Node.js or OpenSSL from your terminal:
+
+**Via Node.js (Terminal / PowerShell):**
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+**Via OpenSSL:**
+```bash
+openssl rand -hex 32
+```
+
+> ⚠️ **GitHub Environment Secret Setup for `MIGRATION_DATABASE_URL`**:
+> Set `MIGRATION_DATABASE_URL` under GitHub **Settings → Environments → staging / production → Environment secrets**:
+> - **Staging Environment Secret**: `postgresql://db_owner:your_staging_owner_password@<staging_host>:<port>/railway`
+> - **Production Environment Secret**: `postgresql://db_owner:your_production_owner_password@<production_host>:<port>/railway`
+
+
+
 
 > ⚠️ **Never share a database between staging and production.**
 > Run a separate Postgres and Redis instance per Railway environment.
@@ -135,7 +160,9 @@ scoped to Preview (staging) or Production as appropriate.
 - [ ] Created two separate Vercel projects (staging + prod) — added their `VERCEL_PROJECT_ID` to the correct environment each
 - [ ] Created two Railway project tokens — added as `RAILWAY_TOKEN` to the correct environment each
 - [ ] Found the API service UUID for staging and prod — added as `RAILWAY_SERVICE_ID` to the correct environment each
+- [ ] Added `MIGRATION_DATABASE_URL` (`db_owner` DDL owner connection string) to GitHub Repository / Environment Secrets for automated CI database migrations
 - [ ] Set all app-level variables (DB, Redis, JWT, Stripe…) inside Railway per environment
 - [ ] Set all frontend env vars inside each Vercel project
 - [ ] Disconnected Railway GitHub auto-deploy (already done — do not re-enable)
 - [ ] Pushed a commit to `develop` and verified the staging pipeline runs end-to-end
+

@@ -40,6 +40,7 @@ import { registerFeatureFlagRoutes } from "./modules/feature-flag/feature-flag.c
 import { FeatureFlagRepository } from "./modules/feature-flag/feature-flag.repository.js";
 import { FeatureFlagService } from "./modules/feature-flag/feature-flag.service.js";
 import { StockMovementRepository } from "./modules/inventory/stock-movement.repository.js";
+import { registerMediaRoutes } from "./modules/media/media.controller.js";
 import { BuyerCheckoutService } from "./modules/order/buyer-checkout.service.js";
 import { registerOrderRoutes } from "./modules/order/order.controller.js";
 import { OrderRepository } from "./modules/order/order.repository.js";
@@ -81,6 +82,7 @@ function getRuntimeRedis(app: FastifyInstance): RedisLikeRuntime {
 }
 
 export function registerAppRoutes(app: FastifyInstance): void {
+  registerMediaRoutes(app);
   registerCategoryRoutes(app);
   registerSubCategoryRoutes(app);
   registerProductRoutes(app);

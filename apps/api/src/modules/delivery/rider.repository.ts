@@ -2,6 +2,8 @@ import { NotImplementedError } from "@gorola/shared";
 import type { DeliveryRider, PrismaClient, RiderLocation } from "@prisma/client";
 import { Prisma } from "@prisma/client";
 
+import { decryptPII, encryptPII, hashPII } from "../../lib/crypto.js";
+
 export class RiderRepository {
   public constructor(private readonly db: PrismaClient) {}
 
@@ -13,6 +15,7 @@ export class RiderRepository {
     const storeId = primaryStore?.storeId || "";
     return {
       ...rider,
+      phone: decryptPII(rider.phone),
       storeId
     };
   }
@@ -24,10 +27,15 @@ export class RiderRepository {
     passwordHash: string;
     storeId: string;
   }): Promise<DeliveryRider & { storeId: string }> {
+    const rawPhone = input.phone.trim();
+    const encryptedPhone = encryptPII(rawPhone);
+    const piiHash = hashPII(rawPhone);
+
     const rider = await this.db.deliveryRider.create({
       data: {
         name: input.name,
-        phone: input.phone,
+        phone: encryptedPhone,
+        phoneHash: piiHash,
         email: input.email,
         passwordHash: input.passwordHash,
         isActive: true,
@@ -69,6 +77,27 @@ export class RiderRepository {
     const rider = await this.db.deliveryRider.findFirst({
       where: {
         email,
+        ...(options?.includeDeleted === true ? {} : { isDeleted: false })
+      },
+      include: {
+        stores: true
+      }
+    });
+    return this.mapRiderWithStoreId(rider);
+  }
+
+  public async findByPhone(
+    phone: string,
+    options?: { includeDeleted?: boolean }
+  ): Promise<(DeliveryRider & { storeId: string }) | null> {
+    const rawPhone = phone.trim();
+    const piiHash = hashPII(rawPhone);
+    const rider = await this.db.deliveryRider.findFirst({
+      where: {
+        OR: [
+          { phoneHash: piiHash },
+          { phone: rawPhone }
+        ],
         ...(options?.includeDeleted === true ? {} : { isDeleted: false })
       },
       include: {

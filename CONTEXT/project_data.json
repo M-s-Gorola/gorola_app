@@ -19,15 +19,16 @@
     "pattern": "Modular Monolith",
     "layer_pattern": "Controller → Service → Repository",
     "language": "TypeScript (strict mode, no any)",
-    "runtime": "Node.js 20 LTS",
+    "runtime": "Node.js 22 LTS",
     "framework": "Fastify v4 (backend) + React 18 + Vite (frontend)",
-    "orm": "Prisma v5 with PostgreSQL 15",
-    "database": "PostgreSQL 15 (primary) + Redis 7 (cache, sessions, queues)",
+    "orm": "Prisma v6 with PostgreSQL 15",
+    "database": "PostgreSQL 15 (primary with app_service DML & db_owner DDL roles) + Redis 7 (cache, sessions, queues)",
     "queue": "BullMQ (Redis-backed)",
     "realtime": "Socket.IO v4 (WebSocket for live tracking, order status)",
     "testing": "Vitest (unit + integration) + Supertest (API) + Playwright (E2E)",
     "tdd": "STRICT — tests written FIRST, always. Red → Green → Refactor.",
-    "deployment": "Railway.app (free tier, supports PostgreSQL + Redis + Node)",
+    "deployment": "Railway.app (Node 22 + PostgreSQL 15 + Redis 7)",
+
     "ci_cd": "GitHub Actions",
     "monorepo": "pnpm workspaces",
     "repo_structure": "apps/web, apps/api, packages/shared, packages/ui"
@@ -170,7 +171,8 @@
     "xss": "DOMPurify on frontend for any user-generated content rendered as HTML",
     "csrf": "Double-submit cookie pattern for state-changing requests",
     "secrets": "Environment variables only — never in source. dotenv-safe enforces all required vars.",
-    "uploads": "Multer + file type validation + virus scan stub (ClamAV future)"
+    "uploads": "Multer + file type validation + virus scan stub (ClamAV future)",
+    "pii_encryption": "AES-256-GCM encryption at rest for PII (phone) with HMAC-SHA256 blind indexing (phoneHash) and least-privilege DML/DDL role separation (app_service / db_owner)"
   },
   "database_schema_enums": [
     "OrderStatus (PLACED | PREPARING | OUT_FOR_DELIVERY | DELIVERED | CANCELLED | PENDING_APPROVAL | APPROVED)",
@@ -186,7 +188,8 @@
     "EarningType (PER_ORDER | PER_KM) — PLANNED Phase 5.7"
   ],
   "database_schema_entities": [
-    "User — id, phone (unique), name, isVerified, isActive, isDeleted, createdAt, updatedAt",
+    "User — id, phone (unique, AES-256-GCM encrypted), phoneHash (unique HMAC-SHA256 blind index), name, isVerified, isActive, isDeleted, createdAt, updatedAt",
+
     "Store — id, name, description, phone, address, isActive, weatherModeDeliveryWindow, storeType, bookingLeadDays, isAcceptingBookings, isAcceptingOrders, isDeleted, riderEarningRatePct (Decimal? — PLANNED Phase 5.7: % of deliveryFee paid to rider; null = use global SystemSetting)",
     "StoreOwner — id, email (unique), passwordHash, storeId (FK Store), totpSecret, totpEnabled, isDeleted",
     "Admin — id, email (unique), passwordHash, totpSecret, isDeleted",
@@ -207,7 +210,8 @@
     "FeatureFlag — id, key (unique), value (Boolean), description?, updatedBy, updatedAt",
     "SystemSetting — id, key (unique), value (String), description?, updatedBy, updatedAt — used for DELIVERY_CHARGE, RIDER_EARNING_RATE_PCT (Phase 5.7), etc.",
     "AuditLog — id, actorId, actorRole (ActorRole), action, entityType, entityId, oldValue (Json?), newValue (Json?), ip, userAgent, createdAt",
-    "DeliveryRider — id, name, phone, email (unique), passwordHash, isActive, riderType (RiderType default DELIVERY), isDeleted",
+    "DeliveryRider — id, name, phone (AES-256-GCM encrypted), phoneHash (unique HMAC-SHA256 blind index), email (unique), passwordHash, isActive, riderType (RiderType default DELIVERY), isDeleted",
+
     "RiderStore — id, riderId (FK DeliveryRider), storeId (FK Store), isPrimary (Boolean) — junction table for multi-store rider assignment; unique(riderId, storeId)",
     "RiderLocation — id, riderId (FK DeliveryRider), lat (Decimal 10,7), lng (Decimal 10,7), updatedAt — upserted on each GPS push",
     "BookingOrder — id, orderId (unique FK Order), scheduledDate, timeslot, requiresFasting, approvalStatus (BookingApprovalStatus), approvedAt?, approvedByOwnerId?, rejectionReason?, assignedTechnicianId?",

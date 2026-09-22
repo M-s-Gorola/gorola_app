@@ -9,7 +9,12 @@ This document explains the purpose of each table in the GoRola PostgreSQL databa
 ### `User`
 *   **Purpose**: Stores buyer (customer) profiles.
 *   **Nuance**: Uses **Soft Delete** (`isDeleted`). We never fully delete a user to preserve order history.
-*   **Identity**: Verified via OTP; phone numbers are unique.
+*   **Identity & PII Encryption (DPDP Compliance)**: Verified via OTP; `phone` is AES-256-GCM encrypted at rest (`enc:<iv>:<ciphertext>:<authTag>`). `phoneHash` stores a unique 64-character HMAC-SHA256 blind index for fast exact lookups without storing plaintext phone numbers in database indexes.
+
+### `DeliveryRider` & `RiderLocation`
+*   **Purpose**: Tracks delivery personnel profiles and real-time location.
+*   **PII Encryption (DPDP Compliance)**: `phone` is AES-256-GCM encrypted at rest (`enc:...`), and `phoneHash` stores a unique 64-character HMAC-SHA256 blind index. `RiderLocation` is highly dynamic; it stores the last known Lat/Lng to show the "Rider is nearby" pulse in the UI.
+
 
 ### `StoreOwner` & `Admin`
 *   **Purpose**: Internal accounts for store management and system administration.
@@ -86,3 +91,12 @@ This document explains the purpose of each table in the GoRola PostgreSQL databa
 ### `DeliveryRider` & `RiderLocation`
 *   **Purpose**: Tracks delivery personnel.
 *   **Nuance**: `RiderLocation` is highly dynamic; it stores the last known Lat/Lng to show the "Rider is nearby" pulse in the UI.
+
+---
+
+## 🔒 Database User Roles & Permissions (DPDP Act Compliance)
+
+PostgreSQL database connections enforce least-privilege role separation:
+*   **`app_service` (DML Role — `DATABASE_URL`)**: Restricted to runtime DML operations (`SELECT`, `INSERT`, `UPDATE`, `DELETE`). Cannot execute DDL schema changes (`CREATE`, `ALTER`, `DROP`, `TRUNCATE`). Used by the Fastify backend during normal API execution.
+*   **`db_owner` (DDL Role — `DIRECT_URL` & `MIGRATION_DATABASE_URL`)**: Full database owner. Used exclusively by `prisma migrate dev`, `prisma migrate deploy`, and administrative developer tools (`prisma:studio`).
+

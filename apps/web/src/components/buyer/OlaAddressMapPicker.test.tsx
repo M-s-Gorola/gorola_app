@@ -16,17 +16,17 @@ const mockMapInstance = {
 };
 
 const mockMarkerInstance = {
-  setLngLat: vi.fn().mockReturnThis(),
-  addTo: vi.fn().mockReturnThis(),
+  setLngLat: vi.fn(() => mockMarkerInstance),
+  addTo: vi.fn(() => mockMarkerInstance),
   remove: vi.fn(),
   on: vi.fn()
 };
 
 const mockInit = vi.fn(() => mockMapInstance);
-const mockOlaMapsInit = vi.fn().mockImplementation(function (this: { init: unknown }) {
-  this.init = mockInit;
+const mockOlaMapsInit = vi.fn(function () {
+  return { init: mockInit };
 });
-const mockMarkerConstructor = vi.fn().mockImplementation(function (this: unknown) {
+const mockMarkerConstructor = vi.fn(function () {
   return mockMarkerInstance;
 });
 
@@ -40,6 +40,11 @@ describe("OlaAddressMapPicker", () => {
     vi.stubGlobal("fetch", mockFetch);
     vi.useFakeTimers();
     mockFetch.mockReset();
+    mockOlaMapsInit.mockImplementation(function () {
+      return { init: mockInit };
+    });
+    mockMarkerInstance.setLngLat.mockImplementation(() => mockMarkerInstance);
+    mockMarkerInstance.addTo.mockImplementation(() => mockMarkerInstance);
     mockMapInstance.remove.mockClear();
     mockMapInstance.setCenter.mockClear();
     mockMapInstance.setZoom.mockClear();

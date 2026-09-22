@@ -35,8 +35,11 @@ jobs:
       DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/gorola_test?schema=public&sslmode=disable"
       DATABASE_URL_TEST: "postgresql://postgres:postgres@127.0.0.1:5432/gorola_test?schema=public&sslmode=disable"
       DIRECT_URL: "postgresql://postgres:postgres@127.0.0.1:5432/gorola_test?schema=public&sslmode=disable"
+      MIGRATION_DATABASE_URL: "postgresql://postgres:postgres@127.0.0.1:5432/gorola_test?schema=public&sslmode=disable"
+      MIGRATION_DATABASE_URL_TEST: "postgresql://postgres:postgres@127.0.0.1:5432/gorola_test?schema=public&sslmode=disable"
       REDIS_URL: "redis://127.0.0.1:6379"
       NODE_ENV: test
+
 
     # Real Postgres 15 + Redis 7 — same major versions as prod intent.
     # Steps connect via 127.0.0.1 (host-published ports), not the container hostname.

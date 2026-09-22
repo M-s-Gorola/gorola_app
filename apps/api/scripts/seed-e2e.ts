@@ -1,4 +1,5 @@
 import { PrismaClient, OrderStatus, DiscountType } from "@prisma/client";
+import { decryptPII, encryptPII, hashPII } from "../src/lib/crypto.js";
 
 const prisma = new PrismaClient();
 
@@ -110,16 +111,25 @@ async function main() {
   // 2. Seed test users for E2E
   const phones = ["+919876543210", "+919876543211", "+919876543212", "+919876543214"];
   const users = await Promise.all(phones.map(async (phone) => {
-    return prisma.user.upsert({
-      where: { phone },
-      update: { isVerified: true },
-      create: {
-        phone,
+    const piiHash = hashPII(phone);
+    const encrypted = encryptPII(phone);
+    const existing = await prisma.user.findFirst({ where: { phoneHash: piiHash } });
+    if (existing) {
+      return prisma.user.update({
+        where: { id: existing.id },
+        data: { isVerified: true }
+      });
+    }
+    return prisma.user.create({
+      data: {
+        phone: encrypted,
+        phoneHash: piiHash,
         name: `E2E Tester ${phone.slice(-4)}`,
         isVerified: true,
       },
     });
   }));
+
 
   const user10 = users[0];
   const user11 = users[1];

@@ -3,10 +3,12 @@ import { Prisma } from "@prisma/client";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { maskPhone } from "../../lib/crypto.js";
 import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { BookingOrderService } from "./booking-order.service.js";
+
 
 type SuccessEnvelope<T> = {
   success: true;
@@ -94,11 +96,8 @@ interface BookingOrderWithRelations {
   };
 }
 
-function maskPhone(phone: string): string {
-  if (!phone) return "";
-  if (phone.length <= 4) return "****";
-  return "*".repeat(phone.length - 4) + phone.slice(-4);
-}
+
+
 
 function serializeBookingOrder(booking: BookingOrderWithRelations): Record<string, unknown> {
   const order = booking.order;
@@ -136,6 +135,7 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     deliveryLat: order.deliveryLat ? Number(order.deliveryLat) : null,
     deliveryLng: order.deliveryLng ? Number(order.deliveryLng) : null,
     buyerMaskedPhone: order.user ? maskPhone(order.user.phone) : "",
+    user: order.user ? { name: order.user.name, phone: order.user.phone } : null,
     paymentMethod: "COD",
     store: {
       id: order.store.id,
@@ -284,8 +284,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
 
       const result = await deps.bookingService.repository.findByStoreId(owner.storeId, {
         ...(statusFilter ? { status: statusFilter } : {}),
-        page: query.page,
-        limit: query.limit
+        ...(query.page !== undefined ? { page: query.page } : {}),
+        ...(query.limit !== undefined ? { limit: query.limit } : {})
       });
 
       return success(request, reply, {

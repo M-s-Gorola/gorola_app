@@ -8,6 +8,7 @@ import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
 import { initGorolaGsapOnce } from "@/lib/gsap";
+import { normalizeImageUrl, PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/image-utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
@@ -305,13 +306,14 @@ export function ProductGrid(props: ProductGridProps): ReactElement {
             <Link to={`/products/${item.productId}`} className="group block cursor-pointer">
               <div className="mb-3 h-28 sm:h-32 w-full overflow-hidden rounded-xl bg-gorola-slate-mist/20">
                 <img
-                  src={item.imageUrl}
+                  src={normalizeImageUrl(item.imageUrl)}
                   alt={item.name}
                   className="h-full w-full object-cover transition-transform duration-500 group-hover:scale-110"
+                  referrerPolicy="no-referrer"
                   onError={(e) => {
                     const img = e.currentTarget as HTMLImageElement;
-                    if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
-                      img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+                    if (img.src !== PRODUCT_PLACEHOLDER_IMAGE) {
+                      img.src = PRODUCT_PLACEHOLDER_IMAGE;
                     }
                   }}
                 />

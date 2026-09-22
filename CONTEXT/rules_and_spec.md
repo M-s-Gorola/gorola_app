@@ -188,8 +188,18 @@ HYBRID COMMERCE ENGINE:
   - BookingApprovalStatus enum: PENDING_APPROVAL, APPROVED, REJECTED, COMPLETED, CANCELLED
   - RiderType enum: DELIVERY, FIELD_TECHNICIAN
 
+DATABASE ROLE SEPARATION & LEAST PRIVILEGE (DPDP Act Sec 8(5)):
+  - Production & Staging runtime connections MUST use 'app_service' (restricted DML role: SELECT, INSERT, UPDATE, DELETE). DDL commands (CREATE, ALTER, DROP, TRUNCATE) are strictly blocked for 'app_service'.
+  - Migrations and administrative operations MUST use 'db_owner' (DDL role via DIRECT_URL and MIGRATION_DATABASE_URL).
+
+PII ENCRYPTION AT REST & BLIND INDEXING (DPDP Act Sec 8(5)):
+  - All PII fields (such as 'phone') MUST be encrypted at rest using AES-256-GCM ('enc:<iv>:<ciphertext>:<authTag>').
+  - Searchable lookups MUST use deterministic HMAC-SHA256 blind indexing ('phoneHash' @unique column) to avoid raw PII in indexes.
+  - Intercepted globally via Prisma Client Extension in apps/api/src/lib/prisma.ts.
+
 MIGRATIONS:
-  - Always use 'prisma migrate dev' — never edit migration files manually
+  - Physical SQL migration files are MANDATORY for all schema changes — run 'prisma migrate dev' using DDL credentials.
+  - SQL migration files MUST be applied to both local dev and test databases before running green code or test suites.
   - Every migration must be reversible — include down migration comments
   - Migrations run automatically in CI before integration tests
   - Never drop a column without a deprecation cycle (rename → dual-write → drop)

@@ -35,9 +35,38 @@ const leafletMocks = vi.hoisted(() => {
     reset() {
       api.mockMapRemove.mockClear();
       api.Lmap.mockClear();
+      api.Lmap.mockImplementation(() => ({
+        off: vi.fn(),
+        on: vi.fn(),
+        remove: api.mockMapRemove,
+        setView: vi.fn(function (this: unknown) {
+          return this;
+        }),
+        fitBounds: vi.fn(function (this: unknown) {
+          return this;
+        })
+      }));
       api.markerFactory.mockClear();
+      api.markerFactory.mockImplementation(() => ({
+        addTo: vi.fn().mockReturnThis(),
+        getLatLng: vi.fn(() => ({ lat: 30.454, lng: 78.066 })),
+        setLatLng: vi.fn().mockReturnThis(),
+        setIcon: vi.fn().mockReturnThis(),
+        off: vi.fn(),
+        on: vi.fn(),
+        remove: vi.fn(),
+        getElement: vi.fn(() => mockMarkerElement)
+      }));
       api.mergeOptionsSpy.mockClear();
       api.polylineFactory.mockClear();
+      api.polylineFactory.mockImplementation(() => ({
+        addTo: vi.fn().mockReturnThis(),
+        remove: vi.fn()
+      }));
+      api.TileLayerMock.mockClear();
+      api.TileLayerMock.mockImplementation(() => ({
+        addTo: vi.fn()
+      }));
       mockMarkerElement.style.filter = "";
     }
   };
@@ -102,6 +131,11 @@ describe("LeafletMapAdapter", () => {
     adapter = new LeafletMapAdapter();
     leafletMocks.reset();
     vi.clearAllMocks();
+    vi.mocked(fetchOlaRoute).mockResolvedValue([
+      [30.455, 78.068],
+      [30.452, 78.064],
+      [30.45, 78.06]
+    ]);
     vi.stubEnv("VITE_OLA_MAPS_API_KEY", "mock-api-key");
   });
 
@@ -167,7 +201,7 @@ describe("LeafletMapAdapter", () => {
     await new Promise((resolve) => setTimeout(resolve, 50));
 
     expect(fetchOlaRoute).toHaveBeenCalledWith(riderCoords, buyerCoords, "mock-api-key");
-    expect(leafletMocks.polylineFactory).toHaveBeenCalledWith(
+    expect(leafletMocks.polylineFactory).toHaveBeenLastCalledWith(
       [
         [30.455, 78.068],
         [30.452, 78.064],

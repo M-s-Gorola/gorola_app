@@ -2,6 +2,7 @@ import { ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
+import { maskPhone } from "../../lib/crypto.js";
 import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
@@ -11,11 +12,7 @@ import type { RiderEarningsService } from "./rider-earnings.service.js";
 import type { RiderLocationService } from "./rider-location.service.js";
 import type { RiderOrderService } from "./rider-order.service.js";
 
-function maskPhone(phone: string): string {
-  if (!phone) return "";
-  if (phone.length <= 4) return "****";
-  return "*".repeat(phone.length - 4) + phone.slice(-4);
-}
+
 
 function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
   return reply.getHeader("x-request-id")?.toString() ?? request.id;

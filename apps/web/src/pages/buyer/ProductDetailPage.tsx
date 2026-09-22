@@ -2,11 +2,12 @@ import { useQuery } from "@tanstack/react-query";
 import gsap from "gsap";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
-import { useNavigate,useParams } from "react-router-dom";
+import { useNavigate, useParams } from "react-router-dom";
 
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
 import { enqueueCartVariantMutation } from "@/lib/cart-variant-mutation-queue";
+import { normalizeImageUrl,PRODUCT_PLACEHOLDER_IMAGE } from "@/lib/image-utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
@@ -137,13 +138,14 @@ export function ProductDetailPage(): ReactElement {
     <section ref={containerRef} className="grid gap-6 rounded-3xl bg-white/80 p-6 shadow-xl md:grid-cols-2 md:p-8 md:gap-8">
       <div className="flex aspect-square items-center justify-center overflow-hidden rounded-2xl bg-gorola-slate-mist/10">
         <img
-          src={query.data.imageUrl}
+          src={normalizeImageUrl(query.data.imageUrl)}
           alt={query.data.name}
           className="h-full w-full object-cover"
+          referrerPolicy="no-referrer"
           onError={(e) => {
             const img = e.currentTarget as HTMLImageElement;
-            if (img.src !== "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7") {
-              img.src = "data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
+            if (img.src !== PRODUCT_PLACEHOLDER_IMAGE) {
+              img.src = PRODUCT_PLACEHOLDER_IMAGE;
             }
           }}
         />

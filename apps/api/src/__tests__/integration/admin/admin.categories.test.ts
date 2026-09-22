@@ -576,5 +576,44 @@ describe("Admin Categories API Integration Tests", () => {
       });
       expect(res2.statusCode).toBe(400);
     });
+
+    it("should validate and confirm bulk category & subcategory image URLs", async () => {
+      const payload = {
+        rows: [
+          {
+            name: "Beverages",
+            imageUrl: "https://example.com/beverages.jpg",
+            subCategories: [
+              { name: "Tea", imageUrl: "https://example.com/tea.jpg" }
+            ]
+          }
+        ]
+      };
+
+      const resVal = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/validate",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+      expect(resVal.statusCode).toBe(200);
+      expect(resVal.json().data.valid).toBe(true);
+
+      const resConf = await server.inject({
+        method: "POST",
+        url: "/api/v1/admin/bulk/categories/confirm?mode=strict",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload
+      });
+      expect(resConf.statusCode).toBe(201);
+
+      const cat = await db.category.findUnique({
+        where: { slug: "beverages" },
+        include: { subCategories: true }
+      });
+      expect(cat?.imageUrl).toBe("https://example.com/beverages.jpg");
+      expect(cat?.subCategories[0]?.imageUrl).toBe("https://example.com/tea.jpg");
+    });
   });
 });
+
