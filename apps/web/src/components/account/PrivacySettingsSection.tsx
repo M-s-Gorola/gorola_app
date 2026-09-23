@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
+import { queryClient } from "@/lib/query-client";
 
 // Raw shape returned by GET /api/v1/consent
 type ConsentLogRow = {
@@ -157,6 +158,7 @@ export function PrivacySettingsSection(): ReactElement {
         setCards((prev) =>
           prev.map((c) => (c.purpose === purpose ? { ...c, isActive: false } : c))
         );
+        void queryClient.invalidateQueries({ queryKey: ["consents"] });
         toast.success("Consent withdrawn successfully");
       }
     } catch (err) {
@@ -188,6 +190,7 @@ export function PrivacySettingsSection(): ReactElement {
         }
       }
       await loadAndBuildCards();
+      void queryClient.invalidateQueries({ queryKey: ["consents"] });
       toast.success("Consent updated successfully");
     } catch (err) {
       let msg = "Failed to update consent";

@@ -62,12 +62,14 @@ export function CheckoutPage(): ReactElement {
   // and to hide the marketing checkbox if the user has already opted in.
   type ConsentRow = { purpose: string; isWithdrawn: boolean };
   const consentsQuery = useQuery({
-    enabled: !isBootstrapPending,
+    enabled: !!accessToken && !isBootstrapPending,
     queryFn: async () => {
       const res = await api!.get<{ success: boolean; data: { consents: ConsentRow[] } }>("/api/v1/consent");
       return res.data.data?.consents ?? [];
     },
-    queryKey: ["consents"]
+    queryKey: ["consents", accessToken],
+    staleTime: 0,
+    refetchOnMount: "always"
   });
 
   const activeConsents = consentsQuery.data ?? [];
@@ -652,7 +654,7 @@ export function CheckoutPage(): ReactElement {
             </div>
 
             {/* Only show the marketing opt-in if the user hasn't already granted it */}
-            {!hasMarketingConsent && (
+            {!consentsQuery.isLoading && !hasMarketingConsent && (
               <label
                 data-testid="checkout-marketing-opt-in"
                 className="flex items-start gap-2.5 rounded-xl border border-gorola-pine/15 bg-white p-3 text-xs text-gorola-charcoal cursor-pointer hover:border-gorola-pine/30 transition-colors text-left"

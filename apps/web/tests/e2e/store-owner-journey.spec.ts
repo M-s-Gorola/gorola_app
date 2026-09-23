@@ -214,10 +214,11 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Click "Place Order"
     const placeOrderBtn = buyerPage.locator('button', { hasText: /Place Order/i });
     await expect(placeOrderBtn).toBeVisible();
-    await placeOrderBtn.click({ force: true });
+    await placeOrderBtn.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+    await placeOrderBtn.click();
 
     // Get order ID from URL
-    await buyerPage.waitForURL(/.*\/orders\/.*/);
+    await buyerPage.waitForURL(/.*\/orders\/.*/, { timeout: 30000 });
     const orderUrl = buyerPage.url();
     const orderId = orderUrl.substring(orderUrl.lastIndexOf("/") + 1);
 
@@ -727,10 +728,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       .click();
     await buyerPage.locator('[data-testid$="cart-button"]:visible').click();
 
-    // Increase quantity
-    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
-    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
-    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
+    // Increase quantity to 4 (Rs 480) to cross the Rs 400 minimum purchase threshold
+    const plusBtn = buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" });
+    await plusBtn.click();
+    await expect(buyerPage.locator('aside').locator('[data-testid="item-quantity"]').first()).toHaveText("2");
+    await plusBtn.click();
+    await expect(buyerPage.locator('aside').locator('[data-testid="item-quantity"]').first()).toHaveText("3");
+    await plusBtn.click();
+    await expect(buyerPage.locator('aside').locator('[data-testid="item-quantity"]').first()).toHaveText("4");
 
     // Assert that the offer is applied automatically in the Cart Drawer
     // Total discount should be 15% of 480 = Rs 72

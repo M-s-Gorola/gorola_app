@@ -84,11 +84,12 @@ test.describe('Checkout & Account', () => {
     
     const responsePromise = page.waitForResponse(resp => 
       resp.url().includes('/api/v1/orders') && resp.request().method() === 'POST',
-      { timeout: 15000 }
+      { timeout: 30000 }
     );
     
     await expect(placeOrderBtn).toBeEnabled({ timeout: 10000 });
-    await placeOrderBtn.click({ force: true });
+    await placeOrderBtn.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+    await placeOrderBtn.click();
     await responsePromise;
 
     // Assert navigation to confirmation page

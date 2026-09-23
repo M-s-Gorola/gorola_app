@@ -341,32 +341,56 @@ Under DPDP Act 2023, anonymous performance telemetry requires prior notice with 
 
 ### 8.3 — User Rights: Erasure, Access & Nomination (Current Setup)
 
-#### 8.3.1 — Right to Erasure (`DELETE /api/v1/user/account`)
+#### 8.3.1 — Right to Erasure with 30-Day Recovery Grace Period (`DELETE /api/v1/user/account` & `POST /api/v1/user/reactivate-account`)
 
 **Root cause / Goal:**
-No account deletion endpoint exists. DPDP Act requires self-serve account deletion that triggers purging of personal data across all systems. GoRola soft-deletes users; this must anonymize PII fields (`name = '[deleted]'`, `phone = 'DELETED_${userId}'`), soft-delete addresses, invalidate active refresh tokens, and queue a 30-day hard-purge job in BullMQ.
+Under India's DPDP Act Section 12, Data Principals have the statutory right to erase their personal data. To prevent accidental data loss and maintain industry-standard security, GoRola provides a **30-day grace period** during which users can cancel the deletion and restore their account simply by logging back in via Phone OTP.
+
+**Lifecycle Architecture:**
+1. **Day 0 (Deletion Request — `DELETE /api/v1/user/account`):**
+   - Soft-delete: Sets `deletedAt = new Date()`, `deletionScheduledFor = Date.now() + 30 days`.
+   - Preserves `phone` and `name` temporarily so the user can be authenticated during the grace period.
+   - Revokes active sessions: Deletes Redis session keys (`user_sessions:{userId}`) and refresh tokens (`rt:buyer:{token}`) for instant logout across all devices.
+   - Enqueues BullMQ `UserDataPurgeJob` scheduled to execute with a 30-day delay.
+   - UI shows confirmation modal: *"Your account has been scheduled for deletion. You have a 30-day grace period. Simply log in with your phone number within 30 days to cancel deletion and restore your account."*
+2. **Days 1–30 (Account Recovery / Reactivation — `POST /api/v1/user/reactivate-account`):**
+   - User verifies Phone OTP on `/login`.
+   - Backend detects `deletedAt !== null` and returns `{ isPendingDeletion: true, deletionScheduledFor }`.
+   - Frontend displays **Account Reactivation Prompt**:
+     - *"Welcome back! Your account is scheduled for permanent deletion on [Date]. Would you like to restore your account?"*
+     - Action: **"Cancel Deletion & Restore Account"** $\rightarrow$ calls `POST /api/v1/user/reactivate-account`, clears `deletedAt = null`, cancels BullMQ job, restores full account access.
+3. **Day 31+ (Permanent Hard Purge & Anonymization — BullMQ `UserDataPurgeJob`):**
+   - Worker checks if `deletedAt !== null` (account was not reactivated).
+   - Irreversibly anonymizes User profile: `name = '[deleted]'`, `phone = 'DELETED_${userId}'`, `phoneHash = null`, `isDeleted = true`, `isActive = false`.
+   - Purges saved delivery addresses from `Address` table.
+   - Purges nominee details (`nomineeName = null`, `nomineeContact = null`, `nomineeRelationship = null`).
+   - Sanitizes order delivery PII in `Order` table (`landmarkDescription = '[deleted]'`, `flatRoom = null`, `deliveryNote = null`, `deliveryLat = null`, `deliveryLng = null`, `addressLabel = null`) while keeping financial totals for statutory merchant tax audits.
+   - Marks all `ConsentLog` records with `isWithdrawn = true` and `withdrawnAt = new Date()`.
+   - Cleans up any remaining Redis keys.
 
 ---
 
-- [ ] **RED — Integration (`user.account-deletion.test.ts`):**
-  - [ ] Test setup: Seed buyer with name "Test User", phone "+919876543210", 2 addresses, 1 order, 1 ConsentLog.
-  - [ ] Test: `DELETE /api/v1/user/account` + buyer JWT → HTTP 200 with `{ success: true, data: { message: 'Your account has been scheduled for deletion...' } }`.
-  - [ ] Test: Query DB: `User` row has `name = '[deleted]'`, `phone` starts with `'DELETED_'`, `isDeleted = true`.
-  - [ ] Test: Query DB: `Address` rows have `deletedAt` set. `ConsentLog` rows have `isWithdrawn = true`.
-  - [ ] Test: Refresh token for user in Redis `refresh:{token}` is deleted.
-  - [ ] Test: `UserDataPurgeJob` enqueued in BullMQ for 30 days later.
-  - [ ] **Run — confirm RED (endpoint does not exist).**
+- [ ] **RED — Integration (`user.account-deletion.test.ts` & `user.account-reactivation.test.ts`):**
+  - [ ] Test: `DELETE /api/v1/user/account` + buyer JWT → HTTP 200 with `{ isPendingDeletion: true, deletionScheduledFor: ... }`.
+  - [ ] Test: Query DB: `User` row has `deletedAt` set, `phone` intact for grace period, `isDeleted = false`.
+  - [ ] Test: Redis sessions for user are invalidated.
+  - [ ] Test: BullMQ `UserDataPurgeJob` enqueued with 30-day delay.
+  - [ ] Test: Login during grace period returns `isPendingDeletion: true`.
+  - [ ] Test: `POST /api/v1/user/reactivate-account` clears `deletedAt` and restores active status.
+  - [ ] Test: Running `UserDataPurgeJob` after 30 days executes irreversible anonymization (`name = '[deleted]'`, `phone = 'DELETED_...'`, addresses purged, consents withdrawn).
+  - [ ] **Run — confirm RED.**
 
 - [ ] **GREEN — Backend & Frontend:**
-  - [ ] [Repository] Add `anonymiseAndSoftDelete(userId)` to `user.repository.ts` and `withdrawAllForUser(userId)` to `consent.repository.ts`.
-  - [ ] [Service] Add `requestAccountDeletion(userId)` to `user.service.ts`: runs anonymization, deletes Redis session keys `user_sessions:{userId}`, enqueues BullMQ `UserDataPurgeJob`.
-  - [ ] [Worker] Create `apps/api/src/workers/user-data-purge.worker.ts`: hard-deletes `User` row after 30-day grace period.
-  - [ ] [Controller] Add handler for `DELETE /api/v1/user/account`.
-  - [ ] [Frontend] Add "Danger Zone" section to `/account` page with "Delete my account" button and confirmation dialog.
+  - [ ] [Repository] Add `markPendingDeletion(userId)`, `reactivateAccount(userId)`, and `permanentPurgeAndAnonymize(userId)` in `user.repository.ts`.
+  - [ ] [Service] Add `requestAccountDeletion(userId)` and `reactivateAccount(userId)` in `user.service.ts`.
+  - [ ] [Worker] Create `apps/api/src/workers/user-data-purge.worker.ts` with BullMQ processor.
+  - [ ] [Controller] Add `DELETE /api/v1/user/account` and `POST /api/v1/user/reactivate-account`.
+  - [ ] [Frontend] Add "Danger Zone" card on `/account/privacy` with deletion dialog.
+  - [ ] [Frontend] Add Reactivation modal on `/login` for users pending deletion.
   - [ ] Run integration & unit tests — **confirm GREEN.**
 
 - [ ] **Verification chain:**
-  - [ ] Buyer goes to `/account` → Clicks "Delete my account" → Confirms deletion modal → API anonymizes PII and invalidates session → User is logged out and redirected to `/` → DB shows anonymized user row → BullMQ job scheduled for 30-day hard purge → ✅ Done.
+  - [ ] Buyer goes to `/account/privacy` → Clicks "Delete my account" → Confirms modal → Soft-deleted & logged out → Buyer logs in within 30 days → Sees reactivation modal → Clicks "Restore Account" → Account restored cleanly → If not restored in 30 days, BullMQ executes permanent PII scrub → ✅ Done.
 
 ---
 
@@ -704,4 +728,20 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Added **Section 9: Booking Commerce Consent ADR** explaining why `ORDER_PROCESSING` legally and architecturally covers booking commerce without creating redundant purpose enums.
     - Added **Section 10: OTP_AUTH Idempotency & Authentication Lifecycle ADR** rationalizing why OTP consent occurs post-verification (when userId is known) and how backend idempotency prevents log bloat.
   - **Quality & Lint Fixes:**
-    - 100% test pass rate across 55 Vitest component/unit tests and 0 ESLint warnings across the entire monorepo.
+    - 100% test pass rate across 55 Vitest component/unit tests and 0 ESLint warnings across the entire monorepo.
+
+- **Session 7 — 2026-09-24 — Rider UI Mobile Layout, PII Key Rotation Fallback, CI E2E Mobile Stability & Booking Consent Parity:**
+  - **Rider UI Mobile Bottom Navigation Centering (`RiderLayout.tsx`):**
+    - Fixed bottom tab bar detachment on desktop and preview containers by applying `max-w-md mx-auto` to `<nav className="fixed bottom-0 left-0 right-0 ...">`, keeping navigation controls centered and aligned with the mobile card container across all viewport sizes.
+  - **PII Phone Number Decryption & Key-Rotation Fallback (`crypto.ts`, `rider.controller.ts`, `admin.service.ts`):**
+    - *Rider Profile Endpoint:* Added missing `decryptPII(rider.phone)` call in `GET /api/v1/rider/profile` (`rider.controller.ts`).
+    - *Admin Platform Riders:* Added missing `decryptPII(r.phone)` mapping in `listRiders()`, `createRider()`, and `updateRider()` in `admin.service.ts` so admin tables display readable plain numbers (`+919000000001`) instead of raw `enc:...` ciphertexts.
+    - *Dynamic Key & Fallback Decryption:* Refactored `crypto.ts` from evaluating `ENCRYPTION_KEY` at import-time to dynamically reading `process.env.ENCRYPTION_KEY` inside `getCipherKey()` and `getHmacSecret()`. Added automated fallback key decryption so historical database seed records encrypted with default keys and newly provisioned records encrypted with custom `.env` keys decrypt seamlessly.
+  - **Playwright E2E CI Mobile Viewport Fixes (`iphone-se`):**
+    - *Click Occlusion Resolution:* Diagnosed and fixed timeout failures in `E2E-022` (`store-owner-journey.spec.ts`) and `E2E-008` (`checkout.spec.ts`) caused by `{ force: true }` clicks clicking behind the fixed `z-50` mobile bottom nav bar. Replaced with `evaluate(node => node.scrollIntoView({ block: 'center' }))` + `.click()`.
+    - *Deterministic Quantity Increments:* Updated `E2E-028` to assert each quantity increment step (`2` → `3` → `4`) before verifying the automatic discount summary, eliminating race conditions during fast automated runs.
+  - **DPDP Consent Synchronization & Booking Commerce Parity:**
+    - *No Checkbox Flash:* Configured `consentsQuery` with `staleTime: 0`, `refetchOnMount: "always"`, and bound to `["consents", accessToken]` in `CheckoutPage.tsx`, rendering the optional Promotions checkbox only after loading completes (`!consentsQuery.isLoading && !hasMarketingConsent`).
+    - *Cache Invalidation:* Added `queryClient.invalidateQueries({ queryKey: ["consents"] })` to `handleWithdraw` and `handleGrant` in `PrivacySettingsSection.tsx` to instantly synchronize consent state across page transitions.
+    - *Booking Commerce Parity (`BookingTimeslotPage.tsx`):* Added the optional *Promotions & Seasonal Offers* checkbox with `data-testid="booking-marketing-opt-in"` to Section 5, and wired optional `MARKETING_EMAIL` consent logging alongside `ORDER_PROCESSING` upon booking confirmation.
+  - **Quality Gates:** 100% GREEN run on `pnpm ci:quality` (84/84 tests passing with zero failures).

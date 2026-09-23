@@ -1724,4 +1724,53 @@ Refactor the order fulfillment lifecycle and user exposure patterns:
 - Existing E2E Playwright tests and integration tests that assumed the merchant could perform the entire placed-to-delivered flow will break. These tests must be rewritten to simulate multi-actor interactions (Merchant prepares -> Rider accepts -> Merchant dispatches -> Rider delivers).
 - The map requires importing Leaflet or Ola Maps inside the store owner panel, which could cause test JSDOM failures if the component is not mocked. We will explicitly mock the map component in `StoreOrdersPage.test.tsx`.
 
+---
+
+## [DECISION-058] DPDP Act Right to Erasure — Two-Stage Soft Deletion with 30-Day Recovery Grace Period and BullMQ Automated Hard Purge
+
+**Date:** 2026-09-24  
+**Status:** Accepted  
+
+**Context:**  
+Under India's Digital Personal Data Protection (DPDP) Act 2023 Section 12, users (Data Principals) have the statutory right to request erasure of their personal data. However, immediate hard deletion or immediate PII scrambling on Day 0 creates significant UX and operational risks:
+1. **Accidental Deletions:** If a user accidentally deletes their account or changes their mind, immediate irreversible scrubbing destroys all account history with zero recovery option.
+2. **Account Recovery Authentication Paradox:** If phone number PII is scrambled on Day 0, the system cannot verify or authenticate the returning user via Phone OTP during a grace period.
+3. **Statutory Merchant Tax Obligations:** Indian accounting and tax regulations (GST/Companies Act) mandate that store order transaction totals and item sales ledgers be retained for tax audits (up to 7-8 years). Immediate hard deletion of `Order` rows would violate financial regulations.
+
+**Decision:**  
+Implement a **Two-Stage Erasure Architecture** featuring a **30-Day Recovery Grace Period**:
+
+1. **Stage 1: Day 0 Deletion Request (`DELETE /api/v1/user/account`)**
+   - **Soft Deletion & Lockout:** Set `deletedAt = new Date()`, `deletionScheduledFor = Date.now() + 30 days`.
+   - **Session Revocation:** Immediately delete active Redis session keys (`user_sessions:{userId}`) and refresh tokens (`rt:buyer:{token}`), forcing instant logout across all active devices.
+   - **Delayed Worker Job:** Enqueue a delayed BullMQ job (`UserDataPurgeJob`) scheduled to execute in 30 days.
+   - **Clear User Notice:** Present a prominent confirmation modal informing the user of the 30-day grace period and instructions on how to restore their account via Phone OTP.
+
+2. **Stage 2: Days 1–30 Account Recovery (`POST /api/v1/user/reactivate-account`)**
+   - If the user verifies Phone OTP on `/login` during the 30 days, the backend detects `deletedAt !== null` and returns `{ isPendingDeletion: true, deletionScheduledFor }`.
+   - The UI displays an **Account Reactivation Prompt** with one-click restoration.
+   - Restoring the account clears `deletedAt = null` and cancels the BullMQ purge job, preserving user profile, addresses, and history.
+
+3. **Stage 3: Day 31+ Irreversible Hard Purge (BullMQ `UserDataPurgeJob`)**
+   - When the 30-day BullMQ job executes, it verifies `deletedAt !== null` (was not reactivated).
+   - **User PII Anonymization:** Sets `name = '[deleted]'`, `phone = 'DELETED_${userId}'`, `phoneHash = null`, `isDeleted = true`, `isActive = false`.
+   - **Saved Address Purge:** Permanently purges all rows in the `Address` table for that user.
+   - **Nominee Purge:** Clears nominee fields (`nomineeName = null`, `nomineeContact = null`, `nomineeRelationship = null`).
+   - **Order Delivery PII Sanitization:** Clears personal delivery metadata (`landmarkDescription = '[deleted]'`, `flatRoom = null`, `deliveryNote = null`, `deliveryLat = null`, `deliveryLng = null`, `addressLabel = null`) while preserving item counts, prices, and tax subtotals for store financial compliance.
+   - **Consent Withdrawal:** Formally marks all `ConsentLog` entries with `isWithdrawn = true` and `withdrawnAt = new Date()`.
+
+**Rationale:**  
+- Adheres to industry gold standards (e.g. Google/Instagram 30-day deactivation) while complying fully with DPDP Section 12 erasure requirements.
+- Retaining phone number in a locked state during the grace period enables seamless, passwordless Phone OTP recovery without introducing third-party recovery email dependencies.
+- Retaining financial records with sanitized delivery PII fulfills both DPDP Act data minimization and Indian GST financial recordkeeping requirements.
+- BullMQ leverages our existing self-hosted Redis instance, ensuring zero personal data is ever shared with external third-party queue providers.
+
+**Tradeoffs:**  
+- Requires handling the `isPendingDeletion` state in login middleware and presenting reactivation UI on `/login`.
+- Delayed jobs in BullMQ must verify that the account was not reactivated before executing final scrubbing.
+
+**Alternatives Considered:**  
+1. **Immediate Day 0 Hard Deletion / PII Scramble:** Rejected — zero grace period, irrecoverable on accidental clicks, and impossible to authenticate returning users.
+2. **Email-Only Account Cancellation Links:** Rejected — adds unnecessary friction and external email dependencies when Phone OTP is already the native authentication channel for GoRola.
+
 

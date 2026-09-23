@@ -2,7 +2,7 @@ import { ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 
-import { maskPhone } from "../../lib/crypto.js";
+import { decryptPII, maskPhone } from "../../lib/crypto.js";
 import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
@@ -379,7 +379,7 @@ export function registerRiderRoutes(
         id: rider.id,
         name: rider.name,
         email: rider.email,
-        phone: rider.phone,
+        phone: decryptPII(rider.phone),
         riderType: rider.riderType,
         store: {
           id: primaryRiderStore.store.id,
