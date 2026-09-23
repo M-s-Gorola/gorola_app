@@ -1,6 +1,8 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+import { useAuthStore } from "@/store/auth.store";
+
 import { AnalyticsConsentBanner } from "./AnalyticsConsentBanner";
 
 const postMock = vi.fn();
@@ -11,13 +13,36 @@ vi.mock("@/lib/api", () => ({
   }
 }));
 
-describe("AnalyticsConsentBanner (DPDP 8.2.7)", () => {
+describe("AnalyticsConsentBanner (DPDP 8.2.7 - Option A)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     localStorage.clear();
+    useAuthStore.getState().clearSession();
   });
 
-  it("renders prominent banner on first load when no consent choice exists in localStorage", () => {
+  it("does not render when user is not authenticated (guest)", () => {
+    render(<AnalyticsConsentBanner />);
+    expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
+  });
+
+  it("does not render when user is authenticated with a non-buyer role (e.g. RIDER, STORE_OWNER)", () => {
+    useAuthStore.setState({
+      accessToken: "mock-rider-token",
+      userId: "rider-123",
+      role: "RIDER"
+    });
+
+    render(<AnalyticsConsentBanner />);
+    expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
+  });
+
+  it("renders prominent banner for authenticated BUYER when no consent choice exists in localStorage", () => {
+    useAuthStore.setState({
+      accessToken: "mock-buyer-token",
+      userId: "buyer-123",
+      role: "BUYER"
+    });
+
     render(<AnalyticsConsentBanner />);
 
     expect(screen.getByTestId("analytics-consent-banner")).toBeInTheDocument();
@@ -26,15 +51,27 @@ describe("AnalyticsConsentBanner (DPDP 8.2.7)", () => {
     expect(screen.getByRole("button", { name: /Decline|Essential Only/i })).toBeInTheDocument();
   });
 
-  it("does not render if user previously made a choice in localStorage", () => {
+  it("does not render for authenticated buyer if they previously made a choice in localStorage", () => {
+    useAuthStore.setState({
+      accessToken: "mock-buyer-token",
+      userId: "buyer-123",
+      role: "BUYER"
+    });
     localStorage.setItem("gorola_analytics_consent", "declined");
+
     render(<AnalyticsConsentBanner />);
 
     expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
   });
 
   it("clicking 'Accept Analytics' records consent via API, saves to localStorage, and dismisses banner", async () => {
+    useAuthStore.setState({
+      accessToken: "mock-buyer-token",
+      userId: "buyer-123",
+      role: "BUYER"
+    });
     postMock.mockResolvedValueOnce({ data: { success: true } });
+
     render(<AnalyticsConsentBanner />);
 
     const acceptBtn = screen.getByRole("button", { name: /Accept Analytics/i });
@@ -52,6 +89,12 @@ describe("AnalyticsConsentBanner (DPDP 8.2.7)", () => {
   });
 
   it("clicking 'Decline' saves declined state in localStorage and dismisses without calling API", async () => {
+    useAuthStore.setState({
+      accessToken: "mock-buyer-token",
+      userId: "buyer-123",
+      role: "BUYER"
+    });
+
     render(<AnalyticsConsentBanner />);
 
     const declineBtn = screen.getByRole("button", { name: /Decline|Essential Only/i });
@@ -62,3 +105,5 @@ describe("AnalyticsConsentBanner (DPDP 8.2.7)", () => {
     expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
   });
 });
+
+

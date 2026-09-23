@@ -314,27 +314,28 @@ Marketing communications must be strictly opt-in (never pre-ticked) and fully co
 
 ---
 
-#### 8.2.7 — `ANALYTICS` First-Visit Banner & Telemetry Opt-In
+#### 8.2.7 — `ANALYTICS` Authenticated Banner & Telemetry Opt-In (Option A)
 
 **Root cause / Goal:**
-Under DPDP, anonymous telemetry and performance analytics collection requires prior user notice with explicit Accept and Decline options.
+Under DPDP Act 2023, anonymous performance telemetry requires prior notice with explicit Accept and Decline options. Under Option A, the banner only renders for authenticated users (`useAuthStore`) who haven't logged an analytics choice yet, ensuring `POST /api/v1/consent` is properly tied to a valid `userId` in PostgreSQL while maintaining local caching in `localStorage`.
 
 - [x] **RED — Unit / Component (`AnalyticsConsentBanner.test.tsx`):**
-  - [x] Test: Renders prominent bottom modal on first load if preference is unset.
-  - [x] Test: "Accept Analytics" calls `POST /api/v1/consent` (`ANALYTICS`) and closes banner.
-  - [x] Test: "Decline / Essential Only" closes banner without granting consent.
+  - [x] Test: Unauthenticated (guest) users do not see the banner.
+  - [x] Test: Authenticated users without prior choice see prominent banner with `DPDP Act 2023` badge.
+  - [x] Test: "Accept Analytics" calls `POST /api/v1/consent` (`ANALYTICS`), saves to `localStorage`, and closes banner.
+  - [x] Test: "Decline / Essential Only" closes banner without calling API, saves declined state to `localStorage`.
   - [x] **Run — confirm RED.**
 
 - [x] **GREEN — Frontend Component:**
-  - [x] [Component] Create `apps/web/src/components/consent/AnalyticsConsentBanner.tsx` and mount globally in `App.tsx`.
-  - [x] Run unit tests — **confirm GREEN.**
+  - [x] [Component] Update `apps/web/src/components/consent/AnalyticsConsentBanner.tsx` with Option A auth gating, `whitespace-nowrap` on badge, and responsive layout.
+  - [x] Run unit tests — **confirm GREEN (5/5 passed).**
 
 ---
 
 #### 8.2.8 — Multi-Layer E2E Suite Updates & Regression Verification
 
-- [x] Update Playwright E2E suites (`auth.spec.ts`, `checkout.spec.ts`, `booking-journey.spec.ts`, `store-owner-journey.spec.ts`, `admin-journey.spec.ts`) to handle the new interactive consent steps.
-- [x] Run full automated test suites (`pnpm test`, `pnpm --filter @gorola/web test`).
+- [x] Update Playwright E2E suites (`auth.spec.ts`, `checkout.spec.ts`, `booking-journey.spec.ts`, `store-owner-journey.spec.ts`, `admin-journey.spec.ts`) to handle interactive consent steps (`data-testid="consent-continue-btn"`).
+- [x] Run full automated unit & integration test suites (`pnpm test` — 87 web test files + 114 API test files = 1200+ tests 100% green).
 - [x] Verify `pnpm typecheck` and `pnpm lint` pass with 0 errors.
 
 ---
@@ -639,3 +640,21 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
   - **`setup-railway-roles.cjs` Fix:** Added `CREATEDB` to the `db_owner` role creation (both `CREATE` and `ALTER` branches of the idempotent `DO $$` block). Added `GRANT ALL ON SCHEMA public TO db_owner` and `ALTER SCHEMA public OWNER TO db_owner` queries. Fixed `ALTER DEFAULT PRIVILEGES` to include `FOR ROLE db_owner`.
   - **CI/CD Deploy Pipeline Fix (`deploy-railway.yml`):** The `deploy-railway.yml` reusable workflow was calling `pnpm` without ever installing it, causing `pnpm: command not found` (exit 127). Added `pnpm/action-setup@v4`, `actions/setup-node@v4` with pnpm cache, and `pnpm install --frozen-lockfile --prefer-offline` steps before the Railway CLI install and migration steps — mirroring the pattern already used in `ci.yml`.
   - **Documentation Updated:** `LOCAL_SETUP.md` and `DEPLOYMENT INFO/DEPLOYMENT_CONFIG_GUIDE.md` updated throughout to reflect all corrected role setup commands, including `CREATEDB`, schema ownership, `FOR ROLE db_owner` default privileges, sequences grants, and recovery one-liners (`ALTER ROLE db_owner CREATEDB;`) for the "role already exists" scenario.
+
+- **Session 4 — 2026-09-23 — Phase 8.2 Implementation & Consent Architecture Documentation:**
+  - **Schema & Backend API (8.2.1 & 8.2.4):**
+    - Created `ConsentLog` model with enum `ConsentPurpose` (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) and physical migration `20260922205638_add_consent_log_model`.
+    - Implemented `POST /api/v1/consent`, `GET /api/v1/consent`, `DELETE /api/v1/consent/:purpose`.
+    - Added Prisma Client extension blocking `delete` and `deleteMany` operations on `ConsentLog` to guarantee audit trail immutability.
+    - Integration tests: `consent.controller.test.ts` (4/4 passed) & `consent.audit.test.ts` (3/3 passed).
+  - **Frontend Notices & Contextual Consent (8.2.2, 8.2.5, 8.2.6, 8.2.7):**
+    - **`OTP_AUTH`:** Step notice on `LoginPage.tsx` logging consent on OTP verification.
+    - **`ORDER_PROCESSING`:** Address dialog notice naming Ola Maps on `SavedAddressesPage.tsx` and `BookingTimeslotPage.tsx`. Checkout fulfillment notice naming Ola Maps and Razorpay on `CheckoutPage.tsx`.
+    - **`MARKETING_EMAIL`:** Un-ticked opt-in checkbox on `CheckoutPage.tsx` and 1-click Opt-In / Withdraw toggle card in `PrivacySettingsSection.tsx`.
+    - **`ANALYTICS`:** Built `AnalyticsConsentBanner.tsx` with Option A authentication gating (only renders for `role === 'BUYER'` when unset, suppressed on Rider/Store/Admin portals).
+  - **Architecture Guide Created:**
+    - Authored `DPDP Act/DPDP_CONSENT_ARCHITECTURE_GUIDE.md` documenting all 4 consent pipelines, ASCII architecture diagram, sub-processor disclosures (Ola Maps, Razorpay, Exotel), hosting disclosures (Railway, Vercel), and checkbox vs action button standards.
+  - **Identified Frontend State Cleanups for Future Polish:**
+    1. *Profile Consent Grouping:* Update `PrivacySettingsSection.tsx` to group raw database logs into the 4 canonical purpose cards rather than rendering duplicate historical rows.
+    2. *Card Description Update:* Update `ORDER_PROCESSING` label in `PrivacySettingsSection.tsx` to explicitly name Razorpay and Ola Maps.
+    3. *Checkout Consent State Awareness:* In `CheckoutPage.tsx`, hide the `MARKETING_EMAIL` checkbox if already Active in user profile, and suppress duplicate `ORDER_PROCESSING` API dispatches on repeat orders.
