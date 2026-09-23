@@ -455,4 +455,97 @@ describe("LoginPage", () => {
       expect(screen.getByTestId("probe-path")).toHaveTextContent("/");
     });
   });
+
+  it("shows reactivation prompt when account is pending deletion and restores account on confirm", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    postMock
+      .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            accessToken: "access_pending",
+            name: "Arjun",
+            phone: "+919876543210",
+            refreshToken: "refresh_pending",
+            userId: "buyer-del-1",
+            isPendingDeletion: true,
+            deletionScheduledFor: "2026-10-24T12:00:00.000Z"
+          }
+        }
+      })
+      .mockResolvedValueOnce({ data: { success: true } }) // reactivate-account
+      .mockResolvedValueOnce({ data: { success: true } }); // consent
+
+    renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
+    await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+    await user.click(screen.getByRole("button", { name: /send otp/i }));
+    await screen.findByText(/Enter OTP/i);
+
+    for (let i = 0; i < 6; i++) {
+      const label = String(i + 1);
+      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+    }
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    expect(await screen.findByTestId("reactivate-account-step")).toBeInTheDocument();
+    expect(screen.getByText(/Account Scheduled for Deletion/i)).toBeInTheDocument();
+    expect(screen.getByText(/24 Oct 2026/i)).toBeInTheDocument();
+
+    const reactivateBtn = screen.getByTestId("reactivate-account-btn");
+    await user.click(reactivateBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/user/reactivate-account",
+        {},
+        { headers: { Authorization: "Bearer access_pending" } }
+      );
+      expect(useAuthStore.getState().userId).toBe("buyer-del-1");
+      expect(screen.getByTestId("probe-path")).toHaveTextContent("/");
+    });
+  });
+
+  it("resets login flow when user chooses to keep deletion scheduled and sign out", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    postMock
+      .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            accessToken: "access_pending",
+            name: "Arjun",
+            phone: "+919876543210",
+            refreshToken: "refresh_pending",
+            userId: "buyer-del-1",
+            isPendingDeletion: true,
+            deletionScheduledFor: "2026-10-24T12:00:00.000Z"
+          }
+        }
+      });
+
+    renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
+    await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+    await user.click(screen.getByRole("button", { name: /send otp/i }));
+    await screen.findByText(/Enter OTP/i);
+
+    for (let i = 0; i < 6; i++) {
+      const label = String(i + 1);
+      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+    }
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    expect(await screen.findByTestId("reactivate-account-step")).toBeInTheDocument();
+
+    const signoutBtn = screen.getByTestId("keep-deletion-logout-btn");
+    await user.click(signoutBtn);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
+      expect(useAuthStore.getState().accessToken).toBeNull();
+    });
+  });
 });

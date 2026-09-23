@@ -1,5 +1,8 @@
 import type { ReactElement } from "react";
 
+import { DangerZoneSection } from "@/components/account/DangerZoneSection";
+import { DataNomineeSection } from "@/components/account/DataNomineeSection";
+import { DataPortabilitySection } from "@/components/account/DataPortabilitySection";
 import { PrivacySettingsSection } from "@/components/account/PrivacySettingsSection";
 import { TopographicBg } from "@/components/shared/TopographicBg";
 
@@ -16,14 +19,18 @@ export function PrivacySettingsPage(): ReactElement {
             Privacy &amp; Data Rights
           </h1>
           <p className="mt-2 font-dm-sans text-gorola-slate">
-            Manage your statutory consent preferences and data privacy controls under India&apos;s DPDP Act 2023.
+            Manage your statutory consent preferences and exercise your data rights under India&apos;s DPDP Act 2023.
           </p>
         </header>
 
-        <div>
+        <div className="space-y-6">
           <PrivacySettingsSection />
+          <DataPortabilitySection />
+          <DataNomineeSection />
+          <DangerZoneSection />
         </div>
       </div>
     </div>
   );
 }
+

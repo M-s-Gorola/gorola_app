@@ -1748,7 +1748,9 @@ Implement a **Two-Stage Erasure Architecture** featuring a **30-Day Recovery Gra
 
 2. **Stage 2: Days 1–30 Account Recovery (`POST /api/v1/user/reactivate-account`)**
    - If the user verifies Phone OTP on `/login` during the 30 days, the backend detects `deletedAt !== null` and returns `{ isPendingDeletion: true, deletionScheduledFor }`.
-   - The UI displays an **Account Reactivation Prompt** with one-click restoration.
+   - The UI halts standard navigation and displays the **Account Scheduled for Deletion** screen with unambiguous controls:
+     - **"Restore My Account" (Primary):** Calls `POST /api/v1/user/reactivate-account`, resets `deletedAt = null`, `deletionScheduledFor = null`, `isDeleted = false`, and logs the user in.
+     - **"Proceed with Deletion & Exit" (Secondary):** Keeps the 30-day countdown running in PostgreSQL, discards tokens, and signs out back to the phone entry screen without altering the deletion schedule.
    - Restoring the account clears `deletedAt = null` and cancels the BullMQ purge job, preserving user profile, addresses, and history.
 
 3. **Stage 3: Day 31+ Irreversible Hard Purge (BullMQ `UserDataPurgeJob`)**

@@ -20,6 +20,8 @@ export type BuyerUserLookup = {
   name: string;
   phone: string;
   isActive: boolean;
+  deletedAt?: Date | null;
+  deletionScheduledFor?: Date | null;
 };
 
 export type AuthServiceDependencies = {
@@ -131,7 +133,9 @@ export class AuthService {
       ...tokens,
       name: user.name.trim().length === 0 ? null : user.name,
       phone: user.phone,
-      userId: user.id
+      userId: user.id,
+      isPendingDeletion: Boolean(user.deletedAt),
+      deletionScheduledFor: user.deletionScheduledFor ? user.deletionScheduledFor.toISOString() : null
     };
   }
 
