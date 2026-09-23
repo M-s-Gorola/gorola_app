@@ -17,16 +17,15 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-09-23
-- **Session Summary:** Completed full Phase 8.2 (Consent Collection & Management across all 4 DPDP purposes):
-  - 8.2.1: ConsentLog Schema, migrations & API endpoints.
-  - 8.2.2: Login Consent Notice screen for `OTP_AUTH`.
-  - 8.2.3 & 8.2.6: Self-serve grant & withdrawal controls on `/profile` with bi-directional opt-in/opt-out for `MARKETING_EMAIL` and `ANALYTICS`.
-  - 8.2.4: Consent immutability guards and audit logging.
-  - 8.2.5: Prominent `ORDER_PROCESSING` DPDP notice cards on Address Modals (`SavedAddressesPage`, `BookingTimeslotPage`) and Checkout review step, with explicit disclosure of **Ola Maps** (location pinning) and **Razorpay** (secure payments).
-  - 8.2.7: Prominent first-visit `AnalyticsConsentBanner` bottom modal in `App.tsx` with explicit Accept / Decline actions.
-  - 8.2.8: Quality gates (`pnpm typecheck`, `pnpm lint`) and 100% unit/integration test coverage across all consent touchpoints.
-- **Next Session Must Start With:** 8.3 — User Rights: Erasure, Access & Nomination (8.3.1 Right to Erasure `DELETE /api/v1/user/account`).
+- **Date:** 2026-09-24
+- **Session Summary:** Completed full Phase 8.2 polish, consent idempotency guards, canonical UI aggregation, and dedicated Privacy Dashboard architecture:
+  - **Dedicated Privacy & Data Rights Page (`/account/privacy`):** Created `PrivacySettingsPage.tsx` at `/account/privacy` hosting all 4 canonical consent cards. Replaced the awkwardly placed bottom card on `/profile` with a clean `Privacy & Consent` Quick Link above Logout.
+  - **Profile Layout Refinement (`ProfilePage.tsx`):** Added `md:items-start` and balanced spacing to eliminate artificial vertical stretching and bottom whitespace on the Personal Info card.
+  - **Idempotency Guard (8.2 & DPDP Sec 10):** Implemented in `consent.service.ts` and `consent.controller.ts` to prevent duplicate `ConsentLog` rows across repeated logins and checkouts with integration tests.
+  - **Cross-Device Analytics Sync (`AnalyticsConsentBanner.tsx`):** Pre-fetches server consent on new devices to sync `localStorage` (`accepted`/`declined`) and prevent repeated banner prompts.
+  - **Universal Heading Standardization:** Synchronized all consent notice headings across `LoginPage.tsx`, `SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `AnalyticsConsentBanner.tsx`, and `PrivacySettingsSection.tsx`. Removed premature "Exotel" reference.
+  - **Quality Gates:** 55/55 Vitest tests passed 100% green; 0 ESLint warnings across monorepo.
+- **Next Session Must Start With:** 8.3 — User Rights: Erasure, Access & Nomination (8.3.1 Right to Erasure `DELETE /api/v1/user/account` & Data Export `GET /api/v1/user/my-data` integrated into `/account/privacy`).
 - **In Progress Right Now:** Ready for Section 8.3 (User Rights: Erasure, Access & Nomination).
 - **Current Blocker:** None.
 
@@ -657,4 +656,52 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
   - **Identified Frontend State Cleanups for Future Polish:**
     1. *Profile Consent Grouping:* Update `PrivacySettingsSection.tsx` to group raw database logs into the 4 canonical purpose cards rather than rendering duplicate historical rows.
     2. *Card Description Update:* Update `ORDER_PROCESSING` label in `PrivacySettingsSection.tsx` to explicitly name Razorpay and Ola Maps.
-    3. *Checkout Consent State Awareness:* In `CheckoutPage.tsx`, hide the `MARKETING_EMAIL` checkbox if already Active in user profile, and suppress duplicate `ORDER_PROCESSING` API dispatches on repeat orders.
+    3. *Checkout Consent State Awareness:* In `CheckoutPage.tsx`, hide the `MARKETING_EMAIL` checkbox if already Active in user profile, and suppress duplicate `ORDER_PROCESSING` API dispatches on repeat orders.
+
+- **Session 5 — 2026-09-23 — DPDP Notice Canonical Standardization & Booking Consent Completion:**
+  - **Canonical Notice Harmonization:** Reconciled `ORDER_PROCESSING` notice wording across all buyer touchpoints (`SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`) using the single, legally truthful conditional formulation:
+    > *"Your address, landmark notes, and GPS coordinates are shared with **Ola Maps** for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via **Razorpay**. Governed by India's DPDP Act 2023."*
+  - **Booking Checkout Consent Completion:** Added the missing `ORDER_PROCESSING` DPDP consent notice card directly above the "Confirm Booking" CTA on `BookingTimeslotPage.tsx`, and wired background consent logging (`POST /api/v1/consent`) upon booking confirmation.
+  - **Audit Trail Uniformity:** Ensured the exact canonical notice text is sent in the `noticeText` payload for all `ORDER_PROCESSING` consent creations (address save, booking confirmation, order checkout) so `ConsentLog` rows are 100% consistent during compliance audits.
+  - **Architecture Guide (v1.1):** Documented Section 8 in `DPDP_CONSENT_ARCHITECTURE_GUIDE.md` detailing the ADR on why Razorpay disclosure is incorporated into `ORDER_PROCESSING` with a conditional clause rather than an unmanageable fifth consent purpose (`PAYMENT_PROCESSING`).
+  - **Quality Gates:** All unit and component tests passing green (`BookingTimeslotPage.test.tsx`, `SavedAddressesPage.test.tsx`, `CheckoutPage.test.tsx` — 20/20 tests passed) and `pnpm typecheck` passed with 0 errors.
+
+- **Session 6 — 2026-09-24 — Consent Idempotency, Profile UI Canonical Aggregation & Dedicated Privacy Dashboard Architecture:**
+  - **Dedicated Account Privacy Dashboard (`/account/privacy`):**
+    - Created `PrivacySettingsPage.tsx` registered under protected route `/account/privacy` in `buyer.tsx`.
+    - Transferred full statutory consent management (`PrivacySettingsSection.tsx`) into this dedicated view.
+    - Updated `ProfilePage.tsx` by replacing the awkwardly placed bottom section with a clean `Privacy & Consent` Quick Link card (`<ShieldCheck />`) positioned directly above the Logout action.
+    - Resolved grid layout stretching in `ProfilePage.tsx` using `md:items-start` and balanced spacing to eliminate excess whitespace on the Personal Info card.
+    - Unit tests created in `PrivacySettingsPage.test.tsx` and updated in `ProfilePage.test.tsx`.
+  - **Phase 8.3 Roadmap Alignment for `/account/privacy`:**
+    - Documented architectural plan: `/account/privacy` serves as the user-facing hub for upcoming Phase 8.3 user rights:
+      1. **Section 8.3.1 (Right to Erasure):** "Delete Account" modal invoking `DELETE /api/v1/user/account`.
+      2. **Section 8.3.2 (Right to Access):** "Download My Data" button triggering JSON export via `GET /api/v1/user/my-data`.
+      3. **Section 8.3.3 (Right to Nominate):** Nomination form saving trusted contact fields to `User` model.
+    - Differentiated interactive account dashboard (`/account/privacy` for logged-in buyers) from public legal disclosures (`/privacy` for guests, regulators, and legal text in Phase 8.6).
+  - **Consent Idempotency Guard (8.2 & DPDP Sec 10):**
+    - Enhanced `recordConsent` in `consent.service.ts` to inspect `findLatestByUserIdAndPurpose`. If an active, unwithdrawn record for the same purpose already exists with matching `consentVersion` and `noticeText`, it returns `{ record, isNew: false }` rather than inserting a duplicate row.
+    - Updated `consent.controller.ts` to respond with `200 OK` on idempotency short-circuits vs `201 Created` for fresh consent grants.
+    - Added dedicated idempotency integration tests in `consent.controller.test.ts` (verifying single row persistence across multiple repeated requests).
+  - **Canonical 4-Card Profile Privacy Settings UI (`PrivacySettingsSection.tsx`):**
+    - Refactored `PrivacySettingsSection.tsx` from rendering raw historical database rows to aggregating entries into the 4 canonical purpose cards (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) via `buildPurposeCards()`.
+    - Guaranteed all 4 canonical cards are always rendered even with empty server records, with 1-click Opt-In / Withdraw buttons.
+    - Removed premature "Exotel" vendor reference from `OTP_AUTH` description across the app (pending Phase 8.8 vendor selection).
+  - **Universal Heading Standardization:**
+    - Standardized every consent form and dialog across the buyer app to use the exact same canonical heading as the Profile Privacy page:
+      - `OTP_AUTH`: **Authentication & Account Security** (`LoginPage.tsx`)
+      - `ORDER_PROCESSING`: **Order Fulfillment & Location Services** (`CheckoutPage.tsx`, `SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`)
+      - `MARKETING_EMAIL`: **Promotions & Seasonal Offers** (`CheckoutPage.tsx`)
+      - `ANALYTICS`: **Usage & Performance Analytics** (`AnalyticsConsentBanner.tsx`)
+  - **Cross-Device Analytics Sync (`AnalyticsConsentBanner.tsx`):**
+    - Implemented cross-device server check on mount (`GET /api/v1/consent`) to sync `localStorage` (`accepted`/`declined`) on new devices without redisplaying the popup for existing users.
+    - Wired "Decline" to persist locally and dispatch background `DELETE /api/v1/consent/ANALYTICS` so all devices stay in sync.
+  - **Checkout Consent State Awareness (`CheckoutPage.tsx`):**
+    - Integrated `consentsQuery` via `useQuery` to fetch active user consents on load.
+    - Suppressed duplicate `POST /api/v1/consent` (ORDER_PROCESSING) dispatches on order placement when consent is already active.
+    - Conditionally hid the `MARKETING_EMAIL` opt-in checkbox if the user has already granted marketing consent.
+  - **Architecture Guide v1.2 Documentation (`DPDP_CONSENT_ARCHITECTURE_GUIDE.md`):**
+    - Added **Section 9: Booking Commerce Consent ADR** explaining why `ORDER_PROCESSING` legally and architecturally covers booking commerce without creating redundant purpose enums.
+    - Added **Section 10: OTP_AUTH Idempotency & Authentication Lifecycle ADR** rationalizing why OTP consent occurs post-verification (when userId is known) and how backend idempotency prevents log bloat.
+  - **Quality & Lint Fixes:**
+    - 100% test pass rate across 55 Vitest component/unit tests and 0 ESLint warnings across the entire monorepo.

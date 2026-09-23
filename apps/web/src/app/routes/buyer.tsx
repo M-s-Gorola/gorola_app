@@ -10,6 +10,7 @@ import { HomePage } from "@/pages/buyer/HomePage";
 import { LoginPage } from "@/pages/buyer/LoginPage";
 import { OrderConfirmationPage } from "@/pages/buyer/OrderConfirmationPage";
 import { OrderHistoryPage } from "@/pages/buyer/OrderHistoryPage";
+import { PrivacySettingsPage } from "@/pages/buyer/PrivacySettingsPage";
 import { ProductDetailPage } from "@/pages/buyer/ProductDetailPage";
 import { ProfilePage } from "@/pages/buyer/ProfilePage";
 import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
@@ -150,6 +151,17 @@ export function BuyerRoutes(): ReactElement[] {
         <ProtectedRoute>
           <BuyerLayout>
             <OrderHistoryPage />
+          </BuyerLayout>
+        </ProtectedRoute>
+      }
+    />,
+    <Route
+      key="buyer-privacy"
+      path="/account/privacy"
+      element={
+        <ProtectedRoute>
+          <BuyerLayout>
+            <PrivacySettingsPage />
           </BuyerLayout>
         </ProtectedRoute>
       }

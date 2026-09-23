@@ -58,6 +58,26 @@ export function CheckoutPage(): ReactElement {
     queryKey: ["buyer-addresses"]
   });
 
+  // Fetch active consents once — used to skip duplicate consent POSTs
+  // and to hide the marketing checkbox if the user has already opted in.
+  type ConsentRow = { purpose: string; isWithdrawn: boolean };
+  const consentsQuery = useQuery({
+    enabled: !isBootstrapPending,
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: { consents: ConsentRow[] } }>("/api/v1/consent");
+      return res.data.data?.consents ?? [];
+    },
+    queryKey: ["consents"]
+  });
+
+  const activeConsents = consentsQuery.data ?? [];
+  const hasOrderProcessingConsent = activeConsents.some(
+    (c) => c.purpose === "ORDER_PROCESSING" && !c.isWithdrawn
+  );
+  const hasMarketingConsent = activeConsents.some(
+    (c) => c.purpose === "MARKETING_EMAIL" && !c.isWithdrawn
+  );
+
   const [step, setStep] = useState<1 | 2>(1);
   const [deliveryChoice, setDeliveryChoice] = useState<string>("new");
   const [landmarkInput, setLandmarkInput] = useState("");
@@ -290,21 +310,27 @@ export function CheckoutPage(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
       void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
       
-      // DPDP 2023: Log ORDER_PROCESSING consent
-      try {
-        const p1 = api?.post("/api/v1/consent", {
-          purpose: "ORDER_PROCESSING",
-          consentVersion: "1.0",
-          noticeText: "We collect your address, contact, and order details to process fulfillment with merchants and riders."
-        });
-        if (p1 && typeof p1.catch === "function") {
-          p1.catch(() => {});
+      // DPDP 2023: Log ORDER_PROCESSING consent only if not already active.
+      // The server also has an idempotency guard, but we avoid the network
+      // round-trip entirely when we already know consent exists in the cache.
+      if (!hasOrderProcessingConsent) {
+        try {
+          const p1 = api?.post("/api/v1/consent", {
+            purpose: "ORDER_PROCESSING",
+            consentVersion: "1.0",
+            noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+          });
+          if (p1 && typeof p1.catch === "function") {
+            p1.catch(() => {});
+          }
+        } catch {
+          /* ignore background consent logging error */
         }
-      } catch {
-        /* ignore background consent logging error */
       }
 
-      if (marketingOptIn) {
+      // Record MARKETING_EMAIL only if the user explicitly opted in this session
+      // and they haven't already granted it previously.
+      if (marketingOptIn && !hasMarketingConsent) {
         try {
           const p2 = api?.post("/api/v1/consent", {
             purpose: "MARKETING_EMAIL",
@@ -618,27 +644,30 @@ export function CheckoutPage(): ReactElement {
             >
               <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
                 <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
-                <span>Order Fulfillment & Data Sharing Notice (DPDP Act 2023)</span>
+                <span>Order Fulfillment &amp; Location Services</span>
               </div>
               <p className="text-gorola-slate leading-relaxed">
-                By placing your order, you authorize GoRola to share your delivery coordinates with <strong>Ola Maps</strong> (for navigation), payment details with <strong>Razorpay</strong> (for secure processing), and contact details with assigned merchants and riders for fulfillment.
+                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
               </p>
             </div>
 
-            <label
-              data-testid="checkout-marketing-opt-in"
-              className="flex items-start gap-2.5 rounded-xl border border-gorola-pine/15 bg-white p-3 text-xs text-gorola-charcoal cursor-pointer hover:border-gorola-pine/30 transition-colors text-left"
-            >
-              <input
-                type="checkbox"
-                checked={marketingOptIn}
-                onChange={(e) => setMarketingOptIn(e.target.checked)}
-                className="mt-0.5 rounded border-gorola-pine/30 text-gorola-pine focus:ring-gorola-pine"
-              />
-              <span className="leading-snug text-gorola-slate">
-                <strong className="text-gorola-charcoal font-medium">Keep me updated (Optional):</strong> Send me seasonal Mussoorie harvest updates, special hill-station deals, and exclusive coupons.
-              </span>
-            </label>
+            {/* Only show the marketing opt-in if the user hasn't already granted it */}
+            {!hasMarketingConsent && (
+              <label
+                data-testid="checkout-marketing-opt-in"
+                className="flex items-start gap-2.5 rounded-xl border border-gorola-pine/15 bg-white p-3 text-xs text-gorola-charcoal cursor-pointer hover:border-gorola-pine/30 transition-colors text-left"
+              >
+                <input
+                  type="checkbox"
+                  checked={marketingOptIn}
+                  onChange={(e) => setMarketingOptIn(e.target.checked)}
+                  className="mt-0.5 rounded border-gorola-pine/30 text-gorola-pine focus:ring-gorola-pine"
+                />
+                <span className="leading-snug text-gorola-slate">
+                  <strong className="text-gorola-charcoal font-medium">Promotions &amp; Seasonal Offers (Optional):</strong> Send me seasonal Mussoorie harvest updates, special hill-station deals, and exclusive coupons.
+                </span>
+              </label>
+            )}
           </div>
 
           <div

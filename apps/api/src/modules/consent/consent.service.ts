@@ -29,7 +29,24 @@ export class ConsentService {
     private readonly auditRepo?: AuditRepository
   ) {}
 
-  public async recordConsent(input: RecordConsentInput): Promise<ConsentDTO> {
+  public async recordConsent(input: RecordConsentInput): Promise<{ record: ConsentDTO; isNew: boolean }> {
+    // Idempotency guard: if an active (non-withdrawn) record already exists
+    // for the same userId + purpose + consentVersion, do not create a duplicate.
+    // This prevents repeat OTP_AUTH rows on every login, and ORDER_PROCESSING
+    // rows on every order, while still preserving the full audit trail for
+    // genuine re-consents after a withdrawal or policy version bump.
+    const existing = await this.consentRepo.findLatestByUserIdAndPurpose(
+      input.userId,
+      input.purpose
+    );
+    if (
+      existing !== null &&
+      !existing.isWithdrawn &&
+      existing.consentVersion === (input.consentVersion ?? "1.0")
+    ) {
+      return { record: formatConsentDTO(existing), isNew: false };
+    }
+
     const record = await this.consentRepo.create(input);
 
     if (this.auditRepo) {
@@ -52,7 +69,7 @@ export class ConsentService {
       }
     }
 
-    return formatConsentDTO(record);
+    return { record: formatConsentDTO(record), isNew: true };
   }
 
   public async getUserConsents(userId: string): Promise<ConsentDTO[]> {

@@ -76,7 +76,7 @@ export function SavedAddressesPage(): ReactElement {
         const p = api?.post("/api/v1/consent", {
           purpose: "ORDER_PROCESSING",
           consentVersion: "1.0",
-          noticeText: "We collect your address, landmark, and GPS coordinates solely to route deliveries and share with assigned merchant stores and riders for order fulfillment."
+          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
         });
         if (p && typeof p.catch === "function") {
           p.catch(() => {});
@@ -103,7 +103,7 @@ export function SavedAddressesPage(): ReactElement {
         const p = api?.post("/api/v1/consent", {
           purpose: "ORDER_PROCESSING",
           consentVersion: "1.0",
-          noticeText: "We collect your address, landmark, and GPS coordinates solely to route deliveries and share with assigned merchant stores and riders for order fulfillment."
+          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
         });
         if (p && typeof p.catch === "function") {
           p.catch(() => {});
@@ -362,10 +362,10 @@ export function SavedAddressesPage(): ReactElement {
             >
               <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
                 <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
-                <span>Delivery & Location Privacy Notice (DPDP Act 2023)</span>
+                <span>Order Fulfillment &amp; Location Services</span>
               </div>
               <p className="text-gorola-slate leading-relaxed">
-                Your address, hill landmark notes, and GPS coordinates are stored securely under India&apos;s DPDP Act 2023. They will solely be shared with <strong>Ola Maps</strong> (for location pinning and route calculation) and assigned merchant stores and delivery riders for order fulfillment.
+                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
               </p>
             </div>
           </div>

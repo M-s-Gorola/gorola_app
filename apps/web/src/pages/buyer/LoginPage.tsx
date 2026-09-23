@@ -300,7 +300,7 @@ export function LoginPage(): ReactElement {
             <div className="rounded-xl border border-border/80 bg-gorola-fog/60 p-4 text-sm text-gorola-charcoal space-y-3">
               <div className="flex items-center gap-2 font-semibold text-gorola-pine">
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                Data Privacy &amp; Consent Notice
+                Authentication &amp; Account Security
               </div>
               <p className="text-muted-foreground leading-relaxed">
                 We collect your phone number to send a one-time password (OTP) and authenticate your account under India&apos;s Digital Personal Data Protection (DPDP) Act 2023. We do not sell your personal data.

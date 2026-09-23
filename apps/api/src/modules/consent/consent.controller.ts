@@ -53,7 +53,7 @@ export function registerConsentRoutes(app: FastifyInstance, deps: RegisterConsen
         "127.0.0.1";
       const userAgent = (request.headers["user-agent"] as string) ?? "unknown";
 
-      const record = await deps.consentService.recordConsent({
+      const { record, isNew } = await deps.consentService.recordConsent({
         consentVersion: body.consentVersion,
         ipAddress,
         noticeText: body.noticeText,
@@ -62,7 +62,9 @@ export function registerConsentRoutes(app: FastifyInstance, deps: RegisterConsen
         userId
       });
 
-      reply.status(201);
+      // 201 Created for a genuine new consent row; 200 OK when the idempotency
+      // guard short-circuits (active same-version record already exists).
+      reply.status(isNew ? 201 : 200);
       return success(request, reply, record);
     }
   );

@@ -16,25 +16,69 @@ export function AnalyticsConsentBanner(): ReactElement | null {
   const role = useAuthStore((s) => s.role);
 
   useEffect(() => {
-    try {
-      if (typeof window !== "undefined" && (window as unknown as { isE2E?: boolean }).isE2E) {
-        setVisible(false);
-        return;
+    let isMounted = true;
+
+    async function checkConsent(): Promise<void> {
+      try {
+        if (typeof window !== "undefined" && (window as unknown as { isE2E?: boolean }).isE2E) {
+          if (isMounted) setVisible(false);
+          return;
+        }
+        // Option A: Only display when user is authenticated as BUYER
+        if (!accessToken || !userId || role !== "BUYER") {
+          if (isMounted) setVisible(false);
+          return;
+        }
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (stored) {
+          if (isMounted) setVisible(false);
+          return;
+        }
+
+        // Cross-device sync: If no decision in localStorage on this device, check server
+        if (api) {
+          try {
+            const res = await api.get<{
+              success: boolean;
+              data: {
+                consents: Array<{
+                  purpose: string;
+                  isWithdrawn: boolean;
+                  createdAt: string;
+                }>;
+              };
+            }>("/api/v1/consent");
+
+            if (res?.data?.success && Array.isArray(res.data.data?.consents)) {
+              const analyticsLogs = res.data.data.consents.filter(
+                (c) => c.purpose === "ANALYTICS"
+              );
+              if (analyticsLogs.length > 0) {
+                analyticsLogs.sort(
+                  (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+                );
+                const latestActive = analyticsLogs.find((c) => !c.isWithdrawn);
+                const state = latestActive ? "accepted" : "declined";
+                localStorage.setItem(STORAGE_KEY, state);
+                if (isMounted) setVisible(false);
+                return;
+              }
+            }
+          } catch {
+            /* fallback to displaying prompt */
+          }
+        }
+
+        if (isMounted) setVisible(true);
+      } catch {
+        if (isMounted) setVisible(false);
       }
-      // Option A: Only display when user is authenticated as BUYER
-      if (!accessToken || !userId || role !== "BUYER") {
-        setVisible(false);
-        return;
-      }
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        setVisible(true);
-      } else {
-        setVisible(false);
-      }
-    } catch {
-      setVisible(false);
     }
+
+    void checkConsent();
+    return () => {
+      isMounted = false;
+    };
   }, [accessToken, userId, role]);
 
   if (!visible) return null;
@@ -70,6 +114,16 @@ export function AnalyticsConsentBanner(): ReactElement | null {
     } catch {
       /* ignore storage failure */
     }
+
+    try {
+      const p = api?.delete("/api/v1/consent/ANALYTICS");
+      if (p && typeof p.catch === "function") {
+        p.catch(() => {});
+      }
+    } catch {
+      /* ignore background network failure */
+    }
+
     setVisible(false);
   };
 
@@ -85,7 +139,7 @@ export function AnalyticsConsentBanner(): ReactElement | null {
               <BarChart3 className="h-4 w-4" />
             </span>
             <h3 className="font-heading text-sm font-bold text-gorola-charcoal">
-              Help Us Improve Hill Deliveries
+              Usage &amp; Performance Analytics
             </h3>
             <span className="inline-flex shrink-0 items-center rounded-full bg-gorola-sand/60 px-2.5 py-0.5 text-[10px] font-semibold text-gorola-pine whitespace-nowrap">
               DPDP Act 2023

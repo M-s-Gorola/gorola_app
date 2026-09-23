@@ -69,10 +69,11 @@ describe("ProfilePage", () => {
     expect(screen.getByDisplayValue("Old Name")).toBeInTheDocument();
   });
 
-  it("renders navigation links to orders and addresses", () => {
+  it("renders navigation links to orders, addresses, and privacy", () => {
     renderProfile();
     expect(screen.getByRole("link", { name: /orders/i })).toHaveAttribute("href", "/account/orders");
     expect(screen.getByRole("link", { name: /addresses/i })).toHaveAttribute("href", "/account/addresses");
+    expect(screen.getByRole("link", { name: /privacy & consent/i })).toHaveAttribute("href", "/account/privacy");
   });
 
   it("submits name update and updates local store on success", async () => {

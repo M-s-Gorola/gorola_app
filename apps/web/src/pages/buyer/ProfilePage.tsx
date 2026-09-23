@@ -2,7 +2,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { isAxiosError } from "axios";
 import gsap from "gsap";
-import { Clock, LogOut, MapPin, UserRound } from "lucide-react";
+import { Clock, LogOut, MapPin, ShieldCheck, UserRound } from "lucide-react";
 import type { ReactElement } from "react";
 import { useLayoutEffect, useRef, useState } from "react";
 import { useForm } from "react-hook-form";
@@ -15,7 +15,6 @@ import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 import { TopographicBg } from "@/components/shared/TopographicBg";
-import { PrivacySettingsSection } from "@/components/account/PrivacySettingsSection";
 
 const profileSchema = z.object({
   name: z.string().min(1, "Name is required").max(100, "Name is too long")
@@ -101,15 +100,15 @@ export function ProfilePage(): ReactElement {
       </div>
 
       <div className="mx-auto max-w-2xl">
-        <header className="profile-animate mb-10">
+        <header className="profile-animate mb-8">
           <h1 className="font-playfair text-4xl text-gorola-charcoal">Your Profile</h1>
           <p className="mt-2 font-dm-sans text-gorola-slate">Manage your account details and preferences.</p>
         </header>
 
-        <div className="grid gap-8 md:grid-cols-2">
+        <div className="grid gap-6 md:grid-cols-2 md:items-start">
           {/* Personal Info Card */}
           <section className="profile-animate rounded-2xl bg-white/70 p-6 shadow-sm backdrop-blur-md border border-gorola-pine/5">
-            <div className="mb-6 flex items-center gap-3">
+            <div className="mb-5 flex items-center gap-3">
               <div className="rounded-full bg-gorola-pine/10 p-2 text-gorola-pine">
                 <UserRound size={20} />
               </div>
@@ -117,24 +116,24 @@ export function ProfilePage(): ReactElement {
             </div>
 
             <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gorola-slate" htmlFor="profile-phone">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-gorola-slate" htmlFor="profile-phone">
                   Phone Number
                 </label>
-                <div className="rounded-lg bg-gorola-slate/5 px-3 py-2 text-gorola-charcoal tabular-nums border border-transparent">
+                <div className="rounded-xl bg-gorola-slate/5 px-3.5 py-2.5 text-sm text-gorola-charcoal font-medium tabular-nums border border-gorola-pine/5">
                   {phone}
                 </div>
                 <p className="text-[11px] text-gorola-slate/60">Phone number cannot be changed.</p>
               </div>
 
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-gorola-slate" htmlFor="profile-name">
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold uppercase tracking-wider text-gorola-slate" htmlFor="profile-name">
                   Full Name
                 </label>
                 <Input
                   id="profile-name"
                   {...register("name")}
-                  className="bg-white/50"
+                  className="rounded-xl bg-white/80"
                   placeholder="Enter your name"
                 />
                 {errors.name && (
@@ -142,24 +141,24 @@ export function ProfilePage(): ReactElement {
                 )}
               </div>
 
-              <Button type="submit" disabled={loading} className="w-full rounded-xl bg-gorola-pine hover:bg-gorola-pine/90 text-white">
+              <Button type="submit" disabled={loading} className="w-full rounded-xl bg-gorola-pine hover:bg-gorola-pine/90 text-white mt-2">
                 {loading ? "Updating..." : "Update Name"}
               </Button>
             </form>
           </section>
 
           {/* Quick Links Card */}
-          <section className="profile-animate space-y-4">
+          <section className="profile-animate space-y-3">
              <Link 
                to="/account/orders" 
-               className="group flex items-center justify-between rounded-2xl bg-white/70 p-6 shadow-sm backdrop-blur-md border border-gorola-pine/5 transition-all hover:bg-gorola-pine/10"
+               className="group flex items-center justify-between rounded-2xl bg-white/70 p-4 shadow-sm backdrop-blur-md border border-gorola-pine/5 transition-all hover:bg-gorola-pine/10"
              >
                <div className="flex items-center gap-3">
                  <div className="rounded-full bg-gorola-saffron/10 p-2 text-gorola-saffron">
-                   <Clock size={20} />
+                   <Clock size={18} />
                  </div>
                  <div>
-                   <h3 className="font-heading font-semibold text-gorola-charcoal">Order History</h3>
+                   <h3 className="font-heading font-semibold text-sm text-gorola-charcoal">Order History</h3>
                    <p className="text-xs text-gorola-slate">View and track your past orders.</p>
                  </div>
                </div>
@@ -168,15 +167,32 @@ export function ProfilePage(): ReactElement {
 
              <Link 
                to="/account/addresses" 
-               className="group flex items-center justify-between rounded-2xl bg-white/70 p-6 shadow-sm backdrop-blur-md border border-gorola-pine/5 transition-all hover:bg-gorola-pine/10"
+               className="group flex items-center justify-between rounded-2xl bg-white/70 p-4 shadow-sm backdrop-blur-md border border-gorola-pine/5 transition-all hover:bg-gorola-pine/10"
              >
                <div className="flex items-center gap-3">
                  <div className="rounded-full bg-gorola-amber/10 p-2 text-gorola-amber">
-                   <MapPin size={20} />
+                   <MapPin size={18} />
                  </div>
                  <div>
-                   <h3 className="font-heading font-semibold text-gorola-charcoal">Saved Addresses</h3>
+                   <h3 className="font-heading font-semibold text-sm text-gorola-charcoal">Saved Addresses</h3>
                    <p className="text-xs text-gorola-slate">Manage your delivery locations.</p>
+                 </div>
+               </div>
+               <div className="text-gorola-slate transition-transform group-hover:translate-x-1">→</div>
+             </Link>
+
+             <Link 
+               to="/account/privacy" 
+               data-testid="quick-link-privacy"
+               className="group flex items-center justify-between rounded-2xl bg-white/70 p-4 shadow-sm backdrop-blur-md border border-gorola-pine/5 transition-all hover:bg-gorola-pine/10"
+             >
+               <div className="flex items-center gap-3">
+                 <div className="rounded-full bg-gorola-pine/10 p-2 text-gorola-pine">
+                   <ShieldCheck size={18} />
+                 </div>
+                 <div>
+                   <h3 className="font-heading font-semibold text-sm text-gorola-charcoal">Privacy &amp; Consent</h3>
+                   <p className="text-xs text-gorola-slate">Manage your DPDP consent &amp; data privacy.</p>
                  </div>
                </div>
                <div className="text-gorola-slate transition-transform group-hover:translate-x-1">→</div>
@@ -185,24 +201,20 @@ export function ProfilePage(): ReactElement {
              <button
                type="button"
                onClick={logoutBuyer}
-               className="group flex w-full items-center justify-between rounded-2xl bg-red-500/10 p-6 shadow-sm backdrop-blur-md border border-red-500/20 transition-all hover:bg-red-500/20 text-red-600 text-left"
+               className="group flex w-full items-center justify-between rounded-2xl bg-red-500/10 p-4 shadow-sm backdrop-blur-md border border-red-500/20 transition-all hover:bg-red-500/20 text-red-600 text-left"
              >
                <div className="flex items-center gap-3">
                  <div className="rounded-full bg-red-500/10 p-2 text-red-600">
-                   <LogOut size={20} />
+                   <LogOut size={18} />
                  </div>
                  <div>
-                   <h3 className="font-heading font-semibold text-gorola-charcoal">Logout</h3>
+                   <h3 className="font-heading font-semibold text-sm text-gorola-charcoal">Logout</h3>
                    <p className="text-xs text-red-500/80">Sign out of your account.</p>
                  </div>
                </div>
                <div className="text-red-600 transition-transform group-hover:translate-x-1">→</div>
              </button>
           </section>
-        </div>
-
-        <div className="mt-8 profile-animate">
-          <PrivacySettingsSection />
         </div>
       </div>
     </div>
