@@ -17,10 +17,16 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-07-29
-- **Session Summary:** Completed Section 8.1.1 (Database Least-Privilege Credential Setup) and Section 8.1.2 (PII Field Encryption at Rest). Implemented `database.least-privilege.test.ts` and `pii.encryption.test.ts`. Built AES-256-GCM encryption & HMAC-SHA256 blind indexing in `src/lib/crypto.ts`, updated `User` and `DeliveryRider` schema with `phoneHash`, generated and deployed migration `20260729201500_add_pii_encryption_fields`, and updated `user.repository.ts`, `rider.repository.ts`, `seed.ts`, and `seed-e2e.ts`. All integration tests and quality gates (`pnpm typecheck`, `pnpm lint`) passing 100% green.
-- **Next Session Must Start With:** 8.2.1 — ConsentLog Schema & Consent API Endpoints (`POST /api/v1/consent`, `GET /api/v1/consent`, `DELETE /api/v1/consent/:purpose`).
-- **In Progress Right Now:** Section 8.2.1 (ConsentLog Schema & Consent API Endpoints).
+- **Date:** 2026-09-24
+- **Session Summary:** Completed full Phase 8.2 polish, consent idempotency guards, canonical UI aggregation, and dedicated Privacy Dashboard architecture:
+  - **Dedicated Privacy & Data Rights Page (`/account/privacy`):** Created `PrivacySettingsPage.tsx` at `/account/privacy` hosting all 4 canonical consent cards. Replaced the awkwardly placed bottom card on `/profile` with a clean `Privacy & Consent` Quick Link above Logout.
+  - **Profile Layout Refinement (`ProfilePage.tsx`):** Added `md:items-start` and balanced spacing to eliminate artificial vertical stretching and bottom whitespace on the Personal Info card.
+  - **Idempotency Guard (8.2 & DPDP Sec 10):** Implemented in `consent.service.ts` and `consent.controller.ts` to prevent duplicate `ConsentLog` rows across repeated logins and checkouts with integration tests.
+  - **Cross-Device Analytics Sync (`AnalyticsConsentBanner.tsx`):** Pre-fetches server consent on new devices to sync `localStorage` (`accepted`/`declined`) and prevent repeated banner prompts.
+  - **Universal Heading Standardization:** Synchronized all consent notice headings across `LoginPage.tsx`, `SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `AnalyticsConsentBanner.tsx`, and `PrivacySettingsSection.tsx`. Removed premature "Exotel" reference.
+  - **Quality Gates:** 55/55 Vitest tests passed 100% green; 0 ESLint warnings across monorepo.
+- **Next Session Must Start With:** 8.3 — User Rights: Erasure, Access & Nomination (8.3.1 Right to Erasure `DELETE /api/v1/user/account` & Data Export `GET /api/v1/user/my-data` integrated into `/account/privacy`).
+- **In Progress Right Now:** Ready for Section 8.3 (User Rights: Erasure, Access & Nomination).
 - **Current Blocker:** None.
 
 
@@ -195,27 +201,27 @@ Create `ConsentLog` model in Prisma. Create `consent.repository.ts`, `consent.se
 
 ---
 
-- [ ] **RED — Integration (`consent.controller.test.ts`):**
-  - [ ] Test setup: Authenticated buyer JWT. ConsentLog table empty.
-  - [ ] Test: `POST /api/v1/consent` with body `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: 'We collect your phone number to send a one-time password.' }` → HTTP 201 with `{ success: true, data: { id, purpose, consentVersion, givenAt } }`.
-  - [ ] Test: Query DB and assert exactly ONE `ConsentLog` row exists with `userId`, `purpose = 'OTP_AUTH'`, `isWithdrawn = false`, `ipAddress` not null.
-  - [ ] Test: `GET /api/v1/consent` with buyer JWT → HTTP 200 returning array of user consent records.
-  - [ ] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` → HTTP 200; `ConsentLog` row updated to `isWithdrawn = true`, `withdrawnAt` set.
-  - [ ] Test: `DELETE /api/v1/consent/OTP_AUTH` → HTTP 400 `CANNOT_WITHDRAW_ESSENTIAL_CONSENT`.
-  - [ ] **Run — confirm RED (consent endpoints do not exist).**
+- [x] **RED — Integration (`consent.controller.test.ts`):**
+  - [x] Test setup: Authenticated buyer JWT. ConsentLog table empty.
+  - [x] Test: `POST /api/v1/consent` with body `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: 'We collect your phone number to send a one-time password.' }` → HTTP 201 with `{ success: true, data: { id, purpose, consentVersion, givenAt } }`.
+  - [x] Test: Query DB and assert exactly ONE `ConsentLog` row exists with `userId`, `purpose = 'OTP_AUTH'`, `isWithdrawn = false`, `ipAddress` not null.
+  - [x] Test: `GET /api/v1/consent` with buyer JWT → HTTP 200 returning array of user consent records.
+  - [x] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` → HTTP 200; `ConsentLog` row updated to `isWithdrawn = true`, `withdrawnAt` set.
+  - [x] Test: `DELETE /api/v1/consent/OTP_AUTH` → HTTP 400 `CANNOT_WITHDRAW_ESSENTIAL_CONSENT`.
+  - [x] **Run — confirm RED (consent endpoints do not exist).**
 
-- [ ] **GREEN — Backend (Schema & Migration → Repository → Service → Controller):**
-  - [ ] [Schema & Migration] Add `ConsentLog` model and `ConsentPurpose` enum (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) to `schema.prisma`. Generate physical SQL migration file: `pnpm --filter @gorola/api exec prisma migrate dev --name add_consent_log_model` using `DIRECT_URL` / `db_owner` DDL role.
-  - [ ] [DB Deployment] Apply migration SQL file to local databases (`gorola_dev` and `gorola_test`) via `pnpm --filter @gorola/api prisma:bootstrap:test` BEFORE writing implementation code or running tests.
-  - [ ] [Repository] Create `consent.repository.ts`: `create`, `findAllByUserId`, `findByUserIdAndPurpose`, `withdraw`.
-  - [ ] [Service] Create `consent.service.ts`: `recordConsent`, `getUserConsents`, `withdrawConsent` (throws `CannotWithdrawEssentialConsentError` if purpose is essential).
-  - [ ] [Controller] Create `consent.controller.ts` for `POST`, `GET`, `DELETE` routes.
-  - [ ] [Routes] Register consent routes in Fastify app with buyer JWT middleware.
-  - [ ] [Cascade & Regression Testing] Check across modules for cascading broken logic. Run full test suite (`pnpm test` / unit, integration, and E2E) and quality gates (`pnpm typecheck`, `pnpm lint`) — **confirm GREEN.**
+- [x] **GREEN — Backend (Schema & Migration → Repository → Service → Controller):**
+  - [x] [Schema & Migration] Add `ConsentLog` model and `ConsentPurpose` enum (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) to `schema.prisma`. Generate physical SQL migration file: `pnpm --filter @gorola/api exec prisma migrate dev --name add_consent_log_model` using `DIRECT_URL` / `db_owner` DDL role.
+  - [x] [DB Deployment] Apply migration SQL file to local databases (`gorola_dev` and `gorola_test`) via `pnpm --filter @gorola/api prisma:bootstrap:test` BEFORE writing implementation code or running tests.
+  - [x] [Repository] Create `consent.repository.ts`: `create`, `findAllByUserId`, `findByUserIdAndPurpose`, `withdraw`.
+  - [x] [Service] Create `consent.service.ts`: `recordConsent`, `getUserConsents`, `withdrawConsent` (throws `CannotWithdrawEssentialConsentError` if purpose is essential).
+  - [x] [Controller] Create `consent.controller.ts` for `POST`, `GET`, `DELETE` routes.
+  - [x] [Routes] Register consent routes in Fastify app with buyer JWT middleware.
+  - [x] [Cascade & Regression Testing] Check across modules for cascading broken logic. Run full test suite (`pnpm test` / unit, integration, and E2E) and quality gates (`pnpm typecheck`, `pnpm lint`) — **confirm GREEN.**
 
 
-- [ ] **Verification chain:**
-  - [ ] Buyer calls `POST /api/v1/consent` → DB row created with IP and timestamp → `GET /api/v1/consent` lists consent → `DELETE /api/v1/consent/MARKETING_EMAIL` marks `isWithdrawn = true` → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Buyer calls `POST /api/v1/consent` → DB row created with IP and timestamp → `GET /api/v1/consent` lists consent → `DELETE /api/v1/consent/MARKETING_EMAIL` marks `isWithdrawn = true` → ✅ Done.
 
 ---
 
@@ -226,78 +232,165 @@ Before a user enters their phone number on `LoginPage.tsx`, they must see a cons
 
 ---
 
-- [ ] **RED — Unit / Component (`LoginPage.test.tsx`):**
-  - [ ] Test: Initial render displays consent notice step (`data-testid="consent-notice-step"`), NOT phone input (`data-testid="phone-input"`).
-  - [ ] Test: Consent notice contains text "We collect your phone number to send a one-time password (OTP)" and link to `/privacy`.
-  - [ ] Test: Clicking "Continue & Accept" (`data-testid="consent-continue-btn"`) displays phone input step.
-  - [ ] Test: After successful OTP login, `POST /api/v1/consent` is called with `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: '...' }`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`LoginPage.test.tsx`):**
+  - [x] Test: Initial render displays consent notice step (`data-testid="consent-notice-step"`), NOT phone input (`data-testid="phone-input"`).
+  - [x] Test: Consent notice contains text "We collect your phone number to send a one-time password (OTP)" and link to `/privacy`.
+  - [x] Test: Clicking "Continue & Accept" (`data-testid="consent-continue-btn"`) displays phone input step.
+  - [x] Test: After successful OTP login, `POST /api/v1/consent` is called with `{ purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: '...' }`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Types → Component):**
-  - [ ] [Component] In `LoginPage.tsx`, add step state `'consent' | 'phone' | 'otp' | 'done'`. Render `ConsentNoticeStep` sub-component initially.
-  - [ ] [Component] On successful OTP verification callback, call `apiClient.post('/api/v1/consent', { purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: CONSENT_NOTICE_TEXT })`.
-  - [ ] Run unit test — **confirm GREEN.**
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Component] In `LoginPage.tsx`, add step state `'consent' | 'phone' | 'otp' | 'done'`. Render `ConsentNoticeStep` sub-component initially.
+  - [x] [Component] On successful OTP verification callback, call `apiClient.post('/api/v1/consent', { purpose: 'OTP_AUTH', consentVersion: '1.0', noticeText: CONSENT_NOTICE_TEXT })`.
+  - [x] Run unit test — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] User opens `/login` → Sees consent notice with Privacy Policy link → Clicks "Continue & Accept" → Enters phone & OTP → On auth success, `ConsentLog` row created in DB → ✅ Done.
+- [x] **Verification chain:**
+  - [x] User opens `/login` → Sees consent notice with Privacy Policy link → Clicks "Continue & Accept" → Enters phone & OTP → On auth success, `ConsentLog` row created in DB → ✅ Done.
 
 ---
 
 #### 8.2.3 — Consent Withdrawal in Account Privacy Settings
 
-- [ ] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
-  - [ ] Test: Renders list of consents returned by `GET /api/v1/consent`. Non-essential consents render "Withdraw" button; essential consents (`OTP_AUTH`) render "Essential" label without button.
-  - [ ] Test: Clicking "Withdraw" on `MARKETING_EMAIL` calls `DELETE /api/v1/consent/MARKETING_EMAIL` and updates UI status to "Withdrawn".
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
+  - [x] Test: Renders list of consents returned by `GET /api/v1/consent`. Non-essential consents render "Withdraw" button; essential consents (`OTP_AUTH`) render "Essential" label without button.
+  - [x] Test: Clicking "Withdraw" on `MARKETING_EMAIL` calls `DELETE /api/v1/consent/MARKETING_EMAIL` and updates UI status to "Withdrawn".
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Component):**
-  - [ ] Create `apps/web/src/components/account/PrivacySettingsSection.tsx` and integrate into `/account` page.
-  - [ ] Run unit test — **confirm GREEN.**
+- [x] **GREEN — Frontend (Component):**
+  - [x] Create `apps/web/src/components/account/PrivacySettingsSection.tsx` and integrate into `/account` page.
+  - [x] Run unit test — **confirm GREEN.**
 
 ---
 
 #### 8.2.4 — Consent Log Audit Trail & Immutability
 
-- [ ] **RED — Integration (`consent.audit.test.ts`):**
-  - [ ] Test: `POST /api/v1/consent` creates an `AuditLog` row with `action = 'CONSENT_GIVEN'`.
-  - [ ] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` creates an `AuditLog` row with `action = 'CONSENT_WITHDRAWN'`.
-  - [ ] Test: Direct programmatic call to `prisma.consentLog.delete({ where: { id } })` throws `AppError` code `CONSENT_LOG_IMMUTABLE` (Prisma middleware guard).
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`consent.audit.test.ts`):**
+  - [x] Test: `POST /api/v1/consent` creates an `AuditLog` row with `action = 'CONSENT_GIVEN'`.
+  - [x] Test: `DELETE /api/v1/consent/MARKETING_EMAIL` creates an `AuditLog` row with `action = 'CONSENT_WITHDRAWN'`.
+  - [x] Test: Direct programmatic call to `prisma.consentLog.delete({ where: { id } })` throws `AppError` code `CONSENT_LOG_IMMUTABLE` (Prisma middleware guard).
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend:**
-  - [ ] Add Prisma middleware in `apps/api/src/lib/prisma.ts` blocking `delete` and `deleteMany` on `ConsentLog`. Update `consent.service.ts` to log to `AuditLog`.
-  - [ ] Run integration test — **confirm GREEN.**
+- [x] **GREEN — Backend:**
+  - [x] Add Prisma middleware in `apps/api/src/lib/prisma.ts` blocking `delete` and `deleteMany` on `ConsentLog`. Update `consent.service.ts` to log to `AuditLog`.
+  - [x] Run integration test — **confirm GREEN.**
+
+---
+
+#### 8.2.5 — `ORDER_PROCESSING` Consent on Address Modals & Checkout Flow
+
+**Root cause / Goal:**
+Saving a delivery address or placing an order collects landmark notes, GPS pins, and phone numbers to be shared with merchants and riders. DPDP Act Sec 5 requires prominent notice before collection.
+
+- [x] **RED — Unit / Component (`SavedAddressesPage.test.tsx`, `CheckoutPage.test.tsx`):**
+  - [x] Test: "Add Address" modal renders prominent `data-testid="order-processing-consent-notice"` detailing data sharing with merchants, delivery partners, and Ola Maps.
+  - [x] Test: Saving an address dispatches `POST /api/v1/consent` with `{ purpose: 'ORDER_PROCESSING', ... }` and refreshes consent query cache.
+  - [x] Test: Checkout review step displays prominent fulfillment consent step.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component & Wiring:**
+  - [x] [Component] In `SavedAddressesPage.tsx` and `BookingTimeslotPage.tsx`, render prominent DPDP notice card naming Ola Maps above Save button.
+  - [x] [Wiring] On address creation/update success, trigger `apiClient.post('/api/v1/consent', { purpose: 'ORDER_PROCESSING', consentVersion: '1.0', noticeText: ... })` and invalidate `['consents']` query cache.
+  - [x] [Component] In `CheckoutPage.tsx`, ensure prominent order fulfillment consent and Ola Maps & Razorpay disclosure are displayed.
+  - [x] Run unit tests — **confirm GREEN.**
+
+---
+
+#### 8.2.6 — `MARKETING_EMAIL` Opt-In & Privacy Settings Controls
+
+**Root cause / Goal:**
+Marketing communications must be strictly opt-in (never pre-ticked) and fully controllable via self-serve switches in Profile Settings.
+
+- [x] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
+  - [x] Test: Privacy Settings renders interactive opt-in toggle card for `MARKETING_EMAIL`.
+  - [x] Test: Enabling toggle sends `POST /api/v1/consent` (`MARKETING_EMAIL`).
+  - [x] Test: Disabling toggle sends `DELETE /api/v1/consent/MARKETING_EMAIL`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component:**
+  - [x] [Component] In `PrivacySettingsSection.tsx`, implement bi-directional opt-in/opt-out toggles for non-essential consents.
+  - [x] [Component] In `CheckoutPage.tsx`, add un-ticked optional marketing opt-in card.
+  - [x] Run unit tests — **confirm GREEN.**
+
+---
+
+#### 8.2.7 — `ANALYTICS` Authenticated Banner & Telemetry Opt-In (Option A)
+
+**Root cause / Goal:**
+Under DPDP Act 2023, anonymous performance telemetry requires prior notice with explicit Accept and Decline options. Under Option A, the banner only renders for authenticated users (`useAuthStore`) who haven't logged an analytics choice yet, ensuring `POST /api/v1/consent` is properly tied to a valid `userId` in PostgreSQL while maintaining local caching in `localStorage`.
+
+- [x] **RED — Unit / Component (`AnalyticsConsentBanner.test.tsx`):**
+  - [x] Test: Unauthenticated (guest) users do not see the banner.
+  - [x] Test: Authenticated users without prior choice see prominent banner with `DPDP Act 2023` badge.
+  - [x] Test: "Accept Analytics" calls `POST /api/v1/consent` (`ANALYTICS`), saves to `localStorage`, and closes banner.
+  - [x] Test: "Decline / Essential Only" closes banner without calling API, saves declined state to `localStorage`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend Component:**
+  - [x] [Component] Update `apps/web/src/components/consent/AnalyticsConsentBanner.tsx` with Option A auth gating, `whitespace-nowrap` on badge, and responsive layout.
+  - [x] Run unit tests — **confirm GREEN (5/5 passed).**
+
+---
+
+#### 8.2.8 — Multi-Layer E2E Suite Updates & Regression Verification
+
+- [x] Update Playwright E2E suites (`auth.spec.ts`, `checkout.spec.ts`, `booking-journey.spec.ts`, `store-owner-journey.spec.ts`, `admin-journey.spec.ts`) to handle interactive consent steps (`data-testid="consent-continue-btn"`).
+- [x] Run full automated unit & integration test suites (`pnpm test` — 87 web test files + 114 API test files = 1200+ tests 100% green).
+- [x] Verify `pnpm typecheck` and `pnpm lint` pass with 0 errors.
 
 ---
 
 ### 8.3 — User Rights: Erasure, Access & Nomination (Current Setup)
 
-#### 8.3.1 — Right to Erasure (`DELETE /api/v1/user/account`)
+#### 8.3.1 — Right to Erasure with 30-Day Recovery Grace Period (`DELETE /api/v1/user/account` & `POST /api/v1/user/reactivate-account`)
 
 **Root cause / Goal:**
-No account deletion endpoint exists. DPDP Act requires self-serve account deletion that triggers purging of personal data across all systems. GoRola soft-deletes users; this must anonymize PII fields (`name = '[deleted]'`, `phone = 'DELETED_${userId}'`), soft-delete addresses, invalidate active refresh tokens, and queue a 30-day hard-purge job in BullMQ.
+Under India's DPDP Act Section 12, Data Principals have the statutory right to erase their personal data. To prevent accidental data loss and maintain industry-standard security, GoRola provides a **30-day grace period** during which users can cancel the deletion and restore their account simply by logging back in via Phone OTP.
+
+**Lifecycle Architecture:**
+1. **Day 0 (Deletion Request — `DELETE /api/v1/user/account`):**
+   - Soft-delete: Sets `deletedAt = new Date()`, `deletionScheduledFor = Date.now() + 30 days`.
+   - Preserves `phone` and `name` temporarily so the user can be authenticated during the grace period.
+   - Revokes active sessions: Deletes Redis session keys (`user_sessions:{userId}`) and refresh tokens (`rt:buyer:{token}`) for instant logout across all devices.
+   - Enqueues BullMQ `UserDataPurgeJob` scheduled to execute with a 30-day delay.
+   - UI shows confirmation modal: *"Your account has been scheduled for deletion. You have a 30-day grace period. Simply log in with your phone number within 30 days to cancel deletion and restore your account."*
+2. **Days 1–30 (Account Recovery / Reactivation — `POST /api/v1/user/reactivate-account`):**
+   - User verifies Phone OTP on `/login`.
+   - Backend detects `deletedAt !== null` and returns `{ isPendingDeletion: true, deletionScheduledFor }`.
+   - Frontend displays **Account Reactivation Prompt**:
+     - *"Welcome back! Your account is scheduled for permanent deletion on [Date]. Would you like to restore your account?"*
+     - Action: **"Cancel Deletion & Restore Account"** $\rightarrow$ calls `POST /api/v1/user/reactivate-account`, clears `deletedAt = null`, cancels BullMQ job, restores full account access.
+3. **Day 31+ (Permanent Hard Purge & Anonymization — BullMQ `UserDataPurgeJob`):**
+   - Worker checks if `deletedAt !== null` (account was not reactivated).
+   - Irreversibly anonymizes User profile: `name = '[deleted]'`, `phone = 'DELETED_${userId}'`, `phoneHash = null`, `isDeleted = true`, `isActive = false`.
+   - Purges saved delivery addresses from `Address` table.
+   - Purges nominee details (`nomineeName = null`, `nomineeContact = null`, `nomineeRelationship = null`).
+   - Sanitizes order delivery PII in `Order` table (`landmarkDescription = '[deleted]'`, `flatRoom = null`, `deliveryNote = null`, `deliveryLat = null`, `deliveryLng = null`, `addressLabel = null`) while keeping financial totals for statutory merchant tax audits.
+   - Marks all `ConsentLog` records with `isWithdrawn = true` and `withdrawnAt = new Date()`.
+   - Cleans up any remaining Redis keys.
 
 ---
 
-- [ ] **RED — Integration (`user.account-deletion.test.ts`):**
-  - [ ] Test setup: Seed buyer with name "Test User", phone "+919876543210", 2 addresses, 1 order, 1 ConsentLog.
-  - [ ] Test: `DELETE /api/v1/user/account` + buyer JWT → HTTP 200 with `{ success: true, data: { message: 'Your account has been scheduled for deletion...' } }`.
-  - [ ] Test: Query DB: `User` row has `name = '[deleted]'`, `phone` starts with `'DELETED_'`, `isDeleted = true`.
-  - [ ] Test: Query DB: `Address` rows have `deletedAt` set. `ConsentLog` rows have `isWithdrawn = true`.
-  - [ ] Test: Refresh token for user in Redis `refresh:{token}` is deleted.
-  - [ ] Test: `UserDataPurgeJob` enqueued in BullMQ for 30 days later.
-  - [ ] **Run — confirm RED (endpoint does not exist).**
+- [ ] **RED — Integration (`user.account-deletion.test.ts` & `user.account-reactivation.test.ts`):**
+  - [ ] Test: `DELETE /api/v1/user/account` + buyer JWT → HTTP 200 with `{ isPendingDeletion: true, deletionScheduledFor: ... }`.
+  - [ ] Test: Query DB: `User` row has `deletedAt` set, `phone` intact for grace period, `isDeleted = false`.
+  - [ ] Test: Redis sessions for user are invalidated.
+  - [ ] Test: BullMQ `UserDataPurgeJob` enqueued with 30-day delay.
+  - [ ] Test: Login during grace period returns `isPendingDeletion: true`.
+  - [ ] Test: `POST /api/v1/user/reactivate-account` clears `deletedAt` and restores active status.
+  - [ ] Test: Running `UserDataPurgeJob` after 30 days executes irreversible anonymization (`name = '[deleted]'`, `phone = 'DELETED_...'`, addresses purged, consents withdrawn).
+  - [ ] **Run — confirm RED.**
 
 - [ ] **GREEN — Backend & Frontend:**
-  - [ ] [Repository] Add `anonymiseAndSoftDelete(userId)` to `user.repository.ts` and `withdrawAllForUser(userId)` to `consent.repository.ts`.
-  - [ ] [Service] Add `requestAccountDeletion(userId)` to `user.service.ts`: runs anonymization, deletes Redis session keys `user_sessions:{userId}`, enqueues BullMQ `UserDataPurgeJob`.
-  - [ ] [Worker] Create `apps/api/src/workers/user-data-purge.worker.ts`: hard-deletes `User` row after 30-day grace period.
-  - [ ] [Controller] Add handler for `DELETE /api/v1/user/account`.
-  - [ ] [Frontend] Add "Danger Zone" section to `/account` page with "Delete my account" button and confirmation dialog.
+  - [ ] [Repository] Add `markPendingDeletion(userId)`, `reactivateAccount(userId)`, and `permanentPurgeAndAnonymize(userId)` in `user.repository.ts`.
+  - [ ] [Service] Add `requestAccountDeletion(userId)` and `reactivateAccount(userId)` in `user.service.ts`.
+  - [ ] [Worker] Create `apps/api/src/workers/user-data-purge.worker.ts` with BullMQ processor.
+  - [ ] [Controller] Add `DELETE /api/v1/user/account` and `POST /api/v1/user/reactivate-account`.
+  - [ ] [Frontend] Add "Danger Zone" card on `/account/privacy` with deletion dialog.
+  - [ ] [Frontend] Add Reactivation modal on `/login` for users pending deletion.
   - [ ] Run integration & unit tests — **confirm GREEN.**
 
 - [ ] **Verification chain:**
-  - [ ] Buyer goes to `/account` → Clicks "Delete my account" → Confirms deletion modal → API anonymizes PII and invalidates session → User is logged out and redirected to `/` → DB shows anonymized user row → BullMQ job scheduled for 30-day hard purge → ✅ Done.
+  - [ ] Buyer goes to `/account/privacy` → Clicks "Delete my account" → Confirms modal → Soft-deleted & logged out → Buyer logs in within 30 days → Sees reactivation modal → Clicks "Restore Account" → Account restored cleanly → If not restored in 30 days, BullMQ executes permanent PII scrub → ✅ Done.
 
 ---
 
@@ -570,3 +663,85 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
   - **`setup-railway-roles.cjs` Fix:** Added `CREATEDB` to the `db_owner` role creation (both `CREATE` and `ALTER` branches of the idempotent `DO $$` block). Added `GRANT ALL ON SCHEMA public TO db_owner` and `ALTER SCHEMA public OWNER TO db_owner` queries. Fixed `ALTER DEFAULT PRIVILEGES` to include `FOR ROLE db_owner`.
   - **CI/CD Deploy Pipeline Fix (`deploy-railway.yml`):** The `deploy-railway.yml` reusable workflow was calling `pnpm` without ever installing it, causing `pnpm: command not found` (exit 127). Added `pnpm/action-setup@v4`, `actions/setup-node@v4` with pnpm cache, and `pnpm install --frozen-lockfile --prefer-offline` steps before the Railway CLI install and migration steps — mirroring the pattern already used in `ci.yml`.
   - **Documentation Updated:** `LOCAL_SETUP.md` and `DEPLOYMENT INFO/DEPLOYMENT_CONFIG_GUIDE.md` updated throughout to reflect all corrected role setup commands, including `CREATEDB`, schema ownership, `FOR ROLE db_owner` default privileges, sequences grants, and recovery one-liners (`ALTER ROLE db_owner CREATEDB;`) for the "role already exists" scenario.
+
+- **Session 4 — 2026-09-23 — Phase 8.2 Implementation & Consent Architecture Documentation:**
+  - **Schema & Backend API (8.2.1 & 8.2.4):**
+    - Created `ConsentLog` model with enum `ConsentPurpose` (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) and physical migration `20260922205638_add_consent_log_model`.
+    - Implemented `POST /api/v1/consent`, `GET /api/v1/consent`, `DELETE /api/v1/consent/:purpose`.
+    - Added Prisma Client extension blocking `delete` and `deleteMany` operations on `ConsentLog` to guarantee audit trail immutability.
+    - Integration tests: `consent.controller.test.ts` (4/4 passed) & `consent.audit.test.ts` (3/3 passed).
+  - **Frontend Notices & Contextual Consent (8.2.2, 8.2.5, 8.2.6, 8.2.7):**
+    - **`OTP_AUTH`:** Step notice on `LoginPage.tsx` logging consent on OTP verification.
+    - **`ORDER_PROCESSING`:** Address dialog notice naming Ola Maps on `SavedAddressesPage.tsx` and `BookingTimeslotPage.tsx`. Checkout fulfillment notice naming Ola Maps and Razorpay on `CheckoutPage.tsx`.
+    - **`MARKETING_EMAIL`:** Un-ticked opt-in checkbox on `CheckoutPage.tsx` and 1-click Opt-In / Withdraw toggle card in `PrivacySettingsSection.tsx`.
+    - **`ANALYTICS`:** Built `AnalyticsConsentBanner.tsx` with Option A authentication gating (only renders for `role === 'BUYER'` when unset, suppressed on Rider/Store/Admin portals).
+  - **Architecture Guide Created:**
+    - Authored `DPDP Act/DPDP_CONSENT_ARCHITECTURE_GUIDE.md` documenting all 4 consent pipelines, ASCII architecture diagram, sub-processor disclosures (Ola Maps, Razorpay, Exotel), hosting disclosures (Railway, Vercel), and checkbox vs action button standards.
+  - **Identified Frontend State Cleanups for Future Polish:**
+    1. *Profile Consent Grouping:* Update `PrivacySettingsSection.tsx` to group raw database logs into the 4 canonical purpose cards rather than rendering duplicate historical rows.
+    2. *Card Description Update:* Update `ORDER_PROCESSING` label in `PrivacySettingsSection.tsx` to explicitly name Razorpay and Ola Maps.
+    3. *Checkout Consent State Awareness:* In `CheckoutPage.tsx`, hide the `MARKETING_EMAIL` checkbox if already Active in user profile, and suppress duplicate `ORDER_PROCESSING` API dispatches on repeat orders.
+
+- **Session 5 — 2026-09-23 — DPDP Notice Canonical Standardization & Booking Consent Completion:**
+  - **Canonical Notice Harmonization:** Reconciled `ORDER_PROCESSING` notice wording across all buyer touchpoints (`SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`) using the single, legally truthful conditional formulation:
+    > *"Your address, landmark notes, and GPS coordinates are shared with **Ola Maps** for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via **Razorpay**. Governed by India's DPDP Act 2023."*
+  - **Booking Checkout Consent Completion:** Added the missing `ORDER_PROCESSING` DPDP consent notice card directly above the "Confirm Booking" CTA on `BookingTimeslotPage.tsx`, and wired background consent logging (`POST /api/v1/consent`) upon booking confirmation.
+  - **Audit Trail Uniformity:** Ensured the exact canonical notice text is sent in the `noticeText` payload for all `ORDER_PROCESSING` consent creations (address save, booking confirmation, order checkout) so `ConsentLog` rows are 100% consistent during compliance audits.
+  - **Architecture Guide (v1.1):** Documented Section 8 in `DPDP_CONSENT_ARCHITECTURE_GUIDE.md` detailing the ADR on why Razorpay disclosure is incorporated into `ORDER_PROCESSING` with a conditional clause rather than an unmanageable fifth consent purpose (`PAYMENT_PROCESSING`).
+  - **Quality Gates:** All unit and component tests passing green (`BookingTimeslotPage.test.tsx`, `SavedAddressesPage.test.tsx`, `CheckoutPage.test.tsx` — 20/20 tests passed) and `pnpm typecheck` passed with 0 errors.
+
+- **Session 6 — 2026-09-24 — Consent Idempotency, Profile UI Canonical Aggregation & Dedicated Privacy Dashboard Architecture:**
+  - **Dedicated Account Privacy Dashboard (`/account/privacy`):**
+    - Created `PrivacySettingsPage.tsx` registered under protected route `/account/privacy` in `buyer.tsx`.
+    - Transferred full statutory consent management (`PrivacySettingsSection.tsx`) into this dedicated view.
+    - Updated `ProfilePage.tsx` by replacing the awkwardly placed bottom section with a clean `Privacy & Consent` Quick Link card (`<ShieldCheck />`) positioned directly above the Logout action.
+    - Resolved grid layout stretching in `ProfilePage.tsx` using `md:items-start` and balanced spacing to eliminate excess whitespace on the Personal Info card.
+    - Unit tests created in `PrivacySettingsPage.test.tsx` and updated in `ProfilePage.test.tsx`.
+  - **Phase 8.3 Roadmap Alignment for `/account/privacy`:**
+    - Documented architectural plan: `/account/privacy` serves as the user-facing hub for upcoming Phase 8.3 user rights:
+      1. **Section 8.3.1 (Right to Erasure):** "Delete Account" modal invoking `DELETE /api/v1/user/account`.
+      2. **Section 8.3.2 (Right to Access):** "Download My Data" button triggering JSON export via `GET /api/v1/user/my-data`.
+      3. **Section 8.3.3 (Right to Nominate):** Nomination form saving trusted contact fields to `User` model.
+    - Differentiated interactive account dashboard (`/account/privacy` for logged-in buyers) from public legal disclosures (`/privacy` for guests, regulators, and legal text in Phase 8.6).
+  - **Consent Idempotency Guard (8.2 & DPDP Sec 10):**
+    - Enhanced `recordConsent` in `consent.service.ts` to inspect `findLatestByUserIdAndPurpose`. If an active, unwithdrawn record for the same purpose already exists with matching `consentVersion` and `noticeText`, it returns `{ record, isNew: false }` rather than inserting a duplicate row.
+    - Updated `consent.controller.ts` to respond with `200 OK` on idempotency short-circuits vs `201 Created` for fresh consent grants.
+    - Added dedicated idempotency integration tests in `consent.controller.test.ts` (verifying single row persistence across multiple repeated requests).
+  - **Canonical 4-Card Profile Privacy Settings UI (`PrivacySettingsSection.tsx`):**
+    - Refactored `PrivacySettingsSection.tsx` from rendering raw historical database rows to aggregating entries into the 4 canonical purpose cards (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) via `buildPurposeCards()`.
+    - Guaranteed all 4 canonical cards are always rendered even with empty server records, with 1-click Opt-In / Withdraw buttons.
+    - Removed premature "Exotel" vendor reference from `OTP_AUTH` description across the app (pending Phase 8.8 vendor selection).
+  - **Universal Heading Standardization:**
+    - Standardized every consent form and dialog across the buyer app to use the exact same canonical heading as the Profile Privacy page:
+      - `OTP_AUTH`: **Authentication & Account Security** (`LoginPage.tsx`)
+      - `ORDER_PROCESSING`: **Order Fulfillment & Location Services** (`CheckoutPage.tsx`, `SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`)
+      - `MARKETING_EMAIL`: **Promotions & Seasonal Offers** (`CheckoutPage.tsx`)
+      - `ANALYTICS`: **Usage & Performance Analytics** (`AnalyticsConsentBanner.tsx`)
+  - **Cross-Device Analytics Sync (`AnalyticsConsentBanner.tsx`):**
+    - Implemented cross-device server check on mount (`GET /api/v1/consent`) to sync `localStorage` (`accepted`/`declined`) on new devices without redisplaying the popup for existing users.
+    - Wired "Decline" to persist locally and dispatch background `DELETE /api/v1/consent/ANALYTICS` so all devices stay in sync.
+  - **Checkout Consent State Awareness (`CheckoutPage.tsx`):**
+    - Integrated `consentsQuery` via `useQuery` to fetch active user consents on load.
+    - Suppressed duplicate `POST /api/v1/consent` (ORDER_PROCESSING) dispatches on order placement when consent is already active.
+    - Conditionally hid the `MARKETING_EMAIL` opt-in checkbox if the user has already granted marketing consent.
+  - **Architecture Guide v1.2 Documentation (`DPDP_CONSENT_ARCHITECTURE_GUIDE.md`):**
+    - Added **Section 9: Booking Commerce Consent ADR** explaining why `ORDER_PROCESSING` legally and architecturally covers booking commerce without creating redundant purpose enums.
+    - Added **Section 10: OTP_AUTH Idempotency & Authentication Lifecycle ADR** rationalizing why OTP consent occurs post-verification (when userId is known) and how backend idempotency prevents log bloat.
+  - **Quality & Lint Fixes:**
+    - 100% test pass rate across 55 Vitest component/unit tests and 0 ESLint warnings across the entire monorepo.
+
+- **Session 7 — 2026-09-24 — Rider UI Mobile Layout, PII Key Rotation Fallback, CI E2E Mobile Stability & Booking Consent Parity:**
+  - **Rider UI Mobile Bottom Navigation Centering (`RiderLayout.tsx`):**
+    - Fixed bottom tab bar detachment on desktop and preview containers by applying `max-w-md mx-auto` to `<nav className="fixed bottom-0 left-0 right-0 ...">`, keeping navigation controls centered and aligned with the mobile card container across all viewport sizes.
+  - **PII Phone Number Decryption & Key-Rotation Fallback (`crypto.ts`, `rider.controller.ts`, `admin.service.ts`):**
+    - *Rider Profile Endpoint:* Added missing `decryptPII(rider.phone)` call in `GET /api/v1/rider/profile` (`rider.controller.ts`).
+    - *Admin Platform Riders:* Added missing `decryptPII(r.phone)` mapping in `listRiders()`, `createRider()`, and `updateRider()` in `admin.service.ts` so admin tables display readable plain numbers (`+919000000001`) instead of raw `enc:...` ciphertexts.
+    - *Dynamic Key & Fallback Decryption:* Refactored `crypto.ts` from evaluating `ENCRYPTION_KEY` at import-time to dynamically reading `process.env.ENCRYPTION_KEY` inside `getCipherKey()` and `getHmacSecret()`. Added automated fallback key decryption so historical database seed records encrypted with default keys and newly provisioned records encrypted with custom `.env` keys decrypt seamlessly.
+  - **Playwright E2E CI Mobile Viewport Fixes (`iphone-se`):**
+    - *Click Occlusion Resolution:* Diagnosed and fixed timeout failures in `E2E-022` (`store-owner-journey.spec.ts`) and `E2E-008` (`checkout.spec.ts`) caused by `{ force: true }` clicks clicking behind the fixed `z-50` mobile bottom nav bar. Replaced with `evaluate(node => node.scrollIntoView({ block: 'center' }))` + `.click()`.
+    - *Deterministic Quantity Increments:* Updated `E2E-028` to assert each quantity increment step (`2` → `3` → `4`) before verifying the automatic discount summary, eliminating race conditions during fast automated runs.
+  - **DPDP Consent Synchronization & Booking Commerce Parity:**
+    - *No Checkbox Flash:* Configured `consentsQuery` with `staleTime: 0`, `refetchOnMount: "always"`, and bound to `["consents", accessToken]` in `CheckoutPage.tsx`, rendering the optional Promotions checkbox only after loading completes (`!consentsQuery.isLoading && !hasMarketingConsent`).
+    - *Cache Invalidation:* Added `queryClient.invalidateQueries({ queryKey: ["consents"] })` to `handleWithdraw` and `handleGrant` in `PrivacySettingsSection.tsx` to instantly synchronize consent state across page transitions.
+    - *Booking Commerce Parity (`BookingTimeslotPage.tsx`):* Added the optional *Promotions & Seasonal Offers* checkbox with `data-testid="booking-marketing-opt-in"` to Section 5, and wired optional `MARKETING_EMAIL` consent logging alongside `ORDER_PROCESSING` upon booking confirmation.
+  - **Quality Gates:** 100% GREEN run on `pnpm ci:quality` (84/84 tests passing with zero failures).

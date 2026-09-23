@@ -7,6 +7,7 @@ import { AdminRoutes } from "@/app/routes/admin";
 import { BuyerRoutes } from "@/app/routes/buyer";
 import { RiderRoutes } from "@/app/routes/rider";
 import { StoreRoutes } from "@/app/routes/store";
+import { AnalyticsConsentBanner } from "@/components/consent/AnalyticsConsentBanner";
 import { DevWeatherToggle } from "@/components/shared/DevWeatherToggle";
 import { Toaster } from "@/components/ui/sonner";
 import { useGorolaMotion } from "@/hooks/useGorolaMotion";
@@ -49,6 +50,7 @@ function AppContent(): ReactElement {
         )}
       </Routes>
       <Toaster position="bottom-left" />
+      <AnalyticsConsentBanner />
       <DevWeatherToggle />
     </>
   );

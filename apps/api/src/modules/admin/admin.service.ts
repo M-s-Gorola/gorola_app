@@ -2,7 +2,7 @@ import { AppError, ConflictError, NotFoundError, ValidationError } from "@gorola
 import { type ActorRole, type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
-import { maskPhone } from "../../lib/crypto.js";
+import { decryptPII, encryptPII, hashPII, maskPhone } from "../../lib/crypto.js";
 import { getRedisClient } from "../../lib/redis.js";
 import { AuditRepository } from "../audit/audit.repository.js";
 import { CategoryRepository } from "../catalog/category.repository.js";
@@ -1681,7 +1681,7 @@ export class AdminService {
       };
     }>[]
   > {
-    return this.db.deliveryRider.findMany({
+    const riders = await this.db.deliveryRider.findMany({
       where: { isDeleted: false },
       orderBy: { createdAt: "desc" },
       include: {
@@ -1698,6 +1698,11 @@ export class AdminService {
         }
       }
     });
+
+    return riders.map((r) => ({
+      ...r,
+      phone: decryptPII(r.phone)
+    }));
   }
 
   public async createRider(
@@ -1753,7 +1758,8 @@ export class AdminService {
       const rider = await tx.deliveryRider.create({
         data: {
           name: dto.name,
-          phone: dto.phone,
+          phone: encryptPII(dto.phone),
+          phoneHash: hashPII(dto.phone),
           email: dto.email,
           passwordHash,
           riderType: dto.riderType,
@@ -1792,7 +1798,10 @@ export class AdminService {
         }
       });
 
-      return rider;
+      return {
+        ...rider,
+        phone: decryptPII(rider.phone)
+      };
     });
   }
 
@@ -1883,7 +1892,10 @@ export class AdminService {
         }
       });
 
-      return updatedRider;
+      return {
+        ...updatedRider,
+        phone: decryptPII(updatedRider.phone)
+      };
     });
   }
 

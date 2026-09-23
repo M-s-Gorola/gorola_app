@@ -238,6 +238,12 @@ describe("BookingTimeslotPage", () => {
     const addressRadio = screen.getByLabelText(/Near Clock Tower Mussoorie/i);
     fireEvent.click(addressRadio);
 
+    // Verify DPDP consent notice is displayed
+    const consentNotice = screen.getByTestId("booking-order-processing-consent");
+    expect(consentNotice).toBeInTheDocument();
+    expect(consentNotice).toHaveTextContent(/DPDP Act 2023/i);
+    expect(consentNotice).toHaveTextContent(/Razorpay/i);
+
     // Now all selected, button is enabled!
     expect(confirmBtn).not.toBeDisabled();
 
@@ -252,6 +258,13 @@ describe("BookingTimeslotPage", () => {
           items: [{ productId: "prod1", variantId: "var1", quantity: 1 }],
           timeslot: "09:00-12:00",
           addressId: "addr1",
+        }),
+      );
+      expect(apiPostSpy).toHaveBeenCalledWith(
+        "/api/v1/consent",
+        expect.objectContaining({
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
         }),
       );
     });

@@ -64,30 +64,56 @@ export function SavedAddressesPage(): ReactElement {
 
   const createMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
-      await api!.post("/api/v1/addresses", body);
+      const res = await api!.post<{ data: { id: string } }>("/api/v1/addresses", body);
+      return res.data;
     },
     onSuccess: () => {
       toast.success("Address added successfully");
       setIsFormOpen(false);
       invalidateAddresses();
+      // DPDP 2023: Log ORDER_PROCESSING consent when address is saved
+      try {
+        const p = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+        });
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+      queryClient.invalidateQueries({ queryKey: ["consents"] });
     },
-    onError: (err) => {
-      handleApiError(err);
-    }
+    onError: (err) => handleApiError(err)
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, body }: { id: string; body: Record<string, unknown> }) => {
-      await api!.put(`/api/v1/addresses/${id}`, body);
+      const res = await api!.put<{ data: { id: string } }>(`/api/v1/addresses/${id}`, body);
+      return res.data;
     },
     onSuccess: () => {
       toast.success("Address updated successfully");
       setIsFormOpen(false);
       invalidateAddresses();
+      // DPDP 2023: Log ORDER_PROCESSING consent when address is updated
+      try {
+        const p = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+        });
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+      queryClient.invalidateQueries({ queryKey: ["consents"] });
     },
-    onError: (err) => {
-      handleApiError(err);
-    }
+    onError: (err) => handleApiError(err)
   });
 
   const deleteMutation = useMutation({
@@ -329,6 +355,19 @@ export function SavedAddressesPage(): ReactElement {
             {formError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
             )}
+
+            <div
+              data-testid="order-processing-consent-notice"
+              className="rounded-xl border border-gorola-pine/20 bg-gorola-sand/40 p-3 text-xs text-gorola-charcoal space-y-1"
+            >
+              <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
+                <span>Order Fulfillment &amp; Location Services</span>
+              </div>
+              <p className="text-gorola-slate leading-relaxed">
+                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+              </p>
+            </div>
           </div>
 
           <DialogFooter>

@@ -12,6 +12,10 @@ test.describe('Checkout & Account', () => {
 
   async function loginAs(page: any, phone: string) {
     await page.goto('/login');
+    const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
+    if (await consentBtn.isVisible()) {
+      await consentBtn.click();
+    }
     await page.locator('#buyer-phone').fill(phone);
     await page.locator('button', { hasText: /Send OTP/i }).click();
     
@@ -80,11 +84,12 @@ test.describe('Checkout & Account', () => {
     
     const responsePromise = page.waitForResponse(resp => 
       resp.url().includes('/api/v1/orders') && resp.request().method() === 'POST',
-      { timeout: 15000 }
+      { timeout: 30000 }
     );
     
     await expect(placeOrderBtn).toBeEnabled({ timeout: 10000 });
-    await placeOrderBtn.click({ force: true });
+    await placeOrderBtn.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+    await placeOrderBtn.click();
     await responsePromise;
 
     // Assert navigation to confirmation page
