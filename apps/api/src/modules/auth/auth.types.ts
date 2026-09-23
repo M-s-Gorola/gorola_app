@@ -33,7 +33,10 @@ export type BuyerRefreshSuccess = AuthTokenPair & {
   userId: string;
 };
 
-export type BuyerVerifySuccess = BuyerRefreshSuccess;
+export type BuyerVerifySuccess = BuyerRefreshSuccess & {
+  isPendingDeletion?: boolean;
+  deletionScheduledFor?: string | null;
+};
 
 export type OtpStoreRecord = {
   hashedOtp: string;

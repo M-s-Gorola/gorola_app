@@ -75,6 +75,11 @@ model User {
   isVerified Boolean   @default(false)
   isActive   Boolean   @default(true)
   isDeleted  Boolean   @default(false)
+  deletedAt  DateTime?
+  deletionScheduledFor DateTime?
+  nomineeName String?
+  nomineeContact String?
+  nomineeRelationship String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   carts      Cart[]

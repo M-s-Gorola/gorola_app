@@ -131,7 +131,9 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
       name: result.name,
       phone: result.phone,
       refreshToken: result.refreshToken,
-      userId: result.userId
+      userId: result.userId,
+      isPendingDeletion: result.isPendingDeletion ?? false,
+      deletionScheduledFor: result.deletionScheduledFor ?? null
     });
   });
 

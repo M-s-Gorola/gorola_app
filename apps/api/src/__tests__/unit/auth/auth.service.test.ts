@@ -154,9 +154,49 @@ describe("AuthService", () => {
         ...tokenPair,
         name: null,
         phone: "+919876543210",
-        userId: "user_test_1"
+        userId: "user_test_1",
+        isPendingDeletion: false,
+        deletionScheduledFor: null
       });
       expect(redis.del).toHaveBeenCalledWith("otp:+919876543210");
+    });
+
+    it("should return isPendingDeletion: true and deletionScheduledFor when user is in 30-day grace period", async () => {
+      const validOtpHash = await hash("123456", 8);
+      const scheduledDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+      ensureBuyerUser.mockResolvedValueOnce({
+        id: "user_pending_1",
+        name: "Pending User",
+        phone: "+919876543210",
+        isActive: true,
+        deletedAt: new Date(),
+        deletionScheduledFor: scheduledDate
+      });
+      const tokenPair: BuyerRefreshSuccess = {
+        accessToken: "access-token-pending",
+        refreshToken: "refresh-token-pending",
+        name: "Pending User",
+        phone: "+919876543210",
+        userId: "user_pending_1"
+      };
+      redis.get.mockResolvedValueOnce(
+        JSON.stringify({
+          attempts: 0,
+          expiresAt: "2026-04-21T08:05:00.000Z",
+          hashedOtp: validOtpHash,
+          sentCount: 1,
+          sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
+        } satisfies OtpStoreRecord)
+      );
+      tokenService.issueTokens.mockResolvedValueOnce(tokenPair);
+
+      const result = await service.verifyOtp({
+        otp: "123456",
+        phone: "+919876543210"
+      });
+
+      expect(result.isPendingDeletion).toBe(true);
+      expect(result.deletionScheduledFor).toBe(scheduledDate.toISOString());
     });
 
     it("should throw UnauthorizedError and increment attempts when OTP is wrong", async () => {

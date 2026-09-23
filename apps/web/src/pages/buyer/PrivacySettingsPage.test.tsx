@@ -81,7 +81,7 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
       screen.getByRole("heading", { name: /privacy & data rights/i, level: 1 })
     ).toBeInTheDocument();
     expect(
-      screen.getByText(/Manage your statutory consent preferences and data privacy controls/i)
+      screen.getByText(/Manage your statutory consent preferences and exercise your data rights/i)
     ).toBeInTheDocument();
 
     expect(await screen.findByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
@@ -180,4 +180,22 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
       expect(localStorage.getItem("gorola_analytics_consent")).toBe("accepted");
     });
   });
+
+  it("renders Data Portability, Data Nominee, and Danger Zone sections for full DPDP rights coverage", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    renderPrivacyPage();
+
+    expect(await screen.findByTestId("data-portability-card")).toBeInTheDocument();
+    expect(screen.getByTestId("data-nominee-card")).toBeInTheDocument();
+    expect(screen.getByTestId("danger-zone-card")).toBeInTheDocument();
+  });
 });
+

@@ -14,3 +14,20 @@ export function parseUpdateProfileInput(body: unknown): UpdateProfileInput {
   }
   return result.data;
 }
+
+export const updateNomineeSchema = z.object({
+  nomineeName: z.string().trim().max(100, "Name is too long").nullable().optional(),
+  nomineeContact: z.string().trim().max(100, "Contact info is too long").nullable().optional(),
+  nomineeRelationship: z.string().trim().max(50, "Relationship is too long").nullable().optional()
+});
+
+export type UpdateNomineeInput = z.infer<typeof updateNomineeSchema>;
+
+export function parseUpdateNomineeInput(body: unknown): UpdateNomineeInput {
+  const result = updateNomineeSchema.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError("Invalid nominee payload", result.error.flatten());
+  }
+  return result.data;
+}
+

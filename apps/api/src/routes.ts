@@ -122,7 +122,9 @@ export function registerAppRoutes(app: FastifyInstance): void {
         id: row.id,
         name: row.name,
         phone: row.phone,
-        isActive: row.isActive
+        isActive: row.isActive,
+        deletedAt: row.deletedAt,
+        deletionScheduledFor: row.deletionScheduledFor
       };
     },
     findUserById: async (id) => {
@@ -132,7 +134,9 @@ export function registerAppRoutes(app: FastifyInstance): void {
         id: row.id,
         name: row.name,
         phone: row.phone,
-        isActive: row.isActive
+        isActive: row.isActive,
+        deletedAt: row.deletedAt,
+        deletionScheduledFor: row.deletionScheduledFor
       };
     },
     otpProvider: createNoopOtpProvider(),

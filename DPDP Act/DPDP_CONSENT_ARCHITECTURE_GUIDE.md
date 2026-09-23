@@ -1,10 +1,10 @@
 # GoRola DPDP Act 2023 — Comprehensive Consent & Data Processing Architecture Guide
 
-> **Document Version:** 1.4  
+> **Document Version:** 1.5  
 > **Applicable Law:** Digital Personal Data Protection (DPDP) Act, 2023 (India)  
 > **Entity (Data Fiduciary):** GoRola (Mountain Commerce Operations)  
 > **Audience:** Product Engineering, Compliance, Legal & Operations  
-> **Last Updated:** 2026-09-24 — Added Section 11: Dedicated Account Privacy Dashboard Architecture (`/account/privacy`), Universal Heading Standardization, Cross-Device Telemetry Synchronization, and Component Test Suite Mapping.
+> **Last Updated:** 2026-09-24 — Added Section 12: Phase 8.3 User Rights Architecture (DPDP Sec 11 Data Portability, Sec 12 Two-Stage Erasure & Purge Worker, Sec 14 Right to Nominate, Tax/Privacy Balance, and Full Question Clarifications).
 
 ---
 
@@ -493,7 +493,7 @@ The Account Privacy architecture is organized into modular components and verifi
 
 | File Path | Description | Test Suite | Test Count |
 | :--- | :--- | :--- | :--- |
-| `apps/web/src/pages/buyer/PrivacySettingsPage.tsx` | Dedicated page for `/account/privacy` | `PrivacySettingsPage.test.tsx` | 3 tests |
+| `apps/web/src/pages/buyer/PrivacySettingsPage.tsx` | Dedicated page for `/account/privacy` | `PrivacySettingsPage.test.tsx` | 4 tests |
 | `apps/web/src/components/account/PrivacySettingsSection.tsx` | 4-card interactive consent dashboard | `PrivacySettingsSection.test.tsx` | 5 tests |
 | `apps/web/src/pages/buyer/ProfilePage.tsx` | Profile overview with quick link to `/account/privacy` | `ProfilePage.test.tsx` | 5 tests |
 | `apps/web/src/components/consent/AnalyticsConsentBanner.tsx` | Bottom banner with cross-device pre-fetch | `AnalyticsConsentBanner.test.tsx` | 8 tests |
@@ -504,6 +504,209 @@ All test suites verify:
 - Immediate 1-click mutation triggers for marketing and analytics opt-in / withdrawal.
 - `localStorage` bi-directional synchronization with server consent logs.
 - Profile page navigation links cleanly directing to `/account/privacy`.
+
+---
+
+## 12. Phase 8.3 — User Rights Architecture: Erasure, Data Portability & Nomination
+
+> **Statutory Basis:** DPDP Act 2023 Section 11 (Right to Access & Portability), Section 12 (Right to Correction and Erasure), Section 14 (Right to Nominate).  
+> **Status:** FULLY IMPLEMENTED & TESTED.
+
+```
+┌──────────────────────────────────────────────────────────────────────────────────┐
+│                      DPDP USER RIGHTS ARCHITECTURE (/account/privacy)            │
+├──────────────────────────────────────────────────────────────────────────────────┤
+│                                                                                  │
+│   ┌───────────────────────────┐      ┌───────────────────────────┐               │
+│   │ 1. DATA PORTABILITY       │      │ 2. RIGHT TO NOMINATE      │               │
+│   │    (DPDP Section 11)      │      │    (DPDP Section 14)      │               │
+│   │ • 1-Click JSON Export     │      │ • Nominee Name & Contact  │               │
+│   │ • Profile, Addresses,     │      │ • Relationship Specifier  │               │
+│   │   Orders, Consent Logs    │      │ • Real-time DB Update     │               │
+│   └─────────────┬─────────────┘      └─────────────┬─────────────┘               │
+│                 │                                  │                             │
+│   ┌─────────────┴──────────────────────────────────┴─────────────┐               │
+│   │ 3. TWO-STAGE ERASURE & ACCOUNT DELETION (DPDP Section 12)    │               │
+│   │                                                              │               │
+│   │  [User Requests Deletion] ──> 30-Day Soft-Delete Grace Period│               │
+│   │                                      │                       │               │
+│   │             ┌────────────────────────┴─────────────────────┐ │               │
+│   │             ▼                                              ▼ │               │
+│   │    [User Re-logs In via OTP]                    [30 Days Pass Without Login] │
+│   │    Account Restored (<100ms)                    Automated Purge Worker Runs  │
+│   │    (Reactivation Endpoint)                      (Permanent PII Anonymization)│
+│   └──────────────────────────────────────────────────────────────┘               │
+└──────────────────────────────────────────────────────────────────────────────────┘
+```
+
+---
+
+### 12.1 — Right to Access & Data Portability (DPDP Section 11)
+
+#### Statutory Mandate
+Under DPDP Act Section 11, Data Principals have the affirmative right to receive a summary of personal data being processed, a list of third-party processors, and a machine-readable copy of their entire data footprint.
+
+#### Implementation
+- **API Endpoint:** `GET /api/v1/user/my-data` (Authenticated `BUYER`)
+- **Repository Method:** `UserRepository.getMyData(userId)`
+- **Data Payload Structure:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "user": {
+        "id": "cuid...",
+        "name": "Arjun Sharma",
+        "phone": "+919876543210",
+        "isVerified": true,
+        "createdAt": "2026-09-20T10:00:00.000Z",
+        "nomineeName": "Aarav Sharma",
+        "nomineeContact": "+919876543211",
+        "nomineeRelationship": "Sibling"
+      },
+      "addresses": [
+        {
+          "id": "cuid...",
+          "label": "Home",
+          "street": "12 Pine View",
+          "landmark": "Near Mall Road",
+          "lat": 31.1048,
+          "lng": 77.1734
+        }
+      ],
+      "orders": [
+        {
+          "id": "cuid...",
+          "status": "DELIVERED",
+          "totalAmount": 450,
+          "items": [
+            { "productName": "Organic Apples 1kg", "quantity": 1, "price": 450 }
+          ]
+        }
+      ],
+      "consentHistory": [
+        {
+          "purpose": "ORDER_PROCESSING",
+          "consentVersion": "1.0",
+          "isWithdrawn": false,
+          "grantedAt": "2026-09-20T10:05:00.000Z"
+        }
+      ]
+    }
+  }
+  ```
+- **Frontend UI Component:** `<DataPortabilitySection />` mounted on `/account/privacy`. Generates an instant, client-side `.json` blob download (`gorola-my-data-<timestamp>.json`) when clicked.
+
+---
+
+### 12.2 — Right to Nominate (DPDP Section 14)
+
+#### Statutory Mandate
+DPDP Section 14 mandates that Data Principals can designate an individual who shall exercise data rights (access, erasure, transfer) in the event of the Data Principal's death or incapacity.
+
+#### Schema Design & Database Layer
+Fields added directly to table `User` with migration `20260924040500_add_user_nominee_and_deletion_fields`:
+```prisma
+model User {
+  ...
+  nomineeName         String?
+  nomineeContact      String?
+  nomineeRelationship String?
+}
+```
+
+#### API Endpoints
+1. `GET /api/v1/user/nominee` — Fetches current nominee details or nulls if none designated.
+2. `PUT /api/v1/user/nominee` — Updates or clears nominee fields. Strict schema validation via `user.schema.ts` (`updateNomineeSchema`).
+   - Supports clearing existing nominee records by submitting `null` values.
+   - Fully type-safe under TypeScript `exactOptionalPropertyTypes: true`.
+
+#### Frontend UI Component
+`<DataNomineeSection />` mounted on `/account/privacy`:
+- Prefills existing nominee info from server.
+- Form inputs for Nominee Full Name, Phone / Email, and Relationship (e.g., Spouse, Parent, Sibling, Legal Representative).
+- "Save Nominee" with loading states and "Clear Nominee" secondary action.
+
+---
+
+### 12.3 — Two-Stage Right to Erasure & Account Deletion (DPDP Section 12)
+
+#### Core Design Decision: Two-Stage Erasure vs Immediate Scrubbing
+Under DPDP Section 12, a Data Principal may request erasure of their personal data. However, immediate hard-deletion on Day 0 creates severe operational, security, and user-experience issues:
+1. **Accidental Deletion & Account Recovery:** If a user accidentally triggers deletion or changes their mind, an immediate hard-delete permanently destroys their order history and loyalty points with zero recovery option.
+2. **Phone OTP Friction:** Because GoRola uses Phone OTP authentication without passwords or emails, an immediate PII wipe means if the user attempts to log back in the next day, the system cannot detect they were an existing customer in a grace period.
+3. **Statutory Grace Period Standard:** Leading consumer platforms (Apple, Google, WhatsApp) provide a 30-day grace period where the account is soft-deleted, sessions revoked, and hidden from services, before background jobs execute irrevocable permanent erasure.
+
+#### Stage 1: Soft-Deletion & Grace Period Trigger
+- **Endpoint:** `DELETE /api/v1/user/account` (Authenticated `BUYER`)
+- **Action:**
+  1. Sets `deletedAt = now()` and `deletionScheduledFor = now() + 30 days`.
+  2. Calls `tokenVerifier.revokeAllUserTokens(userId)` to invalidate all active JWTs and refresh tokens.
+  3. Returns confirmation with `deletionScheduledFor` timestamp.
+  4. Frontend UI (`<DangerZoneSection />`) renders an explicit confirmation modal detailing the 30-day recovery window, logs the user out upon confirmation, and redirects to `/login`.
+
+#### Stage 2: Interactive Re-Login Restoration (Within 30 Days)
+- When a user whose account is in the grace period enters their Phone OTP on `/login`:
+  - `POST /api/v1/auth/buyer/verify-otp` returns `{ isPendingDeletion: true, deletionScheduledFor: "..." }`.
+  - The login flow halts standard redirection and renders an interactive **Account Scheduled for Deletion** step (`<LoginPage />`).
+  - **Unambiguous Action Controls:**
+    - **"Restore My Account" (Primary):** Calls `POST /api/v1/user/reactivate-account`, resets:
+      - `deletedAt = null`
+      - `deletionScheduledFor = null`
+      - `isDeleted = false`
+      - `isActive = true`
+      - Instantly restores account access, addresses, and order history, and logs the user in.
+    - **"Proceed with Deletion & Exit" (Secondary):** Leaves the 30-day countdown running in PostgreSQL, discards tokens, and signs out back to the phone entry screen without altering the deletion schedule.
+
+---
+
+### 12.4 — Automated Data Purge & Anonymization Engine (`purgeExpiredUsers`)
+
+When 30 days elapse without account reactivation, the automated background worker (`apps/api/src/workers/user-data-purge.worker.ts`) processes expired records.
+
+#### Complete Data Scrubbing vs Retention Matrix
+
+| Table / Entity | Action Taken by Purge Worker | Rationale & Legal Basis |
+| :--- | :--- | :--- |
+| **`User` (Profile)** | **Irreversibly Anonymized:**<br>`name = '[deleted]'`<br>`phone = 'DELETED_${userId}'`<br>`phoneHash = null`<br>`nomineeName = null`<br>`nomineeContact = null`<br>`nomineeRelationship = null`<br>`isActive = false`<br>`isDeleted = true` | Erases all direct and indirect PII so user cannot be re-identified under DPDP Sec 12. |
+| **`Address`** | **Hard Deleted (`deleteMany`)** | All physical addresses, street names, and door numbers are permanently wiped. |
+| **`Cart` & `CartItem`** | **Hard Deleted (`deleteMany`)** | Temporary shopping cart state is scrubbed. |
+| **`Order` (Delivery Notes & GPS)** | **Sanitized / Stripped:**<br>`landmarkDescription = '[deleted]'`<br>`flatRoom = null`<br>`deliveryNote = null`<br>`deliveryLat = null`<br>`deliveryLng = null`<br>`addressLabel = null` | Cleanses physical navigation and home location PII from past deliveries. |
+| **`Order` (Financial Totals & Items)** | **Preserved Intact:**<br>`totalAmount`, `subtotal`, `taxAmount`, `items`, `paymentStatus`, `invoiceNumber` | **Statutory Retention:** Indian GST Act and Companies Act (2013) mandate retaining transaction records and tax books for 7–8 years for financial audit compliance. |
+| **`ConsentLog`** | **Marked Withdrawn:**<br>`isWithdrawn = true`<br>`withdrawnAt = now()` | Preserves immutable proof that consent existed and was subsequently terminated upon account erasure. |
+
+---
+
+### 12.5 — Clarifications to Key Architectural Questions
+
+#### Q1: Why not delete the user profile row completely from the database?
+**Answer:** Foreign key integrity. Past orders reference `userId`. If the `User` row were hard deleted, historical financial ledger entries and tax invoices would violate foreign key constraints or require cascading deletes that wipe mandatory financial records. Setting `phone = 'DELETED_${userId}'`, `phoneHash = null`, `name = '[deleted]'`, and stripping all address fields guarantees 100% anonymization while preserving relational tax integrity.
+
+#### Q2: What happens if a user enters their phone number again after the 30-day purge?
+**Answer:** Because `phoneHash` was set to `null` and `phone` was anonymized, the system treats the phone number as brand new. The user goes through standard first-time onboarding with clean, empty state and fresh DPDP consent notices.
+
+#### Q3: How is nominee contact information protected?
+**Answer:** Nominee details (`nomineeName`, `nomineeContact`, `nomineeRelationship`) are treated as Data Principal PII. They are encrypted at rest where applicable, accessible only to the authenticated user, and automatically wiped during the permanent purge.
+
+#### Q4: What prevents unauthorized access during the 30-day deletion window?
+**Answer:** As soon as deletion is requested, `revokeAllUserTokens` clears all active session IDs in Redis / JWT blacklist. Any attempt to access protected APIs without re-authenticating with fresh Phone OTP yields an immediate `401 Unauthorized`.
+
+---
+
+### 12.6 — Phase 8.3 Verification & Test Coverage Matrix
+
+| Test Suite File | Layer | Scope & Assertions | Status |
+| :--- | :--- | :--- | :--- |
+| `user.my-data.test.ts` | API Integration | `GET /api/v1/user/my-data` returns decrypted profile, addresses, orders, items, and consent history. Rejects unauthenticated requests with 401. | ✅ PASS |
+| `user.nominee.test.ts` | API Integration | `PUT /api/v1/user/nominee` updates and clears nominee fields. `GET /api/v1/user/nominee` retrieves active nominee. | ✅ PASS |
+| `user.account-deletion.test.ts` | API Integration | `DELETE /api/v1/user/account` marks 30-day grace period and triggers token revocation. | ✅ PASS |
+| `user.account-reactivation.test.ts` | API Integration | `POST /api/v1/user/reactivate-account` resets deletion timestamps and restores active flags. | ✅ PASS |
+| `user-data-purge.worker.test.ts` | Worker Unit | `purgeExpiredUsers` identifies expired non-reactivated accounts, invokes `permanentPurgeAndAnonymize`, and skips unexpired users. | ✅ PASS |
+| `DataPortabilitySection.test.tsx` | Web Component | Renders portability card and triggers JSON blob download on button click. | ✅ PASS |
+| `DataNomineeSection.test.tsx` | Web Component | Fetches existing nominee, validates form inputs, saves mutations, and handles 1-click clearing. | ✅ PASS |
+| `DangerZoneSection.test.tsx` | Web Component | Displays destructive deletion card, opens confirmation dialog with 30-day notice, and logs out on confirm. | ✅ PASS |
+| `PrivacySettingsPage.test.tsx` | Web Page | Renders all 4 DPDP cards + Portability + Nominee + Danger Zone in responsive layout. | ✅ PASS |
+
 
 
 
