@@ -53,7 +53,7 @@ test.describe('Booking Journey Pipeline E2E', () => {
       await page.locator('button', { hasText: /Add New|Add your first address/i }).first().click();
       await page.locator('input[name="label"]').fill('E2E Diagnostic Lab');
       await page.locator('[name="landmarkDescription"]').fill('Opposite the Aarna Main Hospital');
-      const opCheckbox = page.locator('[data-testid="order-processing-acknowledge-checkbox"]');
+      const opCheckbox = page.locator('[data-testid="order-processing-acknowledge-checkbox"], [data-testid="order-processing-dialog-checkbox"]');
       if (await opCheckbox.isVisible()) {
         await opCheckbox.click();
       }

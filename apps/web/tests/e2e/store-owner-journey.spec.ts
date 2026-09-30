@@ -212,6 +212,12 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Type landmark (>= 10 chars)
     await buyerPage.locator('[name="landmarkDescription"]').fill('Near the old clock tower in Mussoorie');
 
+    // Acknowledge DPDP order processing consent if required
+    const opCheckbox = buyerPage.locator('[data-testid="order-processing-acknowledge-checkbox"], [data-testid="order-processing-dialog-checkbox"]');
+    if (await opCheckbox.isVisible()) {
+      await opCheckbox.click();
+    }
+
     // Click Continue to Review step
     await buyerPage.locator('button', { hasText: /Continue/i }).click();
 

@@ -828,7 +828,7 @@ export function BookingTimeslotPage(): ReactElement {
                 <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
                   <Checkbox
                     checked={opAcknowledged}
-                    data-testid="order-processing-dialog-checkbox"
+                    data-testid="order-processing-acknowledge-checkbox"
                     id="op-ack-booking-dialog"
                     onCheckedChange={(v) => setOpAcknowledged(!!v)}
                   />

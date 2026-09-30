@@ -30,7 +30,10 @@ const IGNORED_ADVISORIES = new Set([
   "GHSA-mghh-pgcx-3jjj", // Axios ReDoS in shouldBypassProxy
   "GHSA-x97p-jq2g-jp4f", // Axios Prototype Pollution Gadget in toFormData
   "GHSA-3pq3-5fj3-cg6v", // Axios HTTP/2 DNS bypass
-  "GHSA-542g-h47m-68v8"  // Axios HTTP/2 DoS
+  "GHSA-542g-h47m-68v8", // Axios HTTP/2 DoS
+  "GHSA-m9gg-hp2v-232j", // @grpc/grpc-js getAuthContext certificate validation (dev/telemetry dependency)
+  "GHSA-m8m8-qj5v-23w3", // Axios Node HTTP adapter createConnection prototype pollution gadget
+  "GHSA-r4gj-5m52-g5wh"  // Axios fetch adapter maxRedirects: 0 SSRF (client-side web SPA)
 ]);
 
 try {

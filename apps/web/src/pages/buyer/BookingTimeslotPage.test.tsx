@@ -453,7 +453,7 @@ describe("BookingTimeslotPage", () => {
     fireEvent.change(landmarkInput, { target: { value: "Near Mall Road Mussoorie" } });
     fireEvent.change(flatRoomInput, { target: { value: "Suite 101" } });
 
-    const ackCheckbox = await screen.findByTestId("order-processing-dialog-checkbox");
+    const ackCheckbox = await screen.findByTestId("order-processing-acknowledge-checkbox");
     fireEvent.click(ackCheckbox);
 
     // Click Save Address
