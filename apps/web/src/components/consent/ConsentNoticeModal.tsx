@@ -140,7 +140,7 @@ export function ConsentNoticeModal({
           </DialogDescription>
         </DialogHeader>
 
-        <ScrollArea className="max-h-[60vh] p-6 space-y-4">
+        <ScrollArea data-lenis-prevent className="max-h-[60vh] overflow-y-auto p-6 space-y-4 overscroll-contain">
           <div className="space-y-4 text-xs text-gorola-charcoal/90 leading-relaxed">
             <div>
               <h4 className="font-semibold text-sm text-gorola-charcoal mb-1">
