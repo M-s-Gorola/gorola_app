@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
@@ -105,15 +106,23 @@ function buildPurposeCards(rows: ConsentLogRow[]): PurposeCard[] {
     }
 
     const isAnalyticsAcceptedInStorage = purpose === "ANALYTICS" && analyticsStoredConsent === "accepted";
+    const isOtpAuthDefault = purpose === "OTP_AUTH";
 
     return {
       purpose,
       latestId: "",
       consentVersion: "1.0",
-      isActive: isAnalyticsAcceptedInStorage,
+      isActive: isOtpAuthDefault || isAnalyticsAcceptedInStorage,
       grantedAt: ""
     };
   });
+}
+
+function getInactiveStatusText(purpose: ConsentPurpose): string {
+  if (purpose === "ORDER_PROCESSING") {
+    return "🟡 Pending — Activated when you save an address or place your first order";
+  }
+  return "Withdrawn / Inactive — you can enable below";
 }
 
 export function PrivacySettingsSection(): ReactElement {
@@ -229,11 +238,11 @@ export function PrivacySettingsSection(): ReactElement {
             const meta = PURPOSE_META[card.purpose];
             return (
               <div
-                className="flex flex-col justify-between gap-3 rounded-xl border border-border/60 bg-white/50 p-4 sm:flex-row sm:items-center"
+                className="flex flex-col justify-between gap-3 rounded-xl border border-border/80 bg-white dark:bg-card p-4 shadow-xs sm:flex-row sm:items-start"
                 key={card.purpose}
                 data-testid={`consent-card-${card.purpose}`}
               >
-                <div className="space-y-1">
+                <div className="space-y-1.5">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm text-gorola-charcoal">{meta.title}</span>
                     {meta.essential ? (
@@ -250,14 +259,20 @@ export function PrivacySettingsSection(): ReactElement {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">{meta.description}</p>
-                  <p className="text-[10px] text-muted-foreground/80">
-                    {card.isActive
-                      ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
-                        ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
-                        : `Active (v${card.consentVersion})`
-                      : "Withdrawn / Inactive — you can enable below"}
-                  </p>
+                  <p className="text-xs text-muted-foreground leading-relaxed">{meta.description}</p>
+                  <div className="flex items-center gap-2.5 flex-wrap pt-0.5 text-xs">
+                    <ConsentNoticeModal purpose={card.purpose} />
+                    <span className="text-muted-foreground/40">•</span>
+                    <span className="text-[11px] text-muted-foreground">
+                      {card.isActive
+                        ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
+                          ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
+                          : card.purpose === "OTP_AUTH"
+                            ? "Active since account creation"
+                            : `Active (v${card.consentVersion})`
+                        : getInactiveStatusText(card.purpose)}
+                    </span>
+                  </div>
                 </div>
 
                 <div>

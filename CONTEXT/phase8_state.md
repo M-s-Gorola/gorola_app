@@ -339,6 +339,401 @@ Under DPDP Act 2023, anonymous performance telemetry requires prior notice with 
 
 ---
 
+### Phase 8.2.9 State: DPDP Consent UI Compliance Fixes
+
+> **Scope:** Frontend-only. No schema changes. No new API endpoints.
+> **Triggered by:** Audit revealing that the built consent UI does not match the spec in
+> `privacy_and_consent_card.md` and `DPDP_CONSENT_ARCHITECTURE_GUIDE.md` on three points:
+> 1. Essential consent cards have no acknowledgement checkbox — the action button is always active.
+> 2. The `ORDER_PROCESSING` essential card shows the wrong inactive status text.
+> 3. No "View Complete Notice" modal exists on any consent card anywhere in the app.
+> **Applicable Law:** DPDP Act 2023, Section 5(2) — notice must be demonstrably seen before data collection.
+
+---
+
+#### 📍 Last Updated
+
+- **Date:** 2026-09-30
+- **Session Summary:** Completed Phase 8.2.9 in strict TDD. All statutory 5-section notices, acknowledgment checkboxes inside cards, Option 2 active status rendering, and notice modals across all 6 touchpoints verified.
+- **Next Session Must Start With:** Phase 8.3 — User Rights: Erasure, Access & Nomination.
+- **In Progress Right Now:** Phase 8.2.9 Complete.
+- **Current Blocker:** None.
+
+> ⚠️ **Update THIS block at the end of every session.** Mark completed checklist items `[x]`
+> and append to Session Notes at the bottom.
+
+---
+
+#### Phase 8.2.9 Section Map
+
+| Work Item | Name | Files Touched | Status |
+|-----------|------|---------------|--------|
+| **8.2.9.1** | Acknowledgement Checkbox — Login Flow (`OTP_AUTH`) | `LoginPage.tsx`, `LoginPage.test.tsx` | 🟢 Complete (18/18 tests green) |
+| **8.2.9.2** | Acknowledgement Checkbox — Address & Checkout Modals (`ORDER_PROCESSING`) | `SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx` + tests | 🟢 Complete (34/34 tests green) |
+| **8.2.9.3** | Acknowledgement Checkbox — Analytics Banner (no change needed — see rationale) | `AnalyticsConsentBanner.tsx` | ✅ No Change Required |
+| **8.2.9.4** | Correct Essential Card Status Text in Privacy Dashboard | `PrivacySettingsSection.tsx`, `PrivacySettingsSection.test.tsx` | 🟢 Complete (6/6 tests green) |
+| **8.2.9.5** | View Complete Notice Modal — Shared Component | `ConsentNoticeModal.tsx`, `ConsentNoticeModal.test.tsx` | 🟢 Complete (6/6 tests green) |
+| **8.2.9.6** | Wire View Complete Notice into All Consent Touchpoints | All touchpoints + their tests | 🟢 Complete |
+| **8.2.9.7** | Quality Gate — Full Suite + Typecheck + Lint | All (211 test files, 1247 tests 100% green) | 🟢 Complete |
+
+---
+
+#### Mandatory API Contract Gate
+
+> This phase is **frontend-only**. No new API endpoints. All existing
+> `POST /api/v1/consent`, `GET /api/v1/consent`, and `DELETE /api/v1/consent/:purpose`
+> contracts are unchanged. The gate below applies to frontend component contracts only.
+
+- [x] All new components have `data-testid` attributes matching the test assertions
+- [x] No `any` types introduced — all props strictly typed
+- [x] No new network calls beyond the existing consent API calls
+- [x] `pnpm typecheck` passes with 0 errors after all changes
+- [x] `pnpm lint` passes with 0 warnings after all changes
+
+---
+
+#### The Three Problems Being Fixed
+
+##### Problem 1 — Essential Consent Has No Acknowledgement Checkpoint
+
+**Root Cause:**
+DPDP Act Section 5(2) requires that a notice is *demonstrably provided* before data
+collection begins. Simply rendering a notice card on screen is insufficient — there
+must be a UX mechanism that proves the user engaged with the notice before proceeding.
+Currently, the "Verify OTP & Continue" button on `LoginPage.tsx` is active from the
+first render. A user can skip past the notice entirely.
+
+**What the spec requires (`privacy_and_consent_card.md`):**
+Every essential consent step must have an **acknowledgement checkbox** labelled
+`"I have read and understood this notice"` that the user must check before the
+primary action button becomes active. This is **not** a grant/refuse toggle.
+The user cannot refuse an essential consent. The checkbox is a read-acknowledgement
+gate that strengthens the audit trail in `ConsentLog`.
+
+**Distinction from Optional Consent:**
+- **Essential** → Acknowledgement checkbox (`I have read and understood this notice`) —
+  must be checked before button activates. No refuse option.
+- **Optional** → Opt-in checkbox (`I agree to receive...`) — unchecked by default,
+  user actively ticks to opt in. Already correct in the codebase.
+
+---
+
+##### Problem 2 — Wrong Inactive Status Text on `ORDER_PROCESSING` Card
+
+**Root Cause:**
+`PrivacySettingsSection.tsx` uses one generic fallback string for all inactive cards:
+`"Withdrawn / Inactive — you can enable below"`. This is correct for optional cards
+(`MARKETING_EMAIL`, `ANALYTICS`) but **wrong** for essential cards that have not yet
+been triggered.
+
+**Required status text per card + state:**
+
+| Card | `isActive === true` | `isActive === false` |
+|------|---------------------|----------------------|
+| `OTP_AUTH` | `Active since [date] (v[version])` | `Active since account creation` |
+| `ORDER_PROCESSING` | `Active since [date] (v[version])` | `🟡 Pending — Activated when you save an address or place your first order` |
+| `MARKETING_EMAIL` | `Active since [date] (v[version])` | `Withdrawn / Inactive — you can enable below` ✅ |
+| `ANALYTICS` | `Active since [date] (v[version])` | `Withdrawn / Inactive — you can enable below` ✅ |
+
+---
+
+##### Problem 3 — No "View Complete Notice" Exists Anywhere
+
+**Root Cause:**
+`privacy_and_consent_card.md` specifies `📋 [View Complete Notice]` on each card.
+The built cards only show a one-line description. The full 5-section statutory notices
+(Purpose, Data Categories, Third Parties, Retention, Rights & Complaints) are not
+surfaced anywhere in the app. DPDP Section 5(2) requires the complete notice —
+including third-party processors, retention period, and DPBI complaint path — be
+accessible at the point of interaction.
+
+**Where it must appear:**
+1. `/account/privacy` — all 4 canonical consent cards.
+2. `/login` — `OTP_AUTH` consent step.
+3. `/account/addresses` — Add/Edit address modal.
+4. `/booking` — Add Address dialog and above "Confirm Booking" button.
+5. `/checkout` — Review step consent block.
+6. `AnalyticsConsentBanner` — within the banner body.
+
+---
+
+#### Phase 8.2.9 Checklist
+
+---
+
+##### 8.2.9.1 — Acknowledgement Checkbox: Login Flow (`OTP_AUTH`)
+
+**Root cause / Goal:**
+`LoginPage.tsx` consent step renders a notice and a "Continue & Accept" button that
+is immediately active. The button must be disabled until the user checks the
+acknowledgement checkbox. This proves the notice was engaged with before the
+`OTP_AUTH` ConsentLog record is created.
+
+---
+
+- [x] **RED — Unit / Component (`LoginPage.test.tsx`):**
+  - [x] Test: On `consent-notice-step`, `data-testid="consent-continue-btn"` is **disabled** on initial render.
+  - [x] Test: `data-testid="consent-acknowledge-checkbox"` renders unchecked on initial render.
+  - [x] Test: Clicking `consent-continue-btn` when checkbox is unchecked does NOT advance the step.
+  - [x] Test: Checking `consent-acknowledge-checkbox` enables `consent-continue-btn`.
+  - [x] Test: After checking the checkbox and clicking `consent-continue-btn`, step advances to `phone-input`.
+  - [x] **Run — confirm RED** (`pnpm --filter @gorola/web test -- --run LoginPage`).
+
+- [x] **GREEN — Frontend (`LoginPage.tsx`):**
+  - [x] Add `const [acknowledged, setAcknowledged] = useState(false)` to the consent step state.
+  - [x] Render a `<Checkbox>` (shadcn/ui) with `data-testid="consent-acknowledge-checkbox"`, `id="consent-ack"`, `checked={acknowledged}`, `onCheckedChange={(v) => setAcknowledged(!!v)}`.
+  - [x] Render `<label htmlFor="consent-ack">I have read and understood this notice</label>` adjacent to the checkbox.
+  - [x] Add `disabled={!acknowledged}` to the "Continue & Accept" button.
+  - [x] Run unit test — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] User opens `/login` → Consent notice + unchecked checkbox rendered → Button visually disabled → User checks checkbox → Button becomes active → User clicks → Advances to phone entry → OTP flow proceeds normally → ConsentLog row created → ✅ Done.
+
+---
+
+##### 8.2.9.2 — Acknowledgement Checkbox: Address & Checkout Modals (`ORDER_PROCESSING`)
+
+**Root cause / Goal:**
+The `ORDER_PROCESSING` consent notice cards on `SavedAddressesPage.tsx`,
+`BookingTimeslotPage.tsx`, and `CheckoutPage.tsx` show the notice above the action button
+but the button is always active. The same acknowledgement gate must apply.
+
+**Special rule — idempotency interaction:**
+The acknowledgement checkbox must only be shown when the user **has not yet** granted
+`ORDER_PROCESSING` consent (`hasOrderProcessingConsent === false`). If they already have
+an active `ORDER_PROCESSING` ConsentLog record, the notice is shown as a read-only
+reminder without checkbox gating — because consent was already recorded.
+
+---
+
+- [x] **RED — Unit / Component (`SavedAddressesPage.test.tsx`):**
+  - [x] Test: When `GET /api/v1/consent` returns no `ORDER_PROCESSING` record, Add Address modal renders `data-testid="order-processing-acknowledge-checkbox"` unchecked.
+  - [x] Test: When checkbox is unchecked, `data-testid="save-address-btn"` is **disabled**.
+  - [x] Test: Checking `order-processing-acknowledge-checkbox` enables the "Save Address" button.
+  - [x] Test: When `GET /api/v1/consent` returns an active `ORDER_PROCESSING` record, the checkbox is **not rendered** and "Save Address" is not disabled by the consent gate.
+  - [x] **Run — confirm RED** (`pnpm --filter @gorola/web test -- --run SavedAddressesPage`).
+
+- [x] **RED — Unit / Component (`CheckoutPage.test.tsx`):**
+  - [x] Test: When no `ORDER_PROCESSING` consent exists, "Place Order" button is disabled until acknowledgement checkbox is checked.
+  - [x] Test: When active `ORDER_PROCESSING` consent exists, no checkbox rendered and "Place Order" button not consent-gated.
+  - [x] **Run — confirm RED** (`pnpm --filter @gorola/web test -- --run CheckoutPage`).
+
+- [x] **RED — Unit / Component (`BookingTimeslotPage.test.tsx`):**
+  - [x] Test: When no `ORDER_PROCESSING` consent exists, "Confirm Booking" button is disabled until acknowledgement checkbox is checked.
+  - [x] **Run — confirm RED** (`pnpm --filter @gorola/web test -- --run BookingTimeslotPage`).
+
+- [x] **GREEN — Frontend (Shared Hook + Component Updates):**
+  - [x] [Shared Hook] Create `apps/web/src/hooks/useOrderProcessingConsent.ts`:
+    - Returns `{ hasConsent: boolean, isLoading: boolean }`.
+    - Reads from React Query cache `["consents"]` — no new fetch.
+    - `hasConsent = true` if any non-withdrawn `ORDER_PROCESSING` row exists.
+  - [x] [SavedAddressesPage.tsx] Import `useOrderProcessingConsent`. In Add Address dialog, conditionally render `<Checkbox id="op-ack" data-testid="order-processing-acknowledge-checkbox">` and `<label>` only when `!hasConsent`. Pass `disabled={!hasConsent && !opAcknowledged}` to "Save Address" button.
+  - [x] [CheckoutPage.tsx] Same pattern — conditionally render checkbox, gate "Place Order" button.
+  - [x] [BookingTimeslotPage.tsx] Same pattern — gate "Confirm Booking" button.
+  - [x] Reset `opAcknowledged` to `false` each time the modal opens (on dialog `onOpenChange`).
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] New user opens Add Address modal → Acknowledgement checkbox rendered unchecked → "Save Address" disabled → Checks checkbox → Button enables → Saves address → `POST /api/v1/consent ORDER_PROCESSING` fired → On next modal open, `hasConsent === true` → Checkbox not shown, button not disabled → ✅ Done.
+
+---
+
+##### 8.2.9.3 — Acknowledgement Checkbox: Analytics Banner
+
+**Rationale (no code change):**
+`AnalyticsConsentBanner.tsx` already forces a binary choice — "Accept Analytics" vs
+"Decline / Essential Only". The "Decline" button is the refusal mechanism, which makes
+a pre-read acknowledgement gate redundant. Adding a required read-checkbox before
+showing the Accept/Decline buttons would itself be a dark pattern. The binary
+Accept/Decline structure is the correct DPDP pattern for optional consents per
+`DPDP_CONSENT_ARCHITECTURE_GUIDE.md` Section 5.
+
+- [x] **No checkbox change required.** Existing tests remain valid.
+
+---
+
+##### 8.2.9.4 — Correct Essential Card Status Text in Privacy Dashboard
+
+**Root cause / Goal:**
+`PrivacySettingsSection.tsx` uses `"Withdrawn / Inactive — you can enable below"` for
+all inactive cards. Essential cards (`OTP_AUTH`, `ORDER_PROCESSING`) have no enable
+mechanism, making this text factually wrong and misleading for first-time users.
+
+---
+
+- [x] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`):**
+  - [x] Test: When `GET /api/v1/consent` returns empty array, `ORDER_PROCESSING` card renders status text containing `"Pending"` (not `"Withdrawn"`).
+  - [x] Test: When `GET /api/v1/consent` returns empty array, `OTP_AUTH` card renders status text containing `"account creation"` (not `"Withdrawn"`).
+  - [x] Test: When `GET /api/v1/consent` returns empty array, `MARKETING_EMAIL` card still renders `"Withdrawn / Inactive — you can enable below"`.
+  - [x] Test: When `GET /api/v1/consent` returns empty array, `ANALYTICS` card still renders `"Withdrawn / Inactive — you can enable below"`.
+  - [x] **Run — confirm RED** (`pnpm --filter @gorola/web test -- --run PrivacySettingsSection`).
+
+- [x] **GREEN — Frontend (`PrivacySettingsSection.tsx`):**
+  - [x] Add helper function inside the component file:
+    ```ts
+    function getInactiveStatusText(purpose: ConsentPurpose): string {
+      switch (purpose) {
+        case 'OTP_AUTH':
+          return 'Active since account creation';
+        case 'ORDER_PROCESSING':
+          return '🟡 Pending — Activated when you save an address or place your first order';
+        default:
+          return 'Withdrawn / Inactive — you can enable below';
+      }
+    }
+    ```
+  - [x] Replace the existing inline inactive text with: `{card.isActive ? `Active since ...` : getInactiveStatusText(card.purpose)}`.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] New user with no orders opens `/account/privacy` → `ORDER_PROCESSING` card shows `"🟡 Pending — Activated when you save an address..."` → User places first order → Returns to `/account/privacy` → Card now shows `"Active since [date] (v1.0)"` → ✅ Done.
+
+---
+
+##### 8.2.9.5 — View Complete Notice Modal: Shared Component
+
+**Root cause / Goal:**
+No "View Complete Notice" UI exists anywhere in the app. A shared modal component must
+render the full 5-section statutory notices defined in `privacy_and_consent_card.md`
+on demand at every consent touchpoint.
+
+**Notice structure (5 sections per purpose):**
+1. Purpose of Processing
+2. Categories of Personal Data Collected
+3. Third-Party Recipients & Processors
+4. Retention Period
+5. Your Rights & Complaints
+
+---
+
+- [x] **RED — Unit / Component (`ConsentNoticeModal.test.tsx`):**
+  - [x] Test: `<ConsentNoticeModal purpose="OTP_AUTH" />` renders trigger button, modal closed by default.
+  - [x] Test: Clicking trigger (`data-testid="view-notice-btn-OTP_AUTH"`) opens modal (`data-testid="consent-notice-modal"` becomes visible).
+  - [x] Test: Modal content contains heading `"Authentication & Account Security"`.
+  - [x] Test: Modal content contains all 5 section headings: `"Purpose of Processing"`, `"Categories of Personal Data Collected"`, `"Third-Party Recipients & Processors"`, `"Retention Period"`, `"Your Rights & Complaints"`.
+  - [x] Test: `OTP_AUTH` modal contains text `"Exotel"`.
+  - [x] Test: `ORDER_PROCESSING` modal contains text `"Ola Maps"` and `"Razorpay"`.
+  - [x] Test: `MARKETING_EMAIL` modal contains text `"withdraw your consent"`.
+  - [x] Test: `ANALYTICS` modal contains text `"Zero PII"`.
+  - [x] Test: Modal contains link text `"dpo@gorola.com"`.
+  - [x] Test: Modal contains text `"Data Protection Board of India"`.
+  - [x] Test: Clicking close button closes modal.
+  - [x] **Run — confirm RED** (component does not exist).
+
+- [x] **GREEN — Frontend (New Shared Component):**
+  - [x] Create `apps/web/src/components/consent/ConsentNoticeModal.tsx`.
+  - [x] Props: `{ purpose: ConsentPurpose; triggerLabel?: string; triggerClassName?: string }`.
+  - [x] Define `CONSENT_NOTICES` record inside the file with verbatim content from `privacy_and_consent_card.md`.
+  - [x] Use shadcn/ui `<Dialog>` for the modal container with `<ScrollArea>` for content.
+  - [x] Trigger: ghost `<Button variant="ghost" size="sm">` with `FileText` Lucide icon.
+  - [x] Footer: `dpo@gorola.com` mailto link + `"Data Protection Board of India (DPBI)"` text.
+  - [x] `data-testid` on trigger: `view-notice-btn-{purpose}`. On modal: `consent-notice-modal`.
+  - [x] Export as: `export function ConsentNoticeModal(props: ConsentNoticeModalProps): ReactElement`.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] User on any consent touchpoint clicks `"View Complete Notice"` → Modal opens → Full 5-section statutory notice rendered with all third parties named, retention periods stated, DPBI complaint path shown → User closes modal → Returns to consent flow → ✅ Done.
+
+---
+
+##### 8.2.9.6 — Wire View Complete Notice into All Consent Touchpoints
+
+**Root cause / Goal:**
+`ConsentNoticeModal` must be rendered at every consent touchpoint. This work item wires
+the shared component into all 6 locations and updates each location's existing tests
+to assert the trigger is present.
+
+---
+
+- [x] **RED — Update existing test files:**
+  - [x] `LoginPage.test.tsx`
+  - [x] `PrivacySettingsSection.test.tsx`
+  - [x] `SavedAddressesPage.test.tsx`
+  - [x] `CheckoutPage.test.tsx`
+  - [x] `BookingTimeslotPage.test.tsx`
+  - [x] `AnalyticsConsentBanner.test.tsx`
+
+- [x] **GREEN — Wire `ConsentNoticeModal` into all touchpoints:**
+  - [x] **`LoginPage.tsx`** — Consent notice step: add `<ConsentNoticeModal purpose="OTP_AUTH" />`.
+  - [x] **`PrivacySettingsSection.tsx`** — Each card body: add `<ConsentNoticeModal purpose={card.purpose} />`.
+  - [x] **`SavedAddressesPage.tsx`** — Add Address dialog consent block: add `<ConsentNoticeModal purpose="ORDER_PROCESSING" />`.
+  - [x] **`CheckoutPage.tsx`** — Address block and marketing card: add `<ConsentNoticeModal />`.
+  - [x] **`BookingTimeslotPage.tsx`** — Add Address dialog + marketing card: add `<ConsentNoticeModal />`.
+  - [x] **`AnalyticsConsentBanner.tsx`** — Banner body: add `<ConsentNoticeModal purpose="ANALYTICS" />`.
+  - [x] Run all updated unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] All 6 touchpoints have functional "View Complete Notice" modals displaying 5-section statutory disclosures.
+
+---
+
+##### 8.2.9.7 — Quality Gate: Full Suite + Typecheck + Lint
+
+- [x] **Run full web test suite:** `pnpm --filter @gorola/web test -- --run` (92 test files, 528 tests 100% green).
+- [x] **Run full API test suite:** `pnpm --filter @gorola/api test -- --run` (119 test files, 719 tests 100% green).
+- [x] **TypeScript typecheck:** `pnpm typecheck` (0 errors across monorepo).
+- [x] **ESLint:** `pnpm lint` (0 errors, 0 warnings).
+- [x] **Verification chain:**
+  - [x] All quality gates pass → ✅ Phase 8.2.9 Complete.
+
+---
+
+#### New Files Created in This Phase
+
+| File | Purpose |
+|------|---------|
+| `apps/web/src/components/consent/ConsentNoticeModal.tsx` | Shared modal for all 4 full statutory notices |
+| `apps/web/src/components/consent/ConsentNoticeModal.test.tsx` | Unit tests for the modal component |
+| `apps/web/src/hooks/useOrderProcessingConsent.ts` | Shared hook — reads ORDER_PROCESSING consent status from React Query cache |
+
+#### Modified Files in This Phase
+
+| File | Changes |
+|------|---------|
+| `apps/web/src/pages/buyer/LoginPage.tsx` | Add acknowledgement checkbox; wire `ConsentNoticeModal` |
+| `apps/web/src/pages/buyer/LoginPage.test.tsx` | New RED tests for checkbox + notice modal trigger |
+| `apps/web/src/pages/buyer/SavedAddressesPage.tsx` | Add conditional acknowledgement checkbox; wire `ConsentNoticeModal` |
+| `apps/web/src/pages/buyer/SavedAddressesPage.test.tsx` | New RED tests |
+| `apps/web/src/pages/buyer/CheckoutPage.tsx` | Add conditional acknowledgement checkbox; wire `ConsentNoticeModal` |
+| `apps/web/src/pages/buyer/CheckoutPage.test.tsx` | New RED tests |
+| `apps/web/src/pages/buyer/BookingTimeslotPage.tsx` | Add conditional acknowledgement checkbox; wire `ConsentNoticeModal` |
+| `apps/web/src/pages/buyer/BookingTimeslotPage.test.tsx` | New RED tests |
+| `apps/web/src/components/account/PrivacySettingsSection.tsx` | Fix inactive status text; wire `ConsentNoticeModal` |
+| `apps/web/src/components/account/PrivacySettingsSection.test.tsx` | New RED tests for status text + notice modal trigger |
+| `apps/web/src/components/consent/AnalyticsConsentBanner.tsx` | Wire `ConsentNoticeModal` |
+| `apps/web/src/components/consent/AnalyticsConsentBanner.test.tsx` | New RED test for notice modal trigger |
+
+---
+
+#### 📝 Session Notes: Phase 8.2.9 Implementation
+
+- **Date:** 2026-09-30
+- **Scope:** Completed full implementation of Phase 8.2.9 (DPDP Consent UI Compliance Fixes) in strict TDD (RED-GREEN-REFACTOR).
+- **Key Deliverables:**
+  1. **ConsentNoticeModal Component (`ConsentNoticeModal.tsx` & `ConsentNoticeModal.test.tsx`)**:
+     - Built shared modal dialog displaying verbatim statutory 5-section notices (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) with data categories, third-party processors (Ola Maps, Razorpay, SMS gateways), retention periods, DPO grievance contact (`dpo@gorola.com`), and statutory complaint path to the Data Protection Board of India (DPBI).
+  2. **Login Consent Flow (`LoginPage.tsx` & `LoginPage.test.tsx`)**:
+     - Embedded acknowledgement checkbox (`[ ] I have read and understood this notice`) inside the white card container.
+     - Clean inline link layout (`[📄 View Complete Notice] • [Privacy Policy & Terms]`). Gated "Continue & Accept" button until checkbox is checked.
+  3. **Order Processing & Address Management (`SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`)**:
+     - Integrated `ORDER_PROCESSING` statutory notice + acknowledgment checkbox directly into all address creation forms.
+     - Implemented **Option 2** consented state: Once granted, subsequent address/booking interactions display `🟢 Consent Active • Permanent operational requirement` without redundant blocking checkboxes.
+     - Streamlined Booking and Checkout review screens to remove redundant `ORDER_PROCESSING` cards, keeping review flows fast and focused.
+  4. **Promotions & Analytics Opt-In (`BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `AnalyticsConsentBanner.tsx`)**:
+     - Rich cards for optional marketing offers with un-ticked opt-in checkboxes and Option 2 active status display.
+     - Wired `<ConsentNoticeModal />` triggers into all 6 canonical consent touchpoints and banner body.
+  5. **Privacy & Consent Preferences Dashboard (`PrivacySettingsSection.tsx` & `PrivacySettingsSection.test.tsx`)**:
+     - Fixed canonical status text fallback for inactive essential consents (`🟡 Pending — Activated when you save an address or place your first order`).
+     - Added direct `[📄 View Complete Notice]` triggers across all 4 purpose cards.
+- **Quality Gate Results:**
+  - `@gorola/web` test suite: **92/92 test files (528 tests) 100% GREEN**.
+  - `@gorola/api` test suite: **119/119 test files (719 tests) 100% GREEN**.
+  - Total Vitest tests: **211 test files, 1,247 tests passing 100%**.
+  - Monorepo typecheck (`pnpm typecheck`): **0 errors**.
+  - Monorepo lint (`pnpm lint`): **0 errors, 0 warnings**.
+
+---
+
 ### 8.3 — User Rights: Erasure, Access & Nomination (Current Setup)
 
 #### 8.3.1 — Right to Erasure with 30-Day Recovery Grace Period (`DELETE /api/v1/user/account` & `POST /api/v1/user/reactivate-account`)
@@ -757,4 +1152,4 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Worker: Created `apps/api/src/workers/user-data-purge.worker.ts` with `purgeExpiredUsers` executing permanent PII scrub and consent withdrawal after 30 days.
     - Frontend: Added `<DangerZoneSection />` on `/account/privacy` with 30-day recovery dialog.
   - **Quality & TDD Parity:** 34/34 API unit/integration tests and 16/16 web unit tests GREEN. 0 ESLint errors, 0 TypeScript errors across all workspace projects.
-
+

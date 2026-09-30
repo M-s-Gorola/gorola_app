@@ -7,7 +7,9 @@ import { useForm } from "react-hook-form";
 import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
@@ -106,6 +108,8 @@ export function LoginPage(): ReactElement {
 
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+
+  const [acknowledged, setAcknowledged] = useState(false);
 
   const hookForm = useForm<PhoneFormValues>({
     defaultValues: { localPhone: "" },
@@ -375,29 +379,46 @@ export function LoginPage(): ReactElement {
 
         {step === "consent" ? (
           <div className="mt-6 flex flex-col gap-5" data-testid="consent-notice-step">
-            <div className="rounded-xl border border-border/80 bg-gorola-fog/60 p-4 text-sm text-gorola-charcoal space-y-3">
+            <div className="rounded-2xl border border-border/80 bg-white dark:bg-card p-5 text-sm text-gorola-charcoal space-y-3.5 shadow-xs">
               <div className="flex items-center gap-2 font-semibold text-gorola-pine">
                 <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
                 Authentication &amp; Account Security
               </div>
-              <p className="text-muted-foreground leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm">
                 We collect your phone number to send a one-time password (OTP) and authenticate your account under India&apos;s Digital Personal Data Protection (DPDP) Act 2023. We do not sell your personal data.
               </p>
-              <p className="text-xs text-muted-foreground">
-                By continuing, you agree to our{" "}
+              
+              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
+                <ConsentNoticeModal purpose="OTP_AUTH" />
+                <span className="text-muted-foreground/40">&bull;</span>
                 <a
                   className="font-medium text-gorola-pine underline hover:text-emerald-700"
                   href="/privacy"
                 >
-                  Privacy Policy
-                </a>{" "}
-                and terms of service.
-              </p>
+                  Privacy Policy &amp; Terms
+                </a>
+              </div>
+
+              <div className="flex items-start gap-2.5 pt-3.5 border-t border-border/60">
+                <Checkbox
+                  checked={acknowledged}
+                  data-testid="consent-acknowledge-checkbox"
+                  id="consent-ack"
+                  onCheckedChange={(v) => setAcknowledged(!!v)}
+                />
+                <label
+                  className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                  htmlFor="consent-ack"
+                >
+                  I have read and understood this notice
+                </label>
+              </div>
             </div>
 
             <Button
               className="w-full rounded-full"
               data-testid="consent-continue-btn"
+              disabled={!acknowledged}
               onClick={() => setStep("phone")}
               type="button"
             >

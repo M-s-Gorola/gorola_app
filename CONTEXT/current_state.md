@@ -88,7 +88,7 @@ _(None currently)_
 | delivery          | ✅         | ✅                | unit: RiderLoginPage, RiderOrdersPage; integration: rider.endpoints, rider.orders |
 | booking           | ❌         | ✅                | integration: booking-schema |
 
-**Last known test count:** 1004 Vitest (619 API + 385 web) + 36 Playwright E2E tests GREEN.
+**Last known test count:** 1247 Vitest (719 API + 528 web across 211 test files) + 36 Playwright E2E tests GREEN.
 **E2E (Playwright):** All E2E tests passing green.
 
 ---

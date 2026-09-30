@@ -7,7 +7,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -78,6 +80,7 @@ export function BookingTimeslotPage(): ReactElement {
   const [couponError, setCouponError] = useState<string | null>(null);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [opAcknowledged, setOpAcknowledged] = useState(false);
 
   const accessToken = useAuthStore((s) => s.accessToken);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
@@ -387,7 +390,12 @@ export function BookingTimeslotPage(): ReactElement {
     }
   };
 
-  const isFormComplete = selectedDate && selectedTimeslot && selectedAddressId && !isSubmitting;
+  const isFormComplete = Boolean(
+    selectedDate &&
+    selectedTimeslot &&
+    selectedAddressId &&
+    !isSubmitting
+  );
 
   return (
     <div className="mx-auto max-w-2xl px-4 py-8">
@@ -676,38 +684,53 @@ export function BookingTimeslotPage(): ReactElement {
           )}
         </div>
 
-        {/* Section 5: DPDP Consent Notice & Action Button */}
+        {/* Section 5: Marketing Consent & Action Button */}
         <div className="border-t border-gorola-pine/10 pt-6 space-y-4">
           <div
-            data-testid="booking-order-processing-consent"
-            className="rounded-2xl border border-gorola-pine/15 bg-gorola-sand/30 p-4 text-xs text-gorola-charcoal space-y-1.5 text-left"
+            data-testid="booking-marketing-opt-in"
+            className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
           >
-            <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-              <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
-              <span>Order Fulfillment &amp; Location Services</span>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                <span>Promotions &amp; Seasonal Offers (Optional)</span>
+              </div>
+              <ConsentNoticeModal purpose="MARKETING_EMAIL" />
             </div>
-            <p className="text-gorola-slate leading-relaxed">
-              Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Receive text updates on hill-weather flash sales, regional Mussoorie store discounts, and seasonal agricultural harvest coupons.
             </p>
+            {!hasMarketingConsent ? (
+              <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                <Checkbox
+                  checked={marketingOptIn}
+                  data-testid="marketing-consent-checkbox"
+                  id="marketing-optin-booking"
+                  onCheckedChange={(v) => setMarketingOptIn(!!v)}
+                />
+                <label
+                  className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                  htmlFor="marketing-optin-booking"
+                >
+                  Yes, send me seasonal Mussoorie harvest updates and coupons
+                </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
+                  Consent Active
+                </span>
+                <span className="text-muted-foreground/40">•</span>
+                <span>
+                  Manage or withdraw in{" "}
+                  <a href="/profile" className="underline text-gorola-pine hover:text-emerald-700">
+                    Privacy Settings
+                  </a>
+                </span>
+              </div>
+            )}
           </div>
-
-          {/* Only show the marketing opt-in if the user hasn't already granted it */}
-          {!consentsQuery.isLoading && !hasMarketingConsent && (
-            <label
-              data-testid="booking-marketing-opt-in"
-              className="flex items-start gap-2.5 rounded-xl border border-gorola-pine/15 bg-white p-3 text-xs text-gorola-charcoal cursor-pointer hover:border-gorola-pine/30 transition-colors text-left"
-            >
-              <input
-                type="checkbox"
-                checked={marketingOptIn}
-                onChange={(e) => setMarketingOptIn(e.target.checked)}
-                className="mt-0.5 rounded border-gorola-pine/30 text-gorola-pine focus:ring-gorola-pine"
-              />
-              <span className="leading-snug text-gorola-slate">
-                <strong className="text-gorola-charcoal font-medium">Promotions &amp; Seasonal Offers (Optional):</strong> Send me seasonal Mussoorie harvest updates, special hill-station deals, and exclusive coupons.
-              </span>
-            </label>
-          )}
 
           {/* Confirm Booking CTA */}
           <button
@@ -788,15 +811,44 @@ export function BookingTimeslotPage(): ReactElement {
 
             <div
               data-testid="order-processing-consent-notice"
-              className="rounded-xl border border-gorola-pine/20 bg-gorola-sand/40 p-3 text-xs text-gorola-charcoal space-y-1"
+              className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs"
             >
-              <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-                <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
-                <span>Order Fulfillment &amp; Location Services</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  <span>Order Fulfillment &amp; Location Services</span>
+                </div>
+                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
               </div>
-              <p className="text-gorola-slate leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
               </p>
+
+              {!hasOrderProcessingConsent ? (
+                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                  <Checkbox
+                    checked={opAcknowledged}
+                    data-testid="order-processing-acknowledge-checkbox"
+                    id="op-ack-booking-dialog"
+                    onCheckedChange={(v) => setOpAcknowledged(!!v)}
+                  />
+                  <label
+                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                    htmlFor="op-ack-booking-dialog"
+                  >
+                    I have read and understood this notice
+                  </label>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                    <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
+                    Consent Active
+                  </span>
+                  <span className="text-muted-foreground/40">•</span>
+                  <span>Permanent operational requirement</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -804,7 +856,11 @@ export function BookingTimeslotPage(): ReactElement {
             <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={createMutation.isPending}>
               Cancel
             </Button>
-            <Button className="bg-gorola-pine text-white" onClick={handleSaveAddress} disabled={createMutation.isPending}>
+            <Button
+              className="bg-gorola-pine text-white"
+              onClick={handleSaveAddress}
+              disabled={createMutation.isPending || (!hasOrderProcessingConsent && !opAcknowledged)}
+            >
               {createMutation.isPending ? "Saving..." : "Save Address"}
             </Button>
           </DialogFooter>

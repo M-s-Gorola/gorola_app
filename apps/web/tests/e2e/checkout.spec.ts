@@ -14,6 +14,10 @@ test.describe('Checkout & Account', () => {
     await page.goto('/login');
     const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
     if (await consentBtn.isVisible()) {
+      const ackCheckbox = page.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await consentBtn.click();
     }
     await page.locator('#buyer-phone').fill(phone);
@@ -74,6 +78,12 @@ test.describe('Checkout & Account', () => {
 
     // Type landmark (>= 10 chars)
     await page.locator('[name="landmarkDescription"]').fill('Near the old clock tower in Mussoorie');
+
+    // Acknowledge DPDP order processing consent if required
+    const opCheckbox = page.locator('[data-testid="order-processing-acknowledge-checkbox"]');
+    if (await opCheckbox.isVisible()) {
+      await opCheckbox.click();
+    }
 
     // Click Continue to Review step
     await page.locator('button', { hasText: /Continue/i }).click();
@@ -146,6 +156,10 @@ test.describe('Checkout & Account', () => {
     await page.getByRole('button', { name: /Add New/i }).click();
     await page.locator('input[name="label"]').fill(uniqueLabel);
     await page.locator('[name="landmarkDescription"]').fill('Opposite Savoy Hotel, Landour');
+    const ackCheckbox = page.locator('[data-testid="order-processing-acknowledge-checkbox"]');
+    if (await ackCheckbox.isVisible()) {
+      await ackCheckbox.click();
+    }
     const saveBtn = page.locator('button', { hasText: /Save Address/i });
     await page.evaluate(() => window.scrollTo(0, document.body.scrollHeight));
     await saveBtn.scrollIntoViewIfNeeded();

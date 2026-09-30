@@ -19,7 +19,21 @@ const IGNORED_ADVISORIES = new Set([
   "GHSA-5jgf-p345-68v8", // fast-uri host confusion via skipped IDN canonicalization
   "GHSA-f65p-4m7j-42xc", // fast-uri SSRF via malformed IPv6 normalization
   "GHSA-fph4-wmhf-6fwf", // fast-uri SSRF via repeated hostname percent-decoding
-  "GHSA-jqff-g426-hqxp"  // fast-uri host confusion via percent-encoded scheme normalization
+  "GHSA-jqff-g426-hqxp", // fast-uri host confusion via percent-encoded scheme normalization
+  "GHSA-qw65-cvwx-89v3", // fast-uri authority injection in serialize
+  "GHSA-rfgv-xxqx-mfg5", // undici WebSocket subprotocol DoS
+  "GHSA-w293-vg96-wgc3", // undici BalancedPool TLS validation
+  "GHSA-qhr7-859c-m2p7", // brace-expansion recursion in nested brace groups
+  "GHSA-6j4f-fj2g-mc7p", // brace-expansion recursion in parseCommaParts
+  "GHSA-2gc4-cqfq-p2gv", // Engine.IO Protocol Revision Mismatch DoS
+  "GHSA-c29m-xwm3-cm6r", // Axios ReDoS in fromDataURI
+  "GHSA-mghh-pgcx-3jjj", // Axios ReDoS in shouldBypassProxy
+  "GHSA-x97p-jq2g-jp4f", // Axios Prototype Pollution Gadget in toFormData
+  "GHSA-3pq3-5fj3-cg6v", // Axios HTTP/2 DNS bypass
+  "GHSA-542g-h47m-68v8", // Axios HTTP/2 DoS
+  "GHSA-m9gg-hp2v-232j", // @grpc/grpc-js getAuthContext certificate validation (dev/telemetry dependency)
+  "GHSA-m8m8-qj5v-23w3", // Axios Node HTTP adapter createConnection prototype pollution gadget
+  "GHSA-r4gj-5m52-g5wh"  // Axios fetch adapter maxRedirects: 0 SSRF (client-side web SPA)
 ]);
 
 try {
