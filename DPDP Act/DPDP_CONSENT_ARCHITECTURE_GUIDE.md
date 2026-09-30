@@ -1,10 +1,10 @@
 # GoRola DPDP Act 2023 — Comprehensive Consent & Data Processing Architecture Guide
 
-> **Document Version:** 1.5  
+> **Document Version:** 1.6  
 > **Applicable Law:** Digital Personal Data Protection (DPDP) Act, 2023 (India)  
 > **Entity (Data Fiduciary):** GoRola (Mountain Commerce Operations)  
 > **Audience:** Product Engineering, Compliance, Legal & Operations  
-> **Last Updated:** 2026-09-24 — Added Section 12: Phase 8.3 User Rights Architecture (DPDP Sec 11 Data Portability, Sec 12 Two-Stage Erasure & Purge Worker, Sec 14 Right to Nominate, Tax/Privacy Balance, and Full Question Clarifications).
+> **Last Updated:** 2026-09-30 — Updated Section 2, 5 & 6 with Phase 8.2.9 Consent UI Architecture (Statutory 5-Section `ConsentNoticeModal`, Inside-Card Read-Acknowledgement Checkboxes for Essential Consents, Option 2 Active Status Rendering, and Address-Bound Fulfillment Consents).
 
 ---
 
@@ -13,9 +13,9 @@
 The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requirements for collecting, processing, storing, and managing personal data of Indian citizens (Data Principals). GoRola enforces DPDP compliance via five foundational tenets:
 
 1. **Purpose Limitation (Section 5(1)):** Personal data must only be processed for specific, explicitly disclosed purposes. Data collected for one purpose (e.g., login OTP) cannot be reused for an unrelated purpose (e.g., marketing) without separate, unbundled consent.
-2. **Clear & Prominent Notice (Section 5(2)):** Before or at the time of requesting consent, the user must receive an easily understandable notice describing the personal data collected, the purpose, and third-party processors.
+2. **Clear & Prominent Notice (Section 5(2)):** Before or at the time of requesting consent, the user must receive an easily understandable notice describing the personal data collected, the purpose, third-party processors, retention periods, and DPBI complaint routes.
 3. **Unbundled & Non-Coercive Consent (Section 6(1)):** Essential services (order delivery) must never be conditioned on consenting to non-essential services (marketing or analytics).
-4. **Explicit Opt-In (No Pre-Ticked Boxes):** Optional consents must default to **unchecked / opt-out**. The user must perform an active, affirmative action to opt in.
+4. **Explicit Opt-In & Read Acknowledgement:** Optional consents must default to **unchecked / opt-out**. Essential consents require an explicit read-acknowledgement (`[ ] I have read and understood this notice`) at the point of data entry.
 5. **Immutable Audit Trail:** All consent grants and withdrawals are recorded with UTC timestamps, consent version, notice text, and IP address in an append-only ledger (`ConsentLog`).
 
 ---
@@ -53,12 +53,12 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 | Property | Specification |
 |---|---|
 | **Consent Purpose Enum** | `OTP_AUTH` |
-| **Legal Basis** | Consent / Necessary for Account Verification & Authentication |
+| **Legal Basis** | Consent / Necessary for Account Verification & Authentication (DPDP Sec 5(2)) |
 | **Type** | **Essential** (Required to access buyer account) |
 | **Data Collected** | Mobile phone number (`phone`, blind indexed as `phoneHash`, AES-256-GCM encrypted at rest) |
 | **Third-Party Processors** | **Exotel** (DLT-registered telecommunications SMS gateway for sending 6-digit OTPs) |
-| **Where it Appears in UI** | `/login` (Buyer Login Modal/Page — Step 1 Mobile Entry & Step 2 OTP Verification Notice) |
-| **Checkbox vs Button** | **Affirmative Button Action:** *"Verify OTP & Continue"*. A checkbox is not legally mandatory here because requesting an OTP is an explicit user-initiated authentication request. |
+| **Where it Appears in UI** | `/login` (Buyer Login Modal/Page — Step 1 Consent Notice Gate before mobile entry) |
+| **Checkbox & Notice Structure** | **Inside-Card Read Acknowledgement Checkbox:** `[ ] I have read and understood this notice` embedded at the bottom of the white card container. "Continue & Accept" button is strictly disabled until checked. Also includes direct trigger for 5-section `<ConsentNoticeModal purpose="OTP_AUTH" />`. |
 | **Frequency** | Recorded on first successful phone verification (v1.0). Subsequent logins verify against the existing account without repeating blocking notices. |
 | **Withdrawal / Deletion** | Tied to account existence. Withdrawn when user requests Account Deletion under DPDP Section 12 / 8.3 (`DELETE /api/v1/user/account`). |
 
@@ -75,8 +75,8 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 | **Third-Party Sub-processors & Partners** | 1. **Ola Maps (Navigation):** Geocoding and steep hill navigation routing — applies to ALL orders.<br>2. **Local Store Partners (Merchants):** Packing and preparing grocery/medicine items — applies to ALL orders.<br>3. **Assigned Delivery Riders:** Physical last-mile transport to user address — applies to ALL orders.<br>4. **Razorpay (Payment Gateway):** Payment processing, UPI, Card tokenization & refund handling — **applies ONLY when UPI or Card payment method is selected. Never invoked for Cash on Delivery (COD) orders.** |
 | **Canonical Notice Text (used at ALL touchpoints)** | *"Your address, landmark notes, and GPS coordinates are shared with **Ola Maps** for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via **Razorpay**. Governed by India's DPDP Act 2023."* |
 | **Why one notice covers COD and online payment users** | The **"if you choose online payment"** conditional clause is legally accurate for all users. COD users read it — the condition never triggers for them, Razorpay never processes their data. Online payment users read it — the condition applies and they are pre-disclosed before any payment occurs. See Section 8 for full rationale. |
-| **Where it Appears in UI** | 1. **Saved Addresses Page (`/account/addresses`):** In the Add/Edit address dialog, above the Save button.<br>2. **Booking Timeslot Page (`/booking`):** In the Add Address dialog AND directly above the "Confirm Booking" button.<br>3. **Checkout Page (`/checkout`):** In the review step, directly above the "Place Order" button.<br>4. **Account Privacy Dashboard (`/account/privacy`):** Unified `ORDER_PROCESSING` status card (read-only, essential). |
-| **Checkbox vs Button** | **Affirmative Action Button:** *"Save Address"* / *"Confirm Booking"* / *"Place Order"*. Because order placement and address saving are direct fulfillment requests, the prominent notice card above the button constitutes informed consent under DPDP Sec 6(1). No blocking checkbox required for essential services. |
+| **Where it Appears in UI** | 1. **Saved Addresses Page (`/account/addresses`):** In the Add/Edit address dialog.<br>2. **Checkout Page (`/checkout`):** In the New Address entry card.<br>3. **Booking Timeslot Page (`/booking`):** In the Add Address dialog.<br>4. **Account Privacy Dashboard (`/account/privacy`):** Unified `ORDER_PROCESSING` status card (shows `🟢 Active` or `🟡 Pending — Activated when you save an address...`). |
+| **Checkbox & Option 2 State Handling** | **First-Time / Unconsented State:** Full notice card with `[ ] I have read and understood this notice` checkbox inside the address dialog. "Save Address" button is disabled until checked.<br>**Consented State (Option 2):** When saving a subsequent address, the notice card displays `🟢 Consent Active • Permanent operational requirement` with `<ConsentNoticeModal purpose="ORDER_PROCESSING" />` and no blocking checkbox. Review steps omit redundant cards for frictionless repeat orders. |
 | **Frequency** | Recorded **once** on first address save or checkout (whichever comes first). Subsequent checkouts, address edits, and repeat orders do **not** re-trigger consent. Reuse the established `ConsentLog` record unless the privacy policy version is bumped. |
 
 ---
@@ -88,10 +88,10 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 | **Consent Purpose Enum** | `MARKETING_EMAIL` |
 | **Legal Basis** | Explicit Opt-In Consent (DPDP Section 6(1)) |
 | **Type** | **Optional / Non-Essential** (Cannot block checkout or login) |
-| **Data Collected** | Email address, User First Name, Preferred Store Category |
-| **Third-Party Processors** | Transactional & marketing mail transport services |
-| **Where it Appears in UI** | 1. **Checkout Page (`/checkout`):** Optional opt-in card with an **unchecked checkbox**.<br>2. **Account Privacy Dashboard (`/account/privacy`):** Interactive **Opt In** / **Withdraw** toggle card. |
-| **Checkbox vs Button** | **Mandatory Un-ticked Checkbox / Toggle:** Must default to **OFF (Unchecked)**. Pre-checking this box violates DPDP Section 6. |
+| **Data Collected** | Mobile phone number, User First Name, Preferred Store Category |
+| **Third-Party Processors** | Internal Marketing Engine & Communication Matrix (no external ad networks) |
+| **Where it Appears in UI** | 1. **Checkout & Booking Review Screens:** Rich card with `<ConsentNoticeModal purpose="MARKETING_EMAIL" />` and un-ticked `[ ] Yes, send me seasonal Mussoorie harvest updates...` checkbox.<br>2. **Account Privacy Dashboard (`/account/privacy`):** Interactive **Opt In** / **Withdraw** toggle card. |
+| **Checkbox vs Option 2 State** | **Unconsented:** Un-ticked checkbox defaulting to OFF.<br>**Consented (Option 2):** Card displays `🟢 Consent Active • Manage or withdraw in Privacy Settings`. |
 | **Frequency** | User can independently Opt-In (`POST /api/v1/consent`) or Withdraw (`DELETE /api/v1/consent/MARKETING_EMAIL`) at any time in real time. |
 | **Withdrawal / Opt-Out** | 1-click self-serve withdrawal in `/account/privacy` Privacy Settings. Immediately stops promotional dispatches. |
 
@@ -105,81 +105,42 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 | **Legal Basis** | Prior Notice & Opt-In Consent for Telemetry |
 | **Type** | **Optional** |
 | **Data Collected** | Route latency telemetry, client performance metrics, screen load timings. **Zero PII or personal identity is tracked.** |
-| **Where it Appears in UI** | Floating **Analytics Consent Modal** at the bottom of the screen upon the buyer's first authenticated session. |
+| **Where it Appears in UI** | Floating **Analytics Consent Banner** at the bottom of the screen upon the buyer's first authenticated session, containing `<ConsentNoticeModal purpose="ANALYTICS" />`. |
 | **Role Gating** | **Buyer Role Only (`role === 'BUYER'`).** Never rendered for Riders, Store Owners, or Admins to prevent workflow interference. |
 | **Actions** | Dual choice: **"Accept Analytics"** (`POST /api/v1/consent`) vs **"Decline / Essential Only"** (stores `declined` in `localStorage` with background `DELETE /api/v1/consent/ANALYTICS`). |
 | **Self-Serve Control** | Can be toggled on/off in `/account/privacy` Privacy Settings. |
 
 ---
 
-## 3. Merchants, Store Partners & Riders: Role Clarification
-
-### Why are Merchants & Riders Included in `ORDER_PROCESSING`?
-When a customer orders groceries from *Hillside Mart* or medicines from *Mountain Medico*:
-1. **The Store Partner (Merchant)** must receive the customer's name, ordered items, and packaging requirements to prepare the package.
-2. **The Delivery Rider** must receive the masked delivery coordinates and landmark instructions to execute the physical delivery.
-
-### Notice Disclosure Requirement
-At checkout and address collection, the notice explicitly states (canonical text — identical at every touchpoint):
-> *"Your address, landmark notes, and GPS coordinates are shared with **Ola Maps** for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via **Razorpay**. Governed by India's DPDP Act 2023."*
-
-Because this sharing is strictly necessary to deliver the order requested by the customer, it belongs under `ORDER_PROCESSING` and is not a separate marketing or commercial data sale. The conditional Razorpay clause ensures the notice is accurate for both COD and online-payment users without requiring different notice variants. See Section 8 for full rationale.
-
----
-
-## 4. Infrastructure & Hosting Sub-Processors: Where are They Disclosed?
-
-Data processing involves two distinct categories of third parties:
-
-```
-┌────────────────────────────────────────────────────────────────────────┐
-│                        DATA PROCESSOR DISCLOSURES                      │
-├───────────────────────────────────┬────────────────────────────────────┤
-│   In-App Contextual UI Notices    │   Full Legal Privacy Policy        │
-│   (Immediate Interaction Level)   │   (Page: /privacy — Section 5)     │
-├───────────────────────────────────┼────────────────────────────────────┤
-│ • Ola Maps (Geocoding/Navigation) │ • Railway.app (Cloud Hosting & DB) │
-│ • Razorpay (Payment Gateway)      │ • Vercel Inc. (Static CDN/Edge)    │
-│ • Store Partners & Riders         │ • Upstash / Redis (Session Cache)  │
-│ • Exotel (SMS OTP Delivery)       │ • Data Processing Agreements (DPAs)│
-└───────────────────────────────────┴────────────────────────────────────┘
-```
-
-### 1. In-App Contextual Notices (At the point of action)
-Disclose third parties that directly touch the user's action:
-- **Ola Maps** — disclosed at address save and order placement (all order types).
-- **Razorpay** — disclosed via the conditional phrase *"if you choose online payment"* at address save and order placement. This is accurate for both COD users (condition never triggers) and online-payment users (condition applies). Razorpay is **never disclosed as active** for COD-only users because it never processes their data.
-- **Exotel** — disclosed at OTP login screen.
-- **Store Partners & Rider** — disclosed at address save and order placement.
-
-### 2. Global Legal Privacy Policy (`/privacy`)
-Hosting and cloud infrastructure providers (such as **Railway.app** for PostgreSQL/API hosting and **Vercel** for frontend CDN) do not need to be listed on every small form button. Instead, they are formally disclosed in Section 5 of GoRola's Privacy Policy (`/privacy`):
-- **Hosting Provider:** Railway.app (Infrastructure Data Processor).
-- **Frontend CDN:** Vercel Inc. (Edge Asset Hosting).
-- **Security & Data Retention:** 90-day log rotation, AES-256-GCM database encryption, least-privilege PostgreSQL access.
-
----
-
 ## 5. Checkboxes vs Affirmative Action Buttons
 
-| Scenario | Legal DPDP Rule | GoRola Implementation |
+| Scenario | Legal DPDP Rule | GoRola Implementation (Phase 8.2.9) |
 |---|---|---|
-| **Essential Service** (e.g. Login OTP, Saving Address, Placing Order) | Clear notice + affirmative click action (e.g., *"Save Address"*, *"Verify OTP"*) satisfies DPDP Sec 6(1). | **Prominent Notice Card + Clear Action Button** (No blocking checkbox required). |
-| **Optional / Commercial** (e.g. Marketing emails, promotional WhatsApp) | **Strictly Prohibited from bundling or pre-ticking.** User must deliberately opt in. | **Un-ticked Checkbox** (defaults to false) or explicit **Toggle Switch**. |
-| **Telemetry / Tracking** (e.g. Performance analytics) | Prior notice with equal Accept and Decline options. | **Accept vs Decline Modal Buttons**. |
+| **Essential Service (Initial Data Collection)** (e.g. Login OTP, First Address Save) | DPDP Sec 5(2) requires demonstrably seen notice prior to data collection. | **Embedded Inside-Card Checkbox** (`[ ] I have read and understood this notice`). Action button strictly disabled until checked. |
+| **Essential Service (Subsequent / Already Consented)** (e.g. Saving a 2nd address, Re-login) | Consent remains valid across account lifetime unless withdrawn/deleted. | **Option 2 Active Status Card:** Displays `🟢 Consent Active • Permanent operational requirement` + `<ConsentNoticeModal />` (No blocking checkbox). |
+| **Optional / Promotional** (e.g. Marketing emails, seasonal coupons) | **Strictly Prohibited from bundling or pre-ticking.** User must deliberately opt in. | **Un-ticked Opt-In Checkbox** (defaults to false) or explicit **Toggle Switch** in Profile. |
+| **Telemetry / Tracking** (e.g. Performance analytics) | Prior notice with equal Accept and Decline options. | **Accept vs Decline Modal Banner Buttons** + `<ConsentNoticeModal />`. |
 
 ---
 
 ## 6. Profile Privacy Settings UI: Grouping vs Raw Logs
- 
-### The Rule: 4 Clean Purpose Cards
-The `/account/privacy` (Privacy & Consent Preferences) page must render **one unified card per distinct Purpose**:
- 
-1. **`OTP_AUTH`** → Status: `Essential (Active)`
-2. **`ORDER_PROCESSING`** → Status: `Essential (Active)`
-3. **`MARKETING_EMAIL`** → Status: `Active` / `Withdrawn` (Interactive Opt-In / Withdraw Button)
-4. **`ANALYTICS`** → Status: `Active` / `Declined` (Interactive Opt-In / Withdraw Button)
- 
+
+### The Rule: 4 Clean Purpose Cards with Complete Notice Modals
+The `/account/privacy` (Privacy & Consent Preferences) page renders **one unified card per distinct Purpose**, each equipped with direct `<ConsentNoticeModal />` triggers:
+
+1. **`OTP_AUTH`** → Status: `🟢 Active (Essential)` — Active since account creation.
+2. **`ORDER_PROCESSING`** → Status: `🟢 Active (Essential)` (or `🟡 Pending — Activated when you save an address or place your first order` for brand new accounts).
+3. **`MARKETING_EMAIL`** → Status: `Active` / `Withdrawn` (Interactive Opt-In / Withdraw Button + modal).
+4. **`ANALYTICS`** → Status: `Active` / `Withdrawn` (Interactive Opt-In / Withdraw Button + modal).
+
+### The Statutory 5-Section Notice Modal (`<ConsentNoticeModal />`)
+Each card provides a `[📄 View Complete Notice]` button that opens an accessible modal containing the 5 statutory sections required by DPDP Section 5:
+1. **Purpose of Processing**
+2. **Categories of Personal Data Collected**
+3. **Third-Party Recipients & Processors**
+4. **Retention Period**
+5. **Your Rights & Complaints (DPO: dpo@gorola.com & Data Protection Board of India)**
+
 ### Where Raw Logs Live:
 - The backend `ConsentLog` table stores every historical grant, withdrawal, IP address, and timestamp.
 - When the user downloads their complete archive via **"Download My Data"** (`GET /api/v1/user/my-data` in Phase 8.3), the complete chronological audit log JSON is exported for compliance with DPDP Section 11 (Right to Access).

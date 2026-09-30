@@ -166,6 +166,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Log in buyer
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
     }
     await buyerPage.locator('#buyer-phone').fill('9876543210');
@@ -453,6 +457,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
     }
     await buyerPage.locator('#buyer-phone').fill('9876543211');
@@ -701,6 +709,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
     }
     await buyerPage.locator('#buyer-phone').fill('9876543212');
@@ -837,6 +849,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
     if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
     }
     await buyerPage.locator('#buyer-phone').fill('9876543214');
@@ -886,6 +902,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.locator('[name="label"]').fill("E2E Suite");
     await buyerPage.locator('[name="landmarkDescription"]').fill("E2E Tower - near the diagnostic center entrance");
     // Click Save Address inside dialog
+    const opCheckbox = buyerPage.locator('[data-testid="order-processing-acknowledge-checkbox"]');
+    if (await opCheckbox.isVisible()) {
+      await opCheckbox.click();
+    }
     await buyerPage.getByRole("button", { name: "Save Address" }).click();
     // Wait for dialog to close after save
     await expect(buyerPage.getByRole("dialog")).not.toBeVisible({ timeout: 10000 });

@@ -217,6 +217,33 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     ).toBeInTheDocument();
   });
 
+  it("renders distinct inactive status text per consent purpose when consents array is empty", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+
+    const otpCard = screen.getByTestId("consent-card-OTP_AUTH");
+    expect(otpCard).toHaveTextContent(/Active since account creation/i);
+
+    const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    expect(orderCard).toHaveTextContent(/Pending — Activated when you save an address or place your first order/i);
+
+    const marketingCard = screen.getByTestId("consent-card-MARKETING_EMAIL");
+    expect(marketingCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
+
+    const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
+    expect(analyticsCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
+  });
+
   it("syncs ANALYTICS opt-in and withdrawal with localStorage", async () => {
     const user = userEvent.setup();
     localStorage.setItem("gorola_analytics_consent", "declined");

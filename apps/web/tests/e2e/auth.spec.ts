@@ -7,6 +7,7 @@ test.describe('Authentication', () => {
     // Assert DPDP Consent Notice is visible initially
     const consentNotice = page.locator('[data-testid="consent-notice-step"]');
     await expect(consentNotice).toBeVisible();
+    await page.locator('[data-testid="consent-acknowledge-checkbox"]').click();
     await page.locator('[data-testid="consent-continue-btn"]').click();
 
     // Assert phone input is visible after consent step
@@ -44,6 +45,10 @@ test.describe('Authentication', () => {
     await page.goto('/login');
     const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
     if (await consentBtn.isVisible()) {
+      const ackCheckbox = page.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await consentBtn.click();
     }
     await page.locator('#buyer-phone').fill('9876543211');

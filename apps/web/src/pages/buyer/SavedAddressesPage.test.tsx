@@ -26,38 +26,57 @@ describe("SavedAddressesPage", () => {
   beforeEach(() => {
     queryClient.clear();
     vi.clearAllMocks();
-    useAuthStore.setState({ isBootstrapPending: false });
+    useAuthStore.setState({ isBootstrapPending: false, accessToken: "token-buyer" });
     
     // Radix UI leaves pointer-events: none on body if forcefully unmounted
     document.body.style.pointerEvents = 'auto';
 
-    apiGetSpy = vi.spyOn(api!, "get").mockResolvedValue({
-      data: {
-        data: {
-          addresses: [
-            {
-              id: "addr1",
-              label: "Home",
-              landmarkDescription: "Near the big clock",
-              flatRoom: "101",
-              isDefault: true,
-              lat: "30.45",
-              lng: "78.08"
-            },
-            {
-              id: "addr2",
-              label: "Work",
-              landmarkDescription: "Office building 10 chars",
-              flatRoom: null,
-              isDefault: false,
-              lat: null,
-              lng: null
+    apiGetSpy = vi.spyOn(api!, "get").mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              consents: [
+                {
+                  id: "c-op",
+                  purpose: "ORDER_PROCESSING",
+                  isWithdrawn: false,
+                  consentVersion: "1.0",
+                  createdAt: "2026-09-20T00:00:00Z"
+                }
+              ]
             }
-          ]
-        }
+          }
+        });
       }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    } as any);
+      return Promise.resolve({
+        data: {
+          data: {
+            addresses: [
+              {
+                id: "addr1",
+                label: "Home",
+                landmarkDescription: "Near the big clock",
+                flatRoom: "101",
+                isDefault: true,
+                lat: "30.45",
+                lng: "78.08"
+              },
+              {
+                id: "addr2",
+                label: "Work",
+                landmarkDescription: "Office building 10 chars",
+                flatRoom: null,
+                isDefault: false,
+                lat: null,
+                lng: null
+              }
+            ]
+          }
+        }
+      });
+    });
 
     apiPostSpy = vi.spyOn(api!, "post").mockResolvedValue({
       data: { data: { id: "new-addr" } }
@@ -98,9 +117,20 @@ describe("SavedAddressesPage", () => {
   });
 
   it("opens add form, renders DPDP fulfillment notice, and submits a new address with consent logging", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { success: true, data: { consents: [] } }
+        });
+      }
+      return Promise.resolve({
+        data: { data: { addresses: [] } }
+      });
+    });
+
     renderComponent();
 
-    const addBtn = await screen.findByRole("button", { name: /Add New/i });
+    const addBtn = await screen.findByRole("button", { name: /Add New|Add your first address/i });
     fireEvent.click(addBtn);
 
     const dialogTitle = await screen.findByText("Add New Address");
@@ -112,7 +142,10 @@ describe("SavedAddressesPage", () => {
 
     const labelInput = screen.getByPlaceholderText("Home");
     const landmarkInput = screen.getByPlaceholderText("E.g. — near the red gate, behind Hotel Padmini");
-    const saveBtn = screen.getByRole("button", { name: "Save Address" });
+    const saveBtn = screen.getByTestId("save-address-btn");
+
+    const ackCheckbox = await screen.findByTestId("order-processing-acknowledge-checkbox");
+    fireEvent.click(ackCheckbox);
 
     fireEvent.change(labelInput, { target: { value: "Vacation" } });
     fireEvent.change(landmarkInput, { target: { value: "Near the beach 123" } });
@@ -130,6 +163,77 @@ describe("SavedAddressesPage", () => {
         consentVersion: "1.0"
       }));
     });
+  });
+
+  it("when no ORDER_PROCESSING consent exists, renders unchecked checkbox and disables Save Address button until checked", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { success: true, data: { consents: [] } }
+        });
+      }
+      if (url === "/api/v1/addresses") {
+        return Promise.resolve({
+          data: { success: true, data: { addresses: [] } }
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: {} } });
+    });
+
+    renderComponent();
+
+    const addBtn = await screen.findByRole("button", { name: /Add New|Add your first address/i });
+    fireEvent.click(addBtn);
+
+    const checkbox = await screen.findByTestId("order-processing-acknowledge-checkbox");
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).toHaveAttribute("data-state", "unchecked");
+
+    const saveBtn = screen.getByTestId("save-address-btn");
+    expect(saveBtn).toBeDisabled();
+
+    // Check the box
+    fireEvent.click(checkbox);
+    expect(saveBtn).toBeEnabled();
+  });
+
+  it("when active ORDER_PROCESSING consent exists, checkbox is not rendered and Save Address button is not disabled by consent", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              consents: [
+                {
+                  id: "c-op",
+                  purpose: "ORDER_PROCESSING",
+                  isWithdrawn: false,
+                  consentVersion: "1.0",
+                  createdAt: "2026-09-20T00:00:00Z"
+                }
+              ]
+            }
+          }
+        });
+      }
+      if (url === "/api/v1/addresses") {
+        return Promise.resolve({
+          data: { success: true, data: { addresses: [] } }
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: {} } });
+    });
+
+    renderComponent();
+
+    const addBtn = await screen.findByRole("button", { name: /Add New|Add your first address/i });
+    fireEvent.click(addBtn);
+
+    await screen.findByText("Add New Address");
+    expect(screen.queryByTestId("order-processing-acknowledge-checkbox")).not.toBeInTheDocument();
+    const saveBtn = screen.getByTestId("save-address-btn");
+    expect(saveBtn).not.toBeDisabled();
   });
 
   it("opens edit form and updates an existing address", async () => {
@@ -199,5 +303,15 @@ describe("SavedAddressesPage", () => {
     await waitFor(() => {
       expect(apiPutSpy).toHaveBeenCalledWith("/api/v1/addresses/addr2/default");
     });
+  });
+
+  it("renders View Complete Notice trigger in Add Address dialog", async () => {
+    renderComponent();
+
+    const addBtn = await screen.findByRole("button", { name: /Add New|Add your first address/i });
+    fireEvent.click(addBtn);
+
+    const noticeBtn = await screen.findByTestId("view-notice-btn-ORDER_PROCESSING");
+    expect(noticeBtn).toBeInTheDocument();
   });
 });

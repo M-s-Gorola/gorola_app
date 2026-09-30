@@ -38,8 +38,105 @@ describe("BookingTimeslotPage", () => {
     vi.clearAllMocks();
     useAuthStore.setState({ isBootstrapPending: false, accessToken: "token-buyer", role: "BUYER" });
 
-    apiGetSpy = vi.spyOn(api!, "get");
+    apiGetSpy = vi.spyOn(api!, "get").mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              consents: [
+                {
+                  id: "c-op",
+                  purpose: "ORDER_PROCESSING",
+                  isWithdrawn: false,
+                  consentVersion: "1.0",
+                  createdAt: "2026-09-20T00:00:00Z"
+                }
+              ]
+            }
+          }
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: {} } });
+    });
     apiPostSpy = vi.spyOn(api!, "post");
+  });
+
+  it("renders marketing opt-in consent card and enables Confirm Booking when date, timeslot, and address are selected", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: { success: true, data: { consents: [] } }
+        });
+      }
+      if (url.includes("/api/v1/products/")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: "prod1",
+              name: "CBC Blood Test",
+              store: { id: "store1", name: "Max Labs", bookingLeadDays: 1 },
+              variants: [
+                {
+                  id: "var1",
+                  label: "Standard Test",
+                  price: "500.00",
+                  requiresFasting: false,
+                  allowedTimeslots: ["09:00-12:00"]
+                }
+              ]
+            }
+          }
+        });
+      }
+      if (url.includes("/api/v1/addresses")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              addresses: [
+                {
+                  id: "addr1",
+                  label: "Home",
+                  landmarkDescription: "Near Clock Tower Mussoorie",
+                  flatRoom: "1A"
+                }
+              ]
+            }
+          }
+        });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderComponent();
+    await screen.findByText("CBC Blood Test");
+
+    const confirmBtn = screen.getByRole("button", { name: /Confirm Booking/i });
+    expect(confirmBtn).toBeDisabled();
+
+    // Select date
+    const dateInput = screen.getByLabelText(/Select Date/i);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    fireEvent.change(dateInput, { target: { value: tomorrowStr } });
+
+    // Select timeslot
+    const slotBtn = screen.getByRole("button", { name: "09:00-12:00" });
+    fireEvent.click(slotBtn);
+
+    // Select address
+    const addressRadio = screen.getByLabelText(/Near Clock Tower Mussoorie/i);
+    fireEvent.click(addressRadio);
+
+    // Marketing opt-in card should be rendered with notice modal trigger
+    expect(screen.getByTestId("booking-marketing-opt-in")).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-MARKETING_EMAIL")).toBeInTheDocument();
+
+    // Confirm button is now enabled
+    expect(confirmBtn).toBeEnabled();
   });
 
   const renderComponent = (searchParams = "?productId=prod1&variantId=var1&storeId=store1") => {
@@ -163,6 +260,16 @@ describe("BookingTimeslotPage", () => {
 
   it("keeps Confirm Booking disabled until date, timeslot, and address are selected", async () => {
     apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              consents: []
+            }
+          }
+        });
+      }
       if (url.includes("/api/v1/products/")) {
         return Promise.resolve({
           data: {
@@ -238,12 +345,6 @@ describe("BookingTimeslotPage", () => {
     const addressRadio = screen.getByLabelText(/Near Clock Tower Mussoorie/i);
     fireEvent.click(addressRadio);
 
-    // Verify DPDP consent notice is displayed
-    const consentNotice = screen.getByTestId("booking-order-processing-consent");
-    expect(consentNotice).toBeInTheDocument();
-    expect(consentNotice).toHaveTextContent(/DPDP Act 2023/i);
-    expect(consentNotice).toHaveTextContent(/Razorpay/i);
-
     // Now all selected, button is enabled!
     expect(confirmBtn).not.toBeDisabled();
 
@@ -258,13 +359,6 @@ describe("BookingTimeslotPage", () => {
           items: [{ productId: "prod1", variantId: "var1", quantity: 1 }],
           timeslot: "09:00-12:00",
           addressId: "addr1",
-        }),
-      );
-      expect(apiPostSpy).toHaveBeenCalledWith(
-        "/api/v1/consent",
-        expect.objectContaining({
-          purpose: "ORDER_PROCESSING",
-          consentVersion: "1.0",
         }),
       );
     });
@@ -293,6 +387,14 @@ describe("BookingTimeslotPage", () => {
           },
         });
       }
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { consents: [] }
+          }
+        });
+      }
       if (url.includes("/api/v1/addresses")) {
         return Promise.resolve({
           data: {
@@ -315,6 +417,11 @@ describe("BookingTimeslotPage", () => {
           },
         });
       }
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { success: true }
+        });
+      }
       if (url === "/api/v1/bookings") {
         return Promise.resolve({
           data: {
@@ -335,6 +442,7 @@ describe("BookingTimeslotPage", () => {
 
     // Verify modal is open
     expect(await screen.findByText("Add New Address")).toBeInTheDocument();
+    expect(screen.getAllByTestId("view-notice-btn-ORDER_PROCESSING").length).toBeGreaterThanOrEqual(1);
 
     // Fill out the address form
     const labelInput = screen.getByLabelText(/Label/i);
@@ -344,6 +452,9 @@ describe("BookingTimeslotPage", () => {
     fireEvent.change(labelInput, { target: { value: "Office" } });
     fireEvent.change(landmarkInput, { target: { value: "Near Mall Road Mussoorie" } });
     fireEvent.change(flatRoomInput, { target: { value: "Suite 101" } });
+
+    const ackCheckbox = await screen.findByTestId("order-processing-dialog-checkbox");
+    fireEvent.click(ackCheckbox);
 
     // Click Save Address
     const saveBtn = screen.getByRole("button", { name: /Save Address/i });
@@ -368,6 +479,24 @@ describe("BookingTimeslotPage", () => {
 
   it("handles live offers and valid/invalid coupon code application", async () => {
     apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              consents: [
+                {
+                  id: "c-op",
+                  purpose: "ORDER_PROCESSING",
+                  isWithdrawn: false,
+                  consentVersion: "1.0",
+                  createdAt: "2026-09-20T00:00:00Z"
+                }
+              ]
+            }
+          }
+        });
+      }
       if (url.includes("/api/v1/products/")) {
         return Promise.resolve({
           data: {

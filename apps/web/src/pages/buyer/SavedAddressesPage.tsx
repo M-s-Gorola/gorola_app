@@ -6,7 +6,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOrderProcessingConsent } from "@/hooks/useOrderProcessingConsent";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -47,7 +50,10 @@ export function SavedAddressesPage(): ReactElement {
   const [isDefault, setIsDefault] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [opAcknowledged, setOpAcknowledged] = useState(false);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
+
+  const { hasConsent: hasOrderProcessingConsent } = useOrderProcessingConsent();
 
   const { data: addresses, isLoading, error } = useQuery({
     enabled: !isBootstrapPending,
@@ -161,6 +167,7 @@ export function SavedAddressesPage(): ReactElement {
     setIsDefault(false);
     setMapCoords(null);
     setFormError(null);
+    setOpAcknowledged(false);
     setIsFormOpen(true);
   };
 
@@ -172,6 +179,7 @@ export function SavedAddressesPage(): ReactElement {
     setIsDefault(addr.isDefault);
     setMapCoords(addr.lat && addr.lng ? { lat: Number(addr.lat), lng: Number(addr.lng) } : null);
     setFormError(null);
+    setOpAcknowledged(false);
     setIsFormOpen(true);
   };
 
@@ -290,7 +298,13 @@ export function SavedAddressesPage(): ReactElement {
         </div>
       )}
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) setOpAcknowledged(false);
+        }}
+      >
         <DialogContent className="sm:max-w-xl gap-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-playfair text-xl">
@@ -358,15 +372,44 @@ export function SavedAddressesPage(): ReactElement {
 
             <div
               data-testid="order-processing-consent-notice"
-              className="rounded-xl border border-gorola-pine/20 bg-gorola-sand/40 p-3 text-xs text-gorola-charcoal space-y-1"
+              className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs"
             >
-              <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-                <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
-                <span>Order Fulfillment &amp; Location Services</span>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  <span>Order Fulfillment &amp; Location Services</span>
+                </div>
+                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
               </div>
-              <p className="text-gorola-slate leading-relaxed">
+              <p className="text-muted-foreground leading-relaxed">
                 Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
               </p>
+
+              {!hasOrderProcessingConsent ? (
+                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                  <Checkbox
+                    checked={opAcknowledged}
+                    data-testid="order-processing-acknowledge-checkbox"
+                    id="op-ack"
+                    onCheckedChange={(v) => setOpAcknowledged(!!v)}
+                  />
+                  <label
+                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                    htmlFor="op-ack"
+                  >
+                    I have read and understood this notice
+                  </label>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                    <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
+                    Consent Active
+                  </span>
+                  <span className="text-muted-foreground/40">•</span>
+                  <span>Permanent operational requirement</span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -374,7 +417,12 @@ export function SavedAddressesPage(): ReactElement {
             <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={isPending}>
               Cancel
             </Button>
-            <Button className="bg-gorola-pine text-white" onClick={handleSaveAddress} disabled={isPending}>
+            <Button
+              className="bg-gorola-pine text-white"
+              data-testid="save-address-btn"
+              disabled={isPending || (!hasOrderProcessingConsent && !opAcknowledged)}
+              onClick={handleSaveAddress}
+            >
               {isPending ? "Saving..." : "Save Address"}
             </Button>
           </DialogFooter>

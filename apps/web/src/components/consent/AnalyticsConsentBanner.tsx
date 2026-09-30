@@ -2,6 +2,7 @@ import { BarChart3, ShieldCheck } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
@@ -148,6 +149,9 @@ export function AnalyticsConsentBanner(): ReactElement | null {
           <p className="text-xs text-gorola-slate leading-relaxed">
             We collect anonymous performance telemetry to optimize steep hill routing and app responsiveness across Mussoorie. No personal identity is tracked.
           </p>
+          <div className="pt-0.5">
+            <ConsentNoticeModal purpose="ANALYTICS" />
+          </div>
         </div>
 
         <div className="flex shrink-0 items-center gap-2.5 pt-1 md:pt-0">

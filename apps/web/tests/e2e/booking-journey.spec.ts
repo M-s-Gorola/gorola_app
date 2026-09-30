@@ -14,6 +14,10 @@ test.describe('Booking Journey Pipeline E2E', () => {
     await page.goto('http://127.0.0.1:5180/login');
     const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
     if (await consentBtn.isVisible()) {
+      const ackCheckbox = page.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
       await consentBtn.click();
     }
     await page.locator('#buyer-phone').fill(phone);
@@ -49,6 +53,10 @@ test.describe('Booking Journey Pipeline E2E', () => {
       await page.locator('button', { hasText: /Add New|Add your first address/i }).first().click();
       await page.locator('input[name="label"]').fill('E2E Diagnostic Lab');
       await page.locator('[name="landmarkDescription"]').fill('Opposite the Aarna Main Hospital');
+      const opCheckbox = page.locator('[data-testid="order-processing-acknowledge-checkbox"]');
+      if (await opCheckbox.isVisible()) {
+        await opCheckbox.click();
+      }
       await page.locator('button', { hasText: /Save Address/i }).click();
       await expect(page.locator('text=/Address added successfully/i')).toBeVisible({ timeout: 15000 });
     }

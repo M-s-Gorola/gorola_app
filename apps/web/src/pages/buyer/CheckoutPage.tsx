@@ -9,6 +9,8 @@ import {
   type MapCoordinates,
   MUSSOORIE_AREA_CENTER,
   OlaAddressMapPicker as AddressMapPicker} from "@/components/buyer/OlaAddressMapPicker";
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
@@ -91,6 +93,7 @@ export function CheckoutPage(): ReactElement {
   const [addressDefaultSet, setAddressDefaultSet] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
   const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [opAcknowledged, setOpAcknowledged] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const addressesList = addressesQuery.data ?? [];
@@ -507,6 +510,40 @@ export function CheckoutPage(): ReactElement {
                         onCoordinatesChange={handleMapCoordinates}
                       />
                     </div>
+
+                    <div
+                      data-testid="checkout-order-processing-consent"
+                      className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs text-left"
+                    >
+                      <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                        <span>Order Fulfillment &amp; Location Services</span>
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">
+                        Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+                      </p>
+                      
+                      <div className="pt-0.5">
+                        <ConsentNoticeModal purpose="ORDER_PROCESSING" />
+                      </div>
+
+                      {!hasOrderProcessingConsent && (
+                        <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                          <Checkbox
+                            checked={opAcknowledged}
+                            data-testid="order-processing-acknowledge-checkbox"
+                            id="op-ack-checkout"
+                            onCheckedChange={(v) => setOpAcknowledged(!!v)}
+                          />
+                          <label
+                            className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                            htmlFor="op-ack-checkout"
+                          >
+                            I have read and understood this notice
+                          </label>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -516,7 +553,8 @@ export function CheckoutPage(): ReactElement {
               ) : null}
 
               <button
-                className="rounded-full bg-gorola-pine px-6 py-2.5 font-dm-sans text-sm font-semibold text-white hover:bg-gorola-pine/90 transition-colors shadow-sm"
+                className="rounded-full bg-gorola-pine px-6 py-2.5 font-dm-sans text-sm font-semibold text-white hover:bg-gorola-pine/90 transition-colors shadow-sm disabled:opacity-60"
+                disabled={deliveryChoice === "new" && !hasOrderProcessingConsent && !opAcknowledged}
                 onClick={() => {
                   handleContinueFromAddress();
                 }}
@@ -620,7 +658,10 @@ export function CheckoutPage(): ReactElement {
             </div>
 
             <div className="space-y-1 border-t border-gorola-pine/10 pt-3 text-left">
-              <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Delivery Address</p>
+              <div className="flex items-center justify-between">
+                <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Delivery Address</p>
+                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
+              </div>
               <div className="space-y-1 text-left" data-testid="review-delivery-address">
                 {selectedAddressLabel ? (
                   <div className="flex items-center gap-1.5 font-dm-sans text-sm font-bold text-gorola-charcoal">
@@ -640,35 +681,37 @@ export function CheckoutPage(): ReactElement {
               </div>
             </div>
 
-            <div
-              data-testid="checkout-order-processing-consent"
-              className="rounded-xl border border-gorola-pine/20 bg-gorola-sand/40 p-3.5 text-xs text-gorola-charcoal space-y-1.5 text-left"
-            >
-              <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-                <span className="inline-block h-2 w-2 rounded-full bg-gorola-pine" />
-                <span>Order Fulfillment &amp; Location Services</span>
-              </div>
-              <p className="text-gorola-slate leading-relaxed">
-                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
-              </p>
-            </div>
-
-            {/* Only show the marketing opt-in if the user hasn't already granted it */}
+            {/* Rich Marketing Opt-in Card */}
             {!consentsQuery.isLoading && !hasMarketingConsent && (
-              <label
+              <div
                 data-testid="checkout-marketing-opt-in"
-                className="flex items-start gap-2.5 rounded-xl border border-gorola-pine/15 bg-white p-3 text-xs text-gorola-charcoal cursor-pointer hover:border-gorola-pine/30 transition-colors text-left"
+                className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
               >
-                <input
-                  type="checkbox"
-                  checked={marketingOptIn}
-                  onChange={(e) => setMarketingOptIn(e.target.checked)}
-                  className="mt-0.5 rounded border-gorola-pine/30 text-gorola-pine focus:ring-gorola-pine"
-                />
-                <span className="leading-snug text-gorola-slate">
-                  <strong className="text-gorola-charcoal font-medium">Promotions &amp; Seasonal Offers (Optional):</strong> Send me seasonal Mussoorie harvest updates, special hill-station deals, and exclusive coupons.
-                </span>
-              </label>
+                <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
+                  <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                  <span>Promotions &amp; Seasonal Offers (Optional)</span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  Receive text updates on hill-weather flash sales, regional Mussoorie store discounts, and seasonal agricultural harvest coupons.
+                </p>
+                <div className="pt-0.5">
+                  <ConsentNoticeModal purpose="MARKETING_EMAIL" />
+                </div>
+                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                  <Checkbox
+                    checked={marketingOptIn}
+                    data-testid="marketing-consent-checkbox"
+                    id="marketing-optin"
+                    onCheckedChange={(v) => setMarketingOptIn(!!v)}
+                  />
+                  <label
+                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                    htmlFor="marketing-optin"
+                  >
+                    Yes, send me seasonal Mussoorie harvest updates and coupons
+                  </label>
+                </div>
+              </div>
             )}
           </div>
 

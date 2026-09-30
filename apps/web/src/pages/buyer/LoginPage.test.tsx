@@ -67,6 +67,10 @@ function renderLogin(initialEntries: InitialEntry[]): void {
 }
 
 async function advanceToPhoneStep(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const ackCheckbox = screen.queryByTestId("consent-acknowledge-checkbox");
+  if (ackCheckbox) {
+    await user.click(ackCheckbox);
+  }
   const continueBtn = screen.queryByTestId("consent-continue-btn");
   if (continueBtn) {
     await user.click(continueBtn);
@@ -92,20 +96,44 @@ describe("LoginPage", () => {
     vi.useRealTimers();
   });
 
-  it("initial render displays consent notice step and link to /privacy", async () => {
+  it("initial render displays consent notice step, unchecked checkbox, and disabled continue button", async () => {
     renderLogin(["/login"]);
     expect(screen.getByTestId("consent-notice-step")).toBeInTheDocument();
     expect(
       screen.getByText(/We collect your phone number to send a one-time password \(OTP\)/i)
     ).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /privacy policy/i })).toHaveAttribute("href", "/privacy");
+    
+    const checkbox = screen.getByTestId("consent-acknowledge-checkbox");
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).toHaveAttribute("data-state", "unchecked");
+
+    const continueBtn = screen.getByTestId("consent-continue-btn");
+    expect(continueBtn).toBeDisabled();
     expect(screen.queryByLabelText(/phone number/i)).not.toBeInTheDocument();
   });
 
-  it("clicking 'Continue & Accept' displays phone input step", async () => {
+  it("clicking continue button while acknowledgement checkbox is unchecked does not advance step", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderLogin(["/login"]);
-    await advanceToPhoneStep(user);
+    const continueBtn = screen.getByTestId("consent-continue-btn");
+    expect(continueBtn).toBeDisabled();
+    await user.click(continueBtn);
+    expect(screen.queryByLabelText(/phone number/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("consent-notice-step")).toBeInTheDocument();
+  });
+
+  it("checking acknowledgement checkbox enables continue button and clicking it advances to phone step", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderLogin(["/login"]);
+    const checkbox = screen.getByTestId("consent-acknowledge-checkbox");
+    const continueBtn = screen.getByTestId("consent-continue-btn");
+    
+    expect(continueBtn).toBeDisabled();
+    await user.click(checkbox);
+    expect(continueBtn).toBeEnabled();
+
+    await user.click(continueBtn);
     expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
   });
 
@@ -547,5 +575,17 @@ describe("LoginPage", () => {
       expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
       expect(useAuthStore.getState().accessToken).toBeNull();
     });
+  });
+
+  it("renders View Complete Notice trigger on consent step and opens modal on click", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderLogin(["/login"]);
+
+    const noticeBtn = screen.getByTestId("view-notice-btn-OTP_AUTH");
+    expect(noticeBtn).toBeInTheDocument();
+
+    await user.click(noticeBtn);
+    expect(await screen.findByTestId("consent-notice-modal")).toBeInTheDocument();
+    expect(screen.getAllByText(/Authentication & Account Security/i).length).toBeGreaterThanOrEqual(1);
   });
 });
