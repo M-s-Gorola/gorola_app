@@ -3,7 +3,7 @@ import { z } from "zod";
 export const consentPurposeEnum = z.enum([
   "OTP_AUTH",
   "ORDER_PROCESSING",
-  "MARKETING_EMAIL",
+  "MARKETING_COMMS",
   "ANALYTICS"
 ]);
 

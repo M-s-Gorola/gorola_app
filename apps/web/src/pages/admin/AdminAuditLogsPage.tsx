@@ -8,7 +8,7 @@ import {
   RefreshCw
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
@@ -49,6 +49,19 @@ export function AdminAuditLogsPage(): ReactElement {
   const fromFilter = searchParams.get("from") ?? "";
   const toFilter = searchParams.get("to") ?? "";
 
+  // Local input state for search bars to ensure instant responsive typing without lagging
+  const [actionInput, setActionInput] = useState(actionFilter);
+  const [entityTypeInput, setEntityTypeInput] = useState(entityTypeFilter);
+
+  // Sync external changes (e.g. direct navigation, reset)
+  useEffect(() => {
+    setActionInput(searchParams.get("action") ?? "");
+  }, [searchParams.get("action")]);
+
+  useEffect(() => {
+    setEntityTypeInput(searchParams.get("entityType") ?? "");
+  }, [searchParams.get("entityType")]);
+
   // Cursor-based pagination state
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
   const [cursorIndex, setCursorIndex] = useState(0);
@@ -73,6 +86,28 @@ export function AdminAuditLogsPage(): ReactElement {
     setCursors([null]);
     setCursorIndex(0);
   };
+
+  // Debounce Action search (350ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentInUrl = searchParams.get("action") ?? "";
+      if (actionInput.trim() !== currentInUrl) {
+        handleFilterChange("action", actionInput.trim());
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [actionInput]);
+
+  // Debounce Entity Type search (350ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const currentInUrl = searchParams.get("entityType") ?? "";
+      if (entityTypeInput.trim() !== currentInUrl) {
+        handleFilterChange("entityType", entityTypeInput.trim());
+      }
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [entityTypeInput]);
 
   // Fetch audit logs query
   const { data, isLoading, isError, isFetching, refetch } = useQuery<AuditLogsResponse["data"]>({
@@ -226,9 +261,9 @@ export function AdminAuditLogsPage(): ReactElement {
           <input
             type="text"
             placeholder="Search action (e.g. SUSPEND)..."
-            value={actionFilter}
-            onChange={(e) => handleFilterChange("action", e.target.value)}
-            className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-3 py-2 text-xs font-medium text-gorola-charcoal focus:outline-none"
+            value={actionInput}
+            onChange={(e) => setActionInput(e.target.value)}
+            className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-3 py-2 text-xs font-medium text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-200"
           />
         </div>
 
@@ -238,9 +273,9 @@ export function AdminAuditLogsPage(): ReactElement {
           <input
             type="text"
             placeholder="Search entity (e.g. Store)..."
-            value={entityTypeFilter}
-            onChange={(e) => handleFilterChange("entityType", e.target.value)}
-            className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-3 py-2 text-xs font-medium text-gorola-charcoal focus:outline-none"
+            value={entityTypeInput}
+            onChange={(e) => setEntityTypeInput(e.target.value)}
+            className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-3 py-2 text-xs font-medium text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-200"
           />
         </div>
 

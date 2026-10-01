@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Edit2, Eye, EyeOff, Plus, RefreshCw, UserCheck, UserX } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
@@ -14,6 +15,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
 type RiderStoreRelation = {
   storeId: string;
@@ -53,6 +55,8 @@ type StoresListResponse = {
 };
 
 export function AdminRidersPage(): ReactElement {
+  const navigate = useNavigate();
+  const { isSubdomainMode } = resolveSubdomain(typeof window !== "undefined" ? window.location.hostname : "");
   const queryClient = useQueryClient();
 
   // Dialog and confirmation states
@@ -408,9 +412,16 @@ export function AdminRidersPage(): ReactElement {
                     </td>
                     <td className="px-4 py-3 text-right space-x-1.5 whitespace-nowrap">
                       <button
+                        data-testid={`view-details-${rider.id}`}
+                        onClick={() => navigate(getScopedPath(`/admin/riders/${rider.id}`, "admin", isSubdomainMode))}
+                        className="px-2 py-1 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-[10px] font-bold text-gorola-pine transition-all shadow-sm inline-flex items-center gap-1"
+                      >
+                        View Details
+                      </button>
+                      <button
                         data-testid={`edit-stores-${rider.id}`}
                         onClick={() => handleOpenEditForm(rider)}
-                        className="px-2 py-1 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-[10px] font-bold text-gorola-pine transition-all shadow-sm inline-flex items-center gap-1"
+                        className="px-2 py-1 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-[10px] font-bold text-gorola-slate hover:text-gorola-charcoal transition-all shadow-sm inline-flex items-center gap-1"
                       >
                         <Edit2 className="h-3 w-3" />
                         Edit Stores

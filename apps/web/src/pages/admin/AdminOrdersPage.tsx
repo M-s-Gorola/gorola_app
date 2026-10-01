@@ -545,7 +545,7 @@ export function AdminOrdersPage(): ReactElement {
                           <User className="h-4 w-4 text-gorola-slate" />
                           <div>
                             <p className="text-[10px] text-gorola-slate font-bold">Buyer Profile</p>
-                            <p className="text-xs font-black text-gorola-charcoal">{orderDetail.user?.name ?? "Guest"}</p>
+                            <p className="text-xs font-black text-gorola-charcoal">{orderDetail.user?.name || "Registered User"}</p>
                           </div>
                         </div>
 
@@ -602,7 +602,7 @@ export function AdminOrdersPage(): ReactElement {
                             </p>
                             <p className="text-[10px] text-gorola-slate mt-0.5">
                               By {hist.changedBy} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
-                              {hist.note && ` - ${hist.note}`}
+                              {hist.note && !hist.note.toLowerCase().includes("accepted by") && !hist.note.toLowerCase().startsWith("order placed") && ` - ${hist.note}`}
                             </p>
                           </div>
                         ))}

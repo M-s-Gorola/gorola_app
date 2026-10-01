@@ -160,7 +160,8 @@ describe("SavedAddressesPage", () => {
       }));
       expect(apiPostSpy).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
         purpose: "ORDER_PROCESSING",
-        consentVersion: "1.0"
+        consentVersion: "1.0",
+        noticeText: expect.stringMatching(/GPS coordinates.*display name/i)
       }));
     });
   });

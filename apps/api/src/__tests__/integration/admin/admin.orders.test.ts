@@ -411,4 +411,86 @@ describe("Admin Orders Integration Tests", () => {
     expect(response.body).toContain("Order ID");
     expect(response.body).toContain("CSV Store");
   });
+
+  it("GET /api/v1/admin/orders/:id should resolve statusHistory actor names and fallback blank user names", async () => {
+    const store = await db.store.create({
+      data: {
+        name: "Hillside Store",
+        description: "Desc",
+        phone: "+919999999011",
+        address: "Address",
+        storeType: "QUICK_COMMERCE"
+      }
+    });
+
+    const storeOwner = await db.storeOwner.create({
+      data: {
+        storeId: store.id,
+        email: "owner@hillside.com",
+        passwordHash: "hash"
+      }
+    });
+
+    const rider = await db.deliveryRider.create({
+      data: {
+        name: "Hillside Express Rider",
+        phone: "+919876543299",
+        email: "rider@gorola.com",
+        passwordHash: "hash",
+        riderType: "DELIVERY"
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: {
+        name: "", // Unset / optional display name
+        phone: "+919876543213",
+        isVerified: true
+      }
+    });
+
+    const order = await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: store.id,
+        riderId: rider.id,
+        status: "DELIVERED",
+        subtotal: 200.0,
+        deliveryFee: 20.0,
+        total: 220.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Mall Road"
+      }
+    });
+
+    await db.orderStatusHistory.createMany({
+      data: [
+        { orderId: order.id, status: "PLACED", changedBy: `buyer:${buyer.id}`, note: "Order placed" },
+        { orderId: order.id, status: "PREPARING", changedBy: `store-owner:${storeOwner.id}`, note: "Order accepted" },
+        { orderId: order.id, status: "OUT_FOR_DELIVERY", changedBy: `rider:${rider.id}`, note: "Rider dispatched" },
+        { orderId: order.id, status: "DELIVERED", changedBy: `rider:${rider.id}`, note: "Delivered to buyer" }
+      ]
+    });
+
+    const token = await generateAccessToken("admin-123", "ADMIN");
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/orders/${order.id}`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.success).toBe(true);
+
+    // Verify resolved history
+    const history = body.data.statusHistory;
+    expect(history.length).toBe(4);
+    expect(history[0].changedBy).toBe("Buyer (Registered User)");
+    expect(history[1].changedBy).toBe("Store Owner (Hillside Store)");
+    expect(history[2].changedBy).toBe("Rider (Hillside Express Rider)");
+    expect(history[3].changedBy).toBe("Rider (Hillside Express Rider)");
+  });
 });
+

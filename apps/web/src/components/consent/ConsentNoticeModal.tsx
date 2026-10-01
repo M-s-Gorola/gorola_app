@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-export type ConsentPurpose = "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_EMAIL" | "ANALYTICS";
+export type ConsentPurpose = "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
 
 interface NoticeContent {
   title: string;
@@ -47,28 +47,30 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
       "We process your location and transaction details to calculate accurate delivery routes, coordinate with local fulfillment hubs, assign delivery riders, and process electronic payments.",
     dataCollected: [
       "Delivery Address & Landmark Notes",
-      "Real-time GPS Coordinates",
-      "Transaction & Billing Details (excluding raw credit card data/CVV)"
+      "GPS Coordinates (saved address pin & order delivery coordinates)",
+      "Display Name (if you have set one) — shared with your assigned store partner and delivery rider for order identification",
+      "Transaction & Billing Details (excluding raw credit card data/CVV) — only when online payment is selected"
     ],
     thirdParties:
       "Shared strictly on a need-to-know basis with: Ola Maps (spatial routing and geolocation), Razorpay (secure payment processing — only when online payment is selected), Local Store Partners & Assigned Delivery Riders (physical order fulfillment).",
     retention:
-      "Transaction records retained for 7 years under Indian GST and financial accounting law. Live GPS streams deleted immediately upon successful delivery verification.",
+      "Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by Ola Maps and discarded.",
     rights:
       "You may update your saved addresses at any time. Contact dpo@gorola.com. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI)."
   },
-  MARKETING_EMAIL: {
+  MARKETING_COMMS: {
     title: "Promotions & Seasonal Offers",
     version: "1.0",
     effectiveDate: "29/09/2026",
     purpose:
-      "We process your contact details and historical purchase categories to send you targeted seasonal Mussoorie harvest updates, hill-station discounts, and exclusive store coupons.",
+      "We process your phone number and historical purchase categories to send you targeted seasonal Mussoorie harvest updates, hill-station discounts, and exclusive store coupons via SMS and app notifications.",
     dataCollected: [
-      "Phone Number",
-      "Purchase History & Regional Location (Mussoorie cluster)"
+      "Phone Number — used to send SMS promotional messages",
+      "Display Name (if you have set one) — used for personalised greetings",
+      "Purchase History & Regional Location (Mussoorie cluster) — used to personalise offers"
     ],
     thirdParties:
-      "Processed purely through internal communication engines. No data is shared with external advertising networks or third-party marketers.",
+      "Promotional messages are sent via our authorised SMS gateway partners. No data is shared with external advertising networks or third-party marketers. Your phone number is never sold.",
     retention:
       "Processed for marketing until you withdraw your consent. Upon withdrawal, scrubbed from all promotional distributions within 48 hours.",
     rights:

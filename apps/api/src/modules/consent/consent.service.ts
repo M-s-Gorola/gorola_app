@@ -16,7 +16,7 @@ export function formatConsentDTO(c: ConsentLog): ConsentDTO {
     id: c.id,
     isWithdrawn: c.isWithdrawn,
     noticeText: c.noticeText,
-    purpose: c.purpose,
+    purpose: c.purpose as ConsentPurpose,
     updatedAt: c.updatedAt.toISOString(),
     userId: c.userId,
     withdrawnAt: c.withdrawnAt?.toISOString() ?? null

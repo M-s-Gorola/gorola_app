@@ -544,17 +544,27 @@ enum EarningType {
   PER_KM
 }
 
-enum ConsentPurpose {
-  OTP_AUTH
-  ORDER_PROCESSING
-  MARKETING_EMAIL
-  ANALYTICS
+model ConsentPurposeConfig {
+  key              String       @id
+  displayName      String
+  description      String
+  isEssential      Boolean      @default(false)
+  retentionSummary String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  consents         ConsentLog[]
 }
+
+
+
+
+
 
 model ConsentLog {
   id             String         @id @default(cuid())
   userId         String
-  purpose        ConsentPurpose
+  purpose        String
+  purposeConfig  ConsentPurposeConfig @relation(fields: [purpose], references: [key])
   consentVersion String         @default("1.0")
   noticeText     String
   ipAddress      String?

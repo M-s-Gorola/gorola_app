@@ -12,7 +12,7 @@ import { queryClient } from "@/lib/query-client";
 // Raw shape returned by GET /api/v1/consent
 type ConsentLogRow = {
   id: string;
-  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_EMAIL" | "ANALYTICS";
+  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
   consentVersion: string;
   noticeText: string;
   isWithdrawn: boolean;
@@ -42,7 +42,7 @@ const PURPOSE_META: Record<ConsentPurpose, { title: string; description: string;
     description: "Required to share your address and GPS coordinates with Ola Maps, store partners, and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay.",
     essential: true
   },
-  MARKETING_EMAIL: {
+  MARKETING_COMMS: {
     title: "Promotions & Seasonal Offers",
     description: "Receive updates on hill weather flash sales, seasonal discounts, and exclusive coupons from Mussoorie stores.",
     essential: false
@@ -57,7 +57,7 @@ const PURPOSE_META: Record<ConsentPurpose, { title: string; description: string;
 const CANONICAL_ORDER: ConsentPurpose[] = [
   "OTP_AUTH",
   "ORDER_PROCESSING",
-  "MARKETING_EMAIL",
+  "MARKETING_COMMS",
   "ANALYTICS"
 ];
 

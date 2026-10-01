@@ -82,7 +82,7 @@ export function SavedAddressesPage(): ReactElement {
         const p = api?.post("/api/v1/consent", {
           purpose: "ORDER_PROCESSING",
           consentVersion: "1.0",
-          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
         });
         if (p && typeof p.catch === "function") {
           p.catch(() => {});
@@ -109,7 +109,7 @@ export function SavedAddressesPage(): ReactElement {
         const p = api?.post("/api/v1/consent", {
           purpose: "ORDER_PROCESSING",
           consentVersion: "1.0",
-          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
         });
         if (p && typeof p.catch === "function") {
           p.catch(() => {});

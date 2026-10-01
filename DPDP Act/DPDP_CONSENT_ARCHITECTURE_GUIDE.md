@@ -1,10 +1,10 @@
 # GoRola DPDP Act 2023 — Comprehensive Consent & Data Processing Architecture Guide
 
-> **Document Version:** 1.6  
+> **Document Version:** 1.7  
 > **Applicable Law:** Digital Personal Data Protection (DPDP) Act, 2023 (India)  
 > **Entity (Data Fiduciary):** GoRola (Mountain Commerce Operations)  
 > **Audience:** Product Engineering, Compliance, Legal & Operations  
-> **Last Updated:** 2026-09-30 — Updated Section 2, 5 & 6 with Phase 8.2.9 Consent UI Architecture (Statutory 5-Section `ConsentNoticeModal`, Inside-Card Read-Acknowledgement Checkboxes for Essential Consents, Option 2 Active Status Rendering, and Address-Bound Fulfillment Consents).
+> **Last Updated:** 2026-10-02 — Phase 8.3.4 DPDP Architecture Overhaul (Dynamic `ConsentPurposeConfig` Database Configuration Table, Multi-Channel `MARKETING_COMMS` Standardisation, Precise GPS/Display Name Statutory Notices, and Admin Consent Auditing Panel).
 
 ---
 
@@ -16,7 +16,7 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 2. **Clear & Prominent Notice (Section 5(2)):** Before or at the time of requesting consent, the user must receive an easily understandable notice describing the personal data collected, the purpose, third-party processors, retention periods, and DPBI complaint routes.
 3. **Unbundled & Non-Coercive Consent (Section 6(1)):** Essential services (order delivery) must never be conditioned on consenting to non-essential services (marketing or analytics).
 4. **Explicit Opt-In & Read Acknowledgement:** Optional consents must default to **unchecked / opt-out**. Essential consents require an explicit read-acknowledgement (`[ ] I have read and understood this notice`) at the point of data entry.
-5. **Immutable Audit Trail:** All consent grants and withdrawals are recorded with UTC timestamps, consent version, notice text, and IP address in an append-only ledger (`ConsentLog`).
+5. **Immutable Audit Trail:** All consent grants and withdrawals are recorded with UTC timestamps, consent version, notice text, and IP address in an append-only ledger (`ConsentLog`) referencing the `ConsentPurposeConfig` configuration table.
 
 ---
 
@@ -32,17 +32,17 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
                v                   v                   v                    v
      +──────────────────+ +─────────────────+ +─────────────────+ +────────────────+
      | 1. OTP_AUTH      | | 2. ORDER_       | | 3. MARKETING_   | | 4. ANALYTICS   |
-     |                  | |    PROCESSING   | |    EMAIL        | |                |
+     |                  | |    PROCESSING   | |    COMMS        | |                |
      | (Essential)      | | (Essential)     | | (Optional)      | | (Optional)     |
      +────────┬─────────+ +────────┬────────+ +────────┬────────+ +────────┬───────+
               |                    |                   |                   |
               v                    v                   v                   v
      +──────────────────+ +─────────────────+ +─────────────────+ +────────────────+
-     | SUB-PROCESSOR:   | | SUB-PROCESSORS: | | PROCESSOR:      | | PROCESSOR:     |
-     | • Exotel SMS     | | • Ola Maps      | | • Marketing     | | • Anonymous    |
-     |   Gateway        | | • Razorpay      | |   Mail Engine   | |   Route        |
-     |                  | | • Store Partners| |                 | |   Telemetry    |
-     |                  | | • Riders        | |                 | |                |
+     | SUB-PROCESSOR:   | | SUB-PROCESSORS: | | PROCESSORS:     | | PROCESSOR:     |
+     | • Exotel SMS     | | • Ola Maps      | | • Exotel SMS /  | | • Anonymous    |
+     |   Gateway        | | • Razorpay      | |   DLT Gateways  | |   Route        |
+     |                  | | • Store Partners| | • Internal Comms| |   Telemetry    |
+     |                  | | • Riders        | |   Engine        | |                |
      +──────────────────+ +─────────────────+ +─────────────────+ +────────────────+
 ```
 
@@ -52,7 +52,7 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 
 | Property | Specification |
 |---|---|
-| **Consent Purpose Enum** | `OTP_AUTH` |
+| **Consent Purpose Key** | `OTP_AUTH` (relational record in `ConsentPurposeConfig`) |
 | **Legal Basis** | Consent / Necessary for Account Verification & Authentication (DPDP Sec 5(2)) |
 | **Type** | **Essential** (Required to access buyer account) |
 | **Data Collected** | Mobile phone number (`phone`, blind indexed as `phoneHash`, AES-256-GCM encrypted at rest) |
@@ -68,32 +68,32 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 
 | Property | Specification |
 |---|---|
-| **Consent Purpose Enum** | `ORDER_PROCESSING` |
+| **Consent Purpose Key** | `ORDER_PROCESSING` (relational record in `ConsentPurposeConfig`) |
 | **Legal Basis** | Contractual Necessity & Explicit Consent for Fulfillment |
 | **Type** | **Essential** (Required to fulfill grocery/medicine orders and home visits) |
-| **Data Collected** | Full Name, Delivery Address, GPS Coordinates (`lat`, `lng`), Order Item Details, Payment Transaction Identifiers (online payment only) |
+| **Data Collected** | Display Name (if provided by user), Delivery Address, GPS Coordinates (`lat`, `lng`), Order Item Details, Payment Transaction Identifiers (online payment only) |
 | **Third-Party Sub-processors & Partners** | 1. **Ola Maps (Navigation):** Geocoding and steep hill navigation routing — applies to ALL orders.<br>2. **Local Store Partners (Merchants):** Packing and preparing grocery/medicine items — applies to ALL orders.<br>3. **Assigned Delivery Riders:** Physical last-mile transport to user address — applies to ALL orders.<br>4. **Razorpay (Payment Gateway):** Payment processing, UPI, Card tokenization & refund handling — **applies ONLY when UPI or Card payment method is selected. Never invoked for Cash on Delivery (COD) orders.** |
 | **Canonical Notice Text (used at ALL touchpoints)** | *"Your address, landmark notes, and GPS coordinates are shared with **Ola Maps** for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via **Razorpay**. Governed by India's DPDP Act 2023."* |
-| **Why one notice covers COD and online payment users** | The **"if you choose online payment"** conditional clause is legally accurate for all users. COD users read it — the condition never triggers for them, Razorpay never processes their data. Online payment users read it — the condition applies and they are pre-disclosed before any payment occurs. See Section 8 for full rationale. |
+| **Data Retention** | Saved addresses and associated GPS coordinates are stored until deleted by the user. Order fulfillment GPS coordinates (`deliveryLat`, `deliveryLng`) are nulled upon account erasure; financial transaction records (order items, GST totals) are retained for 7 years under Indian GST statutory mandates. |
 | **Where it Appears in UI** | 1. **Saved Addresses Page (`/account/addresses`):** In the Add/Edit address dialog.<br>2. **Checkout Page (`/checkout`):** In the New Address entry card.<br>3. **Booking Timeslot Page (`/booking`):** In the Add Address dialog.<br>4. **Account Privacy Dashboard (`/account/privacy`):** Unified `ORDER_PROCESSING` status card (shows `🟢 Active` or `🟡 Pending — Activated when you save an address...`). |
 | **Checkbox & Option 2 State Handling** | **First-Time / Unconsented State:** Full notice card with `[ ] I have read and understood this notice` checkbox inside the address dialog. "Save Address" button is disabled until checked.<br>**Consented State (Option 2):** When saving a subsequent address, the notice card displays `🟢 Consent Active • Permanent operational requirement` with `<ConsentNoticeModal purpose="ORDER_PROCESSING" />` and no blocking checkbox. Review steps omit redundant cards for frictionless repeat orders. |
 | **Frequency** | Recorded **once** on first address save or checkout (whichever comes first). Subsequent checkouts, address edits, and repeat orders do **not** re-trigger consent. Reuse the established `ConsentLog` record unless the privacy policy version is bumped. |
 
 ---
 
-### Pipeline 3: `MARKETING_EMAIL` (Promotions, Weather Sales & Offers)
+### Pipeline 3: `MARKETING_COMMS` (Promotions, Seasonal Hill-Station Offers & Discounts)
 
 | Property | Specification |
 |---|---|
-| **Consent Purpose Enum** | `MARKETING_EMAIL` |
+| **Consent Purpose Key** | `MARKETING_COMMS` (relational record in `ConsentPurposeConfig`) |
 | **Legal Basis** | Explicit Opt-In Consent (DPDP Section 6(1)) |
 | **Type** | **Optional / Non-Essential** (Cannot block checkout or login) |
-| **Data Collected** | Mobile phone number, User First Name, Preferred Store Category |
-| **Third-Party Processors** | Internal Marketing Engine & Communication Matrix (no external ad networks) |
-| **Where it Appears in UI** | 1. **Checkout & Booking Review Screens:** Rich card with `<ConsentNoticeModal purpose="MARKETING_EMAIL" />` and un-ticked `[ ] Yes, send me seasonal Mussoorie harvest updates...` checkbox.<br>2. **Account Privacy Dashboard (`/account/privacy`):** Interactive **Opt In** / **Withdraw** toggle card. |
+| **Data Collected** | Mobile phone number, Display Name (if provided), Preferred Store Categories |
+| **Third-Party Processors** | Internal Marketing Engine & Authorized DLT-Registered SMS Gateways (e.g. Exotel) for promotional SMS broadcasts. (Zero sharing with external programmatic ad networks). |
+| **Where it Appears in UI** | 1. **Checkout & Booking Review Screens:** Rich card with `<ConsentNoticeModal purpose="MARKETING_COMMS" />` and un-ticked `[ ] Yes, send me seasonal Mussoorie harvest updates and discounts...` checkbox.<br>2. **Account Privacy Dashboard (`/account/privacy`):** Interactive **Opt In** / **Withdraw** toggle card. |
 | **Checkbox vs Option 2 State** | **Unconsented:** Un-ticked checkbox defaulting to OFF.<br>**Consented (Option 2):** Card displays `🟢 Consent Active • Manage or withdraw in Privacy Settings`. |
-| **Frequency** | User can independently Opt-In (`POST /api/v1/consent`) or Withdraw (`DELETE /api/v1/consent/MARKETING_EMAIL`) at any time in real time. |
-| **Withdrawal / Opt-Out** | 1-click self-serve withdrawal in `/account/privacy` Privacy Settings. Immediately stops promotional dispatches. |
+| **Frequency** | User can independently Opt-In (`POST /api/v1/consent`) or Withdraw (`DELETE /api/v1/consent/MARKETING_COMMS`) at any time in real time. |
+| **Withdrawal / Opt-Out** | 1-click self-serve withdrawal in `/account/privacy` Privacy Settings. Immediately scrubs user from all promotional distribution queues within 48 hours. |
 
 ---
 
@@ -101,7 +101,7 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 
 | Property | Specification |
 |---|---|
-| **Consent Purpose Enum** | `ANALYTICS` |
+| **Consent Purpose Key** | `ANALYTICS` (relational record in `ConsentPurposeConfig`) |
 | **Legal Basis** | Prior Notice & Opt-In Consent for Telemetry |
 | **Type** | **Optional** |
 | **Data Collected** | Route latency telemetry, client performance metrics, screen load timings. **Zero PII or personal identity is tracked.** |
@@ -114,11 +114,11 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 
 ## 5. Checkboxes vs Affirmative Action Buttons
 
-| Scenario | Legal DPDP Rule | GoRola Implementation (Phase 8.2.9) |
+| Scenario | Legal DPDP Rule | GoRola Implementation (Phase 8.2.9 & 8.3.4) |
 |---|---|---|
 | **Essential Service (Initial Data Collection)** (e.g. Login OTP, First Address Save) | DPDP Sec 5(2) requires demonstrably seen notice prior to data collection. | **Embedded Inside-Card Checkbox** (`[ ] I have read and understood this notice`). Action button strictly disabled until checked. |
 | **Essential Service (Subsequent / Already Consented)** (e.g. Saving a 2nd address, Re-login) | Consent remains valid across account lifetime unless withdrawn/deleted. | **Option 2 Active Status Card:** Displays `🟢 Consent Active • Permanent operational requirement` + `<ConsentNoticeModal />` (No blocking checkbox). |
-| **Optional / Promotional** (e.g. Marketing emails, seasonal coupons) | **Strictly Prohibited from bundling or pre-ticking.** User must deliberately opt in. | **Un-ticked Opt-In Checkbox** (defaults to false) or explicit **Toggle Switch** in Profile. |
+| **Optional / Promotional** (e.g. Marketing communications, seasonal coupons) | **Strictly Prohibited from bundling or pre-ticking.** User must deliberately opt in. | **Un-ticked Opt-In Checkbox** (defaults to false) or explicit **Toggle Switch** in Profile. |
 | **Telemetry / Tracking** (e.g. Performance analytics) | Prior notice with equal Accept and Decline options. | **Accept vs Decline Modal Banner Buttons** + `<ConsentNoticeModal />`. |
 
 ---
@@ -130,7 +130,7 @@ The `/account/privacy` (Privacy & Consent Preferences) page renders **one unifie
 
 1. **`OTP_AUTH`** → Status: `🟢 Active (Essential)` — Active since account creation.
 2. **`ORDER_PROCESSING`** → Status: `🟢 Active (Essential)` (or `🟡 Pending — Activated when you save an address or place your first order` for brand new accounts).
-3. **`MARKETING_EMAIL`** → Status: `Active` / `Withdrawn` (Interactive Opt-In / Withdraw Button + modal).
+3. **`MARKETING_COMMS`** → Status: `Active` / `Withdrawn` (Interactive Opt-In / Withdraw Button + modal).
 4. **`ANALYTICS`** → Status: `Active` / `Withdrawn` (Interactive Opt-In / Withdraw Button + modal).
 
 ### The Statutory 5-Section Notice Modal (`<ConsentNoticeModal />`)
@@ -667,6 +667,106 @@ When 30 days elapse without account reactivation, the automated background worke
 | `DataNomineeSection.test.tsx` | Web Component | Fetches existing nominee, validates form inputs, saves mutations, and handles 1-click clearing. | ✅ PASS |
 | `DangerZoneSection.test.tsx` | Web Component | Displays destructive deletion card, opens confirmation dialog with 30-day notice, and logs out on confirm. | ✅ PASS |
 | `PrivacySettingsPage.test.tsx` | Web Page | Renders all 4 DPDP cards + Portability + Nominee + Danger Zone in responsive layout. | ✅ PASS |
+
+---
+
+## 13. Phase 8.3.4 — Consent Architecture Overhaul & Admin Consent Auditing Panel
+
+> **Statutory Basis:** DPDP Act 2023 Section 5 (Notice & Purpose Specification), Section 6 (Consent Validity & Withdrawal), Section 9 (Processing of Personal Data), Section 11 (Auditability & Access).  
+> **Status:** IMPLEMENTED & TESTED (TDD Order).
+
+### 13.1 — Transition from Postgres Enum to `ConsentPurposeConfig` Relational Table
+
+```
++─────────────────────────────────────────+        +─────────────────────────────────────────+
+|         ConsentPurposeConfig            |        |               ConsentLog                |
++─────────────────────────────────────────+        +─────────────────────────────────────────+
+| key (PK)              TEXT              |<───────| purpose (FK)          TEXT              |
+| displayName           TEXT              | 1    N | id (PK)               TEXT              |
+| description           TEXT              |        | userId (FK User)      TEXT              |
+| isEssential           BOOLEAN           |        | consentVersion        TEXT              |
+| retentionSummary      TEXT              |        | noticeText            TEXT              |
+| createdAt             TIMESTAMP         |        | ipAddress             TEXT              |
+| updatedAt             TIMESTAMP         |        | isWithdrawn           BOOLEAN           |
++─────────────────────────────────────────+        | withdrawnAt           TIMESTAMP?        |
+                                                   | createdAt             TIMESTAMP         |
+                                                   +─────────────────────────────────────────+
+```
+
+1. **Why Table over Enum:**  
+   PostgreSQL ENUM types create significant deployment friction and DDL table locks when adding or modifying purpose configurations. Storing consent purposes in the `ConsentPurposeConfig` relational table allows zero-downtime additions, dynamic descriptions, and flexible retention duration tracking without database migrations.
+2. **Canonical Seeded Configuration:**
+   - `'OTP_AUTH'`: Essential authentication consent.
+   - `'ORDER_PROCESSING'`: Essential fulfillment & navigation consent.
+   - `'MARKETING_COMMS'`: Optional multi-channel promotional consent (renamed from `MARKETING_EMAIL`).
+   - `'ANALYTICS'`: Optional telemetry & performance consent.
+3. **Foreign Key Integrity:**  
+   `ConsentLog.purpose` is constrained by a relational Foreign Key to `ConsentPurposeConfig.key`, guaranteeing that invalid or unregistered purpose strings cannot be inserted into the immutable ledger.
+
+---
+
+### 13.2 — Multi-Channel Standardisation: `MARKETING_COMMS`
+
+GoRola delivers hill-station discounts, seasonal flash sales, and order confirmations through **SMS** (via DLT-registered Exotel gateways) and transactional notifications. The legacy identifier `MARKETING_EMAIL` was an inaccurate misnomer for a mobile-first platform without marketing email newsletters.  
+All database records, API routes, Zod schemas, React components, and test suites have been standardized on `MARKETING_COMMS`.
+
+---
+
+### 13.3 — Precision Statutory Notice Text
+
+Statutory notices at all touchpoints have been audited and updated to ensure strict truth-in-disclosure:
+1. **GPS & Location Retention:** Clarified that delivery address and landmark GPS coordinates are stored until user address deletion, while order fulfillment GPS markers (`deliveryLat/Lng`) are retained during the account lifecycle and nulled upon account erasure. Tax transaction records are preserved for 7 years under Indian GST obligations.
+2. **Display Name Disclosure:** Clarified that display names are optional ("Display Name (if you have set one)"). If a user does not configure a name, only their verified mobile phone number is processed.
+3. **DLT SMS Gateways:** Disclosed that SMS verification and promotional communications are transmitted via DLT-authorized telecom gateways.
+
+---
+
+### 13.4 — Admin Consent Auditing API (`GET /api/v1/admin/users/:id/consents`)
+
+To satisfy administrative inquiry requirements and Data Protection Board compliance requests, a dedicated auditing endpoint is exposed:
+- **Route:** `GET /api/v1/admin/users/:id/consents?page=1&limit=20`
+- **RBAC:** Strictly restricted to authenticated `ADMIN` role (`authenticateToken`, `requireRole(ActorRole.ADMIN)`).
+- **Response Structure:**
+  ```json
+  {
+    "success": true,
+    "data": {
+      "summary": [
+        { "purpose": "OTP_AUTH", "displayName": "Authentication & Account Security", "isEssential": true, "status": "Active" },
+        { "purpose": "ORDER_PROCESSING", "displayName": "Order Fulfillment & Location Services", "isEssential": true, "status": "Active" },
+        { "purpose": "MARKETING_COMMS", "displayName": "Promotions & Seasonal Offers", "isEssential": false, "status": "Withdrawn" },
+        { "purpose": "ANALYTICS", "displayName": "Usage & Performance Analytics", "isEssential": false, "status": "Never Given" }
+      ],
+      "logs": [
+        {
+          "id": "cuid...",
+          "purpose": "MARKETING_COMMS",
+          "consentVersion": "1.0",
+          "noticeText": "...",
+          "ipAddress": "192.168.1.1",
+          "isWithdrawn": true,
+          "withdrawnAt": "2026-10-01T20:00:00.000Z",
+          "createdAt": "2026-10-01T19:00:00.000Z"
+        }
+      ],
+      "total": 12,
+      "page": 1,
+      "limit": 20,
+      "totalPages": 1
+    }
+  }
+  ```
+
+---
+
+### 13.5 — Admin Platform Users Detail Drawer: Consent & Privacy Section
+
+Mounted directly inside the Admin Panel Platform Users detail drawer (`apps/web/src/pages/admin/AdminUsersPage.tsx`):
+1. **Summary Status Table (`data-testid="consent-summary-section"`):**  
+   4-row status summary for `OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS` displaying `Active` (green badge), `Withdrawn` (amber badge), or `Never Given` (gray badge).
+2. **Expandable Audit Log (`data-testid="consent-log-toggle"` & `data-testid="consent-log-table"`):**  
+   Clicking "Show full log (N events)" reveals the paginated history of all `ConsentLog` mutations with purpose, event type (Granted / Withdrawn), formatted UTC date, and masked IP address.
+
 
 
 

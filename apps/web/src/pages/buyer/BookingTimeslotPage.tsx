@@ -102,7 +102,7 @@ export function BookingTimeslotPage(): ReactElement {
     (c) => c.purpose === "ORDER_PROCESSING" && !c.isWithdrawn
   );
   const hasMarketingConsent = activeConsents.some(
-    (c) => c.purpose === "MARKETING_EMAIL" && !c.isWithdrawn
+    (c) => c.purpose === "MARKETING_COMMS" && !c.isWithdrawn
   );
 
   const createMutation = useMutation({
@@ -122,7 +122,7 @@ export function BookingTimeslotPage(): ReactElement {
         const p = api?.post("/api/v1/consent", {
           purpose: "ORDER_PROCESSING",
           consentVersion: "1.0",
-          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
         });
         if (p && typeof p.catch === "function") {
           p.catch(() => {});
@@ -352,7 +352,7 @@ export function BookingTimeslotPage(): ReactElement {
           const p = api?.post("/api/v1/consent", {
             purpose: "ORDER_PROCESSING",
             consentVersion: "1.0",
-            noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+            noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
           });
           if (p && typeof p.catch === "function") {
             p.catch(() => {});
@@ -362,12 +362,12 @@ export function BookingTimeslotPage(): ReactElement {
         }
       }
 
-      // Record MARKETING_EMAIL only if the user explicitly opted in this session
+      // Record MARKETING_COMMS only if the user explicitly opted in this session
       // and they haven't already granted it previously.
       if (marketingOptIn && !hasMarketingConsent) {
         try {
           const p2 = api?.post("/api/v1/consent", {
-            purpose: "MARKETING_EMAIL",
+            purpose: "MARKETING_COMMS",
             consentVersion: "1.0",
             noticeText: "You agreed to receive promotional offers and seasonal discounts."
           });
@@ -695,7 +695,7 @@ export function BookingTimeslotPage(): ReactElement {
                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
                 <span>Promotions &amp; Seasonal Offers (Optional)</span>
               </div>
-              <ConsentNoticeModal purpose="MARKETING_EMAIL" />
+              <ConsentNoticeModal purpose="MARKETING_COMMS" />
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
               Receive text updates on hill-weather flash sales, regional Mussoorie store discounts, and seasonal agricultural harvest coupons.

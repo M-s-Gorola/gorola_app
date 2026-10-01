@@ -83,7 +83,7 @@ function displayCountdown(seconds: number): string {
 }
 
 const CONSENT_NOTICE_TEXT =
-  "We collect your phone number to send a one-time password (OTP) and authenticate your account.";
+  "We collect your phone number to send you a One-Time Password (OTP) and authenticate your account. Your phone number is shared with our authorised SMS gateway partner solely for OTP delivery.";
 
 export function LoginPage(): ReactElement {
   const navigate = useNavigate();

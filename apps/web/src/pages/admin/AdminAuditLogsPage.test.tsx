@@ -138,4 +138,31 @@ describe("AdminAuditLogsPage", () => {
       );
     });
   });
+
+  it("debounces action and entity search inputs before querying", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: { items: [], nextCursor: null }
+      }
+    });
+
+    renderAdminAuditLogs();
+
+    expect(await screen.findByText("Platform Audit Logs")).toBeInTheDocument();
+
+    const actionInput = screen.getByPlaceholderText("Search action (e.g. SUSPEND)...");
+    fireEvent.change(actionInput, { target: { value: "SUSPEND" } });
+
+    // Should update input immediately
+    expect((actionInput as HTMLInputElement).value).toBe("SUSPEND");
+
+    // Debounce wait
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(
+        expect.stringContaining("action=SUSPEND"),
+        undefined
+      );
+    }, { timeout: 1500 });
+  });
 });

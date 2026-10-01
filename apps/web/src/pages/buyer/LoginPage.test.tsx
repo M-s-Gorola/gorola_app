@@ -244,7 +244,7 @@ describe("LoginPage", () => {
       });
       expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
         consentVersion: "1.0",
-        noticeText: expect.any(String),
+        noticeText: expect.stringMatching(/One-Time Password.*SMS gateway partner/i),
         purpose: "OTP_AUTH"
       });
     });

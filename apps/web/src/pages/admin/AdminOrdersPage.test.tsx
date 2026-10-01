@@ -213,4 +213,66 @@ describe("AdminOrdersPage", () => {
       });
     });
   });
+
+  it("renders 'Registered User' when buyer name is empty and renders resolved actors in timeline", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-9999",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 1,
+            total: 100.0,
+            status: "DELIVERED",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-1", name: "Dairy Plaza" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-9999",
+        status: "DELIVERED",
+        subtotal: 90.0,
+        deliveryFee: 10.0,
+        total: 100.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near Mall",
+        flatRoom: "Flat 1",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "", phone: "+919999999001" }, // Empty string
+        store: { name: "Dairy Plaza", phone: "+91000" },
+        items: [
+          { id: "item-1", productName: "Butter", variantLabel: "500g", price: 90.0, quantity: 1 }
+        ],
+        statusHistory: [
+          { id: "hist-1", status: "PLACED", changedBy: "Buyer (Registered User)", changedAt: "2026-06-04T12:00:00.000Z" },
+          { id: "hist-2", status: "PREPARING", changedBy: "Store Owner (Dairy Plaza)", changedAt: "2026-06-04T12:05:00.000Z" }
+        ],
+        riderName: "Rider Bob"
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-9999")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-9999"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(await within(modal).findByText("Registered User")).toBeInTheDocument();
+    expect(within(modal).getByText(/By Buyer \(Registered User\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/By Store Owner \(Dairy Plaza\)/)).toBeInTheDocument();
+  });
 });
+

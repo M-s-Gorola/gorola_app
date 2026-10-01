@@ -269,4 +269,138 @@ describe("Admin Riders Integration Tests", () => {
     expect(updatedRider?.stores?.[0]?.storeId).toBe(qcStore2.id);
     expect(updatedRider?.stores?.[0]?.isPrimary).toBe(true);
   });
+
+  it("GET /api/v1/admin/riders/:id should return detailed rider profile and metrics", async () => {
+    const rider = await db.deliveryRider.create({
+      data: {
+        name: "Express Rider",
+        phone: "+919000000015",
+        email: "express.rider@gorola.in",
+        passwordHash: "hash123",
+        riderType: "DELIVERY",
+        isActive: true,
+        stores: {
+          create: {
+            storeId: qcStore.id,
+            isPrimary: true
+          }
+        }
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: { name: "Buyer 1", phone: "+919876543209", isVerified: true }
+    });
+
+    // Create 2 completed orders with earnings
+    const order1 = await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: qcStore.id,
+        riderId: rider.id,
+        status: "DELIVERED",
+        subtotal: 300,
+        deliveryFee: 30,
+        total: 330,
+        paymentMethod: "COD",
+        landmarkDescription: "Loc 1"
+      }
+    });
+
+    await db.riderEarning.create({
+      data: {
+        riderId: rider.id,
+        orderId: order1.id,
+        amount: 25.0
+      }
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/riders/${rider.id}`,
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.id).toBe(rider.id);
+    expect(body.data.name).toBe("Express Rider");
+    expect(body.data.email).toBe("express.rider@gorola.in");
+    expect(body.data.maskedPhone).toBe("*********0015");
+    expect(body.data.primaryStoreId).toBe(qcStore.id);
+    expect(body.data.primaryStoreName).toBe(qcStore.name);
+    expect(body.data.totalDeliveries).toBe(1);
+    expect(body.data.totalEarnings).toBe(25);
+  });
+
+  it("GET /api/v1/admin/riders/:id should return 404 for non-existent rider ID", async () => {
+    const response = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/riders/nonexistent_rider_id_123",
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+
+    expect(response.statusCode).toBe(404);
+  });
+
+  it("GET /api/v1/admin/riders/:id/orders should return paginated orders delivered by rider", async () => {
+    const rider = await db.deliveryRider.create({
+      data: {
+        name: "Order Test Rider",
+        phone: "+919000000016",
+        email: "order.rider@gorola.in",
+        passwordHash: "hash123",
+        riderType: "DELIVERY",
+        isActive: true
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: { name: "Buyer 2", phone: "+919876543210", isVerified: true }
+    });
+
+    await db.order.createMany({
+      data: [
+        {
+          userId: buyer.id,
+          storeId: qcStore.id,
+          riderId: rider.id,
+          status: "DELIVERED",
+          subtotal: 100,
+          deliveryFee: 20,
+          total: 120,
+          paymentMethod: "COD",
+          landmarkDescription: "Loc A"
+        },
+        {
+          userId: buyer.id,
+          storeId: qcStore.id,
+          riderId: rider.id,
+          status: "DELIVERED",
+          subtotal: 200,
+          deliveryFee: 20,
+          total: 220,
+          paymentMethod: "UPI",
+          landmarkDescription: "Loc B"
+        }
+      ]
+    });
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/riders/${rider.id}/orders?page=1&limit=1`,
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = response.json();
+    expect(body.success).toBe(true);
+    expect(body.data.total).toBe(2);
+    expect(body.data.totalPages).toBe(2);
+    expect(body.data.page).toBe(1);
+    expect(body.data.items).toHaveLength(1);
+    expect(body.data.items[0].storeName).toBe(qcStore.name);
+  });
 });
+

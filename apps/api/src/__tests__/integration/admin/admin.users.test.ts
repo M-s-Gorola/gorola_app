@@ -291,4 +291,288 @@ describe("Admin Users Integration Tests", () => {
     const refreshSuccess = await authService.refreshToken({ refreshToken: "mock-refresh-token" });
     expect(refreshSuccess.accessToken).toBeDefined();
   });
+
+  describe("GET /api/v1/admin/users/:id/consents (DPDP 8.3.4.3)", () => {
+    it("returns consent summary and paginated logs for a user with admin JWT", async () => {
+      const user = await db.user.create({
+        data: {
+          name: "Consent Audit User",
+          phone: "+919876501111",
+          isVerified: true
+        }
+      });
+
+      // Create 2 consent log rows: 1 active OTP_AUTH, 1 withdrawn MARKETING_COMMS
+      await db.consentLog.create({
+        data: {
+          userId: user.id,
+          purpose: "OTP_AUTH",
+          consentVersion: "1.0",
+          noticeText: "Authentication notice",
+          ipAddress: "192.168.1.1",
+          userAgent: "Mozilla/5.0",
+          isWithdrawn: false
+        }
+      });
+
+      await db.consentLog.create({
+        data: {
+          userId: user.id,
+          purpose: "MARKETING_COMMS",
+          consentVersion: "1.0",
+          noticeText: "Promotions notice",
+          ipAddress: "192.168.1.2",
+          userAgent: "Mozilla/5.0",
+          isWithdrawn: true,
+          withdrawnAt: new Date()
+        }
+      });
+
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}/consents`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = res.json() as {
+        success: boolean;
+        data: {
+          summary: Array<{
+            purpose: string;
+            displayName: string;
+            isEssential: boolean;
+            isActive: boolean;
+            givenAt: string | null;
+            withdrawnAt: string | null;
+            version: string | null;
+          }>;
+          logs: Array<{
+            id: string;
+            purpose: string;
+            isWithdrawn: boolean;
+            consentVersion: string;
+            noticeText: string;
+            ipAddress: string | null;
+            userAgent: string | null;
+            createdAt: string;
+            withdrawnAt: string | null;
+          }>;
+          total: number;
+          page: number;
+          totalPages: number;
+          limit: number;
+        };
+      };
+
+      expect(json.success).toBe(true);
+      expect(json.data.total).toBe(2);
+      expect(json.data.page).toBe(1);
+      expect(json.data.limit).toBe(20);
+      expect(json.data.totalPages).toBe(1);
+      expect(json.data.logs).toHaveLength(2);
+
+      // Check summary
+      const otpSummary = json.data.summary.find((s) => s.purpose === "OTP_AUTH");
+      expect(otpSummary).toBeDefined();
+      expect(otpSummary?.isActive).toBe(true);
+      expect(otpSummary?.isEssential).toBe(true);
+      expect(otpSummary?.displayName).toBe("Authentication & Account Security");
+
+      const mktSummary = json.data.summary.find((s) => s.purpose === "MARKETING_COMMS");
+      expect(mktSummary).toBeDefined();
+      expect(mktSummary?.isActive).toBe(false);
+      expect(mktSummary?.withdrawnAt).not.toBeNull();
+    });
+
+    it("paginates consent logs with page and limit query params", async () => {
+      const user = await db.user.create({
+        data: {
+          name: "Pagination User",
+          phone: "+919876502222",
+          isVerified: true
+        }
+      });
+
+      await db.consentLog.create({
+        data: {
+          userId: user.id,
+          purpose: "OTP_AUTH",
+          consentVersion: "1.0",
+          noticeText: "First log",
+          createdAt: new Date("2026-01-01T00:00:00Z")
+        }
+      });
+
+      await db.consentLog.create({
+        data: {
+          userId: user.id,
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "Second log",
+          createdAt: new Date("2026-01-02T00:00:00Z")
+        }
+      });
+
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+
+      // Page 1, limit 1
+      const resPage1 = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}/consents?page=1&limit=1`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      expect(resPage1.statusCode).toBe(200);
+      const json1 = resPage1.json() as { data: { logs: unknown[]; total: number; totalPages: number; page: number } };
+      expect(json1.data.logs).toHaveLength(1);
+      expect(json1.data.total).toBe(2);
+      expect(json1.data.totalPages).toBe(2);
+      expect(json1.data.page).toBe(1);
+
+      // Page 2, limit 1
+      const resPage2 = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}/consents?page=2&limit=1`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      expect(resPage2.statusCode).toBe(200);
+      const json2 = resPage2.json() as { data: { logs: unknown[]; total: number; totalPages: number; page: number } };
+      expect(json2.data.logs).toHaveLength(1);
+      expect(json2.data.page).toBe(2);
+    });
+
+    it("returns 403 when called with buyer JWT", async () => {
+      const buyerToken = await generateAccessToken("buyer-123", "BUYER");
+      const res = await server.inject({
+        method: "GET",
+        url: "/api/v1/admin/users/any-id/consents",
+        headers: { authorization: `Bearer ${buyerToken}` }
+      });
+      expect(res.statusCode).toBe(403);
+    });
+
+    it("returns 404 with NOT_FOUND error code when user does not exist", async () => {
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+      const res = await server.inject({
+        method: "GET",
+        url: "/api/v1/admin/users/nonexistent-user-id/consents",
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      expect(res.statusCode).toBe(404);
+      const json = res.json() as { error: { code: string } };
+      expect(json.error.code).toBe("NOT_FOUND");
+    });
+  });
+
+  describe("GET /api/v1/admin/users/:id/orders (Phase 6.17.2)", () => {
+    it("returns 200 with paginated orders and total count for the user", async () => {
+      const user = await db.user.create({
+        data: {
+          name: "Alice Walker",
+          phone: "+919876543201",
+          isVerified: true
+        }
+      });
+
+      const store = await db.store.create({
+        data: {
+          name: "Fresh Groceries",
+          description: "Fresh goods",
+          phone: "+919876543202",
+          address: "Mall Road",
+          storeType: "QUICK_COMMERCE"
+        }
+      });
+
+      // Create 3 orders for user
+      await db.order.createMany({
+        data: [
+          {
+            userId: user.id,
+            storeId: store.id,
+            status: "DELIVERED",
+            subtotal: 100,
+            deliveryFee: 20,
+            total: 120,
+            paymentMethod: "COD",
+            landmarkDescription: "House 1"
+          },
+          {
+            userId: user.id,
+            storeId: store.id,
+            status: "PLACED",
+            subtotal: 200,
+            deliveryFee: 20,
+            total: 220,
+            paymentMethod: "UPI",
+            landmarkDescription: "House 2"
+          },
+          {
+            userId: user.id,
+            storeId: store.id,
+            status: "DELIVERED",
+            subtotal: 300,
+            deliveryFee: 20,
+            total: 320,
+            paymentMethod: "CARD",
+            landmarkDescription: "House 3"
+          }
+        ]
+      });
+
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+
+      // Test page 1 with limit 2
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}/orders?page=1&limit=2`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = res.json() as {
+        success: boolean;
+        data: {
+          items: Array<{ id: string; storeName: string; total: number; status: string; createdAt: string }>;
+          total: number;
+          page: number;
+          limit: number;
+          totalPages: number;
+        };
+      };
+      expect(json.success).toBe(true);
+      expect(json.data.total).toBe(3);
+      expect(json.data.totalPages).toBe(2);
+      expect(json.data.page).toBe(1);
+      expect(json.data.limit).toBe(2);
+      expect(json.data.items).toHaveLength(2);
+      expect(json.data.items[0]?.storeName).toBe("Fresh Groceries");
+
+      // Test status filter
+      const filterRes = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}/orders?status=DELIVERED`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      expect(filterRes.statusCode).toBe(200);
+      const filterJson = filterRes.json() as {
+        data: { items: Array<{ status: string }>; total: number };
+      };
+      expect(filterJson.data.total).toBe(2);
+      expect(filterJson.data.items.every((o) => o.status === "DELIVERED")).toBe(true);
+    });
+
+    it("returns 404 when user does not exist", async () => {
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+      const res = await server.inject({
+        method: "GET",
+        url: "/api/v1/admin/users/non-existent-id/orders",
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+      expect(res.statusCode).toBe(404);
+    });
+  });
 });
+

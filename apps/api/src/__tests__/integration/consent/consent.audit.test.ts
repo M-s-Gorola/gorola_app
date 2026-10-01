@@ -96,8 +96,8 @@ describe("Consent Audit & Immutability (DPDP 8.2.4)", () => {
       method: "POST",
       payload: {
         consentVersion: "1.0",
-        noticeText: "Marketing emails",
-        purpose: "MARKETING_EMAIL"
+        noticeText: "Promotions and discounts",
+        purpose: "MARKETING_COMMS"
       },
       url: "/api/v1/consent"
     });
@@ -105,7 +105,7 @@ describe("Consent Audit & Immutability (DPDP 8.2.4)", () => {
     const deleteRes = await server.inject({
       headers: { authorization: `Bearer ${accessToken}` },
       method: "DELETE",
-      url: "/api/v1/consent/MARKETING_EMAIL"
+      url: "/api/v1/consent/MARKETING_COMMS"
     });
     expect(deleteRes.statusCode).toBe(200);
 

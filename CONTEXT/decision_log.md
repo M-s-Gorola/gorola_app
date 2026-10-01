@@ -1775,4 +1775,53 @@ Implement a **Two-Stage Erasure Architecture** featuring a **30-Day Recovery Gra
 1. **Immediate Day 0 Hard Deletion / PII Scramble:** Rejected — zero grace period, irrecoverable on accidental clicks, and impossible to authenticate returning users.
 2. **Email-Only Account Cancellation Links:** Rejected — adds unnecessary friction and external email dependencies when Phone OTP is already the native authentication channel for GoRola.
 
+---
+
+## [DECISION-059] DPDP Consent Architecture Overhaul — Dynamic Configuration Table, Multi-Channel Marketing Renaming (MARKETING_COMMS), Strict Notice Disclosures, and Admin Consent Auditing
+
+**Date:** 2026-10-02  
+**Status:** Accepted  
+
+**Context:**  
+During the compliance audit of GoRola's DPDP Act implementation (Phase 8.2 & 8.3), four key architectural and regulatory observations were identified:
+1. **PostgreSQL Enum Rigidity vs Dynamic Extensibility:** The initial consent ledger used a hardcoded PostgreSQL enum (`ConsentPurpose: OTP_AUTH | ORDER_PROCESSING | MARKETING_EMAIL | ANALYTICS`). Adding, removing, or re-configuring purposes in production required DDL migration scripts that lock tables and create migration risks.
+2. **Channel-Specific Misnomer (`MARKETING_EMAIL`):** GoRola is a mobile-first quick-commerce platform using Phone OTP and SMS/WhatsApp communications. The identifier `MARKETING_EMAIL` was an inaccurate misnomer that did not reflect actual communication channels (SMS promotions, discount broadcasts).
+3. **Disclosure Accuracy in Statutory Notices:**
+   - *GPS Location Retention:* Initial notices stated GPS was never retained or deleted on delivery, whereas `Order.deliveryLat/Lng` is retained for historical routing and only stripped upon account erasure.
+   - *Display Name:* Since `User.name` is optional, claiming "we collect your name" without clarification caused ambiguity when users only provided a phone number.
+   - *Sub-Processor Transparency:* Marketing SMS dispatches via DLT-registered SMS gateways (Exotel) needed explicit mention in marketing and login notices.
+4. **Administrative Audit Observability:** Customer support and compliance officers had no interface to inspect a user's consent status or historical audit log in the Admin Panel during data subject inquiries.
+
+**Decision:**  
+Implement **Phase 8.3.4 (DPDP Consent Architecture Overhaul & Admin Consent Panel)**:
+
+1. **Replace Enum with `ConsentPurposeConfig` Relational Table:**
+   - Drop the `ConsentPurpose` PostgreSQL enum.
+   - Create `ConsentPurposeConfig` table (`key` PK, `displayName`, `description`, `isEssential`, `retentionSummary`, `createdAt`, `updatedAt`).
+   - Change `ConsentLog.purpose` to `TEXT` with a Foreign Key constraint referencing `ConsentPurposeConfig.key`.
+   - Seed the 4 canonical purposes: `OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`.
+
+2. **Standardize `MARKETING_COMMS` Across All Layers:**
+   - Rename `MARKETING_EMAIL` to `MARKETING_COMMS` across database migrations, backend types, Zod schemas, controllers, and frontend components.
+   - Update existing database rows in migration `20261001200359_replace_consent_purpose_enum_with_config_table`.
+
+3. **Precise Statutory Notice Text Alignment:**
+   - Update `ConsentNoticeModal` and all inline notice cards (`SavedAddressesPage`, `CheckoutPage`, `BookingTimeslotPage`, `LoginPage`) to reflect:
+     - Accurate GPS retention (retained with address; order GPS nulled upon account erasure; financial totals kept 7 years for GST).
+     - Conditional name collection ("Display Name (if you have set one)").
+     - Sub-processor disclosures including authorized SMS gateways.
+
+4. **Admin Consent Auditing API & Drawer UI:**
+   - Expose `GET /api/v1/admin/users/:id/consents` with pagination (`page`, `limit`) returning active summary per purpose and paginated historical `ConsentLog` rows.
+   - Add a dedicated "Consent & Privacy (DPDP Act 2023)" section to the Admin Platform Users detail drawer with 4-row status summary and expandable audit log.
+
+**Rationale:**  
+- A configuration table enables zero-downtime additions of future consent categories (e.g. loyalty programs, third-party insurance) without DDL locks.
+- `MARKETING_COMMS` accurately communicates multi-channel promotional consent (SMS, WhatsApp, notifications) without violating DPDP truth-in-disclosure principles.
+- Admin observability ensures GoRola can respond to Data Protection Board compliance audits and customer grievance redressals within statutory timeframes.
+
+**Tradeoffs:**  
+- Requires a schema migration that casts enum to text and seeds initial configuration rows. Handled safely with data migration SQL before adding foreign key constraints.
+
+
 

@@ -277,6 +277,15 @@ Personal Identifiable Information (PII) fields like `phone` on `User` and `Deliv
 - **Prisma Client Extension (`$extends`)**: Intercepts queries in [`apps/api/src/lib/prisma.ts`](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/lib/prisma.ts). Automatically encrypts writes, maps queries to `phoneHash`, and transparently decrypts outputs back to plaintext for application code and repositories.
 - **Centralized Masking**: `maskPhone(phone)` decrypts `enc:...` before returning formatted strings (`*********3210`) for API responses.
 
+### 3. DPDP Act 2023 Consent & User Rights Architecture
+- **Dynamic Purpose Configuration (`ConsentPurposeConfig`)**: Replaced rigid PostgreSQL enums with a database configuration table containing canonical purposes (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`), essential flags, and retention summaries.
+- **Append-Only Immutable Ledger (`ConsentLog`)**: All consent grants and withdrawals are persisted with UTC timestamps, notice text, and IP addresses. Protected against deletions via Prisma extension guards.
+- **Idempotency Guard**: Service-layer checks prevent duplicate consent log records across repeated logins or checkouts.
+- **User Rights Matrix**:
+  - *Data Portability (Section 11)*: `GET /api/v1/user/my-data` returns JSON export of profile, addresses, orders, and consent history.
+  - *Right to Nominate (Section 14)*: `GET /api/v1/user/nominee` and `PUT /api/v1/user/nominee`.
+  - *Right to Erasure (Section 12)*: Two-stage deletion (`DELETE /api/v1/user/account`) with 30-day grace period, instant token revocation, OTP restoration (`POST /api/v1/user/reactivate-account`), and BullMQ automated permanent purge worker.
+
 ---
 
 ## Module Map
@@ -297,6 +306,11 @@ apps/api/src/modules/
 │   └── admin auth           ← POST /api/v1/auth/admin/login
 │                               POST /api/v1/auth/admin/verify-2fa
 │                               POST /api/v1/auth/admin/refresh
+│
+├── consent/                 ← DPDP ACT 2023 CONSENT PIPELINE
+│   ├── record consent       ← POST   /api/v1/consent
+│   ├── list user consents   ← GET    /api/v1/consent
+│   └── withdraw consent     ← DELETE /api/v1/consent/:purpose
 │
 ├── catalog/                 ← READ-HEAVY, CACHED IN REDIS
 │   ├── categories           ← GET /api/v1/categories
@@ -325,13 +339,17 @@ apps/api/src/modules/
 │   ├── list my orders       ← GET  /api/v1/orders (buyer's orders)
 │   └── reorder              ← POST /api/v1/orders/:id/reorder
 │
-├── user/                    ← BUYER PROFILE
-│   ├── my profile           ← GET  /api/v1/me
-│   ├── update profile       ← PUT  /api/v1/me
-│   ├── my addresses         ← GET  /api/v1/me/addresses
-│   ├── add address          ← POST /api/v1/me/addresses
-│   ├── update address       ← PUT  /api/v1/me/addresses/:id
-│   └── delete address       ← DELETE /api/v1/me/addresses/:id
+├── user/                    ← BUYER PROFILE & DPDP USER RIGHTS
+│   ├── my profile           ← GET    /api/v1/me
+│   ├── update profile       ← PUT    /api/v1/me
+│   ├── my addresses         ← GET    /api/v1/me/addresses
+│   ├── add address          ← POST   /api/v1/me/addresses
+│   ├── update address       ← PUT    /api/v1/me/addresses/:id
+│   ├── delete address       ← DELETE /api/v1/me/addresses/:id
+│   ├── data portability    ← GET    /api/v1/user/my-data
+│   ├── nominee management   ← GET/PUT/DELETE /api/v1/user/nominee
+│   ├── request erasure      ← DELETE /api/v1/user/account
+│   └── reactivate account   ← POST   /api/v1/user/reactivate-account
 │
 ├── store/                   ← PUBLIC STORE INFO
 │   ├── list stores          ← GET /api/v1/stores
@@ -359,6 +377,7 @@ apps/api/src/modules/
 │   ├── all orders           ← GET /api/v1/admin/orders
 │   ├── store management     ← CRUD /api/v1/admin/stores
 │   ├── user management      ← GET/PUT /api/v1/admin/users
+│   ├── user consent audit   ← GET /api/v1/admin/users/:id/consents
 │   ├── category management  ← CRUD /api/v1/admin/categories
 │   ├── bulk categories      ← POST /api/v1/admin/bulk/categories/validate | /confirm
 │   ├── feature flags        ← GET/PUT /api/v1/admin/feature-flags
@@ -386,10 +405,13 @@ apps/api/src/modules/
 ## Database Schema (Entity-Relationship Summary)
 
 ```
+ConsentPurposeConfig (canonical DPDP purposes)
+  └── has many → ConsentLog (FK purpose)
+
 User (buyer)
   │
   ├── has many → Address
-  ├── has many  → ConsentLog (givenAt, purpose, isWithdrawn, withdrawnAt)
+  ├── has many → ConsentLog (givenAt, purpose, isWithdrawn, withdrawnAt, noticeText, ipAddress)
   ├── has one  → Cart
   │               └── has many → CartItem → ProductVariant
   └── has many → Order (orderType = QUICK | BOOKING)

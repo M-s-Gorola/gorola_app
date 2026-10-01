@@ -1,4 +1,4 @@
-import { UnauthorizedError } from "@gorola/shared";
+import { UnauthorizedError, ValidationError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
@@ -46,7 +46,12 @@ export function registerConsentRoutes(app: FastifyInstance, deps: RegisterConsen
         throw new UnauthorizedError("User subject missing");
       }
 
-      const body = recordConsentBodySchema.parse(request.body);
+      const parsed = recordConsentBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new ValidationError("Invalid consent payload", parsed.error.flatten());
+      }
+      const body = parsed.data;
+
       const ipAddress =
         (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
         request.ip ??
@@ -94,7 +99,12 @@ export function registerConsentRoutes(app: FastifyInstance, deps: RegisterConsen
         throw new UnauthorizedError("User subject missing");
       }
 
-      const params = withdrawConsentParamsSchema.parse(request.params);
+      const parsed = withdrawConsentParamsSchema.safeParse(request.params);
+      if (!parsed.success) {
+        throw new ValidationError("Invalid consent purpose parameter", parsed.error.flatten());
+      }
+      const params = parsed.data;
+
       const ipAddress =
         (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
         request.ip ??

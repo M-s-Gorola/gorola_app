@@ -35,7 +35,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     vi.clearAllMocks();
   });
 
-  it("renders list of consents, showing Essential label for OTP_AUTH and Withdraw button for MARKETING_EMAIL", async () => {
+  it("renders list of consents, showing Essential label for OTP_AUTH and Withdraw button for MARKETING_COMMS", async () => {
     getMock.mockResolvedValueOnce({
       data: {
         success: true,
@@ -52,7 +52,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
             },
             {
               id: "c2",
-              purpose: "MARKETING_EMAIL",
+              purpose: "MARKETING_COMMS",
               consentVersion: "1.0",
               noticeText: "Marketing updates",
               isWithdrawn: false,
@@ -68,7 +68,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
 
     expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
-    expect(screen.getByTestId("consent-card-MARKETING_EMAIL")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-MARKETING_COMMS")).toBeInTheDocument();
     expect(screen.getByText(/Authentication & Account Security/i)).toBeInTheDocument();
     expect(screen.getByText(/Promotions & Seasonal Offers/i)).toBeInTheDocument();
 
@@ -78,10 +78,10 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(screen.queryByTestId("withdraw-btn-ORDER_PROCESSING")).not.toBeInTheDocument();
 
     // Non-essential consent should have Withdraw button
-    expect(screen.getByTestId("withdraw-btn-MARKETING_EMAIL")).toBeInTheDocument();
+    expect(screen.getByTestId("withdraw-btn-MARKETING_COMMS")).toBeInTheDocument();
   });
 
-  it("clicking Withdraw on MARKETING_EMAIL calls DELETE /api/v1/consent/MARKETING_EMAIL and updates status to Withdrawn", async () => {
+  it("clicking Withdraw on MARKETING_COMMS calls DELETE /api/v1/consent/MARKETING_COMMS and updates status to Withdrawn", async () => {
     const user = userEvent.setup();
     getMock.mockResolvedValueOnce({
       data: {
@@ -90,7 +90,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
           consents: [
             {
               id: "c2",
-              purpose: "MARKETING_EMAIL",
+              purpose: "MARKETING_COMMS",
               consentVersion: "1.0",
               noticeText: "Marketing updates",
               isWithdrawn: false,
@@ -108,7 +108,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
         data: {
           consent: {
             id: "c2",
-            purpose: "MARKETING_EMAIL",
+            purpose: "MARKETING_COMMS",
             isWithdrawn: true,
             withdrawnAt: "2026-09-22T01:00:00Z"
           }
@@ -118,11 +118,11 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
 
     renderSection();
 
-    const withdrawBtn = await screen.findByTestId("withdraw-btn-MARKETING_EMAIL");
+    const withdrawBtn = await screen.findByTestId("withdraw-btn-MARKETING_COMMS");
     await user.click(withdrawBtn);
 
     await waitFor(() => {
-      expect(deleteMock).toHaveBeenCalledWith("/api/v1/consent/MARKETING_EMAIL");
+      expect(deleteMock).toHaveBeenCalledWith("/api/v1/consent/MARKETING_COMMS");
     });
 
     const withdrawnElements = await screen.findAllByText(/Withdrawn/i);
@@ -136,7 +136,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
         data: {
           consent: {
             id: "c3",
-            purpose: "MARKETING_EMAIL",
+            purpose: "MARKETING_COMMS",
             consentVersion: "1.0",
             noticeText: "Marketing updates",
             isWithdrawn: false,
@@ -163,7 +163,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
             },
             {
               id: "c2",
-              purpose: "MARKETING_EMAIL",
+              purpose: "MARKETING_COMMS",
               consentVersion: "1.0",
               noticeText: "Marketing updates",
               isWithdrawn: true,
@@ -179,12 +179,12 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
 
     expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
 
-    const optInBtn = await screen.findByTestId("optin-btn-MARKETING_EMAIL");
+    const optInBtn = await screen.findByTestId("optin-btn-MARKETING_COMMS");
     fireEvent.click(optInBtn);
 
     await waitFor(() => {
       expect(postMock).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
-        purpose: "MARKETING_EMAIL",
+        purpose: "MARKETING_COMMS",
         consentVersion: "1.0"
       }));
     });
@@ -205,7 +205,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-ORDER_PROCESSING")).toBeInTheDocument();
-    expect(screen.getByTestId("consent-card-MARKETING_EMAIL")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-MARKETING_COMMS")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-ANALYTICS")).toBeInTheDocument();
 
     // ORDER_PROCESSING must mention Ola Maps and Razorpay
@@ -237,7 +237,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
     expect(orderCard).toHaveTextContent(/Pending — Activated when you save an address or place your first order/i);
 
-    const marketingCard = screen.getByTestId("consent-card-MARKETING_EMAIL");
+    const marketingCard = screen.getByTestId("consent-card-MARKETING_COMMS");
     expect(marketingCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
 
     const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
