@@ -74,7 +74,7 @@ jobs:
             railway:
               - 'apps/api/**'
               - 'packages/shared/**'
-              - 'railway.toml'
+              - '.railway/**'
               - 'nixpacks.toml'
               - 'Procfile'
               - 'package.json'

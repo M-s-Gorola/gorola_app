@@ -14,7 +14,7 @@ To ensure that only our GitHub Actions CI/CD pipeline triggers deployments, we i
 | Platform    | How to disable                                                                                                                                                                                                    | "As Code" implementation                                                                                 |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | **Vercel**  | Project → **Settings** → _Build and Deployment_ → **Ignored build step** → **Behavior: Don’t build anything** (command: `exit 0`).                                                                                | Root `vercel.json` includes `"git": { "deploymentEnabled": false }`.                                     |
-| **Railway** | API service → **Settings** → **Source** (or **Git**): **Disconnect** the GitHub repository. New commits will no longer trigger automatic builds.                                                                 | Not available in `railway.toml`. Disconnection is a platform-level setting.                              |
+| **Railway** | API service → **Settings** → **Source** (or **Git**): **Disconnect** the GitHub repository. New commits will no longer trigger automatic builds.                                                                 | Disconnection is a platform-level setting (not configured in `.railway/railway.ts`).                     |
 
 ---
 
@@ -34,11 +34,18 @@ Controls the deployment of the buyer web app.
 - `buildCommand`: Builds shared packages first, then the web app.
 - `outputDirectory`: Points to `apps/web/dist` (the result of the Vite build).
 
-### Railway (`railway.toml`)
-Controls the deployment of the Fastify API.
-- `[build].builder`: Set to `NIXPACKS`.
-- `[build].buildCommand`: Installs dependencies and builds the shared package + API.
-- `[deploy].startCommand`: Runs `pnpm --filter @gorola/api start`.
+### Railway (`.railway/railway.ts` — Infrastructure as Code)
+
+> [!IMPORTANT]
+> **Railway Migration Notice: Config as Code (`railway.toml`) → Infrastructure as Code (`.railway/railway.ts`)**
+> Railway has deprecated legacy Config as Code (`railway.toml` / `railway.json`) with a hard cutoff on **December 1, 2026**. GoRola uses Railway **Infrastructure as Code (IaC)** via the official TypeScript SDK (`railway/iac`) in `.railway/railway.ts`.
+
+Controls the deployment and resource configuration of the Fastify API:
+- `builder`: Set to `NIXPACKS`.
+- `buildCommand`: Installs dependencies and builds the shared package + API (`pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`).
+- `startCommand`: Runs `pnpm --filter @gorola/api start`.
+- `restartPolicyType`: `ON_FAILURE`.
+- `healthcheckPath`: `/health`.
 
 ### Node Environment (`nixpacks.toml` & `Procfile`)
 - `nixpacks.toml`: Pins the Node version to `22` for Railway’s Nixpacks builder.

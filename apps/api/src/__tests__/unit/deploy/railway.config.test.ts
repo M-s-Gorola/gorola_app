@@ -9,22 +9,23 @@ const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const apiRoot = path.join(thisDir, "..", "..", "..", "..");
 const repoRoot = path.join(thisDir, "..", "..", "..", "..", "..", "..");
 
-const railwayToml = path.join(repoRoot, "railway.toml");
+const railwayTs = path.join(repoRoot, ".railway", "railway.ts");
 const nixpacksToml = path.join(repoRoot, "nixpacks.toml");
 const nvmrc = path.join(repoRoot, ".nvmrc");
 const rootPackageJson = path.join(repoRoot, "package.json");
 const procfile = path.join(repoRoot, "Procfile");
 
-describe("Phase 1.9 — Railway / Procfile (repo as code)", () => {
-  it("exposes a railway.toml with monorepo build and @gorola/api start", async () => {
-    const text = await readFile(railwayToml, "utf8");
-    expect(text).toMatch(/^\[build\]/m);
-    expect(text).toMatch(/buildCommand/s);
+describe("Phase 1.9 — Railway Infrastructure as Code (.railway/railway.ts) / Procfile", () => {
+  it("exposes .railway/railway.ts with monorepo build, healthcheck, and @gorola/api start", async () => {
+    const text = await readFile(railwayTs, "utf8");
+    expect(text).toMatch(/defineRailway/);
+    expect(text).toMatch(/builder:\s*["']NIXPACKS["']/);
+    expect(text).toMatch(/buildCommand:/);
     expect(text).toMatch(/@gorola\/shared/);
     expect(text).toMatch(/@gorola\/api/);
-    expect(text).toMatch(/^\[deploy\]/m);
-    expect(text).toMatch(/startCommand/s);
+    expect(text).toMatch(/startCommand:/);
     expect(text).toMatch(/pnpm --filter @gorola\/api start/);
+    expect(text).toMatch(/restartPolicyType:\s*["']ON_FAILURE["']/);
   });
 
   it("exposes a Procfile web process using the API start script", async () => {

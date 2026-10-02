@@ -60,7 +60,7 @@
 | Platform | In the UI | In repo (optional) |
 |----------|-----------|-------------------|
 | **Vercel** | *Settings* → *Build and Deployment* → **Ignored build step** → **Don’t build anything** (runs `exit 0`, so Vercel skips the build for Git events). The GitHub repo can stay **connected** for PR integration. | Root `vercel.json` sets `git.deploymentEnabled: false` so the policy is recorded next to `install` / `build` / `output`. |
-| **Railway** | API service → *Settings* (Source / **Git**): **Disconnect** the repository. Commits no longer start deploys. | There is no `railway.toml` flag for this; autodeploy is a **Git connection** setting. |
+| **Railway** | API service → *Settings* (Source / **Git**): **Disconnect** the repository. Commits no longer start deploys. | Autodeploy is a **Git connection** setting managed in the dashboard / API. |
 
 **CD from GitHub:** File `.github/workflows/ci-cd.yml` defines `ci`, **`paths`**, then in parallel **deploy-vercel** and **deploy-railway** (gated on `main` and path outputs). **Vercel:** `npx vercel deploy --prod` (remote build; `VERCEL_*` job env). **Railway:** `npx @railway/cli@latest up --ci` with `--message` = branch + short SHA and `--service` (not legacy GraphQL). Secrets: `VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID`, `RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID` (see `GoRola_app/README.md`).
 
@@ -113,12 +113,16 @@ Path: `vercel.json` (repository root, same as `GoRola_app`).
 
 ### Railway — Fastify API (Node)
 
+> [!IMPORTANT]
+> **Railway Migration: Config as Code (`railway.toml`) → Infrastructure as Code (`.railway/railway.ts`)**
+> Railway is deprecating legacy "Config as Code" (`railway.toml` / `railway.json`) with a hard cutoff date of **December 1, 2026**. GoRola uses Railway **Infrastructure as Code (IaC)** authored in TypeScript (`.railway/railway.ts`) via the `@railway/iac` / `railway` SDK.
+
 #### In plain language
 
-- **`railway.toml`** (monorepo root) tells Railway **how to build** the API and **how to start** it after a successful build: Nixpacks builder, full `buildCommand`, `startCommand`, and restart policy. It does **not** store secrets or provision databases.
+- **`.railway/railway.ts`** (repository root) defines Railway **Infrastructure as Code**: Nixpacks builder, full `buildCommand`, `startCommand`, restart policy, and health check route.
 - **`nixpacks.toml`** only pins **Node major 22** for the Nixpacks Node build image (matches CI and local `.nvmrc`).
-- **`Procfile`** declares a **`web`** process with the same start command as `railway.toml` so the default process type is unambiguous.
-- **`apps/api/package.json` → `scripts.build` and `scripts.start`** are the **last mile**: what `pnpm --filter @gorola/api run build` and `pnpm --filter @gorola/api start` actually run (Prisma generate, `tsc`, migrate deploy, `node dist/app.js`). If you change API startup, you change these scripts (and usually leave `railway.toml`’s *wrapper* as `pnpm --filter @gorola/api …`).
+- **`Procfile`** declares a **`web`** process with the same start command as `.railway/railway.ts` so the default process type is unambiguous.
+- **`apps/api/package.json` → `scripts.build` and `scripts.start`** are the **last mile**: what `pnpm --filter @gorola/api run build` and `pnpm --filter @gorola/api start` actually run (Prisma generate, `tsc`, migrate deploy, `node dist/app.js`). If you change API startup, you change these scripts.
 
 **Root directory for the service:** the **Git repo root** (`GoRola_app`). Do **not** set the deploy root to `apps/api` only — the monorepo needs `pnpm-workspace.yaml` and filters.
 
@@ -126,28 +130,36 @@ Path: `vercel.json` (repository root, same as `GoRola_app`).
 
 | File | Role |
 |------|------|
-| **`railway.toml`** | `builder`, **full `buildCommand`**, **deploy `startCommand`**, `restartPolicyType`. This is the authoritative place for how Railway builds and runs the API service. |
+| **`.railway/railway.ts`** | Infrastructure as Code: `builder`, **full `buildCommand`**, **deploy `startCommand`**, `restartPolicyType`, `healthcheckPath`. |
 | **`nixpacks.toml`** | `NODE_VERSION` for Nixpacks (Node 22). |
 | **`Procfile`** | `web: …` process line; matches the intended start. |
 | **`apps/api/package.json` → `scripts`** | `build` = Prisma client + TypeScript emit to `dist/`. `start` = migrate then listen. |
 | **Repo root `.env.example` / `project_data.json`** | **Documentation only** — list of variable **names** Railway must have; not the values. |
 
-#### Committed config — `railway.toml`
+#### Committed config — `.railway/railway.ts` (Infrastructure as Code)
 
-Path: `railway.toml` (repository root).
+Path: `.railway/railway.ts` (repository root).
 
-```toml
-# GoRola API on Railway (monorepo root). In dashboard: set PostgreSQL 15 + Redis 7, link vars (DATABASE_URL, REDIS_URL, etc.).
-# Node: 22+ on Nixpacks/Railway (see nixpacks.toml, .nvmrc) and >=22 in root package.json "engines" (CI uses 22).
-# https://docs.railway.com/deploy/config-as-code
+```typescript
+import { defineRailway, project, service } from "railway/iac";
 
-[build]
-builder = "NIXPACKS"
-buildCommand = "pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build"
+export default defineRailway(() => {
+  const api = service("api", {
+    build: {
+      builder: "NIXPACKS",
+      buildCommand: "pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build",
+    },
+    deploy: {
+      startCommand: "pnpm --filter @gorola/api start",
+      restartPolicyType: "ON_FAILURE",
+      healthcheckPath: "/health",
+    },
+  });
 
-[deploy]
-startCommand = "pnpm --filter @gorola/api start"
-restartPolicyType = "on_failure"
+  return project("gorola", {
+    resources: [api],
+  });
+});
 ```
 
 #### Committed config — `nixpacks.toml`
@@ -170,7 +182,7 @@ Path: `Procfile` (repository root).
 web: pnpm --filter @gorola/api start
 ```
 
-#### Committed config — `apps/api` npm scripts (invoked by `railway.toml`)
+#### Committed config — `apps/api` npm scripts (invoked by `.railway/railway.ts`)
 
 The Railway `startCommand` runs `pnpm --filter @gorola/api start`, which uses these scripts in `apps/api/package.json`:
 
@@ -193,7 +205,7 @@ So every deploy: **migrations run**, then the server **listens** on the port Rai
 
 `CORS_ALLOWED_ORIGINS` must include the **Vercel** production (and **Preview** URLs if the browser calls the API from those hosts).
 
-**Further reading:** [Railway config as code](https://docs.railway.com/deploy/config-as-code), [Nixpacks Node](https://nixpacks.com/docs/providers/node).
+**Further reading:** [Railway Infrastructure as Code](https://docs.railway.com/infrastructure-as-code), [Nixpacks Node](https://nixpacks.com/docs/providers/node).
 
 ---
 
