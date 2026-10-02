@@ -98,7 +98,7 @@ jobs:
       - name: Apply Railway Infrastructure as Code
         shell: bash
         run: |
-          railway config apply --yes --environment "${{ inputs.environment }}"
+          railway config apply --yes
 
       # Deploy to the Railway environment matching this workflow's input.
       # Label format: "<branch> <short-sha>" for traceability in the Railway dashboard.
