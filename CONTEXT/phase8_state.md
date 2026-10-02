@@ -18,15 +18,14 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-10-03
-- **Session Summary:** Fully implemented and verified Phase 8.4 (Session Transparency & Security Alerting) and Phase 8.5 (Automated Data Retention & Purge Jobs) in strict TDD format, plus mobile UI/UX improvements:
-  - **8.4.1 (Active Sessions & Remote Revocation):** Implemented session tracking in `AuthService`, routes `GET /api/v1/auth/sessions` & `DELETE /api/v1/auth/sessions`, Fastify IP/User-Agent context extraction, and `ActiveSessionsSection.tsx` component with mobile-responsive design.
-  - **8.4.2 (Security Alerting):** Structured `SecurityAlertPayload` and `logSecurityAlert` helper in `logger.ts` triggering `FAILED_AUTH_BURST` security alert upon reaching lockout thresholds.
-  - **8.5.1 (Automated Data Retention & Purge Jobs):** Built `audit-log-archive.worker.ts` (365-day audit purge), `otp-log-purge.worker.ts` (90-day statutory OTP purge), and unified `scheduler.ts`. Verified in `data-retention.test.ts`.
-  - **8.5.2 (Railway Log Retention):** Verified Railway Pro plan fixed 30-day log retention compliance.
-  - **Consent UI/UX Accordion Refinement:** Implemented bold headings and Compact Accordion per Purpose in `PrivacySettingsSection.tsx` for optimal mobile readability and DPDP transparency.
-  - **Final Quality Gate:** 100% GREEN (122 API test files / 744 tests passed, 95 Web test files / 541 tests passed, 0 TypeScript errors across 4 packages, 0 ESLint errors).
-- **Next Session Must Start With:** Phase 8.6 — Privacy Policy & Legal Pages.
-- **In Progress Right Now:** None (Phases 8.4 & 8.5 complete).
+- **Session Summary:** Fully completed and verified Phase 8.6 (Privacy Policy & Legal Pages) and end-to-end versioning re-consent flow in strict TDD format (RED-GREEN-REFACTOR):
+  - **8.6.1 (`/privacy` Statutory Privacy Policy):** Expanded `PrivacyPolicyPage.tsx` with all 11 DPDP Act 2023 statutory sections (Data Fiduciary details, PII categories, purposes, retention schedules, third-party processors, user rights, children's data 18+ requirement, 72h breach notification, DPO/DPBI escalation, versioning, Dehradun jurisdiction). Updated `BuyerFooter.tsx` with statutory links.
+  - **8.6.2 (`/terms` Terms of Service):** Implemented `TermsOfServicePage.tsx` covering 18+ eligibility, Mussoorie hill delivery & dynamic weather modes, pricing & Razorpay payments, cancellation/refunds, force majeure, and dispute resolution. Registered route in `buyer.tsx`.
+  - **8.6.3 (Privacy Policy Versioning & Dynamic Re-Consent):** Added `privacyPolicyVersionAccepted` to `User` in `schema.prisma`, generated and deployed migration `20261002215446_add_privacy_policy_version_to_user`, implemented `POST /api/v1/user/accept-policy` route, updated auth serialization in `routes.ts`, `api.ts`, and `LoginPage.tsx`, and built `PrivacyPolicyUpdateBanner.tsx` supporting both guest and logged-in buyer re-consent. Fixed layout stacking so the banner renders clearly above `BuyerNav`. Reverted test target version to `1.0`.
+  - **Mobile Layout Polish:** Added `pb-24` bottom clearance to `BuyerFooter.tsx` so all footer links and page content scroll cleanly into view above the fixed mobile bottom bar.
+  - **Final Quality Gate:** 100% GREEN (123 API test files / 750 tests passed, 99 Web test files passed, 0 TypeScript errors across 4 workspace projects, 0 ESLint errors).
+- **Next Session Must Start With:** Phase 8.7 — Non-Code Prerequisites & Documentation (Operational / Legal DPAs & Inventory).
+- **In Progress Right Now:** None (Phases 8.1–8.6 complete).
 - **Current Blocker:** None.
 
 
@@ -1692,7 +1691,7 @@ This creates two critical defects:
 ### 8.6 — Privacy Policy & Legal Pages (Current Setup)
 
 #### 8.6.1 — `/privacy` Privacy Policy Page
-- [ ] Create `apps/web/src/pages/legal/PrivacyPolicyPage.tsx` routed at `/privacy` containing all 11 DPDP sections:
+- [x] Create `apps/web/src/pages/buyer/PrivacyPolicyPage.tsx` routed at `/privacy` containing all 11 DPDP sections:
   1. Who we are (GoRola)
   2. What personal data we collect (phone, name, address, orders, IP)
   3. Why we collect it (purpose per field)
@@ -1704,16 +1703,16 @@ This creates two critical defects:
   9. Grievance Officer details (`privacy@gorola.in`)
   10. Policy updates & re-consent
   11. Governing law (DPDP Act 2023)
-- [ ] Add `/privacy` route to `App.tsx` and link in site footer.
+- [x] Add `/privacy` route to `buyer.tsx` and link in site footer.
 
 #### 8.6.2 — `/terms` Terms of Service Page
-- [ ] Create `apps/web/src/pages/legal/TermsOfServicePage.tsx` routed at `/terms` with explicit Section: *"Eligibility: GoRola is intended for users aged 18 and above..."*
+- [x] Create `apps/web/src/pages/buyer/TermsOfServicePage.tsx` routed at `/terms` with explicit Section: *"Eligibility: GoRola is intended for users aged 18 and above..."*
 
 #### 8.6.3 — Privacy Policy Versioning & Re-Consent Banner
-- [ ] [Schema & Migration] Add `privacyPolicyVersionAccepted String @default("1.0")` to `User` model in `schema.prisma`. Generate physical SQL migration file: `pnpm --filter @gorola/api exec prisma migrate dev --name add_privacy_policy_version_to_user` using `DIRECT_URL` / `db_owner` DDL role.
-- [ ] [DB Deployment] Apply migration SQL file to local databases (`gorola_dev` and `gorola_test`) via `pnpm --filter @gorola/api prisma:bootstrap:test` BEFORE writing implementation code or running tests.
-- [ ] [Frontend Banner] In `App.tsx`, check user's `privacyPolicyVersionAccepted` against current `CURRENT_POLICY_VERSION = "1.0"`. Render re-consent banner if mismatched.
-- [ ] [Cascade & Regression Testing] Check across modules for cascading broken logic. Run full test suite (`pnpm test` / unit, integration, and E2E) and quality gates (`pnpm typecheck`, `pnpm lint`) — **confirm GREEN.**
+- [x] [Schema & Migration] Add `privacyPolicyVersionAccepted String @default("1.0")` to `User` model in `schema.prisma`. Generate physical SQL migration file: `pnpm --filter @gorola/api exec prisma migrate dev --name add_privacy_policy_version_to_user` using `DIRECT_URL` / `db_owner` DDL role.
+- [x] [DB Deployment] Apply migration SQL file to local databases (`gorola_dev` and `gorola_test`) via `pnpm --filter @gorola/api prisma:bootstrap:test` BEFORE writing implementation code or running tests.
+- [x] [Frontend Banner] In `BuyerLayout.tsx`, check user's `privacyPolicyVersionAccepted` against current `CURRENT_POLICY_VERSION = "1.0"`. Render re-consent banner if mismatched.
+- [x] [Cascade & Regression Testing] Check across modules for cascading broken logic. Run full test suite (`pnpm test` / unit, integration, and E2E) and quality gates (`pnpm typecheck`, `pnpm lint`) — **confirm GREEN.**
 
 
 ---

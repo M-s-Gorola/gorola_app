@@ -362,6 +362,24 @@ export class UserRepository {
     return toDomainUser(updated)!;
   }
 
+  public async acceptPolicyVersion(
+    userId: string,
+    version: string
+  ): Promise<{ id: string; privacyPolicyVersionAccepted: string }> {
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: {
+        privacyPolicyVersionAccepted: version
+      },
+      select: {
+        id: true,
+        privacyPolicyVersionAccepted: true
+      }
+    });
+
+    return updated;
+  }
+
   public async permanentPurgeAndAnonymize(userId: string): Promise<void> {
     await this.db.$transaction([
       // 1. Irreversibly anonymize user profile

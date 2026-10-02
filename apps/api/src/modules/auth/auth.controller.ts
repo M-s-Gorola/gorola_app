@@ -165,6 +165,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
       phone: result.phone,
       refreshToken: result.refreshToken,
       userId: result.userId,
+      privacyPolicyVersionAccepted: result.privacyPolicyVersionAccepted ?? "1.0",
       isPendingDeletion: result.isPendingDeletion ?? false,
       deletionScheduledFor: result.deletionScheduledFor ?? null
     });
@@ -175,7 +176,10 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
     const context = getClientContext(request);
     const tokens = await deps.authService.refreshToken(payload, context);
     reply.setCookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
-    return success(request, reply, tokens);
+    return success(request, reply, {
+      ...tokens,
+      privacyPolicyVersionAccepted: tokens.privacyPolicyVersionAccepted ?? "1.0"
+    });
   });
 
   app.post("/api/v1/auth/buyer/logout", async (request, reply) => {

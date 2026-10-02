@@ -31,6 +31,7 @@ type VerifyEnvelope = {
     phone?: string;
     userId?: string;
     name?: string | null;
+    privacyPolicyVersionAccepted?: string | null;
     isPendingDeletion?: boolean;
     deletionScheduledFor?: string | null;
   };
@@ -218,11 +219,13 @@ export function LoginPage(): ReactElement {
     userId: string;
     name: string | null;
     phone: string;
+    privacyPolicyVersionAccepted?: string | null;
   }): void {
     setBuyerSession({
       accessToken: sessionData.accessToken,
       name: sessionData.name,
       phone: sessionData.phone,
+      privacyPolicyVersionAccepted: sessionData.privacyPolicyVersionAccepted ?? "1.0",
       refreshToken: sessionData.refreshToken,
       userId: sessionData.userId
     });
@@ -329,6 +332,7 @@ export function LoginPage(): ReactElement {
         accessToken,
         name: data.name ?? null,
         phone: data.phone ?? phoneE164,
+        privacyPolicyVersionAccepted: data.privacyPolicyVersionAccepted ?? "1.0",
         refreshToken,
         userId
       });

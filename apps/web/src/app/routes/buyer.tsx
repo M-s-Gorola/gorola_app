@@ -18,6 +18,7 @@ import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
 import { SearchResultsPage } from "@/pages/buyer/SearchResultsPage";
 import { StoreDetailPage } from "@/pages/buyer/StoreDetailPage";
 import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
+import { TermsOfServicePage } from "@/pages/buyer/TermsOfServicePage";
 
 import { ProtectedRoute } from "./guards";
 
@@ -162,6 +163,15 @@ export function BuyerRoutes(): ReactElement[] {
       element={
         <BuyerLayout>
           <PrivacyPolicyPage />
+        </BuyerLayout>
+      }
+    />,
+    <Route
+      key="buyer-terms"
+      path="/terms"
+      element={
+        <BuyerLayout>
+          <TermsOfServicePage />
         </BuyerLayout>
       }
     />,

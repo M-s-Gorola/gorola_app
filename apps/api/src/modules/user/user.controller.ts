@@ -4,7 +4,11 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
 import type { AccessTokenVerifier } from "../auth/auth.types.js";
 import type { UserRepository } from "./user.repository.js";
-import { parseUpdateNomineeInput, parseUpdateProfileInput } from "./user.schema.js";
+import {
+  parseAcceptPolicyInput,
+  parseUpdateNomineeInput,
+  parseUpdateProfileInput
+} from "./user.schema.js";
 
 type SuccessEnvelope<T> = {
   success: true;
@@ -139,6 +143,25 @@ export function registerUserRoutes(app: FastifyInstance, deps: RegisterUserDeps)
           name: user.name,
           phone: user.phone
         }
+      });
+    }
+  );
+
+  // POST /api/v1/user/accept-policy - Record acceptance of Privacy Policy / Terms version
+  app.post(
+    "/api/v1/user/accept-policy",
+    { preHandler: buyerGuard },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new UnauthorizedError("User subject missing");
+      }
+
+      const payload = parseAcceptPolicyInput(request.body);
+      const updated = await deps.userRepository.acceptPolicyVersion(userId, payload.version);
+      return success(request, reply, {
+        accepted: true,
+        version: updated.privacyPolicyVersionAccepted
       });
     }
   );

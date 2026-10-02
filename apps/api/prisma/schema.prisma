@@ -80,6 +80,7 @@ model User {
   nomineeName String?
   nomineeContact String?
   nomineeRelationship String?
+  privacyPolicyVersionAccepted String @default("1.0")
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   carts      Cart[]
