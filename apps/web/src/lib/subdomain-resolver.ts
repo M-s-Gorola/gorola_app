@@ -1,4 +1,4 @@
-export function resolveSubdomain(hostname: string): { isSubdomainMode: boolean; subdomain: "store" | "admin" | "rider" | null } {
+export function resolveSubdomain(hostname: string = typeof window !== "undefined" ? window.location.hostname : ""): { isSubdomainMode: boolean; subdomain: "store" | "admin" | "rider" | null } {
   // 1. Check for query parameter override (e.g. ?_subdomain=store) or session storage persistence
   if (typeof window !== "undefined") {
     const params = new URLSearchParams(window.location.search);

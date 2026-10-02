@@ -6,7 +6,9 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -22,6 +24,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useOrderProcessingConsent } from "@/hooks/useOrderProcessingConsent";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -47,7 +50,10 @@ export function SavedAddressesPage(): ReactElement {
   const [isDefault, setIsDefault] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
+  const [opAcknowledged, setOpAcknowledged] = useState(false);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
+
+  const { hasConsent: hasOrderProcessingConsent } = useOrderProcessingConsent();
 
   const { data: addresses, isLoading, error } = useQuery({
     enabled: !isBootstrapPending,
@@ -64,30 +70,56 @@ export function SavedAddressesPage(): ReactElement {
 
   const createMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
-      await api!.post("/api/v1/addresses", body);
+      const res = await api!.post<{ data: { id: string } }>("/api/v1/addresses", body);
+      return res.data;
     },
     onSuccess: () => {
       toast.success("Address added successfully");
       setIsFormOpen(false);
       invalidateAddresses();
+      // DPDP 2023: Log ORDER_PROCESSING consent when address is saved
+      try {
+        const p = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
+        });
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+      queryClient.invalidateQueries({ queryKey: ["consents"] });
     },
-    onError: (err) => {
-      handleApiError(err);
-    }
+    onError: (err) => handleApiError(err)
   });
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, body }: { id: string; body: Record<string, unknown> }) => {
-      await api!.put(`/api/v1/addresses/${id}`, body);
+      const res = await api!.put<{ data: { id: string } }>(`/api/v1/addresses/${id}`, body);
+      return res.data;
     },
     onSuccess: () => {
       toast.success("Address updated successfully");
       setIsFormOpen(false);
       invalidateAddresses();
+      // DPDP 2023: Log ORDER_PROCESSING consent when address is updated
+      try {
+        const p = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
+        });
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+      queryClient.invalidateQueries({ queryKey: ["consents"] });
     },
-    onError: (err) => {
-      handleApiError(err);
-    }
+    onError: (err) => handleApiError(err)
   });
 
   const deleteMutation = useMutation({
@@ -135,6 +167,7 @@ export function SavedAddressesPage(): ReactElement {
     setIsDefault(false);
     setMapCoords(null);
     setFormError(null);
+    setOpAcknowledged(false);
     setIsFormOpen(true);
   };
 
@@ -146,6 +179,7 @@ export function SavedAddressesPage(): ReactElement {
     setIsDefault(addr.isDefault);
     setMapCoords(addr.lat && addr.lng ? { lat: Number(addr.lat), lng: Number(addr.lng) } : null);
     setFormError(null);
+    setOpAcknowledged(false);
     setIsFormOpen(true);
   };
 
@@ -264,7 +298,13 @@ export function SavedAddressesPage(): ReactElement {
         </div>
       )}
 
-      <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
+      <Dialog
+        open={isFormOpen}
+        onOpenChange={(open) => {
+          setIsFormOpen(open);
+          if (!open) setOpAcknowledged(false);
+        }}
+      >
         <DialogContent className="sm:max-w-xl gap-6 max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="font-playfair text-xl">
@@ -329,13 +369,79 @@ export function SavedAddressesPage(): ReactElement {
             {formError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
             )}
+
+            <div
+              data-testid="order-processing-consent-notice"
+              className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  <span>Order Fulfillment &amp; Location Services</span>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                  Essential
+                </span>
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
+              </p>
+
+              <div className="pt-0.5 text-[11px] text-muted-foreground">
+                <span>For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the </span>
+                <ConsentNoticeModal
+                  purpose="ORDER_PROCESSING"
+                  triggerLabel="Order Fulfillment Notice"
+                  triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                />
+                <span> (or view our platform-wide </span>
+                <a
+                  href="/privacy"
+                  className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                >
+                  Privacy Policy
+                </a>
+                <span>).</span>
+              </div>
+
+              {!hasOrderProcessingConsent ? (
+                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                  <Checkbox
+                    checked={opAcknowledged}
+                    data-testid="order-processing-acknowledge-checkbox"
+                    id="op-ack"
+                    onCheckedChange={(v) => setOpAcknowledged(!!v)}
+                  />
+                  <label
+                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                    htmlFor="op-ack"
+                  >
+                    I have read and understood this notice
+                  </label>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                    <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
+                    Consent Active
+                  </span>
+                  <span className="text-muted-foreground/40">•</span>
+                  <span>Permanent operational requirement</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={isPending}>
               Cancel
             </Button>
-            <Button className="bg-gorola-pine text-white" onClick={handleSaveAddress} disabled={isPending}>
+            <Button
+              className="bg-gorola-pine text-white"
+              data-testid="save-address-btn"
+              disabled={isPending || (!hasOrderProcessingConsent && !opAcknowledged)}
+              onClick={handleSaveAddress}
+            >
               {isPending ? "Saving..." : "Save Address"}
             </Button>
           </DialogFooter>

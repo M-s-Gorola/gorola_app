@@ -187,6 +187,28 @@ describe("Admin Audit Logs Integration Tests", () => {
     expect(bodyActionFilter.data.items.length).toBe(1);
     expect(bodyActionFilter.data.items[0].id).toBe(log1.id);
 
+    // Test substring & case-insensitive filtering by action: GET /api/v1/admin/audit-logs?action=suspend
+    const resActionSubstring = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/audit-logs?action=suspend",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(resActionSubstring.statusCode).toBe(200);
+    const bodyActionSubstring = resActionSubstring.json();
+    expect(bodyActionSubstring.data.items.length).toBe(1);
+    expect(bodyActionSubstring.data.items[0].id).toBe(log1.id);
+
+    // Test substring & case-insensitive filtering by entityType: GET /api/v1/admin/audit-logs?entityType=store
+    const resEntitySubstring = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/audit-logs?entityType=store",
+      headers: { authorization: `Bearer ${token}` }
+    });
+    expect(resEntitySubstring.statusCode).toBe(200);
+    const bodyEntitySubstring = resEntitySubstring.json();
+    expect(bodyEntitySubstring.data.items.length).toBe(1);
+    expect(bodyEntitySubstring.data.items[0].id).toBe(log2.id);
+
     // Test filtering by role and date range
     const fromIso = new Date(Date.now() - 3600000).toISOString();
     const toIso = new Date(Date.now() + 3600000).toISOString();

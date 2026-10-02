@@ -1,17 +1,16 @@
 import crypto from "node:crypto";
 
-const DEFAULT_KEY =
-  process.env.ENCRYPTION_KEY ||
-  "gorola_default_pii_encryption_key_32bytes!!";
-const DEFAULT_HMAC_SECRET =
-  process.env.HMAC_SECRET || "gorola_default_hmac_secret_key_32bytes!!";
-
 function getCipherKey(): Buffer {
-  return crypto.createHash("sha256").update(DEFAULT_KEY).digest();
+  const key =
+    process.env.ENCRYPTION_KEY ||
+    "gorola_default_pii_encryption_key_32bytes!!";
+  return crypto.createHash("sha256").update(key).digest();
 }
 
 function getHmacSecret(): Buffer {
-  return crypto.createHash("sha256").update(DEFAULT_HMAC_SECRET).digest();
+  const secret =
+    process.env.HMAC_SECRET || "gorola_default_hmac_secret_key_32bytes!!";
+  return crypto.createHash("sha256").update(secret).digest();
 }
 
 export function encryptPII(text: string): string {
@@ -46,19 +45,39 @@ export function decryptPII(encryptedText: string): string {
   const ciphertext = Buffer.from(ciphertextHex, "hex");
   const authTag = Buffer.from(authTagHex, "hex");
 
-  try {
-    const decipher = crypto.createDecipheriv("aes-256-gcm", getCipherKey(), iv);
-    decipher.setAuthTag(authTag);
+  const tryDecrypt = (keyStr: string): string | null => {
+    try {
+      const keyBuffer = crypto.createHash("sha256").update(keyStr).digest();
+      const decipher = crypto.createDecipheriv("aes-256-gcm", keyBuffer, iv);
+      decipher.setAuthTag(authTag);
 
-    let decrypted = decipher.update(ciphertext, undefined, "utf8");
-    decrypted += decipher.final("utf8");
+      let decrypted = decipher.update(ciphertext, undefined, "utf8");
+      decrypted += decipher.final("utf8");
 
-    return decrypted;
-  } catch {
-    // If key mismatched or data was corrupted, safely fallback to raw ciphertext without crashing
-    return encryptedText;
+      return decrypted;
+    } catch {
+      return null;
+    }
+  };
+
+  const configuredKey =
+    process.env.ENCRYPTION_KEY ||
+    "gorola_default_pii_encryption_key_32bytes!!";
+
+  const primary = tryDecrypt(configuredKey);
+  if (primary !== null) {
+    return primary;
   }
 
+  const defaultFallbackKey = "gorola_default_pii_encryption_key_32bytes!!";
+  if (configuredKey !== defaultFallbackKey) {
+    const fallback = tryDecrypt(defaultFallbackKey);
+    if (fallback !== null) {
+      return fallback;
+    }
+  }
+
+  return encryptedText;
 }
 
 export function hashPII(text: string): string {

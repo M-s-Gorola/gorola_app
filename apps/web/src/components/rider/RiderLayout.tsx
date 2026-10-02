@@ -66,7 +66,7 @@ export function RiderLayout({ children }: RiderLayoutProps): ReactElement {
       </main>
 
       {/* Bottom Tab Bar Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 z-30 h-16 border-t border-gorola-fog bg-white flex justify-around items-center px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.03)] pb-safe">
+      <nav className="fixed bottom-0 left-0 right-0 z-30 h-16 max-w-md mx-auto border-t border-gorola-fog bg-white flex justify-around items-center px-6 shadow-[0_-2px_10px_rgba(0,0,0,0.03)] pb-safe">
         <Link
           to={ordersPath}
           className={`flex flex-col items-center justify-center gap-1 w-20 py-2 h-12 rounded-xl transition-colors select-none ${

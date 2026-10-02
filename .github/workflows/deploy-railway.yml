@@ -7,6 +7,8 @@
 #   Called by staging.yml (staging environment) and production.yml (production).
 #   Railway's GitHub auto-deploy is intentionally DISCONNECTED from the repo —
 #   GitHub Actions is the sole deploy trigger, giving per-branch control.
+#   Build settings (builder, build/start commands, healthcheck, restart policy)
+#   are managed directly in the Railway dashboard — NOT via IaC.
 #
 # INPUTS
 #   environment     — "staging" | "production"

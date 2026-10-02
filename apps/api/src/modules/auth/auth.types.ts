@@ -33,7 +33,10 @@ export type BuyerRefreshSuccess = AuthTokenPair & {
   userId: string;
 };
 
-export type BuyerVerifySuccess = BuyerRefreshSuccess;
+export type BuyerVerifySuccess = BuyerRefreshSuccess & {
+  isPendingDeletion?: boolean;
+  deletionScheduledFor?: string | null;
+};
 
 export type OtpStoreRecord = {
   hashedOtp: string;
@@ -64,8 +67,32 @@ export type AccessTokenVerifier = {
   verifyAccessToken: (token: string) => Promise<AccessTokenPayload>;
 };
 
+export type SessionContext = {
+  ipAddress?: string | null;
+  userAgent?: string | null;
+};
+
+export type ActiveSession = {
+  sessionId: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastActiveAt: string;
+  isCurrent?: boolean;
+};
+
+export type StoredSessionRecord = {
+  sessionId: string;
+  refreshToken: string;
+  ipAddress: string | null;
+  userAgent: string | null;
+  createdAt: string;
+  lastActiveAt: string;
+};
+
 export type RedisLikeClient = {
   get: (key: string) => Promise<string | null>;
   set: (key: string, value: string, mode: "EX", ttlSeconds: number) => Promise<unknown>;
   del: (key: string) => Promise<unknown>;
 };
+

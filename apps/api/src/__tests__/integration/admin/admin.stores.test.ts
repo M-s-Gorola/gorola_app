@@ -326,4 +326,73 @@ describe("Admin Stores API Integration Tests", () => {
     const gatedCat2 = resCategories2.json().data.find((c: { id: string }) => c.id === category.id);
     expect((gatedCat2 as { productCount?: number } | undefined)?.productCount).toBe(1);
   });
+
+  it("GET /api/v1/admin/stores/:id/orders should return paginated orders for the store", async () => {
+    const store = await db.store.create({
+      data: {
+        name: "Order Store Test",
+        description: "Store for order tests",
+        phone: "+919999000111",
+        address: "Store Address 1",
+        storeType: "QUICK_COMMERCE",
+        isActive: true
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: { phone: "+919876543211", name: "Store Customer 1" }
+    });
+
+    await db.order.createMany({
+      data: [
+        {
+          userId: buyer.id,
+          storeId: store.id,
+          status: "DELIVERED",
+          subtotal: 150,
+          deliveryFee: 20,
+          total: 170,
+          paymentMethod: "COD",
+          landmarkDescription: "Test Loc 1"
+        },
+        {
+          userId: buyer.id,
+          storeId: store.id,
+          status: "PLACED",
+          subtotal: 250,
+          deliveryFee: 20,
+          total: 270,
+          paymentMethod: "UPI",
+          landmarkDescription: "Test Loc 2"
+        }
+      ]
+    });
+
+    const res = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/stores/${store.id}/orders?page=1&limit=1`,
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.success).toBe(true);
+    expect(body.data.total).toBe(2);
+    expect(body.data.totalPages).toBe(2);
+    expect(body.data.page).toBe(1);
+    expect(body.data.limit).toBe(1);
+    expect(body.data.items).toHaveLength(1);
+    expect(body.data.items[0].userName).toBe("Store Customer 1");
+    expect(body.data.items[0].userMaskedPhone).toBe("*********3211");
+  });
+
+  it("GET /api/v1/admin/stores/:id/orders should return 404 for nonexistent store", async () => {
+    const res = await server.inject({
+      method: "GET",
+      url: "/api/v1/admin/stores/nonexistent_store_999/orders",
+      headers: { authorization: `Bearer ${adminToken}` }
+    });
+
+    expect(res.statusCode).toBe(404);
+  });
 });

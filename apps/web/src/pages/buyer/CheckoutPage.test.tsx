@@ -103,20 +103,100 @@ describe("CheckoutPage", () => {
         ]
       });
     });
-    getMock.mockResolvedValue({
-      data: {
-        data: {
-          addresses: [
-            {
-              id: "addr-1",
-              label: "Home",
-              landmarkDescription: "Near landmark text here area tenchars"
-            }
-          ]
-        },
-        success: true
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: {
+            data: {
+              consents: [
+                {
+                  id: "c-op",
+                  purpose: "ORDER_PROCESSING",
+                  isWithdrawn: false,
+                  consentVersion: "1.0",
+                  createdAt: "2026-09-20T00:00:00Z"
+                }
+              ]
+            },
+            success: true
+          }
+        });
       }
+      return Promise.resolve({
+        data: {
+          data: {
+            addresses: [
+              {
+                id: "addr-1",
+                label: "Home",
+                landmarkDescription: "Near landmark text here area tenchars"
+              }
+            ]
+          },
+          success: true
+        }
+      });
     });
+  });
+
+  it("when no ORDER_PROCESSING consent exists, Place Order button is disabled until acknowledgement checkbox is checked", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { data: { consents: [] }, success: true }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          data: {
+            addresses: [
+              {
+                id: "addr-1",
+                label: "Home",
+                landmarkDescription: "Near landmark text here area tenchars"
+              }
+            ]
+          },
+          success: true
+        }
+      });
+    });
+
+    const user = userEvent.setup();
+    renderCheckout();
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText(/Deliver to new location/i));
+
+    const landmark = screen.getByPlaceholderText(/Hotel Padmini|E\.g\./i);
+    await user.type(landmark, "Near landmark text here area tenchars");
+
+    const checkbox = screen.getByTestId("order-processing-acknowledge-checkbox");
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).toHaveAttribute("data-state", "unchecked");
+
+    const continueBtn = screen.getByRole("button", { name: /^Continue$/i });
+    expect(continueBtn).toBeDisabled();
+
+    // Check acknowledgement
+    await user.click(checkbox);
+    expect(continueBtn).toBeEnabled();
+  });
+
+  it("when active ORDER_PROCESSING consent exists, no checkbox rendered on new address", async () => {
+    const user = userEvent.setup();
+    renderCheckout();
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText(/Deliver to new location/i));
+
+    expect(screen.queryByTestId("order-processing-acknowledge-checkbox")).not.toBeInTheDocument();
   });
 
   it("does not show a postal or pin code field", async () => {
@@ -150,6 +230,28 @@ describe("CheckoutPage", () => {
   });
 
   it("places order via POST /api/v1/orders using saved address and navigates", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { data: { consents: [] }, success: true }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          data: {
+            addresses: [
+              {
+                id: "addr-1",
+                label: "Home",
+                landmarkDescription: "Near landmark text here area tenchars"
+              }
+            ]
+          },
+          success: true
+        }
+      });
+    });
+
     postMock.mockResolvedValueOnce({
       data: {
         data: {
@@ -172,6 +274,7 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
     expect(screen.getByRole("heading", { name: /^Review$/i })).toBeInTheDocument();
+    expect(screen.getByTestId("checkout-marketing-opt-in")).toBeInTheDocument();
     expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Home");
     expect(screen.getByTestId("review-delivery-address")).toHaveTextContent("Near landmark text here area tenchars");
 

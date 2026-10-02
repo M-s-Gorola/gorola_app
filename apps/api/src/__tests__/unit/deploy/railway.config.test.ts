@@ -9,24 +9,16 @@ const thisDir = path.dirname(fileURLToPath(import.meta.url));
 const apiRoot = path.join(thisDir, "..", "..", "..", "..");
 const repoRoot = path.join(thisDir, "..", "..", "..", "..", "..", "..");
 
-const railwayToml = path.join(repoRoot, "railway.toml");
 const nixpacksToml = path.join(repoRoot, "nixpacks.toml");
 const nvmrc = path.join(repoRoot, ".nvmrc");
 const rootPackageJson = path.join(repoRoot, "package.json");
 const procfile = path.join(repoRoot, "Procfile");
 
-describe("Phase 1.9 — Railway / Procfile (repo as code)", () => {
-  it("exposes a railway.toml with monorepo build and @gorola/api start", async () => {
-    const text = await readFile(railwayToml, "utf8");
-    expect(text).toMatch(/^\[build\]/m);
-    expect(text).toMatch(/buildCommand/s);
-    expect(text).toMatch(/@gorola\/shared/);
-    expect(text).toMatch(/@gorola\/api/);
-    expect(text).toMatch(/^\[deploy\]/m);
-    expect(text).toMatch(/startCommand/s);
-    expect(text).toMatch(/pnpm --filter @gorola\/api start/);
-  });
-
+// Railway IaC (.railway/railway.ts + railway config apply) has been removed.
+// Build settings (builder, buildCommand, startCommand, restartPolicyType)
+// are now configured directly in the Railway dashboard.
+// This suite validates the remaining deployment config that lives in the repo.
+describe("Phase 1.9 — Railway Deployment Config (Procfile / scripts / Node version)", () => {
   it("exposes a Procfile web process using the API start script", async () => {
     const text = await readFile(procfile, "utf8");
     expect(text).toMatch(/^web:\s*pnpm --filter @gorola\/api start/m);

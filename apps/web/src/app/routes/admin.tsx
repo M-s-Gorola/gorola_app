@@ -9,11 +9,13 @@ import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
 import { AdminFeatureFlagsPage } from "@/pages/admin/AdminFeatureFlagsPage";
 import { AdminLoginPage } from "@/pages/admin/AdminLoginPage";
 import { AdminOrdersPage } from "@/pages/admin/AdminOrdersPage";
+import { AdminRiderDetailPage } from "@/pages/admin/AdminRiderDetailPage";
 import { AdminRidersPage } from "@/pages/admin/AdminRidersPage";
 import { AdminSetup2FAPage } from "@/pages/admin/AdminSetup2FAPage";
 import { AdminStoreDetailPage } from "@/pages/admin/AdminStoreDetailPage";
 import { AdminStoresPage } from "@/pages/admin/AdminStoresPage";
 import { AdminTwoFactorPage } from "@/pages/admin/AdminTwoFactorPage";
+import { AdminUserDetailPage } from "@/pages/admin/AdminUserDetailPage";
 import { AdminUsersPage } from "@/pages/admin/AdminUsersPage";
 
 import { AdminRoute } from "./guards";
@@ -72,12 +74,34 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
       }
     />,
     <Route
+      key="admin-user-detail"
+      path={`${prefix}/users/:id`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminUserDetailPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
       key="admin-riders"
       path={`${prefix}/riders`}
       element={
         <AdminRoute>
           <AdminLayout>
             <AdminRidersPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-rider-detail"
+      path={`${prefix}/riders/:id`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminRiderDetailPage />
           </AdminLayout>
         </AdminRoute>
       }

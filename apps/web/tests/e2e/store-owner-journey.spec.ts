@@ -165,6 +165,13 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
 
     // Log in buyer
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543210');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -205,16 +212,23 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     // Type landmark (>= 10 chars)
     await buyerPage.locator('[name="landmarkDescription"]').fill('Near the old clock tower in Mussoorie');
 
+    // Acknowledge DPDP order processing consent if required
+    const opCheckbox = buyerPage.locator('[data-testid="order-processing-acknowledge-checkbox"], [data-testid="order-processing-dialog-checkbox"]');
+    if (await opCheckbox.isVisible()) {
+      await opCheckbox.click();
+    }
+
     // Click Continue to Review step
     await buyerPage.locator('button', { hasText: /Continue/i }).click();
 
     // Click "Place Order"
     const placeOrderBtn = buyerPage.locator('button', { hasText: /Place Order/i });
     await expect(placeOrderBtn).toBeVisible();
-    await placeOrderBtn.click({ force: true });
+    await placeOrderBtn.evaluate((node) => node.scrollIntoView({ block: 'center' }));
+    await placeOrderBtn.click();
 
     // Get order ID from URL
-    await buyerPage.waitForURL(/.*\/orders\/.*/);
+    await buyerPage.waitForURL(/.*\/orders\/.*/, { timeout: 30000 });
     const orderUrl = buyerPage.url();
     const orderId = orderUrl.substring(orderUrl.lastIndexOf("/") + 1);
 
@@ -448,6 +462,13 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543211');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -693,6 +714,13 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543212');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -718,10 +746,14 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       .click();
     await buyerPage.locator('[data-testid$="cart-button"]:visible').click();
 
-    // Increase quantity
-    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
-    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
-    await buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" }).click();
+    // Increase quantity to 4 (Rs 480) to cross the Rs 400 minimum purchase threshold
+    const plusBtn = buyerPage.locator('aside').getByRole("button", { name: "Increase Premium Basmati Rice quantity" });
+    await plusBtn.click();
+    await expect(buyerPage.locator('aside').locator('[data-testid="item-quantity"]').first()).toHaveText("2");
+    await plusBtn.click();
+    await expect(buyerPage.locator('aside').locator('[data-testid="item-quantity"]').first()).toHaveText("3");
+    await plusBtn.click();
+    await expect(buyerPage.locator('aside').locator('[data-testid="item-quantity"]').first()).toHaveText("4");
 
     // Assert that the offer is applied automatically in the Cart Drawer
     // Total discount should be 15% of 480 = Rs 72
@@ -822,6 +854,13 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       (window as any).isE2E = true;
     });
     await buyerPage.goto(`${BUYER_SUBDOMAIN}/login`);
+    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
+      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
     await buyerPage.locator('#buyer-phone').fill('9876543214');
     await buyerPage.locator('button', { hasText: /Send OTP/i }).click();
     await expect(buyerPage.locator('text=/Enter OTP/i')).toBeVisible({ timeout: 15000 });
@@ -869,6 +908,10 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
     await buyerPage.locator('[name="label"]').fill("E2E Suite");
     await buyerPage.locator('[name="landmarkDescription"]').fill("E2E Tower - near the diagnostic center entrance");
     // Click Save Address inside dialog
+    const opCheckbox = buyerPage.locator('[data-testid="order-processing-acknowledge-checkbox"]');
+    if (await opCheckbox.isVisible()) {
+      await opCheckbox.click();
+    }
     await buyerPage.getByRole("button", { name: "Save Address" }).click();
     // Wait for dialog to close after save
     await expect(buyerPage.getByRole("dialog")).not.toBeVisible({ timeout: 10000 });

@@ -155,4 +155,260 @@ export class UserRepository {
       throw error;
     }
   }
+
+  public async getMyData(userId: string): Promise<{
+    profile: {
+      id: string;
+      name: string;
+      phone: string;
+      createdAt: string;
+      updatedAt: string;
+    };
+    addresses: Array<{
+      id: string;
+      label: string;
+      landmarkDescription: string;
+      flatRoom: string | null;
+      lat: number | null;
+      lng: number | null;
+      isDefault: boolean;
+      createdAt: string;
+    }>;
+    orders: Array<{
+      id: string;
+      orderType: string;
+      status: string;
+      subtotal: number;
+      deliveryFee: number;
+      total: number;
+      paymentMethod: string;
+      paymentStatus: string;
+      createdAt: string;
+      items: Array<{
+        productName: string;
+        variantLabel: string;
+        price: number;
+        quantity: number;
+      }>;
+    }>;
+    consents: Array<{
+      id: string;
+      purpose: string;
+      consentVersion: string;
+      noticeText: string;
+      isWithdrawn: boolean;
+      createdAt: string;
+      withdrawnAt: string | null;
+    }>;
+  }> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      include: {
+        addresses: {
+          where: { isDeleted: false },
+          orderBy: { createdAt: "desc" }
+        },
+        orders: {
+          take: 50,
+          orderBy: { createdAt: "desc" },
+          include: {
+            items: true
+          }
+        },
+        consents: {
+          orderBy: { createdAt: "desc" }
+        }
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundError("User not found", { userId });
+    }
+
+    const decryptedPhone = decryptPII(user.phone);
+
+    return {
+      profile: {
+        id: user.id,
+        name: user.name,
+        phone: decryptedPhone,
+        createdAt: user.createdAt.toISOString(),
+        updatedAt: user.updatedAt.toISOString()
+      },
+      addresses: user.addresses.map((a) => ({
+        id: a.id,
+        label: a.label,
+        landmarkDescription: a.landmarkDescription,
+        flatRoom: a.flatRoom,
+        lat: a.lat ? Number(a.lat) : null,
+        lng: a.lng ? Number(a.lng) : null,
+        isDefault: a.isDefault,
+        createdAt: a.createdAt.toISOString()
+      })),
+      orders: user.orders.map((o) => ({
+        id: o.id,
+        orderType: o.orderType,
+        status: o.status,
+        subtotal: Number(o.subtotal),
+        deliveryFee: Number(o.deliveryFee),
+        total: Number(o.total),
+        paymentMethod: o.paymentMethod,
+        paymentStatus: o.paymentStatus,
+        createdAt: o.createdAt.toISOString(),
+        items: o.items.map((item) => ({
+          productName: item.productName,
+          variantLabel: item.variantLabel,
+          price: Number(item.price),
+          quantity: item.quantity
+        }))
+      })),
+      consents: user.consents.map((c) => ({
+        id: c.id,
+        purpose: c.purpose,
+        consentVersion: c.consentVersion,
+        noticeText: c.noticeText,
+        isWithdrawn: c.isWithdrawn,
+        createdAt: c.createdAt.toISOString(),
+        withdrawnAt: c.withdrawnAt ? c.withdrawnAt.toISOString() : null
+      }))
+    };
+  }
+
+  public async updateNominee(
+    userId: string,
+    data: {
+      nomineeName?: string | null | undefined;
+      nomineeContact?: string | null | undefined;
+      nomineeRelationship?: string | null | undefined;
+    }
+  ): Promise<{
+    nomineeName: string | null;
+    nomineeContact: string | null;
+    nomineeRelationship: string | null;
+  }> {
+    const updateData: Record<string, string | null> = {};
+    if (data.nomineeName !== undefined) updateData.nomineeName = data.nomineeName;
+    if (data.nomineeContact !== undefined) updateData.nomineeContact = data.nomineeContact;
+    if (data.nomineeRelationship !== undefined) updateData.nomineeRelationship = data.nomineeRelationship;
+
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: updateData,
+      select: {
+        nomineeName: true,
+        nomineeContact: true,
+        nomineeRelationship: true
+      }
+    });
+
+    return updated;
+  }
+
+  public async getNominee(userId: string): Promise<{
+    nomineeName: string | null;
+    nomineeContact: string | null;
+    nomineeRelationship: string | null;
+  }> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId },
+      select: {
+        nomineeName: true,
+        nomineeContact: true,
+        nomineeRelationship: true
+      }
+    });
+
+    if (!user) {
+      throw new NotFoundError("User not found", { userId });
+    }
+
+    return user;
+  }
+
+  public async markPendingDeletion(userId: string): Promise<{
+    id: string;
+    deletedAt: string;
+    deletionScheduledFor: string;
+  }> {
+    const deletedAt = new Date();
+    const deletionScheduledFor = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt,
+        deletionScheduledFor
+      }
+    });
+
+    return {
+      id: updated.id,
+      deletedAt: updated.deletedAt!.toISOString(),
+      deletionScheduledFor: updated.deletionScheduledFor!.toISOString()
+    };
+  }
+
+  public async reactivateAccount(userId: string): Promise<User> {
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: {
+        deletedAt: null,
+        deletionScheduledFor: null,
+        isDeleted: false,
+        isActive: true
+      }
+    });
+
+    return toDomainUser(updated)!;
+  }
+
+  public async permanentPurgeAndAnonymize(userId: string): Promise<void> {
+    await this.db.$transaction([
+      // 1. Irreversibly anonymize user profile
+      this.db.user.update({
+        where: { id: userId },
+        data: {
+          name: "[deleted]",
+          phone: `DELETED_${userId}`,
+          phoneHash: null,
+          isDeleted: true,
+          isActive: false,
+          nomineeName: null,
+          nomineeContact: null,
+          nomineeRelationship: null
+        }
+      }),
+      // 2. Permanently purge saved delivery addresses
+      this.db.address.deleteMany({
+        where: { userId }
+      }),
+      // 3. Clear shopping carts
+      this.db.cart.deleteMany({
+        where: { userId }
+      }),
+      // 4. Sanitize delivery PII from orders while keeping tax totals
+      this.db.order.updateMany({
+        where: { userId },
+        data: {
+          landmarkDescription: "[deleted]",
+          flatRoom: null,
+          deliveryNote: null,
+          deliveryLat: null,
+          deliveryLng: null,
+          addressLabel: null
+        }
+      }),
+      // 5. Mark all consents as withdrawn
+      this.db.consentLog.updateMany({
+        where: { userId, isWithdrawn: false },
+        data: {
+          isWithdrawn: true,
+          withdrawnAt: new Date()
+        }
+      })
+    ]);
+  }
 }
+
+
+

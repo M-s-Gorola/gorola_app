@@ -1724,4 +1724,156 @@ Refactor the order fulfillment lifecycle and user exposure patterns:
 - Existing E2E Playwright tests and integration tests that assumed the merchant could perform the entire placed-to-delivered flow will break. These tests must be rewritten to simulate multi-actor interactions (Merchant prepares -> Rider accepts -> Merchant dispatches -> Rider delivers).
 - The map requires importing Leaflet or Ola Maps inside the store owner panel, which could cause test JSDOM failures if the component is not mocked. We will explicitly mock the map component in `StoreOrdersPage.test.tsx`.
 
+---
+
+## [DECISION-058] DPDP Act Right to Erasure — Two-Stage Soft Deletion with 30-Day Recovery Grace Period and BullMQ Automated Hard Purge
+
+**Date:** 2026-09-24  
+**Status:** Accepted  
+
+**Context:**  
+Under India's Digital Personal Data Protection (DPDP) Act 2023 Section 12, users (Data Principals) have the statutory right to request erasure of their personal data. However, immediate hard deletion or immediate PII scrambling on Day 0 creates significant UX and operational risks:
+1. **Accidental Deletions:** If a user accidentally deletes their account or changes their mind, immediate irreversible scrubbing destroys all account history with zero recovery option.
+2. **Account Recovery Authentication Paradox:** If phone number PII is scrambled on Day 0, the system cannot verify or authenticate the returning user via Phone OTP during a grace period.
+3. **Statutory Merchant Tax Obligations:** Indian accounting and tax regulations (GST/Companies Act) mandate that store order transaction totals and item sales ledgers be retained for tax audits (up to 7-8 years). Immediate hard deletion of `Order` rows would violate financial regulations.
+
+**Decision:**  
+Implement a **Two-Stage Erasure Architecture** featuring a **30-Day Recovery Grace Period**:
+
+1. **Stage 1: Day 0 Deletion Request (`DELETE /api/v1/user/account`)**
+   - **Soft Deletion & Lockout:** Set `deletedAt = new Date()`, `deletionScheduledFor = Date.now() + 30 days`.
+   - **Session Revocation:** Immediately delete active Redis session keys (`user_sessions:{userId}`) and refresh tokens (`rt:buyer:{token}`), forcing instant logout across all active devices.
+   - **Delayed Worker Job:** Enqueue a delayed BullMQ job (`UserDataPurgeJob`) scheduled to execute in 30 days.
+   - **Clear User Notice:** Present a prominent confirmation modal informing the user of the 30-day grace period and instructions on how to restore their account via Phone OTP.
+
+2. **Stage 2: Days 1–30 Account Recovery (`POST /api/v1/user/reactivate-account`)**
+   - If the user verifies Phone OTP on `/login` during the 30 days, the backend detects `deletedAt !== null` and returns `{ isPendingDeletion: true, deletionScheduledFor }`.
+   - The UI halts standard navigation and displays the **Account Scheduled for Deletion** screen with unambiguous controls:
+     - **"Restore My Account" (Primary):** Calls `POST /api/v1/user/reactivate-account`, resets `deletedAt = null`, `deletionScheduledFor = null`, `isDeleted = false`, and logs the user in.
+     - **"Proceed with Deletion & Exit" (Secondary):** Keeps the 30-day countdown running in PostgreSQL, discards tokens, and signs out back to the phone entry screen without altering the deletion schedule.
+   - Restoring the account clears `deletedAt = null` and cancels the BullMQ purge job, preserving user profile, addresses, and history.
+
+3. **Stage 3: Day 31+ Irreversible Hard Purge (BullMQ `UserDataPurgeJob`)**
+   - When the 30-day BullMQ job executes, it verifies `deletedAt !== null` (was not reactivated).
+   - **User PII Anonymization:** Sets `name = '[deleted]'`, `phone = 'DELETED_${userId}'`, `phoneHash = null`, `isDeleted = true`, `isActive = false`.
+   - **Saved Address Purge:** Permanently purges all rows in the `Address` table for that user.
+   - **Nominee Purge:** Clears nominee fields (`nomineeName = null`, `nomineeContact = null`, `nomineeRelationship = null`).
+   - **Order Delivery PII Sanitization:** Clears personal delivery metadata (`landmarkDescription = '[deleted]'`, `flatRoom = null`, `deliveryNote = null`, `deliveryLat = null`, `deliveryLng = null`, `addressLabel = null`) while preserving item counts, prices, and tax subtotals for store financial compliance.
+   - **Consent Withdrawal:** Formally marks all `ConsentLog` entries with `isWithdrawn = true` and `withdrawnAt = new Date()`.
+
+**Rationale:**  
+- Adheres to industry gold standards (e.g. Google/Instagram 30-day deactivation) while complying fully with DPDP Section 12 erasure requirements.
+- Retaining phone number in a locked state during the grace period enables seamless, passwordless Phone OTP recovery without introducing third-party recovery email dependencies.
+- Retaining financial records with sanitized delivery PII fulfills both DPDP Act data minimization and Indian GST financial recordkeeping requirements.
+- BullMQ leverages our existing self-hosted Redis instance, ensuring zero personal data is ever shared with external third-party queue providers.
+
+**Tradeoffs:**  
+- Requires handling the `isPendingDeletion` state in login middleware and presenting reactivation UI on `/login`.
+- Delayed jobs in BullMQ must verify that the account was not reactivated before executing final scrubbing.
+
+**Alternatives Considered:**  
+1. **Immediate Day 0 Hard Deletion / PII Scramble:** Rejected — zero grace period, irrecoverable on accidental clicks, and impossible to authenticate returning users.
+2. **Email-Only Account Cancellation Links:** Rejected — adds unnecessary friction and external email dependencies when Phone OTP is already the native authentication channel for GoRola.
+
+---
+
+## [DECISION-059] DPDP Consent Architecture Overhaul — Dynamic Configuration Table, Multi-Channel Marketing Renaming (MARKETING_COMMS), Strict Notice Disclosures, and Admin Consent Auditing
+
+**Date:** 2026-10-02  
+**Status:** Accepted  
+
+**Context:**  
+During the compliance audit of GoRola's DPDP Act implementation (Phase 8.2 & 8.3), four key architectural and regulatory observations were identified:
+1. **PostgreSQL Enum Rigidity vs Dynamic Extensibility:** The initial consent ledger used a hardcoded PostgreSQL enum (`ConsentPurpose: OTP_AUTH | ORDER_PROCESSING | MARKETING_EMAIL | ANALYTICS`). Adding, removing, or re-configuring purposes in production required DDL migration scripts that lock tables and create migration risks.
+2. **Channel-Specific Misnomer (`MARKETING_EMAIL`):** GoRola is a mobile-first quick-commerce platform using Phone OTP and SMS/WhatsApp communications. The identifier `MARKETING_EMAIL` was an inaccurate misnomer that did not reflect actual communication channels (SMS promotions, discount broadcasts).
+3. **Disclosure Accuracy in Statutory Notices:**
+   - *GPS Location Retention:* Initial notices stated GPS was never retained or deleted on delivery, whereas `Order.deliveryLat/Lng` is retained for historical routing and only stripped upon account erasure.
+   - *Display Name:* Since `User.name` is optional, claiming "we collect your name" without clarification caused ambiguity when users only provided a phone number.
+   - *Sub-Processor Transparency:* Marketing SMS dispatches via DLT-registered SMS gateways (Exotel) needed explicit mention in marketing and login notices.
+4. **Administrative Audit Observability:** Customer support and compliance officers had no interface to inspect a user's consent status or historical audit log in the Admin Panel during data subject inquiries.
+
+**Decision:**  
+Implement **Phase 8.3.4 (DPDP Consent Architecture Overhaul & Admin Consent Panel)**:
+
+1. **Replace Enum with `ConsentPurposeConfig` Relational Table:**
+   - Drop the `ConsentPurpose` PostgreSQL enum.
+   - Create `ConsentPurposeConfig` table (`key` PK, `displayName`, `description`, `isEssential`, `retentionSummary`, `createdAt`, `updatedAt`).
+   - Change `ConsentLog.purpose` to `TEXT` with a Foreign Key constraint referencing `ConsentPurposeConfig.key`.
+   - Seed the 4 canonical purposes: `OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`.
+
+2. **Standardize `MARKETING_COMMS` Across All Layers:**
+   - Rename `MARKETING_EMAIL` to `MARKETING_COMMS` across database migrations, backend types, Zod schemas, controllers, and frontend components.
+   - Update existing database rows in migration `20261001200359_replace_consent_purpose_enum_with_config_table`.
+
+3. **Precise Statutory Notice Text Alignment:**
+   - Update `ConsentNoticeModal` and all inline notice cards (`SavedAddressesPage`, `CheckoutPage`, `BookingTimeslotPage`, `LoginPage`) to reflect:
+     - Accurate GPS retention (retained with address; order GPS nulled upon account erasure; financial totals kept 7 years for GST).
+     - Conditional name collection ("Display Name (if you have set one)").
+     - Sub-processor disclosures including authorized SMS gateways.
+
+4. **Admin Consent Auditing API & Drawer UI:**
+   - Expose `GET /api/v1/admin/users/:id/consents` with pagination (`page`, `limit`) returning active summary per purpose and paginated historical `ConsentLog` rows.
+   - Add a dedicated "Consent & Privacy (DPDP Act 2023)" section to the Admin Platform Users detail drawer with 4-row status summary and expandable audit log.
+
+**Rationale:**  
+- A configuration table enables zero-downtime additions of future consent categories (e.g. loyalty programs, third-party insurance) without DDL locks.
+- `MARKETING_COMMS` accurately communicates multi-channel promotional consent (SMS, WhatsApp, notifications) without violating DPDP truth-in-disclosure principles.
+- Admin observability ensures GoRola can respond to Data Protection Board compliance audits and customer grievance redressals within statutory timeframes.
+
+**Tradeoffs:**  
+- Requires a schema migration that casts enum to text and seeds initial configuration rows. Handled safely with data migration SQL before adding foreign key constraints.
+
+---
+
+## [DECISION-060] Rejection of Railway IaC in Favor of Railway Dashboard Configuration (Source of Truth)
+
+**Date:** 2026-10-03  
+**Status:** Accepted  
+
+**Context:**  
+Railway announced the deprecation and end-of-life cutoff (December 1, 2026) for legacy "Config as Code" (`railway.toml` / `railway.json`), urging projects to migrate to Railway Infrastructure as Code (`@railway/iac`). 
+
+In response to this platform-level deprecation, we initially authored Railway Infrastructure as Code (`.railway/railway.ts`) and configured GitHub Actions to synchronize it via `railway config apply --yes --confirm-destructive`.
+
+However, evaluating Railway IaC in practice revealed fundamental misalignments with GoRola's architectural needs:
+1. **Application Code vs Infrastructure Management:** GoRola is a modular monolith backend with a stable, unchanging topology (single Fastify Node API + Postgres + Redis). Our CI/CD pipeline only needs to deploy **application code changes** via `railway up`, not dynamically orchestrate multi-resource cloud topologies.
+2. **Destructive Env Var Deletion Hazard:** `railway config apply` performs a declarative reconciliation of the entire environment state against the IaC file. Because our `railway.ts` only declared build and deploy settings (no `variables` block), Railway treated all dashboard-configured environment variables (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `DPDP_*`, etc.) as undeclared and marked them for deletion.
+3. **The Destructive Flag Dilemma:**
+   - With `--confirm-destructive`: The CLI silently wiped every environment variable in the Railway environment on every CI run, crashing the app on boot.
+   - Without `--confirm-destructive`: The CLI exited with code 1 whenever the plan contained deletions, breaking the CI/CD pipeline unconditionally.
+4. **Scoping Limitations (`export const partial`):** The `partial` export only scopes service ownership (which service Railway manages), not variable protection within a managed service.
+5. **Maintenance Overhead of `preserve()` Stubs:** The official IaC workaround requires generating and maintaining stubbed `preserve()` definitions for every secret and environment variable in code, adding pointless toil and fragile sync requirements for a single-service monorepo backend.
+
+**Decision:**  
+Completely remove Railway IaC (`.railway/railway.ts`, `.railway/README.md`) and all `railway config apply` steps from the GitHub Actions deployment pipeline (`deploy-railway.yml`, `paths.yml`). Adopt the Railway Web Dashboard configuration as the permanent, single source of truth for service build and deploy settings across both **Staging** and **Production** environments.
+
+**Required Dashboard Settings (Set once per service in Staging & Production):**
+- **Root Directory:** Repository root (`GoRola_app`)
+- **Builder:** `Railpack` (or `Nixpacks` with `nixpacks.toml`)
+- **Build Command:** `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`
+- **Start Command:** `pnpm --filter @gorola/api start`
+- **Restart Policy:** `On Failure` (Max Retries: 10)
+
+**Deployment Mechanism:**  
+CI/CD deploys via standard imperative CLI:
+```bash
+railway up --ci --environment "<env>" --service "$RAILWAY_SERVICE_ID"
+```
+Future builds and deploys pick up these dashboard settings automatically without any risk of configuration drift or secret deletion.
+
+**Rationale:**  
+- Eliminates the fatal risk of environment variables being purged on CI runs.
+- Simplifies CI/CD pipeline to a single, idempotent `railway up` deployment command.
+- Decouples secret management (safely entered in Railway Dashboard / GitHub Secrets) from code repositories.
+- Dashboard settings persist permanently across all future builds and branch deployments.
+
+**Tradeoffs:**  
+- Initial service configuration (Builder, Build Command, Start Command, Healthcheck Path, Restart Policy) must be manually set once in the Railway Dashboard for both Staging and Production environments.
+
+**Alternatives Considered:**  
+1. **Declare all environment variables with `preserve()` in `railway.ts`:** Rejected — requires constantly synchronizing TypeScript stubs whenever new environment variables are introduced, creating high maintenance friction.
+2. **Maintain legacy `railway.toml`:** Rejected — deprecated by Railway with end-of-life cutoff.
+
+
+
 

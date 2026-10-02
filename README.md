@@ -46,7 +46,8 @@ GoRola_app/
 ├── DATABASE and SETUP/     # Detailed guides for local setup and seeding
 ├── DEPLOYMENT INFO/        # Technical breakdown of Vercel/Railway config
 ├── vercel.json             # Vercel configuration (buyer web)
-├── railway.toml            # Railway configuration (API)
+├── nixpacks.toml           # Nixpacks Node 22 pin
+├── Procfile                # Web process definition
 ├── .env.example            # Environment variables template
 ├── package.json            # Root workspace scripts
 ├── pnpm-workspace.yaml     # pnpm workspace definition
@@ -78,7 +79,7 @@ The project uses GitHub Actions for continuous integration and deployment.
 ### Secrets Management
 Detailed instructions for configuring GitHub Environments, Vercel, and Railway secrets can be found here:
 - 🔐 **[CI/CD Secrets Guide](./.github/workflows/SECRETS.md)**: Configuring GitHub, Vercel, and Railway secrets.
-- ⚙️ **[Deployment Config Guide](./DEPLOYMENT%20INFO/DEPLOYMENT_CONFIG_GUIDE.md)**: Technical breakdown of `vercel.json`, `railway.toml`, and CORS policies.
+- ⚙️ **[Deployment Config Guide](./DEPLOYMENT%20INFO/DEPLOYMENT_CONFIG_GUIDE.md)**: Technical breakdown of `vercel.json`, Railway service settings, and CORS policies.
 
 ## Development Quality Gate
 

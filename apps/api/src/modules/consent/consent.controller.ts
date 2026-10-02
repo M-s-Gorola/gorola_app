@@ -1,0 +1,124 @@
+import { UnauthorizedError, ValidationError } from "@gorola/shared";
+import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+
+import { requireAuth, requireRole } from "../auth/auth.middleware.js";
+import type { AccessTokenVerifier } from "../auth/auth.types.js";
+import { recordConsentBodySchema, withdrawConsentParamsSchema } from "./consent.schema.js";
+import type { ConsentService } from "./consent.service.js";
+
+type SuccessEnvelope<T> = {
+  success: true;
+  data: T;
+  meta: {
+    requestId: string;
+  };
+};
+
+function getRequestId(request: FastifyRequest, reply: FastifyReply): string {
+  return reply.getHeader("x-request-id")?.toString() ?? request.id;
+}
+
+function success<T>(request: FastifyRequest, reply: FastifyReply, data: T): SuccessEnvelope<T> {
+  return {
+    data,
+    meta: {
+      requestId: getRequestId(request, reply)
+    },
+    success: true
+  };
+}
+
+export type RegisterConsentDeps = {
+  consentService: ConsentService;
+  tokenVerifier: AccessTokenVerifier;
+};
+
+export function registerConsentRoutes(app: FastifyInstance, deps: RegisterConsentDeps): void {
+  const buyerGuard = [requireAuth(deps.tokenVerifier), requireRole(["BUYER"])];
+
+  // POST /api/v1/consent - Record consent
+  app.post(
+    "/api/v1/consent",
+    { preHandler: buyerGuard },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new UnauthorizedError("User subject missing");
+      }
+
+      const parsed = recordConsentBodySchema.safeParse(request.body);
+      if (!parsed.success) {
+        throw new ValidationError("Invalid consent payload", parsed.error.flatten());
+      }
+      const body = parsed.data;
+
+      const ipAddress =
+        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
+        request.ip ??
+        "127.0.0.1";
+      const userAgent = (request.headers["user-agent"] as string) ?? "unknown";
+
+      const { record, isNew } = await deps.consentService.recordConsent({
+        consentVersion: body.consentVersion,
+        ipAddress,
+        noticeText: body.noticeText,
+        purpose: body.purpose,
+        userAgent,
+        userId
+      });
+
+      // 201 Created for a genuine new consent row; 200 OK when the idempotency
+      // guard short-circuits (active same-version record already exists).
+      reply.status(isNew ? 201 : 200);
+      return success(request, reply, record);
+    }
+  );
+
+  // GET /api/v1/consent - List all user consents
+  app.get(
+    "/api/v1/consent",
+    { preHandler: buyerGuard },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new UnauthorizedError("User subject missing");
+      }
+
+      const consents = await deps.consentService.getUserConsents(userId);
+      return success(request, reply, { consents });
+    }
+  );
+
+  // DELETE /api/v1/consent/:purpose - Withdraw non-essential consent
+  app.delete(
+    "/api/v1/consent/:purpose",
+    { preHandler: buyerGuard },
+    async (request, reply) => {
+      const userId = request.user?.sub;
+      if (!userId) {
+        throw new UnauthorizedError("User subject missing");
+      }
+
+      const parsed = withdrawConsentParamsSchema.safeParse(request.params);
+      if (!parsed.success) {
+        throw new ValidationError("Invalid consent purpose parameter", parsed.error.flatten());
+      }
+      const params = parsed.data;
+
+      const ipAddress =
+        (request.headers["x-forwarded-for"] as string)?.split(",")[0]?.trim() ??
+        request.ip ??
+        "127.0.0.1";
+      const userAgent = (request.headers["user-agent"] as string) ?? "unknown";
+
+      const consent = await deps.consentService.withdrawConsent({
+        ipAddress,
+        purpose: params.purpose,
+        userAgent,
+        userId
+      });
+
+      return success(request, reply, { consent });
+    }
+  );
+}

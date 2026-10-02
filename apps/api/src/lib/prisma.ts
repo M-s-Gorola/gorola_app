@@ -1,3 +1,4 @@
+import { AppError } from "@gorola/shared";
 import { PrismaClient } from "@prisma/client";
 
 import { decryptPII, encryptPII, hashPII } from "./crypto.js";
@@ -180,6 +181,20 @@ export function getPrismaClient(): PrismaClient {
               args.data.phone = encryptPII(args.data.phone);
             }
             return query(args);
+          }
+        },
+        consentLog: {
+          async delete() {
+            throw new AppError("CONSENT_LOG_IMMUTABLE: ConsentLog is immutable and cannot be deleted", {
+              code: "CONSENT_LOG_IMMUTABLE",
+              statusCode: 403
+            });
+          },
+          async deleteMany() {
+            throw new AppError("CONSENT_LOG_IMMUTABLE: ConsentLog is immutable and cannot be deleted", {
+              code: "CONSENT_LOG_IMMUTABLE",
+              statusCode: 403
+            });
           }
         }
       }

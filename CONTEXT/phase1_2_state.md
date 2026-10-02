@@ -373,8 +373,7 @@
 ### 1.9 ” Railway Deployment
 
 - [x] Railway project created with services: Node.js API, PostgreSQL 15, Redis 7
-- [x] All environment variables set in Railway dashboard (see root `.env.example` and `project_data` ” no secrets in repo)
-- [x] `railway.toml` (monorepo root) + `Procfile` ” Nixpacks `buildCommand` builds `@gorola/shared` then `@gorola/api`; `startCommand` = `pnpm --filter @gorola/api start` (which runs `prisma migrate deploy && node dist/app.js`; `node dist/app.js` **starts the server** via `isNodeMainModule` in `app.ts`)
+- [x] Railway service settings configured in Railway Dashboard (source of truth) + `Procfile` fallback — Nixpacks/Railpack `buildCommand` builds `@gorola/shared` then `@gorola/api`; `startCommand` = `pnpm --filter @gorola/api start` (which runs `prisma migrate deploy && node dist/app.js`; `node dist/app.js` **starts the server** via `isNodeMainModule` in `app.ts`)
 - [x] **Build** (Railway) vs **start** (migrations + listen): `apps/api` `build` = `prisma generate && tsc`; `start` = migrate + `node dist/app.js` _(checklist’s old “build = migrate+node” line was split correctly to match Railway)_
 - [x] Vercel project **deployed and linked** to this repo (`vercel.json` at monorepo root: install / build / `apps/web/dist`). Production **`VITE_API_BASE_URL`** = Railway API origin. **Vercel origin** added to Railway **`CORS_ALLOWED_ORIGINS`**. **Verified:** browser from Vercel URL → `GET /api/health` → `data.status: "ok"`.
 
@@ -2093,5 +2092,14 @@ _(Append new entries ” never delete old ones)_
 - **Components (TDD):** `TopographicBg` (decorative SVG, `opacity` default `0.12`); `WeatherBanner` (pine vs slate from `useWeatherStore`, `data-weather` + `role="status"`); `ETABanner` (`.eta-pulse` on amber dot, static `etaLabel` prop for now). **`HomePage`:** “Design system ” Phase 2.2 preview” section with the three for visual smoke-testing.
 - **Tooling:** `WeatherBanner.test.tsx` needs **`eslint-disable simple-import-sort/imports, import/order`** (conflict between `import/order` and `@/` + `./` ordering).
 - **Verify:** `pnpm ci:quality` (API 277, web 30, build).
+
+**Session 57 (Railway Config as Code to Infrastructure as Code Migration):**
+- Migrated Railway deployment configuration from legacy/deprecated Config as Code (`railway.toml`) to Railway Infrastructure as Code (`.railway/railway.ts`) using the official `@railway/iac` TypeScript SDK (`defineRailway`, `service`, `project`).
+- Added `railway` SDK dependency in root workspace, created `.railway/railway.ts` and `.railway/README.md`, and removed deprecated `railway.toml`.
+- Updated path filter in `.github/workflows/paths.yml` to watch `.railway/**`.
+- Added automated `railway config apply --yes` step in `.github/workflows/deploy-railway.yml` to sync IaC state on Railway before running `railway up`.
+- Updated unit test `apps/api/src/__tests__/unit/deploy/railway.config.test.ts` to validate `.railway/railway.ts`.
+- Updated deployment documentation across `DEPLOYMENT_CONFIG_GUIDE.md`, `README.md`, and `architecture.md`.
+- Verification: unit tests, monorepo typecheck, and lint all pass with 0 errors/warnings.
 
 

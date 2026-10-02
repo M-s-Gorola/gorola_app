@@ -66,10 +66,27 @@ function renderLogin(initialEntries: InitialEntry[]): void {
   );
 }
 
+async function advanceToPhoneStep(user: ReturnType<typeof userEvent.setup>): Promise<void> {
+  const ackCheckbox = screen.queryByTestId("consent-acknowledge-checkbox");
+  if (ackCheckbox) {
+    await user.click(ackCheckbox);
+  }
+  const continueBtn = screen.queryByTestId("consent-continue-btn");
+  if (continueBtn) {
+    await user.click(continueBtn);
+  }
+}
+
 describe("LoginPage", () => {
   beforeEach(() => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     postMock.mockReset();
+    postMock.mockImplementation(async (url: string) => {
+      if (url === "/api/v1/consent") {
+        return { data: { success: true } };
+      }
+      return undefined;
+    });
     act(() => {
       useAuthStore.getState().clearSession();
     });
@@ -79,9 +96,52 @@ describe("LoginPage", () => {
     vi.useRealTimers();
   });
 
+  it("initial render displays consent notice step, unchecked checkbox, and disabled continue button", async () => {
+    renderLogin(["/login"]);
+    expect(screen.getByTestId("consent-notice-step")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-notice-step")).toHaveTextContent(
+      /We collect your phone number and share it with our secure SMS gateway \(Exotel\)/i
+    );
+    expect(screen.getByText(/For full details on retention period, data rights, and erasure policies, read the/i)).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /privacy policy/i })).toHaveAttribute("href", "/privacy");
+    
+    const checkbox = screen.getByTestId("consent-acknowledge-checkbox");
+    expect(checkbox).toBeInTheDocument();
+    expect(checkbox).toHaveAttribute("data-state", "unchecked");
+
+    const continueBtn = screen.getByTestId("consent-continue-btn");
+    expect(continueBtn).toBeDisabled();
+    expect(screen.queryByLabelText(/phone number/i)).not.toBeInTheDocument();
+  });
+
+  it("clicking continue button while acknowledgement checkbox is unchecked does not advance step", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderLogin(["/login"]);
+    const continueBtn = screen.getByTestId("consent-continue-btn");
+    expect(continueBtn).toBeDisabled();
+    await user.click(continueBtn);
+    expect(screen.queryByLabelText(/phone number/i)).not.toBeInTheDocument();
+    expect(screen.getByTestId("consent-notice-step")).toBeInTheDocument();
+  });
+
+  it("checking acknowledgement checkbox enables continue button and clicking it advances to phone step", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderLogin(["/login"]);
+    const checkbox = screen.getByTestId("consent-acknowledge-checkbox");
+    const continueBtn = screen.getByTestId("consent-continue-btn");
+    
+    expect(continueBtn).toBeDisabled();
+    await user.click(checkbox);
+    expect(continueBtn).toBeEnabled();
+
+    await user.click(continueBtn);
+    expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
+  });
+
   it("shows Zod validation when phone has wrong digit count", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "98765");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     expect(postMock).not.toHaveBeenCalled();
@@ -95,6 +155,7 @@ describe("LoginPage", () => {
     });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
 
@@ -112,6 +173,7 @@ describe("LoginPage", () => {
     postMock.mockReturnValueOnce(new Promise(() => undefined));
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
 
@@ -134,6 +196,7 @@ describe("LoginPage", () => {
     });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
 
@@ -142,7 +205,7 @@ describe("LoginPage", () => {
     ).toBeInTheDocument();
   });
 
-  it("OTP digits fill and verify submit calls verify-otp with full code", async () => {
+  it("OTP digits fill and verify submit calls verify-otp and records consent", async () => {
     const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
     postMock
       .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } })
@@ -157,9 +220,13 @@ describe("LoginPage", () => {
             userId: "buyer-u1"
           }
         }
+      })
+      .mockResolvedValueOnce({
+        data: { success: true }
       });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -176,6 +243,11 @@ describe("LoginPage", () => {
         otp: "123456",
         phone: "+919876543210"
       });
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
+        consentVersion: "1.0",
+        noticeText: expect.stringMatching(/One-Time Password.*SMS gateway partner/i),
+        purpose: "OTP_AUTH"
+      });
     });
 
     expect(useAuthStore.getState().accessToken).toBe("access");
@@ -191,6 +263,7 @@ describe("LoginPage", () => {
     postMock.mockResolvedValueOnce({ data: { success: true, data: { sent: true } } });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -215,6 +288,7 @@ describe("LoginPage", () => {
     postMock.mockResolvedValue({ data: { success: true, data: { sent: true } } });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -244,14 +318,15 @@ describe("LoginPage", () => {
             success: false,
             error: {
               code: "UNAUTHORIZED",
-              details: { attemptsRemaining: 2 },
-              message: "Invalid OTP"
+              message: "Invalid OTP",
+              details: { attemptsRemaining: 4 }
             }
           }
         }
       });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -262,7 +337,7 @@ describe("LoginPage", () => {
     }
     await user.click(screen.getByRole("button", { name: /verify/i }));
 
-    expect(await screen.findByText(/2 attempts left/i)).toBeInTheDocument();
+    expect(await screen.findByText(/4 attempts left/i)).toBeInTheDocument();
   });
 
   it("shows lockout message when OTP verification locked", async () => {
@@ -276,24 +351,26 @@ describe("LoginPage", () => {
             success: false,
             error: {
               code: "RATE_LIMITED",
-              message: "Too many incorrect OTP attempts. Try requesting a new code."
+              message: "Verification locked for 15 minutes"
             }
           }
         }
       });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
+
     for (let i = 0; i < 6; i++) {
       const label = String(i + 1);
-      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), "8");
+      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), "9");
     }
     await user.click(screen.getByRole("button", { name: /verify/i }));
 
     expect(
-      await screen.findByText(/Too many incorrect OTP attempts/i)
+      await screen.findByText(/Verification locked for 15 minutes/i)
     ).toBeInTheDocument();
   });
 
@@ -321,6 +398,7 @@ describe("LoginPage", () => {
       }
     ]);
 
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -359,6 +437,7 @@ describe("LoginPage", () => {
       }
     ]);
 
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -391,6 +470,7 @@ describe("LoginPage", () => {
       });
 
     renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
     await user.type(screen.getByLabelText(/phone number/i), "9876543210");
     await user.click(screen.getByRole("button", { name: /send otp/i }));
     await screen.findByText(/Enter OTP/i);
@@ -403,5 +483,110 @@ describe("LoginPage", () => {
     await waitFor(() => {
       expect(screen.getByTestId("probe-path")).toHaveTextContent("/");
     });
+  });
+
+  it("shows reactivation prompt when account is pending deletion and restores account on confirm", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    postMock
+      .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            accessToken: "access_pending",
+            name: "Arjun",
+            phone: "+919876543210",
+            refreshToken: "refresh_pending",
+            userId: "buyer-del-1",
+            isPendingDeletion: true,
+            deletionScheduledFor: "2026-10-24T12:00:00.000Z"
+          }
+        }
+      })
+      .mockResolvedValueOnce({ data: { success: true } }) // reactivate-account
+      .mockResolvedValueOnce({ data: { success: true } }); // consent
+
+    renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
+    await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+    await user.click(screen.getByRole("button", { name: /send otp/i }));
+    await screen.findByText(/Enter OTP/i);
+
+    for (let i = 0; i < 6; i++) {
+      const label = String(i + 1);
+      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+    }
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    expect(await screen.findByTestId("reactivate-account-step")).toBeInTheDocument();
+    expect(screen.getByText(/Account Scheduled for Deletion/i)).toBeInTheDocument();
+    expect(screen.getByText(/24 Oct 2026/i)).toBeInTheDocument();
+
+    const reactivateBtn = screen.getByTestId("reactivate-account-btn");
+    await user.click(reactivateBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/user/reactivate-account",
+        {},
+        { headers: { Authorization: "Bearer access_pending" } }
+      );
+      expect(useAuthStore.getState().userId).toBe("buyer-del-1");
+      expect(screen.getByTestId("probe-path")).toHaveTextContent("/");
+    });
+  });
+
+  it("resets login flow when user chooses to keep deletion scheduled and sign out", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    postMock
+      .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } })
+      .mockResolvedValueOnce({
+        data: {
+          success: true,
+          data: {
+            accessToken: "access_pending",
+            name: "Arjun",
+            phone: "+919876543210",
+            refreshToken: "refresh_pending",
+            userId: "buyer-del-1",
+            isPendingDeletion: true,
+            deletionScheduledFor: "2026-10-24T12:00:00.000Z"
+          }
+        }
+      });
+
+    renderLogin(["/login"]);
+    await advanceToPhoneStep(user);
+    await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+    await user.click(screen.getByRole("button", { name: /send otp/i }));
+    await screen.findByText(/Enter OTP/i);
+
+    for (let i = 0; i < 6; i++) {
+      const label = String(i + 1);
+      await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+    }
+    await user.click(screen.getByRole("button", { name: /verify/i }));
+
+    expect(await screen.findByTestId("reactivate-account-step")).toBeInTheDocument();
+
+    const signoutBtn = screen.getByTestId("keep-deletion-logout-btn");
+    await user.click(signoutBtn);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText(/phone number/i)).toBeInTheDocument();
+      expect(useAuthStore.getState().accessToken).toBeNull();
+    });
+  });
+
+  it("renders View Complete Notice trigger on consent step and opens modal on click", async () => {
+    const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+    renderLogin(["/login"]);
+
+    const noticeBtn = screen.getByTestId("view-notice-btn-OTP_AUTH");
+    expect(noticeBtn).toBeInTheDocument();
+
+    await user.click(noticeBtn);
+    expect(await screen.findByTestId("consent-notice-modal")).toBeInTheDocument();
+    expect(screen.getAllByText(/Authentication & Account Security/i).length).toBeGreaterThanOrEqual(1);
   });
 });

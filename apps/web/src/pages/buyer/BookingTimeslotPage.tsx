@@ -7,7 +7,9 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -18,6 +20,7 @@ import {
 } from "@/components/ui/dialog";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
+import { useAuthStore } from "@/store/auth.store";
 
 type Address = {
   id: string;
@@ -76,6 +79,31 @@ export function BookingTimeslotPage(): ReactElement {
   const [couponSavedAmount, setCouponSavedAmount] = useState(0);
   const [couponError, setCouponError] = useState<string | null>(null);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [opAcknowledged, setOpAcknowledged] = useState(false);
+
+  const accessToken = useAuthStore((s) => s.accessToken);
+  const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
+
+  type ConsentRow = { purpose: string; isWithdrawn: boolean };
+  const consentsQuery = useQuery({
+    enabled: !!accessToken && !isBootstrapPending,
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: { consents: ConsentRow[] } }>("/api/v1/consent");
+      return res.data.data?.consents ?? [];
+    },
+    queryKey: ["consents", accessToken],
+    staleTime: 0,
+    refetchOnMount: "always"
+  });
+
+  const activeConsents = consentsQuery.data ?? [];
+  const hasOrderProcessingConsent = activeConsents.some(
+    (c) => c.purpose === "ORDER_PROCESSING" && !c.isWithdrawn
+  );
+  const hasMarketingConsent = activeConsents.some(
+    (c) => c.purpose === "MARKETING_COMMS" && !c.isWithdrawn
+  );
 
   const createMutation = useMutation({
     mutationFn: async (body: Record<string, unknown>) => {
@@ -89,6 +117,20 @@ export function BookingTimeslotPage(): ReactElement {
       if (res?.data?.id) {
         setSelectedAddressId(res.data.id);
       }
+      // DPDP 2023: Log ORDER_PROCESSING consent when address is saved
+      try {
+        const p = api?.post("/api/v1/consent", {
+          purpose: "ORDER_PROCESSING",
+          consentVersion: "1.0",
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
+        });
+        if (p && typeof p.catch === "function") {
+          p.catch(() => {});
+        }
+      } catch {
+        /* ignore background consent logging error */
+      }
+      void queryClient.invalidateQueries({ queryKey: ["consents"] });
     },
     onError: (err) => {
       if (isAxiosError(err)) {
@@ -304,6 +346,40 @@ export function BookingTimeslotPage(): ReactElement {
           discountCode: appliedCouponCode || undefined,
         }
       );
+      // DPDP 2023: Log ORDER_PROCESSING consent only if not already active
+      if (!hasOrderProcessingConsent) {
+        try {
+          const p = api?.post("/api/v1/consent", {
+            purpose: "ORDER_PROCESSING",
+            consentVersion: "1.0",
+            noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
+          });
+          if (p && typeof p.catch === "function") {
+            p.catch(() => {});
+          }
+        } catch {
+          /* ignore background consent logging error */
+        }
+      }
+
+      // Record MARKETING_COMMS only if the user explicitly opted in this session
+      // and they haven't already granted it previously.
+      if (marketingOptIn && !hasMarketingConsent) {
+        try {
+          const p2 = api?.post("/api/v1/consent", {
+            purpose: "MARKETING_COMMS",
+            consentVersion: "1.0",
+            noticeText: "You agreed to receive promotional offers and seasonal discounts."
+          });
+          if (p2 && typeof p2.catch === "function") {
+            p2.catch(() => {});
+          }
+        } catch {
+          /* ignore background consent logging error */
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ["consents"] });
+
       toast.success("Booking placed successfully!");
       navigate(`/bookings/${res.data.data.orderId}`, { replace: true });
     } catch (err) {
@@ -314,242 +390,225 @@ export function BookingTimeslotPage(): ReactElement {
     }
   };
 
-  const isFormComplete = selectedDate && selectedTimeslot && selectedAddressId && !isSubmitting;
+  const isFormComplete = Boolean(
+    selectedDate &&
+    selectedTimeslot &&
+    selectedAddressId &&
+    !isSubmitting
+  );
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6 px-4 py-8">
-      {/* Product Detail, Offers, and Receipt Card */}
-      <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
-        {/* Product Detail */}
-        <div>
-          <h1 className="font-playfair text-2xl font-bold text-gorola-charcoal">{product.name}</h1>
-          <p className="mt-1 font-dm-sans text-sm font-semibold text-gorola-pine">{product.store.name}</p>
-          <p className="mt-2 font-dm-sans text-sm text-gorola-slate leading-relaxed">{product.description}</p>
-          <div className="mt-3 inline-flex rounded-full bg-gorola-saffron/10 px-3 py-1 font-dm-sans text-xs font-semibold text-gorola-charcoal">
-            Variant: {variant.label} — Rs {variant.price}
-          </div>
-        </div>
-
-        {/* Offers & Coupon Section */}
-        <div className="border-t border-gorola-pine/10 pt-4 space-y-3">
-          {/* Render Store Offers (unlocked/locked pills) */}
-          {storeOffers.length > 0 && (
-            <div className="space-y-2">
-              {storeOffers.map((offer) => {
-                const minOrder = offer.minOrderAmount ?? 0;
-                const isLocked = subtotal < minOrder;
-                if (isLocked) {
-                  return (
-                    <div
-                      key={offer.id}
-                      data-testid={`offer-pill-${offer.id}`}
-                      className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 font-dm-sans text-xs font-semibold text-amber-800 flex flex-col gap-0.5"
-                    >
-                      <div>{offer.title}</div>
-                      {offer.minOrderAmount !== null && offer.minOrderAmount !== undefined && offer.minOrderAmount > 0 && (
-                        <div className="text-amber-700 font-normal">
-                          · Minimum purchase: Rs {offer.minOrderAmount}
-                        </div>
-                      )}
-                      {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
-                        <div className="text-amber-700 font-normal">
-                          · Discount up to: Rs {offer.maxDiscount}
-                        </div>
-                      )}
-                    </div>
-                  );
-                } else {
-                  return (
-                    <div
-                      key={offer.id}
-                      data-testid={`offer-pill-${offer.id}`}
-                      className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 font-dm-sans text-xs font-semibold text-emerald-700 flex flex-col gap-0.5"
-                    >
-                      <div>✅ {offer.title}</div>
-                      {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
-                        <div className="text-emerald-600 font-normal">
-                          · Maximum discount: Rs {offer.maxDiscount}
-                        </div>
-                      )}
-                    </div>
-                  );
-                }
-              })}
+    <div className="mx-auto max-w-2xl px-4 py-8">
+      {/* Unified Master Booking Card */}
+      <div className="rounded-3xl border border-gorola-pine/15 bg-white p-6 sm:p-8 shadow-sm text-left space-y-6">
+        {/* Section 1: Service Detail & Pricing Summary */}
+        <div className="space-y-4">
+          <div>
+            <h1 className="font-playfair text-2xl sm:text-3xl font-bold text-gorola-charcoal">{product.name}</h1>
+            <p className="mt-1 font-dm-sans text-sm font-semibold text-gorola-pine">{product.store.name}</p>
+            <p className="mt-2 font-dm-sans text-sm text-gorola-slate leading-relaxed">{product.description}</p>
+            <div className="mt-3 inline-flex rounded-full bg-gorola-saffron/10 px-3.5 py-1 font-dm-sans text-xs font-semibold text-gorola-charcoal">
+              Variant: {variant.label} — Rs {variant.price}
             </div>
-          )}
-
-          {/* Discount code input bar (moved below offers, above receipt) */}
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <input
-                value={couponCodeInput}
-                onChange={(e) => setCouponCodeInput(e.target.value)}
-                placeholder="Discount code"
-                className="w-full rounded-xl border border-gorola-pine/10 bg-gorola-fog/50 px-4 py-2 font-dm-sans text-sm focus:outline-none focus:border-gorola-pine/30 transition-all"
-              />
-              <button
-                type="button"
-                onClick={handleApplyCoupon}
-                className="rounded-xl bg-gorola-charcoal px-4 py-2 font-dm-sans text-sm font-bold text-white hover:bg-gorola-charcoal/90 transition-all"
-              >
-                Apply
-              </button>
-            </div>
-            {couponError && <p className="text-[10px] font-bold text-red-500 ml-1">{couponError}</p>}
-          </div>
-        </div>
-
-        {/* Receipt Summary Content */}
-        <div className="border-t border-gorola-pine/10 pt-4 space-y-2">
-          <div className="flex justify-between">
-            <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
-            <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {subtotal.toFixed(2)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="font-dm-sans text-sm text-gorola-charcoal">Service fee</span>
-            <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {serviceFee.toFixed(2)}</span>
           </div>
 
-          {totalDiscount > 0 && (
-            <div className="space-y-2">
-              <div className="flex justify-between text-gorola-pine font-bold" data-testid="discount-summary">
-                <div className="flex items-center gap-1.5 font-dm-sans text-sm">
-                  <span>Total Discount</span>
-                  <button
-                    type="button"
-                    data-testid="discount-toggle-chevron"
-                    onClick={() => setIsDiscountOpen(!isDiscountOpen)}
-                    className="text-gorola-pine hover:bg-gorola-pine/5 rounded p-0.5 transition-colors flex items-center justify-center"
-                    aria-label="Toggle discount breakdown"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      width="16"
-                      height="16"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.5"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className={`h-4 w-4 transition-transform duration-200 ${isDiscountOpen ? "rotate-180" : ""}`}
-                    >
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
-                </div>
-                <span className="font-dm-sans text-sm">-Rs {totalDiscount.toFixed(2)}</span>
+          {/* Offers & Coupon Section */}
+          <div className="border-t border-gorola-pine/10 pt-4 space-y-3">
+            {/* Render Store Offers (unlocked/locked pills) */}
+            {storeOffers.length > 0 && (
+              <div className="space-y-2">
+                {storeOffers.map((offer) => {
+                  const minOrder = offer.minOrderAmount ?? 0;
+                  const isLocked = subtotal < minOrder;
+                  if (isLocked) {
+                    return (
+                      <div
+                        key={offer.id}
+                        data-testid={`offer-pill-${offer.id}`}
+                        className="rounded-xl bg-amber-50 border border-amber-200 px-3 py-2 font-dm-sans text-xs font-semibold text-amber-800 flex flex-col gap-0.5"
+                      >
+                        <div>{offer.title}</div>
+                        {offer.minOrderAmount !== null && offer.minOrderAmount !== undefined && offer.minOrderAmount > 0 && (
+                          <div className="text-amber-700 font-normal">
+                            · Minimum purchase: Rs {offer.minOrderAmount}
+                          </div>
+                        )}
+                        {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                          <div className="text-amber-700 font-normal">
+                            · Discount up to: Rs {offer.maxDiscount}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div
+                        key={offer.id}
+                        data-testid={`offer-pill-${offer.id}`}
+                        className="rounded-xl bg-emerald-50 border border-emerald-200 px-3 py-2 font-dm-sans text-xs font-semibold text-emerald-700 flex flex-col gap-0.5"
+                      >
+                        <div>✅ {offer.title}</div>
+                        {offer.maxDiscount !== null && offer.maxDiscount !== undefined && offer.maxDiscount > 0 && (
+                          <div className="text-emerald-600 font-normal">
+                            · Maximum discount: Rs {offer.maxDiscount}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  }
+                })}
               </div>
-              {isDiscountOpen && (
-                <div className="space-y-1.5 pl-4">
-                  {appliedOffers.map((o) => (
-                    <div
-                      key={o.id}
-                      data-testid="discount-breakdown-item"
-                      className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
+            )}
+
+            {/* Discount code input bar */}
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <input
+                  value={couponCodeInput}
+                  onChange={(e) => setCouponCodeInput(e.target.value)}
+                  placeholder="Discount code"
+                  className="w-full rounded-xl border border-gorola-pine/10 bg-gorola-fog/50 px-4 py-2 font-dm-sans text-sm focus:outline-none focus:border-gorola-pine/30 transition-all"
+                />
+                <button
+                  type="button"
+                  onClick={handleApplyCoupon}
+                  className="rounded-xl bg-gorola-charcoal px-4 py-2 font-dm-sans text-sm font-bold text-white hover:bg-gorola-charcoal/90 transition-all"
+                >
+                  Apply
+                </button>
+              </div>
+              {couponError && <p className="text-[10px] font-bold text-red-500 ml-1">{couponError}</p>}
+            </div>
+          </div>
+
+          {/* Receipt Summary Content */}
+          <div className="border-t border-gorola-pine/10 pt-4 space-y-2">
+            <div className="flex justify-between">
+              <span className="font-dm-sans text-sm text-gorola-charcoal">Subtotal</span>
+              <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {subtotal.toFixed(2)}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="font-dm-sans text-sm text-gorola-charcoal">Service fee</span>
+              <span className="font-dm-sans text-sm text-gorola-charcoal">Rs {serviceFee.toFixed(2)}</span>
+            </div>
+
+            {totalDiscount > 0 && (
+              <div className="space-y-2">
+                <div className="flex justify-between text-gorola-pine font-bold" data-testid="discount-summary">
+                  <div className="flex items-center gap-1.5 font-dm-sans text-sm">
+                    <span>Total Discount</span>
+                    <button
+                      type="button"
+                      data-testid="discount-toggle-chevron"
+                      onClick={() => setIsDiscountOpen(!isDiscountOpen)}
+                      className="text-gorola-pine hover:bg-gorola-pine/5 rounded p-0.5 transition-colors flex items-center justify-center"
+                      aria-label="Toggle discount breakdown"
                     >
-                      <span className="break-words text-left flex-1">{o.title}</span>
-                      <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
-                    </div>
-                  ))}
-                  {couponSavedAmount > 0 && (
-                    <div
-                      data-testid="discount-breakdown-item"
-                      className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
-                    >
-                      <span className="break-words text-left flex-1">{appliedCouponCode}</span>
-                      <span className="text-right whitespace-nowrap shrink-0">-Rs {couponSavedAmount.toFixed(2)}</span>
-                    </div>
-                  )}
+                      <svg
+                        xmlns="http://www.w3.org/2000/svg"
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        className={`h-4 w-4 transition-transform duration-200 ${isDiscountOpen ? "rotate-180" : ""}`}
+                      >
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  </div>
+                  <span className="font-dm-sans text-sm">-Rs {totalDiscount.toFixed(2)}</span>
                 </div>
-              )}
+                {isDiscountOpen && (
+                  <div className="space-y-1.5 pl-4">
+                    {appliedOffers.map((o) => (
+                      <div
+                        key={o.id}
+                        data-testid="discount-breakdown-item"
+                        className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
+                      >
+                        <span className="break-words text-left flex-1">{o.title}</span>
+                        <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
+                      </div>
+                    ))}
+                    {couponSavedAmount > 0 && (
+                      <div
+                        data-testid="discount-breakdown-item"
+                        className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
+                      >
+                        <span className="break-words text-left flex-1">{appliedCouponCode}</span>
+                        <span className="text-right whitespace-nowrap shrink-0">-Rs {couponSavedAmount.toFixed(2)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            <div className="flex justify-between border-t border-gorola-pine/5 pt-2">
+              <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Total</span>
+              <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Rs {finalTotal.toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Section 2: Date Picker */}
+        <div className="border-t border-gorola-pine/10 pt-6 space-y-3">
+          <label htmlFor="booking-date" className="block font-playfair text-lg font-bold text-gorola-charcoal">
+            Select Date
+          </label>
+          <input
+            id="booking-date"
+            type="date"
+            min={minDateStr}
+            value={selectedDate}
+            onChange={(e) => setSelectedDate(e.target.value)}
+            className="w-full rounded-xl border border-gorola-pine/20 px-3.5 py-2.5 font-dm-sans text-sm outline-none focus:border-gorola-pine focus:ring-1 focus:ring-gorola-pine transition-all"
+          />
+        </div>
+
+        {/* Section 3: Timeslot Selector */}
+        <div className="border-t border-gorola-pine/10 pt-6 space-y-3">
+          <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Timeslot</h3>
+          
+          {variant.requiresFasting && (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 font-dm-sans text-sm text-amber-800">
+              ⚠️ This test requires fasting. Please schedule for early morning.
             </div>
           )}
 
-          <div className="flex justify-between border-t border-gorola-pine/5 pt-2">
-            <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Total</span>
-            <span className="font-dm-sans text-base font-bold text-gorola-charcoal">Rs {finalTotal.toFixed(2)}</span>
+          <div className="flex flex-wrap gap-2">
+            {variant.allowedTimeslots.map((slot) => {
+              const isDisabled = variant.requiresFasting && slot !== "06:00-09:00";
+              const isSelected = selectedTimeslot === slot;
+              return (
+                <button
+                  key={slot}
+                  type="button"
+                  disabled={isDisabled}
+                  onClick={() => setSelectedTimeslot(slot)}
+                  className={`rounded-full border px-4 py-2 font-dm-sans text-sm font-semibold transition-all duration-200 ${
+                    isSelected
+                      ? "border-gorola-saffron bg-gorola-saffron/15 text-gorola-charcoal shadow-sm"
+                      : isDisabled
+                      ? "border-gorola-slate-mist/10 bg-gorola-slate-mist/5 text-gorola-slate/30 cursor-not-allowed"
+                      : "border-gorola-pine/20 text-gorola-slate hover:border-gorola-pine/40 hover:bg-gorola-fog/30"
+                  }`}
+                >
+                  {slot}
+                </button>
+              );
+            })}
           </div>
         </div>
-      </div>
 
-      {/* Date Picker Section */}
-      <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-3">
-        <label htmlFor="booking-date" className="block font-playfair text-lg font-bold text-gorola-charcoal">
-          Select Date
-        </label>
-        <input
-          id="booking-date"
-          type="date"
-          min={minDateStr}
-          value={selectedDate}
-          onChange={(e) => setSelectedDate(e.target.value)}
-          className="w-full rounded-xl border border-gorola-pine/20 px-3 py-2 font-dm-sans text-sm outline-none focus:border-gorola-pine"
-        />
-      </div>
-
-      {/* Timeslot Selector Section */}
-      <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
-        <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Timeslot</h3>
-        
-        {variant.requiresFasting && (
-          <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 font-dm-sans text-sm text-amber-800">
-            ⚠️ This test requires fasting. Please schedule for early morning.
-          </div>
-        )}
-
-        <div className="flex flex-wrap gap-2">
-          {variant.allowedTimeslots.map((slot) => {
-            const isDisabled = variant.requiresFasting && slot !== "06:00-09:00";
-            const isSelected = selectedTimeslot === slot;
-            return (
-              <button
-                key={slot}
-                type="button"
-                disabled={isDisabled}
-                onClick={() => setSelectedTimeslot(slot)}
-                className={`rounded-full border px-4 py-2 font-dm-sans text-sm font-semibold transition-all duration-200 ${
-                  isSelected
-                    ? "border-gorola-saffron bg-gorola-saffron/10 text-gorola-charcoal"
-                    : isDisabled
-                    ? "border-gorola-slate-mist/10 bg-gorola-slate-mist/5 text-gorola-slate/30 cursor-not-allowed"
-                    : "border-gorola-pine/20 text-gorola-slate hover:border-gorola-pine/40"
-                }`}
-              >
-                {slot}
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* Address Selector Section */}
-      <div className="rounded-2xl border border-gorola-pine/10 bg-white p-5 shadow-sm text-left space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Address</h3>
-          <Button
-            onClick={() => {
-              setLabel("");
-              setLandmark("");
-              setFlatRoom("");
-              setIsDefault(false);
-              setMapCoords(null);
-              setFormError(null);
-              setIsFormOpen(true);
-            }}
-            size="sm"
-            variant="outline"
-            className="rounded-full border-gorola-pine/20 text-gorola-pine hover:bg-gorola-pine/5 flex items-center gap-1 font-dm-sans text-xs h-8"
-          >
-            <Plus className="h-3.5 w-3.5" /> Add New
-          </Button>
-        </div>
-
-        {addresses.length === 0 ? (
-          <div className="text-center py-4 space-y-3">
-            <p className="font-dm-sans text-sm text-gorola-slate">
-              No saved addresses found.
-            </p>
+        {/* Section 4: Address Selector */}
+        <div className="border-t border-gorola-pine/10 pt-6 space-y-4">
+          <div className="flex items-center justify-between">
+            <h3 className="font-playfair text-lg font-bold text-gorola-charcoal">Select Address</h3>
             <Button
               onClick={() => {
                 setLabel("");
@@ -561,56 +620,147 @@ export function BookingTimeslotPage(): ReactElement {
                 setIsFormOpen(true);
               }}
               size="sm"
-              className="rounded-full bg-gorola-pine text-white"
+              variant="outline"
+              className="rounded-full border-gorola-pine/20 text-gorola-pine hover:bg-gorola-pine/5 flex items-center gap-1 font-dm-sans text-xs h-8"
             >
-              <Plus className="mr-1 h-4 w-4" /> Add your first address
+              <Plus className="h-3.5 w-3.5" /> Add New
             </Button>
           </div>
-        ) : (
-          <div className="space-y-3">
-            {addresses.map((addr) => {
-              const isSelected = selectedAddressId === addr.id;
-              return (
-                <label
-                  key={addr.id}
-                  className={`relative flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
-                    isSelected ? "border-gorola-pine bg-gorola-fog/30" : "border-gorola-pine/15"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="booking-address"
-                    value={addr.id}
-                    checked={isSelected}
-                    onChange={() => setSelectedAddressId(addr.id)}
-                    className="mt-1 accent-gorola-pine"
-                    aria-label={`Address option: ${addr.landmarkDescription}`}
-                  />
-                  <div className="space-y-1">
-                    <span className="font-dm-sans font-bold text-sm text-gorola-charcoal">
-                      {addr.label}
-                    </span>
-                    <p className="font-dm-sans text-xs text-gorola-slate leading-relaxed">
-                      {addr.flatRoom ? `${addr.flatRoom}, ` : ""}
-                      {addr.landmarkDescription}
-                    </p>
-                  </div>
-                </label>
-              );
-            })}
-          </div>
-        )}
-      </div>
 
-      {/* Confirm Booking CTA */}
-      <button
-        type="button"
-        disabled={!isFormComplete}
-        onClick={handlePlaceBooking}
-        className="w-full rounded-full bg-gorola-saffron py-3 font-dm-sans text-base font-bold text-gorola-charcoal shadow-lg transition-transform hover:scale-[1.02] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
-      >
-        {isSubmitting ? "Placing Booking..." : "Confirm Booking"}
-      </button>
+          {addresses.length === 0 ? (
+            <div className="text-center py-4 space-y-3 rounded-2xl bg-gorola-fog/30 border border-dashed border-gorola-pine/15">
+              <p className="font-dm-sans text-sm text-gorola-slate">
+                No saved addresses found.
+              </p>
+              <Button
+                onClick={() => {
+                  setLabel("");
+                  setLandmark("");
+                  setFlatRoom("");
+                  setIsDefault(false);
+                  setMapCoords(null);
+                  setFormError(null);
+                  setIsFormOpen(true);
+                }}
+                size="sm"
+                className="rounded-full bg-gorola-pine text-white"
+              >
+                <Plus className="mr-1 h-4 w-4" /> Add your first address
+              </Button>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {addresses.map((addr) => {
+                const isSelected = selectedAddressId === addr.id;
+                return (
+                  <label
+                    key={addr.id}
+                    className={`relative flex items-start gap-3 rounded-xl border p-4 cursor-pointer transition-all duration-200 ${
+                      isSelected ? "border-gorola-pine bg-gorola-fog/40 shadow-xs" : "border-gorola-pine/15 hover:border-gorola-pine/30"
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="booking-address"
+                      value={addr.id}
+                      checked={isSelected}
+                      onChange={() => setSelectedAddressId(addr.id)}
+                      className="mt-1 accent-gorola-pine"
+                      aria-label={`Address option: ${addr.landmarkDescription}`}
+                    />
+                    <div className="space-y-1">
+                      <span className="font-dm-sans font-bold text-sm text-gorola-charcoal">
+                        {addr.label}
+                      </span>
+                      <p className="font-dm-sans text-xs text-gorola-slate leading-relaxed">
+                        {addr.flatRoom ? `${addr.flatRoom}, ` : ""}
+                        {addr.landmarkDescription}
+                      </p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+        {/* Section 5: Marketing Consent & Action Button */}
+        <div className="border-t border-gorola-pine/10 pt-6 space-y-4">
+          <div
+            data-testid="booking-marketing-opt-in"
+            className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
+          >
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
+                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                <span>Promotions &amp; Seasonal Offers (Optional)</span>
+              </div>
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                Optional
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
+            </p>
+            <div className="pt-0.5 text-[11px] text-muted-foreground">
+              <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
+              <ConsentNoticeModal
+                purpose="MARKETING_COMMS"
+                triggerLabel="Promotions Notice"
+                triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+              />
+              <span> (or view our platform-wide </span>
+              <a
+                href="/privacy"
+                className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+              >
+                Privacy Policy
+              </a>
+              <span>).</span>
+            </div>
+            {!hasMarketingConsent ? (
+              <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                <Checkbox
+                  checked={marketingOptIn}
+                  data-testid="marketing-consent-checkbox"
+                  id="marketing-optin-booking"
+                  onCheckedChange={(v) => setMarketingOptIn(!!v)}
+                />
+                <label
+                  className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                  htmlFor="marketing-optin-booking"
+                >
+                  Yes, send me seasonal Mussoorie harvest updates and coupons
+                </label>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
+                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                  <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
+                  Consent Active
+                </span>
+                <span className="text-muted-foreground/40">•</span>
+                <span>
+                  Manage or withdraw in{" "}
+                  <a href="/profile" className="underline text-gorola-pine hover:text-emerald-700">
+                    Privacy Settings
+                  </a>
+                </span>
+              </div>
+            )}
+          </div>
+
+          {/* Confirm Booking CTA */}
+          <button
+            type="button"
+            disabled={!isFormComplete}
+            onClick={handlePlaceBooking}
+            className="w-full rounded-full bg-gorola-saffron py-3.5 font-dm-sans text-base font-bold text-gorola-charcoal shadow-md transition-all hover:bg-gorola-saffron/90 hover:scale-[1.01] active:scale-95 disabled:opacity-50 disabled:hover:scale-100 disabled:cursor-not-allowed"
+          >
+            {isSubmitting ? "Placing Booking..." : "Confirm Booking"}
+          </button>
+        </div>
+      </div>
 
       {/* Address Form Dialog */}
       <Dialog open={isFormOpen} onOpenChange={setIsFormOpen}>
@@ -676,13 +826,59 @@ export function BookingTimeslotPage(): ReactElement {
             {formError && (
               <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
             )}
+
+            <div
+              data-testid="order-processing-consent-notice"
+              className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs"
+            >
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  <span>Order Fulfillment &amp; Location Services</span>
+                </div>
+                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
+              </div>
+              <p className="text-muted-foreground leading-relaxed">
+                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+              </p>
+
+              {!hasOrderProcessingConsent ? (
+                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                  <Checkbox
+                    checked={opAcknowledged}
+                    data-testid="order-processing-acknowledge-checkbox"
+                    id="op-ack-booking-dialog"
+                    onCheckedChange={(v) => setOpAcknowledged(!!v)}
+                  />
+                  <label
+                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                    htmlFor="op-ack-booking-dialog"
+                  >
+                    I have read and understood this notice
+                  </label>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
+                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
+                    <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
+                    Consent Active
+                  </span>
+                  <span className="text-muted-foreground/40">•</span>
+                  <span>Permanent operational requirement</span>
+                </div>
+              )}
+            </div>
           </div>
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setIsFormOpen(false)} disabled={createMutation.isPending}>
               Cancel
             </Button>
-            <Button className="bg-gorola-pine text-white" onClick={handleSaveAddress} disabled={createMutation.isPending}>
+            <Button
+              className="bg-gorola-pine text-white"
+              onClick={handleSaveAddress}
+              disabled={createMutation.isPending || (!hasOrderProcessingConsent && !opAcknowledged)}
+            >
               {createMutation.isPending ? "Saving..." : "Save Address"}
             </Button>
           </DialogFooter>

@@ -22,7 +22,6 @@
     "db:local:seed": "pnpm --filter @gorola/api prisma:seed",
     "db:local:verify-seed": "pnpm --filter @gorola/api prisma:verify:seed"
   },
-
   "devDependencies": {
     "@eslint/js": "^9.24.0",
     "@types/dotenv-safe": "^9.1.0",
@@ -36,6 +35,7 @@
     "globals": "^16.0.0",
     "jiti": "^2.6.1",
     "prettier": "^3.5.3",
+    "railway": "^3.12.0",
     "typescript": "^5.8.3"
   }
 }

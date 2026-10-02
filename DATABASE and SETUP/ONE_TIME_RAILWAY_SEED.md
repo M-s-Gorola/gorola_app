@@ -136,6 +136,8 @@ pnpm --filter @gorola/api truncate:db "<RAILWAY_POSTGRES_PUBLIC_URL>"
 docker exec -i gorola-postgres psql "postgresql://postgres:<RAILWAY_POSTGRES_PASSWORD>@<RAILWAY_HOST>:<RAILWAY_PORT>/railway" -c "DO \$\$ DECLARE r RECORD; BEGIN FOR r IN SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != '_prisma_migrations' LOOP EXECUTE 'TRUNCATE TABLE public.' || quote_ident(r.tablename) || ' CASCADE'; END LOOP; END \$\$;"
 ```
 
+Replace `<RAILWAY_POSTGRES_PASSWORD>`, `<RAILWAY_HOST>`, and `<RAILWAY_PORT>` with the values from your Railway PostgreSQL service → **Connect** tab → Public URL.
+
 **Step 2 — Re-seed catalog data:**
 ```bash
 # Set DATABASE_URL to Railway (app_service or db_owner) — use export to avoid .env override

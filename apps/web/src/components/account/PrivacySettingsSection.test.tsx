@@ -1,0 +1,412 @@
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+import { PrivacySettingsSection } from "./PrivacySettingsSection";
+
+const { getMock, deleteMock, postMock } = vi.hoisted(() => ({
+  getMock: vi.fn(),
+  deleteMock: vi.fn(),
+  postMock: vi.fn()
+}));
+
+vi.mock("@/lib/api", () => ({
+  api: {
+    get: getMock,
+    delete: deleteMock,
+    post: postMock
+  }
+}));
+
+function renderSection() {
+  const queryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } }
+  });
+  return render(
+    <QueryClientProvider client={queryClient}>
+      <PrivacySettingsSection />
+    </QueryClientProvider>
+  );
+}
+
+describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it("renders list of consents, showing Essential label for OTP_AUTH and Withdraw button for MARKETING_COMMS", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: [
+            {
+              id: "c1",
+              purpose: "OTP_AUTH",
+              consentVersion: "1.0",
+              noticeText: "OTP auth",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-09-22T00:00:00Z"
+            },
+            {
+              id: "c2",
+              purpose: "MARKETING_COMMS",
+              consentVersion: "1.0",
+              noticeText: "Marketing updates",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-09-22T00:00:00Z"
+            }
+          ]
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-MARKETING_COMMS")).toBeInTheDocument();
+    expect(screen.getByText(/Authentication & Account Security/i)).toBeInTheDocument();
+    expect(screen.getByText(/Promotions & Seasonal Offers/i)).toBeInTheDocument();
+
+    // Essential consents (OTP_AUTH, ORDER_PROCESSING) should have Essential badge, no Withdraw button
+    expect(screen.getAllByText(/Essential/i)).toHaveLength(2);
+    expect(screen.queryByTestId("withdraw-btn-OTP_AUTH")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("withdraw-btn-ORDER_PROCESSING")).not.toBeInTheDocument();
+
+    // Non-essential consent should have Withdraw button
+    expect(screen.getByTestId("withdraw-btn-MARKETING_COMMS")).toBeInTheDocument();
+  });
+
+  it("clicking Withdraw on MARKETING_COMMS calls DELETE /api/v1/consent/MARKETING_COMMS and updates status to Withdrawn", async () => {
+    const user = userEvent.setup();
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: [
+            {
+              id: "c2",
+              purpose: "MARKETING_COMMS",
+              consentVersion: "1.0",
+              noticeText: "Marketing updates",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-09-22T00:00:00Z"
+            }
+          ]
+        }
+      }
+    });
+
+    deleteMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consent: {
+            id: "c2",
+            purpose: "MARKETING_COMMS",
+            isWithdrawn: true,
+            withdrawnAt: "2026-09-22T01:00:00Z"
+          }
+        }
+      }
+    });
+
+    renderSection();
+
+    const withdrawBtn = await screen.findByTestId("withdraw-btn-MARKETING_COMMS");
+    await user.click(withdrawBtn);
+
+    await waitFor(() => {
+      expect(deleteMock).toHaveBeenCalledWith("/api/v1/consent/MARKETING_COMMS");
+    });
+
+    const withdrawnElements = await screen.findAllByText(/Withdrawn/i);
+    expect(withdrawnElements.length).toBeGreaterThan(0);
+  });
+
+  it("allows user to grant/opt-in to an optional consent when withdrawn or absent", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consent: {
+            id: "c3",
+            purpose: "MARKETING_COMMS",
+            consentVersion: "1.0",
+            noticeText: "Marketing updates",
+            isWithdrawn: false,
+            withdrawnAt: null,
+            createdAt: "2026-09-23T00:00:00Z"
+          }
+        }
+      }
+    });
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          consents: [
+            {
+              id: "c1",
+              purpose: "OTP_AUTH",
+              consentVersion: "1.0",
+              noticeText: "OTP auth",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-09-22T00:00:00Z"
+            },
+            {
+              id: "c2",
+              purpose: "MARKETING_COMMS",
+              consentVersion: "1.0",
+              noticeText: "Marketing updates",
+              isWithdrawn: true,
+              withdrawnAt: "2026-09-22T01:00:00Z",
+              createdAt: "2026-09-22T00:00:00Z"
+            }
+          ]
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+
+    const optInBtn = await screen.findByTestId("optin-btn-MARKETING_COMMS");
+    fireEvent.click(optInBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
+        purpose: "MARKETING_COMMS",
+        consentVersion: "1.0"
+      }));
+    });
+  });
+
+  it("always renders all 4 canonical cards even if backend returns partial or empty list", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-ORDER_PROCESSING")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-MARKETING_COMMS")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-ANALYTICS")).toBeInTheDocument();
+
+    // ORDER_PROCESSING must mention Ola Maps and Razorpay
+    const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    // Expand the card if not already open
+    const orderTrigger = orderCard.querySelector('[role="button"]') ?? orderCard;
+    if (orderTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(orderTrigger);
+    }
+    expect(orderCard).toHaveTextContent(/Ola Maps/i);
+    expect(orderCard).toHaveTextContent(/Razorpay for online payments/i);
+  });
+
+  it("renders distinct inactive status text per consent purpose when consents array is empty", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+
+    const otpCard = screen.getByTestId("consent-card-OTP_AUTH");
+    // OTP_AUTH starts expanded by default — ensure it is open before asserting
+    const otpTrigger = otpCard.querySelector('[role="button"]') ?? otpCard;
+    if (otpTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(otpTrigger);
+    }
+    expect(otpCard).toHaveTextContent(/Active since account creation/i);
+
+    const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    const orderTrigger = orderCard.querySelector('[role="button"]') ?? orderCard;
+    if (orderTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(orderTrigger);
+    }
+    expect(orderCard).toHaveTextContent(/Pending — Activated when you save an address or place your first order/i);
+
+    const marketingCard = screen.getByTestId("consent-card-MARKETING_COMMS");
+    const marketingTrigger = marketingCard.querySelector('[role="button"]') ?? marketingCard;
+    if (marketingTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(marketingTrigger);
+    }
+    expect(marketingCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
+
+    const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
+    const analyticsTrigger = analyticsCard.querySelector('[role="button"]') ?? analyticsCard;
+    if (analyticsTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(analyticsTrigger);
+    }
+    expect(analyticsCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
+  });
+
+  it("syncs ANALYTICS opt-in and withdrawal with localStorage", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("gorola_analytics_consent", "declined");
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    postMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          consent: {
+            id: "c-analytics",
+            purpose: "ANALYTICS",
+            consentVersion: "1.0",
+            noticeText: "Analytics notice",
+            isWithdrawn: false,
+            withdrawnAt: null,
+            createdAt: "2026-09-24T00:00:00Z"
+          }
+        }
+      }
+    });
+
+    deleteMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          consent: {
+            id: "c-analytics",
+            purpose: "ANALYTICS",
+            isWithdrawn: true,
+            withdrawnAt: "2026-09-24T01:00:00Z"
+          }
+        }
+      }
+    });
+
+    renderSection();
+
+    const optInBtn = await screen.findByTestId("optin-btn-ANALYTICS");
+    await user.click(optInBtn);
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
+        purpose: "ANALYTICS"
+      }));
+      expect(localStorage.getItem("gorola_analytics_consent")).toBe("accepted");
+    });
+
+    // After opt-in, state updates and withdraw button appears
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: {
+          consents: [
+            {
+              id: "c-analytics",
+              purpose: "ANALYTICS",
+              consentVersion: "1.0",
+              noticeText: "Analytics notice",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-09-24T00:00:00Z"
+            }
+          ]
+        }
+      }
+    });
+
+    // Trigger reload to reflect active state
+    const withdrawBtn = await screen.findByTestId("withdraw-btn-ANALYTICS");
+    await user.click(withdrawBtn);
+
+    await waitFor(() => {
+      expect(deleteMock).toHaveBeenCalledWith("/api/v1/consent/ANALYTICS");
+      expect(localStorage.getItem("gorola_analytics_consent")).toBe("declined");
+    });
+  });
+
+  it("renders updated 8.3.5.1 canonical card content with stored data details and distinct transparency lines", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+
+    // Expand ORDER_PROCESSING (closed by default)
+    const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    const orderTrigger = orderCard.querySelector('[role="button"]') ?? orderCard;
+    if (orderTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(orderTrigger);
+    }
+    expect(orderCard).toHaveTextContent(/Ola Maps/i);
+    expect(orderCard).toHaveTextContent(/Display Name/i);
+    expect(orderCard).toHaveTextContent(/Razorpay/i);
+    expect(orderCard).toHaveTextContent(/For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the/i);
+    expect(orderCard).toHaveTextContent(/Order Fulfillment Notice/i);
+
+    // OTP_AUTH starts expanded by default
+    const otpCard = screen.getByTestId("consent-card-OTP_AUTH");
+    const otpTrigger = otpCard.querySelector('[role="button"]') ?? otpCard;
+    if (otpTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(otpTrigger);
+    }
+    expect(otpCard).toHaveTextContent(/Exotel/i);
+    expect(otpCard).toHaveTextContent(/For full details on retention period, data rights, and erasure policies, read the/i);
+    expect(otpCard).toHaveTextContent(/Authentication Notice/i);
+
+    // Expand MARKETING_COMMS (closed by default)
+    const marketingCard = screen.getByTestId("consent-card-MARKETING_COMMS");
+    const marketingTrigger = marketingCard.querySelector('[role="button"]') ?? marketingCard;
+    if (marketingTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(marketingTrigger);
+    }
+    expect(marketingCard).toHaveTextContent(/Exotel/i);
+    expect(marketingCard).toHaveTextContent(/For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the/i);
+    expect(marketingCard).toHaveTextContent(/Promotions Notice/i);
+
+    // Expand ANALYTICS (closed by default)
+    const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
+    const analyticsTrigger = analyticsCard.querySelector('[role="button"]') ?? analyticsCard;
+    if (analyticsTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(analyticsTrigger);
+    }
+    expect(analyticsCard).toHaveTextContent(/For full details on 180-day auto-purge schedules, telemetry anonymization, and opt-out rights, read the/i);
+    expect(analyticsCard).toHaveTextContent(/Analytics Notice/i);
+
+    // Each card must link to the platform-wide Privacy Policy
+    const privacyPolicyLinks = screen.getAllByRole("link", { name: /privacy policy/i });
+    expect(privacyPolicyLinks.length).toBeGreaterThanOrEqual(4);
+  });
+});
+

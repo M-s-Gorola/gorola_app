@@ -43,16 +43,25 @@ export class AuditRepository {
   }): Promise<{ items: AuditLog[]; nextCursor: string | null }> {
     const limit = filters.limit ?? 50;
     const { actorRole, action, entityType, entityId, from, to, cursor } = filters;
+    const fromDate = from ? new Date(from) : undefined;
+    let toDate: Date | undefined;
+    if (to) {
+      if (typeof to === "string" && /^\d{4}-\d{2}-\d{2}$/.test(to)) {
+        toDate = new Date(`${to}T23:59:59.999Z`);
+      } else {
+        toDate = new Date(to);
+      }
+    }
 
     const where: Prisma.AuditLogWhereInput = {
       ...(actorRole ? { actorRole } : {}),
-      ...(action ? { action } : {}),
-      ...(entityType ? { entityType } : {}),
+      ...(action ? { action: { contains: action, mode: "insensitive" } } : {}),
+      ...(entityType ? { entityType: { contains: entityType, mode: "insensitive" } } : {}),
       ...(entityId ? { entityId } : {}),
-      ...(from || to ? {
+      ...(fromDate || toDate ? {
         createdAt: {
-          ...(from ? { gte: new Date(from) } : {}),
-          ...(to ? { lte: new Date(to) } : {})
+          ...(fromDate ? { gte: fromDate } : {}),
+          ...(toDate ? { lte: toDate } : {})
         }
       } : {})
     };

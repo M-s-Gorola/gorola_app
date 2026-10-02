@@ -183,9 +183,12 @@ describe("auth controller routes", () => {
     expect(data.userId).toBe("user_refresh_1");
     expect(data.phone).toBe("+919999999999");
     expect(data.name).toBe("Hydrated User");
-    expect(authService.refreshToken).toHaveBeenCalledWith({
-      refreshToken: "old-refresh"
-    });
+    expect(authService.refreshToken).toHaveBeenCalledWith(
+      {
+        refreshToken: "old-refresh"
+      },
+      expect.objectContaining({ ipAddress: expect.any(String) })
+    );
   });
 
   it("POST /api/v1/auth/buyer/logout should revoke token", async () => {
@@ -245,9 +248,13 @@ describe("auth controller routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(authService.refreshToken).toHaveBeenCalledWith({
-      refreshToken: "cookie-refresh"
-    });
+    expect(authService.refreshToken).toHaveBeenCalledWith(
+      {
+        refreshToken: "cookie-refresh"
+      },
+      expect.objectContaining({ ipAddress: expect.any(String) })
+    );
+
   });
 
   it("should pass through service typed errors", async () => {

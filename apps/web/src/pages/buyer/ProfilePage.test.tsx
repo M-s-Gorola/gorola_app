@@ -7,15 +7,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ProfilePage } from "./ProfilePage";
 import { useAuthStore } from "@/store/auth.store";
 
-const { putMock, postMock } = vi.hoisted(() => ({
+const { putMock, postMock, getMock } = vi.hoisted(() => ({
   putMock: vi.fn(),
-  postMock: vi.fn()
+  postMock: vi.fn(),
+  getMock: vi.fn()
 }));
 
 vi.mock("@/lib/api", () => ({
   api: {
     put: putMock,
-    post: postMock
+    post: postMock,
+    get: getMock
   }
 }));
 
@@ -46,6 +48,10 @@ describe("ProfilePage", () => {
   beforeEach(() => {
     putMock.mockReset();
     postMock.mockReset();
+    getMock.mockReset();
+    getMock.mockResolvedValue({
+      data: { success: true, data: { consents: [] } }
+    });
     act(() => {
       useAuthStore.getState().setBuyerSession({
         userId: "u123",
@@ -63,10 +69,11 @@ describe("ProfilePage", () => {
     expect(screen.getByDisplayValue("Old Name")).toBeInTheDocument();
   });
 
-  it("renders navigation links to orders and addresses", () => {
+  it("renders navigation links to orders, addresses, and privacy", () => {
     renderProfile();
     expect(screen.getByRole("link", { name: /orders/i })).toHaveAttribute("href", "/account/orders");
     expect(screen.getByRole("link", { name: /addresses/i })).toHaveAttribute("href", "/account/addresses");
+    expect(screen.getByRole("link", { name: /privacy & consent/i })).toHaveAttribute("href", "/account/privacy");
   });
 
   it("submits name update and updates local store on success", async () => {

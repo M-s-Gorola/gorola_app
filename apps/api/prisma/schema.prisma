@@ -75,11 +75,17 @@ model User {
   isVerified Boolean   @default(false)
   isActive   Boolean   @default(true)
   isDeleted  Boolean   @default(false)
+  deletedAt  DateTime?
+  deletionScheduledFor DateTime?
+  nomineeName String?
+  nomineeContact String?
+  nomineeRelationship String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   carts      Cart[]
   orders     Order[]
   addresses  Address[]
+  consents   ConsentLog[]
 
   @@index([isDeleted])
   @@index([createdAt])
@@ -538,4 +544,38 @@ enum EarningType {
   PER_KM
 }
 
+model ConsentPurposeConfig {
+  key              String       @id
+  displayName      String
+  description      String
+  isEssential      Boolean      @default(false)
+  retentionSummary String
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  consents         ConsentLog[]
+}
 
+
+
+
+
+
+model ConsentLog {
+  id             String         @id @default(cuid())
+  userId         String
+  purpose        String
+  purposeConfig  ConsentPurposeConfig @relation(fields: [purpose], references: [key])
+  consentVersion String         @default("1.0")
+  noticeText     String
+  ipAddress      String?
+  userAgent      String?
+  isWithdrawn    Boolean        @default(false)
+  withdrawnAt    DateTime?
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
+  user           User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose])
+  @@index([userId, isWithdrawn])
+  @@index([createdAt])
+}

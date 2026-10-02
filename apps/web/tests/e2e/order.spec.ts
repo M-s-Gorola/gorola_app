@@ -7,6 +7,14 @@ test.describe('Order Management', () => {
     });
     // Log in
     await page.goto('/login');
+    const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
+    if (await consentBtn.isVisible()) {
+      const ackCheckbox = page.locator('[data-testid="consent-acknowledge-checkbox"]');
+      if (await ackCheckbox.isVisible()) {
+        await ackCheckbox.click();
+      }
+      await consentBtn.click();
+    }
     await page.locator('#buyer-phone').fill('9876543212');
     await page.locator('button', { hasText: /Send OTP/i }).click();
 

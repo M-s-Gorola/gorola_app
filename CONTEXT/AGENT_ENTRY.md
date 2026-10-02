@@ -202,21 +202,6 @@ Deployment: Railway (API + DB + Redis) + Vercel (frontend)
 CI/CD:      GitHub Actions
 ```
 
-### Key Design Tokens
-```
---gorola-pine:       #1D3D2F  (primary brand, nav, dark elements)
---gorola-saffron:    #E8833A  (CTAs only — use sparingly)
---gorola-fog:        #F4F1EC  (backgrounds — never pure white)
---gorola-charcoal:   #1C1C1E  (all body text)
---gorola-amber:      #F5A623  (live ETA, weather alerts only)
---gorola-slate:      #3A4A5C  (weather mode elements)
---gorola-slate-mist: #E8ECF0  (weather mode backgrounds)
-
-Font Display: 'Playfair Display', Georgia, serif    → hero, section titles
-Font Body:    'DM Sans', system-ui, sans-serif      → everything else
-Font Hindi:   'Noto Sans Devanagari', sans-serif    → Hindi text
-```
-
 ### API Response Shape (Always)
 ```typescript
 // Success

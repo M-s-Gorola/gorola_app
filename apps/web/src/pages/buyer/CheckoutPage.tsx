@@ -9,6 +9,8 @@ import {
   type MapCoordinates,
   MUSSOORIE_AREA_CENTER,
   OlaAddressMapPicker as AddressMapPicker} from "@/components/buyer/OlaAddressMapPicker";
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
@@ -58,6 +60,28 @@ export function CheckoutPage(): ReactElement {
     queryKey: ["buyer-addresses"]
   });
 
+  // Fetch active consents once — used to skip duplicate consent POSTs
+  // and to hide the marketing checkbox if the user has already opted in.
+  type ConsentRow = { purpose: string; isWithdrawn: boolean };
+  const consentsQuery = useQuery({
+    enabled: !!accessToken && !isBootstrapPending,
+    queryFn: async () => {
+      const res = await api!.get<{ success: boolean; data: { consents: ConsentRow[] } }>("/api/v1/consent");
+      return res.data.data?.consents ?? [];
+    },
+    queryKey: ["consents", accessToken],
+    staleTime: 0,
+    refetchOnMount: "always"
+  });
+
+  const activeConsents = consentsQuery.data ?? [];
+  const hasOrderProcessingConsent = activeConsents.some(
+    (c) => c.purpose === "ORDER_PROCESSING" && !c.isWithdrawn
+  );
+  const hasMarketingConsent = activeConsents.some(
+    (c) => c.purpose === "MARKETING_COMMS" && !c.isWithdrawn
+  );
+
   const [step, setStep] = useState<1 | 2>(1);
   const [deliveryChoice, setDeliveryChoice] = useState<string>("new");
   const [landmarkInput, setLandmarkInput] = useState("");
@@ -68,6 +92,8 @@ export function CheckoutPage(): ReactElement {
   const [step1Error, setStep1Error] = useState<string | null>(null);
   const [addressDefaultSet, setAddressDefaultSet] = useState(false);
   const [mapCoords, setMapCoords] = useState<MapCoordinates | null>(null);
+  const [marketingOptIn, setMarketingOptIn] = useState(false);
+  const [opAcknowledged, setOpAcknowledged] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const addressesList = addressesQuery.data ?? [];
@@ -289,6 +315,42 @@ export function CheckoutPage(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ["orders", "history"] });
       void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
       
+      // DPDP 2023: Log ORDER_PROCESSING consent only if not already active.
+      // The server also has an idempotency guard, but we avoid the network
+      // round-trip entirely when we already know consent exists in the cache.
+      if (!hasOrderProcessingConsent) {
+        try {
+          const p1 = api?.post("/api/v1/consent", {
+            purpose: "ORDER_PROCESSING",
+            consentVersion: "1.0",
+            noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
+          });
+          if (p1 && typeof p1.catch === "function") {
+            p1.catch(() => {});
+          }
+        } catch {
+          /* ignore background consent logging error */
+        }
+      }
+
+      // Record MARKETING_COMMS only if the user explicitly opted in this session
+      // and they haven't already granted it previously.
+      if (marketingOptIn && !hasMarketingConsent) {
+        try {
+          const p2 = api?.post("/api/v1/consent", {
+            purpose: "MARKETING_COMMS",
+            consentVersion: "1.0",
+            noticeText: "You agreed to receive promotional offers and seasonal discounts."
+          });
+          if (p2 && typeof p2.catch === "function") {
+            p2.catch(() => {});
+          }
+        } catch {
+          /* ignore background consent logging error */
+        }
+      }
+      void queryClient.invalidateQueries({ queryKey: ["consents"] });
+
       navigate(`/orders/${orderId}`, { replace: true });
     }
   });
@@ -448,6 +510,53 @@ export function CheckoutPage(): ReactElement {
                         onCoordinatesChange={handleMapCoordinates}
                       />
                     </div>
+
+                    <div
+                      data-testid="checkout-order-processing-consent"
+                      className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs text-left"
+                    >
+                      <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
+                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                        <span>Order Fulfillment &amp; Location Services</span>
+                      </div>
+                      <p className="text-muted-foreground leading-relaxed">
+                        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
+                      </p>
+                      
+                      <div className="pt-0.5 text-[11px] text-muted-foreground">
+                        <span>For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the </span>
+                        <ConsentNoticeModal
+                          purpose="ORDER_PROCESSING"
+                          triggerLabel="Order Fulfillment Notice"
+                          triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                        />
+                        <span> (or view our platform-wide </span>
+                        <a
+                          href="/privacy"
+                          className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                        >
+                          Privacy Policy
+                        </a>
+                        <span>).</span>
+                      </div>
+
+                      {!hasOrderProcessingConsent && (
+                        <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                          <Checkbox
+                            checked={opAcknowledged}
+                            data-testid="order-processing-acknowledge-checkbox"
+                            id="op-ack-checkout"
+                            onCheckedChange={(v) => setOpAcknowledged(!!v)}
+                          />
+                          <label
+                            className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                            htmlFor="op-ack-checkout"
+                          >
+                            I have read and understood this notice
+                          </label>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </div>
@@ -457,7 +566,8 @@ export function CheckoutPage(): ReactElement {
               ) : null}
 
               <button
-                className="rounded-full bg-gorola-pine px-6 py-2.5 font-dm-sans text-sm font-semibold text-white hover:bg-gorola-pine/90 transition-colors shadow-sm"
+                className="rounded-full bg-gorola-pine px-6 py-2.5 font-dm-sans text-sm font-semibold text-white hover:bg-gorola-pine/90 transition-colors shadow-sm disabled:opacity-60"
+                disabled={deliveryChoice === "new" && !hasOrderProcessingConsent && !opAcknowledged}
                 onClick={() => {
                   handleContinueFromAddress();
                 }}
@@ -561,7 +671,14 @@ export function CheckoutPage(): ReactElement {
             </div>
 
             <div className="space-y-1 border-t border-gorola-pine/10 pt-3 text-left">
-              <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Delivery Address</p>
+              <div className="flex items-center justify-between">
+                <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Delivery Address</p>
+                <ConsentNoticeModal
+                  purpose="ORDER_PROCESSING"
+                  triggerLabel="Order Fulfillment Notice"
+                  triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                />
+              </div>
               <div className="space-y-1 text-left" data-testid="review-delivery-address">
                 {selectedAddressLabel ? (
                   <div className="flex items-center gap-1.5 font-dm-sans text-sm font-bold text-gorola-charcoal">
@@ -580,6 +697,57 @@ export function CheckoutPage(): ReactElement {
                 </p>
               </div>
             </div>
+
+            {/* Rich Marketing Opt-in Card */}
+            {!consentsQuery.isLoading && !hasMarketingConsent && (
+              <div
+                data-testid="checkout-marketing-opt-in"
+                className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
+              >
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                    <span>Promotions &amp; Seasonal Offers (Optional)</span>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                    Optional
+                  </span>
+                </div>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
+                </p>
+                <div className="pt-0.5 text-[11px] text-muted-foreground">
+                  <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
+                  <ConsentNoticeModal
+                    purpose="MARKETING_COMMS"
+                    triggerLabel="Promotions Notice"
+                    triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                  <span> (or view our platform-wide </span>
+                  <a
+                    href="/privacy"
+                    className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                  >
+                    Privacy Policy
+                  </a>
+                  <span>).</span>
+                </div>
+                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
+                  <Checkbox
+                    checked={marketingOptIn}
+                    data-testid="marketing-consent-checkbox"
+                    id="marketing-optin"
+                    onCheckedChange={(v) => setMarketingOptIn(!!v)}
+                  />
+                  <label
+                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
+                    htmlFor="marketing-optin"
+                  >
+                    Yes, send me seasonal Mussoorie harvest updates and coupons
+                  </label>
+                </div>
+              </div>
+            )}
           </div>
 
           <div

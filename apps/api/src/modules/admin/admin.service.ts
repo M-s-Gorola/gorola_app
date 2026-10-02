@@ -2,7 +2,7 @@ import { AppError, ConflictError, NotFoundError, ValidationError } from "@gorola
 import { type ActorRole, type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
-import { maskPhone } from "../../lib/crypto.js";
+import { decryptPII, encryptPII, hashPII, maskPhone } from "../../lib/crypto.js";
 import { getRedisClient } from "../../lib/redis.js";
 import { AuditRepository } from "../audit/audit.repository.js";
 import { CategoryRepository } from "../catalog/category.repository.js";
@@ -436,8 +436,67 @@ export class AdminService {
       throw new NotFoundError("Order not found");
     }
 
+    // Collect distinct actor IDs for resolution
+    const buyerIds = new Set<string>();
+    const storeOwnerIds = new Set<string>();
+    const riderIds = new Set<string>();
+    const adminIds = new Set<string>();
+
+    for (const h of order.statusHistory) {
+      if (h.changedBy.startsWith("buyer:")) {
+        buyerIds.add(h.changedBy.slice(6));
+      } else if (h.changedBy.startsWith("store-owner:")) {
+        storeOwnerIds.add(h.changedBy.slice(12));
+      } else if (h.changedBy.startsWith("rider:")) {
+        riderIds.add(h.changedBy.slice(6));
+      } else if (h.changedBy.startsWith("admin:")) {
+        adminIds.add(h.changedBy.slice(6));
+      }
+    }
+
+    const [buyers, storeOwners, riders, admins] = await Promise.all([
+      buyerIds.size > 0 ? this.db.user.findMany({ where: { id: { in: Array.from(buyerIds) } }, select: { id: true, name: true } }) : [],
+      storeOwnerIds.size > 0 ? this.db.storeOwner.findMany({ where: { id: { in: Array.from(storeOwnerIds) } }, include: { store: { select: { name: true } } } }) : [],
+      riderIds.size > 0 ? this.db.deliveryRider.findMany({ where: { id: { in: Array.from(riderIds) } }, select: { id: true, name: true } }) : [],
+      adminIds.size > 0 ? this.db.admin.findMany({ where: { id: { in: Array.from(adminIds) } }, select: { id: true, email: true } }) : []
+    ]);
+
+    const buyerMap = new Map(buyers.map((b) => [b.id, b.name]));
+    const storeOwnerMap = new Map(storeOwners.map((so) => [so.id, so.store?.name || so.email]));
+    const riderMap = new Map(riders.map((r) => [r.id, r.name]));
+    const adminMap = new Map(admins.map((a) => [a.id, a.email]));
+
+    const resolvedStatusHistory = order.statusHistory.map((h) => {
+      let resolvedChangedBy = h.changedBy;
+      if (h.changedBy === "SYSTEM") {
+        resolvedChangedBy = "System";
+      } else if (h.changedBy.startsWith("buyer:")) {
+        const id = h.changedBy.slice(6);
+        const name = buyerMap.get(id);
+        resolvedChangedBy = name ? `Buyer (${name})` : "Buyer (Registered User)";
+      } else if (h.changedBy.startsWith("store-owner:")) {
+        const id = h.changedBy.slice(12);
+        const storeName = storeOwnerMap.get(id);
+        resolvedChangedBy = storeName ? `Store Owner (${storeName})` : "Store Owner";
+      } else if (h.changedBy.startsWith("rider:")) {
+        const id = h.changedBy.slice(6);
+        const name = riderMap.get(id);
+        resolvedChangedBy = name ? `Rider (${name})` : "Rider";
+      } else if (h.changedBy.startsWith("admin:")) {
+        const id = h.changedBy.slice(6);
+        const email = adminMap.get(id);
+        resolvedChangedBy = email ? `Admin (${email})` : "Admin";
+      }
+
+      return {
+        ...h,
+        changedBy: resolvedChangedBy
+      };
+    });
+
     return {
       ...order,
+      statusHistory: resolvedStatusHistory,
       buyerMaskedPhone: maskPhone(order.user?.phone ?? ""),
       total: Number(order.total),
       subtotal: Number(order.subtotal),
@@ -560,6 +619,7 @@ export class AdminService {
       name: user.name,
       maskedPhone: maskPhone(user.phone),
       isActive: user.isActive,
+      nomineeName: user.nomineeName ?? null,
       createdAt: user.createdAt.toISOString(),
       orders: user.orders.map((o) => ({
         id: o.id,
@@ -573,6 +633,57 @@ export class AdminService {
         flatRoom: a.flatRoom,
         landmarkDescription: a.landmarkDescription
       }))
+    };
+  }
+
+  public async getUserOrders(userId: string, page = 1, limit = 10, status?: OrderStatus) {
+    const user = await this.db.user.findFirst({
+      where: { id: userId, isDeleted: false },
+      select: { id: true }
+    });
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    const where: Prisma.OrderWhereInput = {
+      userId,
+      ...(status ? { status } : {})
+    };
+
+    const [total, orders] = await Promise.all([
+      this.db.order.count({ where }),
+      this.db.order.findMany({
+        where,
+        skip: (page - 1) * limit,
+        take: limit,
+        orderBy: { createdAt: "desc" },
+        include: {
+          store: { select: { id: true, name: true } },
+          items: true
+        }
+      })
+    ]);
+
+    const totalPages = Math.ceil(total / limit) || 1;
+
+    return {
+      items: orders.map((o) => ({
+        id: o.id,
+        storeId: o.storeId,
+        storeName: o.store.name,
+        total: Number(o.total),
+        subtotal: Number(o.subtotal),
+        deliveryFee: Number(o.deliveryFee),
+        status: o.status,
+        orderType: o.orderType,
+        paymentMethod: o.paymentMethod,
+        itemsCount: o.items.reduce((sum, it) => sum + it.quantity, 0),
+        createdAt: o.createdAt.toISOString()
+      })),
+      total,
+      page,
+      limit,
+      totalPages
     };
   }
 
@@ -634,6 +745,61 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  public async getUserConsentLogs(userId: string, page: number, limit: number) {
+    const user = await this.db.user.findFirst({ where: { id: userId, isDeleted: false } });
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    const skip = (page - 1) * limit;
+    const total = await this.db.consentLog.count({ where: { userId } });
+
+    const logs = await this.db.consentLog.findMany({
+      where: { userId },
+      orderBy: { createdAt: "desc" },
+      skip,
+      take: limit
+    });
+
+    const allPurposes = await this.db.consentPurposeConfig.findMany();
+    const summary = await Promise.all(
+      allPurposes.map(async (p) => {
+        const latest = await this.db.consentLog.findFirst({
+          where: { userId, purpose: p.key },
+          orderBy: { createdAt: "desc" }
+        });
+        return {
+          purpose: p.key,
+          displayName: p.displayName,
+          isEssential: p.isEssential,
+          isActive: latest ? !latest.isWithdrawn : false,
+          givenAt: latest?.createdAt.toISOString() ?? null,
+          withdrawnAt: latest?.withdrawnAt?.toISOString() ?? null,
+          version: latest?.consentVersion ?? null
+        };
+      })
+    );
+
+    return {
+      summary,
+      logs: logs.map((l) => ({
+        id: l.id,
+        purpose: l.purpose,
+        isWithdrawn: l.isWithdrawn,
+        consentVersion: l.consentVersion,
+        noticeText: l.noticeText,
+        ipAddress: l.ipAddress ?? null,
+        userAgent: l.userAgent ?? null,
+        createdAt: l.createdAt.toISOString(),
+        withdrawnAt: l.withdrawnAt?.toISOString() ?? null
+      })),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1
+    };
   }
 
   public async createStore(
@@ -802,6 +968,72 @@ export class AdminService {
         email: o.email,
         createdAt: o.createdAt.toISOString()
       }))
+    };
+  }
+
+  public async getStoreOrders(
+    storeId: string,
+    params: {
+      page?: number;
+      limit?: number;
+      status?: OrderStatus;
+    } = {}
+  ) {
+    const store = await this.db.store.findFirst({
+      where: { id: storeId, isDeleted: false }
+    });
+    if (!store) {
+      throw new NotFoundError("Store not found");
+    }
+
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.OrderWhereInput = {
+      storeId,
+      ...(params.status ? { status: params.status } : {})
+    };
+
+    const [orders, total] = await Promise.all([
+      this.db.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          user: { select: { name: true, phone: true } },
+          rider: { select: { name: true } },
+          items: true
+        }
+      }),
+      this.db.order.count({ where })
+    ]);
+
+    const items = orders.map((o) => ({
+      id: o.id,
+      orderNumber: o.id,
+      status: o.status,
+      orderType: o.orderType,
+      createdAt: o.createdAt,
+      total: Number(o.total),
+      subtotal: Number(o.subtotal),
+      deliveryFee: Number(o.deliveryFee),
+      paymentMethod: o.paymentMethod,
+      storeName: store.name,
+      storeId: store.id,
+      userName: o.user?.name?.trim() || "Registered User",
+      userMaskedPhone: maskPhone(o.user?.phone ?? ""),
+      riderName: o.rider?.name ?? null,
+      itemCount: o.items.length
+    }));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
     };
   }
 
@@ -1681,7 +1913,7 @@ export class AdminService {
       };
     }>[]
   > {
-    return this.db.deliveryRider.findMany({
+    const riders = await this.db.deliveryRider.findMany({
       where: { isDeleted: false },
       orderBy: { createdAt: "desc" },
       include: {
@@ -1698,6 +1930,11 @@ export class AdminService {
         }
       }
     });
+
+    return riders.map((r) => ({
+      ...r,
+      phone: decryptPII(r.phone)
+    }));
   }
 
   public async createRider(
@@ -1753,7 +1990,8 @@ export class AdminService {
       const rider = await tx.deliveryRider.create({
         data: {
           name: dto.name,
-          phone: dto.phone,
+          phone: encryptPII(dto.phone),
+          phoneHash: hashPII(dto.phone),
           email: dto.email,
           passwordHash,
           riderType: dto.riderType,
@@ -1792,7 +2030,10 @@ export class AdminService {
         }
       });
 
-      return rider;
+      return {
+        ...rider,
+        phone: decryptPII(rider.phone)
+      };
     });
   }
 
@@ -1883,8 +2124,136 @@ export class AdminService {
         }
       });
 
-      return updatedRider;
+      return {
+        ...updatedRider,
+        phone: decryptPII(updatedRider.phone)
+      };
     });
+  }
+
+  public async getRiderDetail(riderId: string) {
+    const rider = await this.db.deliveryRider.findFirst({
+      where: { id: riderId, isDeleted: false },
+      include: {
+        stores: {
+          include: {
+            store: {
+              select: {
+                id: true,
+                name: true,
+                storeType: true
+              }
+            }
+          }
+        }
+      }
+    });
+
+    if (!rider) {
+      throw new NotFoundError("Rider not found");
+    }
+
+    const primaryStore = rider.stores.find((s) => s.isPrimary);
+
+    const [totalDeliveries, earningsAgg] = await Promise.all([
+      this.db.order.count({
+        where: {
+          riderId,
+          status: "DELIVERED"
+        }
+      }),
+      this.db.riderEarning.aggregate({
+        where: { riderId },
+        _sum: { amount: true }
+      })
+    ]);
+
+    return {
+      id: rider.id,
+      name: rider.name,
+      email: rider.email,
+      phone: decryptPII(rider.phone),
+      maskedPhone: maskPhone(rider.phone),
+      riderType: rider.riderType,
+      isActive: rider.isActive,
+      primaryStoreId: primaryStore?.storeId ?? null,
+      primaryStoreName: primaryStore?.store.name ?? null,
+      stores: rider.stores.map((s) => ({
+        storeId: s.storeId,
+        isPrimary: s.isPrimary,
+        storeName: s.store.name,
+        storeType: s.store.storeType
+      })),
+      totalDeliveries,
+      totalEarnings: Number(earningsAgg._sum.amount ?? 0),
+      createdAt: rider.createdAt,
+      updatedAt: rider.updatedAt
+    };
+  }
+
+  public async getRiderOrders(
+    riderId: string,
+    params: {
+      page?: number;
+      limit?: number;
+      status?: OrderStatus;
+    } = {}
+  ) {
+    const rider = await this.db.deliveryRider.findFirst({
+      where: { id: riderId, isDeleted: false }
+    });
+    if (!rider) {
+      throw new NotFoundError("Rider not found");
+    }
+
+    const page = Math.max(1, params.page ?? 1);
+    const limit = Math.min(100, Math.max(1, params.limit ?? 10));
+    const skip = (page - 1) * limit;
+
+    const where: Prisma.OrderWhereInput = {
+      riderId,
+      ...(params.status ? { status: params.status } : {})
+    };
+
+    const [orders, total] = await Promise.all([
+      this.db.order.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          store: { select: { id: true, name: true, storeType: true } },
+          user: { select: { name: true, phone: true } },
+          items: true
+        }
+      }),
+      this.db.order.count({ where })
+    ]);
+
+    const items = orders.map((o) => ({
+      id: o.id,
+      orderNumber: o.id,
+      status: o.status,
+      orderType: o.orderType,
+      createdAt: o.createdAt,
+      total: Number(o.total),
+      subtotal: Number(o.subtotal),
+      deliveryFee: Number(o.deliveryFee),
+      paymentMethod: o.paymentMethod,
+      storeName: o.store.name,
+      storeId: o.store.id,
+      userName: o.user.name?.trim() || "Registered User",
+      userMaskedPhone: maskPhone(o.user.phone),
+      itemCount: o.items.length
+    }));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   public async getOrdersTrend(params: {

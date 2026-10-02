@@ -1,16 +1,16 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
-  MapPin,
-  Phone,
   RefreshCw,
   Search
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
+import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
 type UserListItem = {
   id: string;
@@ -22,49 +22,21 @@ type UserListItem = {
   isActive: boolean;
 };
 
-type OrderHistoryItem = {
-  id: string;
-  storeName: string;
-  total: number;
-  status: string;
-  createdAt: string;
-};
-
-type AddressItem = {
-  id: string;
-  flatRoom?: string | null;
-  landmarkDescription?: string | null;
-};
-
-type UserDetail = {
-  id: string;
-  name: string;
-  maskedPhone: string;
-  isActive: boolean;
-  createdAt: string;
-  orders: OrderHistoryItem[];
-  addresses: AddressItem[];
-};
-
 type UsersListResponse = {
   success: boolean;
   data: UserListItem[];
 };
 
-type UserDetailResponse = {
-  success: boolean;
-  data: UserDetail;
-};
-
 export function AdminUsersPage(): ReactElement {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
 
   // Search and debounce states
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
 
-  // Drawer / modal states
-  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  // Confirmation dialog states
   const [confirmStatusChangeUserId, setConfirmStatusChangeUserId] = useState<string | null>(null);
 
   // Debounce search effect (300ms)
@@ -92,36 +64,21 @@ export function AdminUsersPage(): ReactElement {
     staleTime: 10000
   });
 
-  // Fetch single user detail query
-  const { data: userDetail, isLoading: isDetailLoading } = useQuery<UserDetail>({
-    queryKey: ["admin", "user-detail", selectedUserId],
-    queryFn: async () => {
-      if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<UserDetailResponse>(`/api/v1/admin/users/${selectedUserId}`);
-      return res.data.data;
-    },
-    enabled: !!selectedUserId
-  });
-
-  // Find user details helper for confirmation modal
-  const confirmUser = users?.find((u) => u.id === confirmStatusChangeUserId);
-
-  // Suspend / Unsuspend mutations
+  // Toggle user status mutation (Suspend / Unsuspend)
   const toggleStatusMutation = useMutation({
-    mutationFn: async ({ userId, suspend }: { userId: string; suspend: boolean }) => {
+    mutationFn: async ({ userId, isCurrentlyActive }: { userId: string; isCurrentlyActive: boolean }) => {
       if (!api) throw new Error("API helper not initialized");
-      const endpoint = `/api/v1/admin/users/${userId}/${suspend ? "suspend" : "unsuspend"}`;
-      await api.put(endpoint, {});
+      const endpoint = isCurrentlyActive
+        ? `/api/v1/admin/users/${userId}/suspend`
+        : `/api/v1/admin/users/${userId}/unsuspend`;
+      const res = await api.put(endpoint, {});
+      return res.data;
     },
-    onSuccess: (_, variables) => {
-      const action = variables.suspend ? "suspended" : "unsuspended";
+    onSuccess: async (_, variables) => {
+      const action = variables.isCurrentlyActive ? "suspended" : "unsuspended";
       toast.success(`User successfully ${action}`);
-      void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
-      // Also invalidate details query if open
-      if (selectedUserId === variables.userId) {
-        void queryClient.invalidateQueries({ queryKey: ["admin", "user-detail", selectedUserId] });
-      }
       setConfirmStatusChangeUserId(null);
+      await queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
     },
     onError: (err: unknown) => {
       const error = err as { response?: { data?: { error?: { message?: string } } } };
@@ -130,14 +87,6 @@ export function AdminUsersPage(): ReactElement {
     }
   });
 
-  const handleToggleStatusConfirm = () => {
-    if (!confirmStatusChangeUserId || !confirmUser) return;
-    toggleStatusMutation.mutate({
-      userId: confirmStatusChangeUserId,
-      suspend: confirmUser.isActive
-    });
-  };
-
   const formatCurrency = (val: number): string => {
     return `₹${val.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
@@ -145,47 +94,51 @@ export function AdminUsersPage(): ReactElement {
     })}`;
   };
 
-  if (isLoading && !users) {
+  if (isLoading) {
     return (
-      <div data-testid="users-loading-skeleton" className="space-y-6 animate-pulse">
+      <div className="space-y-6 animate-pulse p-4 md:p-8">
         <div className="h-10 bg-gorola-charcoal/10 rounded-xl w-48" />
-        <div className="h-14 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
-        <div className="h-96 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
+        <div className="h-12 bg-gorola-charcoal/10 rounded-2xl w-full" />
+        <div className="h-64 bg-gorola-charcoal/10 rounded-2xl w-full" />
       </div>
     );
   }
 
   if (isError) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
-        <AlertTriangle className="h-10 w-10 text-red-500" />
-        <h2 className="text-lg font-bold text-gorola-charcoal">Failed to load platform buyers</h2>
-        <button onClick={() => void refetch()} className="px-4 py-2 bg-gorola-pine text-white rounded-xl text-sm font-bold">
+      <div className="p-8 text-center space-y-4">
+        <AlertTriangle className="h-10 w-10 text-gorola-clay mx-auto" />
+        <h2 className="text-xl font-bold text-gorola-charcoal">Failed to load platform users</h2>
+        <p className="text-sm text-gorola-slate">An error occurred while communicating with the server.</p>
+        <button
+          onClick={() => void refetch()}
+          className="px-4 py-2 bg-gorola-pine text-white text-xs font-bold rounded-xl shadow-md hover:bg-gorola-pine/90"
+        >
           Try Again
         </button>
       </div>
     );
   }
 
-  const items = users ?? [];
+  const items = users || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 pb-12">
       {/* Header */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+      <header className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">Platform Users</h1>
-          <p className="text-sm text-gorola-slate font-dm-sans">
-            Manage buyer accounts, search by contact numbers, inspect orders, and suspend or unsuspend sessions.
+          <h1 className="text-2xl font-bold text-gorola-charcoal tracking-tight">Platform Users</h1>
+          <p className="text-xs text-gorola-slate mt-1 font-medium">
+            Search registered users, audit statutory DPDP privacy consents, and manage buyer account statuses.
           </p>
         </div>
 
         <button
           onClick={() => void refetch()}
           disabled={isFetching}
-          className="px-4 py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 rounded-xl text-xs font-bold text-gorola-charcoal shadow-sm transition-all self-start sm:self-auto disabled:opacity-50"
         >
-          <RefreshCw className={`h-4 w-4 text-gorola-pine ${isFetching ? "animate-spin" : ""}`} />
+          <RefreshCw className={`h-3.5 w-3.5 ${isFetching ? "animate-spin text-gorola-pine" : "text-gorola-slate"}`} />
           Sync List
         </button>
       </header>
@@ -228,232 +181,114 @@ export function AdminUsersPage(): ReactElement {
                   </td>
                 </tr>
               ) : (
-                items.map((user) => (
-                  <tr
-                    key={user.id}
-                    className={`hover:bg-gorola-charcoal/[0.01] transition-all ${
-                      !user.isActive ? "opacity-60 bg-gorola-slate-mist/5" : ""
-                    }`}
-                  >
-                    <td className="px-6 py-4 font-bold text-gorola-charcoal whitespace-nowrap">{user.name}</td>
-                    <td className="px-6 py-4 font-mono text-xs text-gorola-charcoal whitespace-nowrap">{user.maskedPhone}</td>
-                    <td className="px-6 py-4 font-bold text-center text-gorola-charcoal whitespace-nowrap">{user.orderCount}</td>
-                    <td className="px-6 py-4 font-bold text-gorola-charcoal whitespace-nowrap">{formatCurrency(user.totalSpent)}</td>
-                    <td className="px-6 py-4 text-xs font-medium text-gorola-slate whitespace-nowrap">
-                      {new Date(user.createdAt).toLocaleDateString("en-IN", {
-                        year: "numeric",
-                        month: "short",
-                        day: "numeric"
-                      })}
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span
-                        className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                          user.isActive
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
-                            : "bg-rose-100 text-rose-800 border-rose-200/50"
-                        }`}
-                      >
-                        {user.isActive ? "Active" : "Suspended"}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap">
-                      <button
-                        data-testid={`view-details-${user.id}`}
-                        onClick={() => setSelectedUserId(user.id)}
-                        className="px-3 py-1.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-xs font-bold text-gorola-pine transition-all shadow-sm whitespace-nowrap"
-                      >
-                        View Details
-                      </button>
-                      <button
-                        data-testid={`toggle-status-${user.id}`}
-                        onClick={() => setConfirmStatusChangeUserId(user.id)}
-                        className={`px-3 py-1.5 border rounded-xl text-xs font-bold transition-all shadow-sm whitespace-nowrap ${
-                          user.isActive
-                            ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
-                            : "bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100"
-                        }`}
-                      >
-                        {user.isActive ? "Suspend" : "Unsuspend"}
-                      </button>
-                    </td>
-                  </tr>
-                ))
+                items.map((user) => {
+                  const displayName = user.name?.trim() || "Registered User";
+                  return (
+                    <tr
+                      key={user.id}
+                      className={`hover:bg-gorola-charcoal/[0.01] transition-all cursor-pointer ${
+                        !user.isActive ? "opacity-60 bg-gorola-slate-mist/5" : ""
+                      }`}
+                      onClick={() => navigate(getScopedPath(`/admin/users/${user.id}`, "admin", isSubdomainMode))}
+                    >
+                      <td className="px-6 py-4 font-bold text-gorola-charcoal whitespace-nowrap">{displayName}</td>
+                      <td className="px-6 py-4 font-mono text-xs text-gorola-charcoal whitespace-nowrap">{user.maskedPhone}</td>
+                      <td className="px-6 py-4 font-bold text-center text-gorola-charcoal whitespace-nowrap">{user.orderCount}</td>
+                      <td className="px-6 py-4 font-bold text-gorola-charcoal whitespace-nowrap">{formatCurrency(user.totalSpent)}</td>
+                      <td className="px-6 py-4 text-xs font-medium text-gorola-slate whitespace-nowrap">
+                        {new Date(user.createdAt).toLocaleDateString("en-IN", {
+                          year: "numeric",
+                          month: "short",
+                          day: "numeric"
+                        })}
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                            user.isActive
+                              ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
+                              : "bg-rose-100 text-rose-800 border-rose-200/50"
+                          }`}
+                        >
+                          {user.isActive ? "Active" : "Suspended"}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right space-x-2 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                        <button
+                          data-testid={`view-details-${user.id}`}
+                          onClick={() => navigate(getScopedPath(`/admin/users/${user.id}`, "admin", isSubdomainMode))}
+                          className="px-3 py-1.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-xs font-bold text-gorola-pine transition-all shadow-sm whitespace-nowrap"
+                        >
+                          View Details
+                        </button>
+                        <button
+                          data-testid={`toggle-status-${user.id}`}
+                          onClick={() => setConfirmStatusChangeUserId(user.id)}
+                          className={`px-3 py-1.5 border rounded-xl text-xs font-bold transition-all shadow-sm whitespace-nowrap ${
+                            user.isActive
+                              ? "bg-rose-50 border-rose-200 text-rose-600 hover:bg-rose-100"
+                              : "bg-emerald-50 border-emerald-200 text-emerald-600 hover:bg-emerald-100"
+                          }`}
+                        >
+                          {user.isActive ? "Suspend" : "Unsuspend"}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })
               )}
             </tbody>
           </table>
         </div>
       </div>
 
-      {/* User Details Drawer (Slide-over) */}
-      {selectedUserId && (
-        <div
-          data-testid="user-details-drawer"
-          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex justify-end animate-in fade-in duration-200"
-          onClick={() => setSelectedUserId(null)}
-        >
-          <div
-            className="bg-white h-full w-full max-w-lg shadow-2xl p-6 md:p-8 space-y-6 overflow-y-auto animate-in slide-in-from-right duration-300"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {isDetailLoading ? (
-              <div className="h-full flex flex-col items-center justify-center space-y-4">
-                <RefreshCw className="h-8 w-8 text-gorola-pine animate-spin" />
-                <span className="text-sm text-gorola-slate">Retrieving detailed records...</span>
-              </div>
-            ) : (
-              userDetail && (
+      {/* Confirmation Modal for Suspending/Unsuspending */}
+      {confirmStatusChangeUserId && (
+        <div className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            {(() => {
+              const targetUser = items.find((u) => u.id === confirmStatusChangeUserId);
+              if (!targetUser) return null;
+              return (
                 <>
-                  {/* Drawer Header */}
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <span
-                        className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border mb-3 ${
-                          userDetail.isActive
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
-                            : "bg-rose-100 text-rose-800 border-rose-200/50"
-                        }`}
-                      >
-                        {userDetail.isActive ? "Active" : "Suspended"}
-                      </span>
-                      <h2 className="text-2xl font-bold text-gorola-charcoal">{userDetail.name}</h2>
-                      <p className="text-xs text-gorola-slate mt-1 font-medium">
-                        Joined on: {new Date(userDetail.createdAt).toLocaleString("en-IN")}
-                      </p>
-                    </div>
+                  <h3 className="text-lg font-bold text-gorola-charcoal">
+                    {targetUser.isActive ? "Suspend User Account?" : "Unsuspend User Account?"}
+                  </h3>
+                  <p className="text-xs text-gorola-slate leading-relaxed">
+                    {targetUser.isActive
+                      ? `Suspending ${targetUser.name || "this user"} will immediately terminate their active sessions and block further OTP verification.`
+                      : `Unsuspending ${targetUser.name || "this user"} will restore their ability to log in.`}
+                  </p>
+                  <div className="flex items-center justify-end gap-3 pt-4 border-t border-gorola-charcoal/10">
                     <button
-                      onClick={() => setSelectedUserId(null)}
-                      className="h-8 w-8 rounded-full border border-gorola-charcoal/10 hover:border-gorola-pine/20 flex items-center justify-center font-bold text-gorola-slate transition-all"
-                      aria-label="Close details"
+                      type="button"
+                      onClick={() => setConfirmStatusChangeUserId(null)}
+                      className="px-4 py-2 text-xs font-bold text-gorola-slate hover:bg-gorola-mint/10 rounded-xl"
                     >
-                      ✕
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={toggleStatusMutation.isPending}
+                      onClick={() =>
+                        toggleStatusMutation.mutate({
+                          userId: targetUser.id,
+                          isCurrentlyActive: targetUser.isActive
+                        })
+                      }
+                      data-testid="confirm-status-change"
+                      className={`px-5 py-2 text-xs font-black rounded-xl text-white shadow-md ${
+                        targetUser.isActive
+                          ? "bg-rose-600 hover:bg-rose-700"
+                          : "bg-emerald-600 hover:bg-emerald-700"
+                      }`}
+                    >
+                      {toggleStatusMutation.isPending ? "Updating..." : "Confirm"}
                     </button>
                   </div>
-
-                  {/* Profile info cards */}
-                  <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 space-y-3">
-                    <div className="flex items-center gap-3">
-                      <Phone className="h-4 w-4 text-gorola-slate" />
-                      <div>
-                        <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wide">Contact Number</p>
-                        <p className="text-xs font-black text-gorola-charcoal">{userDetail.maskedPhone}</p>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Addresses */}
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-gorola-slate">Registered Addresses</h3>
-                    {userDetail.addresses.length === 0 ? (
-                      <p className="text-xs text-gorola-slate italic">No registered addresses found.</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {userDetail.addresses.map((address) => (
-                          <div
-                            key={address.id}
-                            className="flex items-start gap-3 bg-gorola-charcoal/[0.01] border border-gorola-charcoal/5 rounded-xl p-3.5"
-                          >
-                            <MapPin className="h-4 w-4 text-gorola-pine shrink-0 mt-0.5" />
-                            <div className="text-xs font-medium text-gorola-charcoal leading-relaxed">
-                              {address.flatRoom ? `${address.flatRoom}, ` : ""}
-                              {address.landmarkDescription}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Order History */}
-                  <div className="space-y-3">
-                    <h3 className="text-xs font-black uppercase tracking-wider text-gorola-slate">Order History</h3>
-                    {userDetail.orders.length === 0 ? (
-                      <p className="text-xs text-gorola-slate italic">No order history found for this buyer.</p>
-                    ) : (
-                      <div className="border border-gorola-charcoal/10 rounded-xl overflow-hidden bg-white">
-                        <table className="w-full text-left border-collapse">
-                          <thead>
-                            <tr className="border-b border-gorola-charcoal/5 bg-gorola-charcoal/[0.01]">
-                              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Order ID</th>
-                              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Store</th>
-                              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Total</th>
-                              <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Status</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-gorola-charcoal/5 text-xs">
-                            {userDetail.orders.map((order) => (
-                              <tr key={order.id} className="hover:bg-gorola-charcoal/[0.005]">
-                                <td className="px-4 py-3 font-mono font-bold text-gorola-charcoal">
-                                  #{order.id.slice(0, 8).toUpperCase()}
-                                </td>
-                                <td className="px-4 py-3 font-bold text-gorola-charcoal">{order.storeName}</td>
-                                <td className="px-4 py-3 font-bold text-gorola-charcoal">{formatCurrency(order.total)}</td>
-                                <td className="px-4 py-3">
-                                  <span className="font-bold text-[10px] uppercase text-gorola-pine">
-                                    {order.status}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </div>
                 </>
-              )
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* Confirmation Dialog Modal */}
-      {confirmStatusChangeUserId && confirmUser && (
-        <div
-          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setConfirmStatusChangeUserId(null)}
-        >
-          <div
-            className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex items-start gap-4">
-              <div className="h-10 w-10 rounded-full bg-rose-50 border border-rose-100 flex items-center justify-center shrink-0">
-                <AlertTriangle className="h-5 w-5 text-rose-600" />
-              </div>
-              <div className="space-y-1.5">
-                <h3 className="text-lg font-bold text-gorola-charcoal">
-                  {confirmUser.isActive ? "Suspend User Account" : "Unsuspend User Account"}
-                </h3>
-                <p className="text-xs text-gorola-slate leading-relaxed">
-                  Are you sure you want to {confirmUser.isActive ? "suspend" : "unsuspend"} this user?
-                </p>
-              </div>
-            </div>
-
-            <div className="flex justify-end gap-3 pt-2">
-              <button
-                onClick={() => setConfirmStatusChangeUserId(null)}
-                className="px-4 py-2 border border-gorola-charcoal/10 hover:bg-gorola-charcoal/5 rounded-xl text-xs font-bold text-gorola-slate transition-all"
-              >
-                Cancel
-              </button>
-              <button
-                data-testid="confirm-status-change"
-                onClick={handleToggleStatusConfirm}
-                disabled={toggleStatusMutation.isPending}
-                className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition-all flex items-center gap-1.5 ${
-                  confirmUser.isActive
-                    ? "bg-rose-600 hover:bg-rose-700 active:bg-rose-800"
-                    : "bg-emerald-600 hover:bg-emerald-700 active:bg-emerald-800"
-                }`}
-              >
-                {toggleStatusMutation.isPending && (
-                  <RefreshCw className="h-3 w-3 animate-spin" />
-                )}
-                Confirm
-              </button>
-            </div>
+              );
+            })()}
           </div>
         </div>
       )}
