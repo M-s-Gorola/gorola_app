@@ -37,8 +37,6 @@ type UserDetail = {
   createdAt: string;
   addresses: AddressItem[];
   nomineeName?: string | null;
-  nomineeContact?: string | null;
-  nomineeRelationship?: string | null;
 };
 
 type UserDetailResponse = {
@@ -388,8 +386,8 @@ export function AdminUserDetailPage(): ReactElement {
             <ShieldCheck className="h-5 w-5 text-gorola-slate" />
             <div>
               <p className="text-[10px] uppercase font-black text-gorola-slate/70">Nominee Info</p>
-              <p className="text-sm font-black text-gorola-charcoal">
-                {user.nomineeName ? `${user.nomineeName} (${user.nomineeRelationship ?? "Nominee"})` : "Not Configured"}
+              <p className="text-sm font-black text-gorola-charcoal" data-testid="user-nominee-info">
+                {user.nomineeName ? user.nomineeName : "Not Configured"}
               </p>
             </div>
           </div>

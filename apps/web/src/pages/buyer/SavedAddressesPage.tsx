@@ -379,11 +379,30 @@ export function SavedAddressesPage(): ReactElement {
                   <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
                   <span>Order Fulfillment &amp; Location Services</span>
                 </div>
-                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                  Essential
+                </span>
               </div>
               <p className="text-muted-foreground leading-relaxed">
-                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+                We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
               </p>
+
+              <div className="pt-0.5 text-[11px] text-muted-foreground">
+                <span>For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the </span>
+                <ConsentNoticeModal
+                  purpose="ORDER_PROCESSING"
+                  triggerLabel="Order Fulfillment Notice"
+                  triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                />
+                <span> (or view our platform-wide </span>
+                <a
+                  href="/privacy"
+                  className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                >
+                  Privacy Policy
+                </a>
+                <span>).</span>
+              </div>
 
               {!hasOrderProcessingConsent ? (
                 <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">

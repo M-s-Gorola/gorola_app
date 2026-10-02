@@ -11,21 +11,20 @@
 
 | Phase   | Name                    | Status      | Notes |
 | ------- | ----------------------- | ----------- | ----- |
-| Phase 8 | DPDP Act 2023 Compliance | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee) and 8.3.4 (Consent Overhaul & Admin Consent Panel) complete. |
+| Phase 8 | DPDP Act 2023 Compliance | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee), 8.3.4 (Consent Overhaul & Admin Consent Panel), and 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) complete; Phase 8.4 (Session Transparency & Security Alerting) ready to execute. |
 
 ---
 
 ## 📍 Last Updated
 
 - **Date:** 2026-10-02
-- **Session Summary:** Completed Phase 8.3.4 (Consent Architecture Overhaul & Admin Consent Panel) in full TDD order:
-  - **8.3.4.1 (Schema & DB Migration):** Replaced PostgreSQL `ConsentPurpose` enum with `ConsentPurposeConfig` relational table. Renamed `MARKETING_EMAIL` to `MARKETING_COMMS`. Updated `ConsentLog.purpose` to `TEXT` with FK to `ConsentPurposeConfig.key`. Seeded 4 canonical rows (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`). Applied migration `20261001200359_replace_consent_purpose_enum_with_config_table` to `gorola_dev` and `gorola_test`.
-  - **8.3.4.2 (Notice Text Corrections):** Updated `ConsentNoticeModal.tsx` and all inline notice cards (`SavedAddressesPage`, `CheckoutPage`, `BookingTimeslotPage`, `LoginPage`) with accurate GPS retention (retained with address; order GPS nulled on erasure; financials kept 7 years for GST), conditional display name disclosure ("Display Name (if you have set one)"), and DLT-registered SMS gateway disclosure.
-  - **8.3.4.3 (Admin Consents API):** Implemented `GET /api/v1/admin/users/:id/consents` with pagination (`page`, `limit`), summary per purpose, and full log history in `admin.service.ts` & `admin.controller.ts`.
-  - **8.3.4.4 (Admin User Drawer UI):** Added "Consent & Privacy (DPDP Act 2023)" section to `AdminUsersPage.tsx` with 4-row purpose summary table, active status badges, and expandable paginated full log.
-  - **Final Quality Gates:** All 516 backend tests passed, all 298 frontend tests passed, `pnpm typecheck` passed (0 errors), `pnpm lint` passed (0 warnings). Zero `MARKETING_EMAIL` strings remaining in source.
-- **Next Session Must Start With:** Phase 8.4 — Data Security & Encryption at Rest (or next planned section in Phase 8).
-- **In Progress Right Now:** Phase 8.3.4 Complete.
+- **Session Summary:** Fully executed and verified Phase 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection):
+  - **8.3.5.1 (Consent Cards Alignment & Purpose-Specific Transparency Lines):** Concise consent cards across all buyer interfaces with bolded third-party services (**Exotel**, **Ola Maps**, **Razorpay**), seamless typographic text baseline alignment for notice modal links, and distinct purpose-specific transparency lines pointing to statutory notices & public `/privacy` policy page.
+  - **8.3.5.2 (Admin Audit Log Substring Search):** `audit.repository.ts` Prisma queries updated to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType` search, verified with debounced UI inputs.
+  - **8.3.5.3 (Admin User Detail Nominee Integration & Strict PII Minimization):** `getUserDetail` API response exposes ONLY `nomineeName` (strictly omitting `nomineeContact` & `nomineeRelationship` to prevent third-party PII exposure) and `AdminUserDetailPage.tsx` displays nominee name or "Not Configured".
+  - **Final Quality Gate:** 100% GREEN (119 API test files / 737 tests passed, 95 Web test files / 541 tests passed, 0 TypeScript errors, 0 ESLint warnings/errors).
+- **Next Session Must Start With:** Phase 8.4 — Session Transparency & Security Alerting (8.4.1 Active Sessions & Remote Revoke).
+- **In Progress Right Now:** None (Phase 8.3.5 complete).
 - **Current Blocker:** None.
 
 
@@ -1394,6 +1393,248 @@ Add a new "Consent & Privacy" section at the bottom of the user detail drawer in
 - [x] Confirm `SELECT COUNT(*) FROM "ConsentLog" WHERE purpose = 'MARKETING_EMAIL'` against both `gorola_dev` and `gorola_test` databases returns 0.
 - [x] Confirm `SELECT COUNT(*) FROM "ConsentPurposeConfig"` returns exactly 4 on both databases.
 
+---
+
+### 8.3.5 — DPDP UI Alignment, Audit Log Search & Nominee PII Protection
+
+> **Type: Backend (repository filters + DTO serialization) + Frontend (consent cards, transparency lines, audit log search & user detail Nominee card). Full TDD.**
+> **Prerequisite: Phase 8.3.4 complete.**
+> **This section has three sequential sub-tasks. Complete them strictly in order.**
+
+---
+
+#### Sub-task Overview
+
+| Sub-task | Name | Type | Dependency |
+|----------|------|------|-----------|
+| **8.3.5.1** | Canonical Consent Cards Content Alignment & Purpose-Specific Transparency Lines | Frontend + Backend | Phase 8.3.4 complete |
+| **8.3.5.2** | Admin Audit Log Substring Search & Case-Insensitive Filtering | Backend + Frontend | None — can run in parallel |
+| **8.3.5.3** | Admin User Detail Nominee Field Integration & Strict PII Minimization | Backend + Frontend | None — can run in parallel |
+
+---
+
+### 8.3.5.1 — Canonical Consent Cards Content Alignment & Purpose-Specific Transparency Lines
+
+**Root cause / Goal:**
+In Phase 8.3.4.2, we corrected the full statutory notices inside `ConsentNoticeModal.tsx`. However, the concise consent cards across buyer interfaces (`PURPOSE_META` in `PrivacySettingsSection.tsx`, `SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `LoginPage.tsx`, `AnalyticsConsentBanner.tsx`) still suffer from gaps in disclosed stored data:
+1. `ORDER_PROCESSING`: Omitted **Display Name (if set)** shared with store partners and delivery riders, Ola Maps spatial routing, Razorpay online payments, and 7-year GST retention terms.
+2. `OTP_AUTH`: Omitted the DLT-registered SMS gateway partner (**Exotel**) and 30-day permanent erasure guarantee upon account deletion.
+3. `MARKETING_COMMS`: Omitted explicit communication channels (**SMS and app notifications**), personal data utilized (phone number, Display Name if set, purchase categories), and the 48-hour opt-out scrubbing policy.
+4. `ANALYTICS`: Omitted the 180-day telemetry auto-purge / anonymization schedule.
+5. Furthermore, consent cards lacked distinct, purpose-specific 1-line transparency prompts placed directly above action buttons/checkboxes that clearly distinguish the quick, purpose-specific Statutory Notice from the overarching, platform-wide Privacy Policy (`/privacy`).
+6. When a user grants consent in `PrivacySettingsSection.tsx`, `handleGrant` sends a brief `meta.description` instead of the canonical statutory text.
+
+**Fix / Approach:**
+1. Update `PURPOSE_META` in `PrivacySettingsSection.tsx` and all inline consent cards (`SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `LoginPage.tsx`, `AnalyticsConsentBanner.tsx`) to contain complete, accurate data disclosures while preserving concise readability.
+2. Add purpose-specific 1-line transparency prompts directly before checkboxes and action buttons:
+   - **ORDER_PROCESSING:** *"For details on location sharing and order data retention, read the [Order Fulfillment Notice] (or view our platform-wide [Privacy Policy])."*
+   - **OTP_AUTH:** *"For details on OTP verification and account security, read the [Authentication Notice] (or view our platform-wide [Privacy Policy])."*
+   - **MARKETING_COMMS:** *"For details on promotional messages and 1-click opt-out, read the [Promotions Notice] (or view our platform-wide [Privacy Policy])."*
+   - **ANALYTICS:** *"For details on performance logs and zero-PII data handling, read the [Analytics Notice] (or view our platform-wide [Privacy Policy])."*
+3. Update `handleGrant` in `PrivacySettingsSection.tsx` to log the canonical notice text from `CONSENT_NOTICES[purpose].purpose` or full statutory summary to `POST /api/v1/consent`.
+
+---
+
+- [x] **RED — Unit / Component Tests:**
+  - [x] `PrivacySettingsSection.test.tsx`:
+    - [x] Test: Renders `ORDER_PROCESSING` card containing `"Ola Maps"`, `"Display Name"`, `"Razorpay"`, and detailed transparency prompt before action button.
+    - [x] Test: Renders `OTP_AUTH` card containing `"Exotel"` and authentication transparency prompt.
+    - [x] Test: Renders `MARKETING_COMMS` card containing `"Exotel"` and promotions transparency prompt.
+    - [x] Test: Renders `ANALYTICS` card and analytics transparency prompt.
+    - [x] Test: Renders distinct purpose transparency lines linking to statutory notice trigger and `/privacy` for each card.
+  - [x] `SavedAddressesPage.test.tsx`:
+    - [x] Test: Renders DPDP fulfillment notice containing `"Ola Maps"`, `"Display Name"`, `"Razorpay"`, followed by the transparency line *"For full details on statutory 7-year GST retention, live GPS handling, and data rights..."* with links before the acknowledgement checkbox.
+  - [x] `CheckoutPage.test.tsx` & `BookingTimeslotPage.test.tsx`:
+    - [x] Test: Renders marketing opt-in card with Exotel disclosure and the purpose transparency line before checkbox.
+  - [x] `LoginPage.test.tsx`:
+    - [x] Test: Renders OTP consent notice with Exotel disclosure and authentication transparency line before checkbox.
+  - [x] `AnalyticsConsentBanner.test.tsx`:
+    - [x] Test: Renders analytics consent card with telemetry purge disclosure and transparency line before Accept/Decline buttons.
+  - [x] `PrivacyPolicyPage.test.tsx`:
+    - [x] Test: Renders public DPDP policy page with bolded third-party services and statutory rights.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Frontend Component Updates:**
+  - [x] In `apps/web/src/components/account/PrivacySettingsSection.tsx`:
+    - Update `PURPOSE_META` descriptions with concise stored data and recipient details.
+    - Add purpose-specific transparency lines and ensure `handleGrant` logs canonical notice text.
+    - Move action button into header row so notice text spans 100% width.
+  - [x] In `apps/web/src/pages/buyer/SavedAddressesPage.tsx`:
+    - Update inline `order-processing-consent-notice` with concise disclosures and transparency line before checkbox.
+  - [x] In `apps/web/src/pages/buyer/LoginPage.tsx`:
+    - Update OTP consent card with Exotel disclosure and transparency line.
+  - [x] In `apps/web/src/pages/buyer/CheckoutPage.tsx` & `BookingTimeslotPage.tsx`:
+    - Update Order Processing & Marketing opt-in cards with standardized text and transparency lines.
+  - [x] In `apps/web/src/components/consent/AnalyticsConsentBanner.tsx`:
+    - Update telemetry disclosures and transparency prompt.
+  - [x] In `apps/web/src/pages/buyer/PrivacyPolicyPage.tsx`:
+    - Create public `/privacy` policy page with full DPDP Act 2023 disclosures and DPO details.
+  - [x] Run `pnpm --filter @gorola/web test -- --run` — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer visits `/account/privacy` → sees all 4 cards with concise stored data & recipient disclosures (Display Name, Ola Maps, Exotel, Razorpay in bold) → each card has distinct transparency line linking to statutory modal and `/privacy` → Buyer adds address on `/account/addresses` → sees full fulfillment notice and transparency line before checking box → Buyer checks out on `/checkout` → sees marketing opt-in with channel & opt-out details → Visiting `/privacy` opens public policy page → ✅ Done.
+
+---
+
+### 8.3.5.2 — Admin Audit Log Substring Search & Case-Insensitive Filtering
+
+**Root cause / Goal:**
+In `apps/api/src/modules/audit/audit.repository.ts`, `findMany` builds the Prisma where filter using strict equality:
+`...(action ? { action } : {})` and `...(entityType ? { entityType } : {})`.
+This creates two critical defects:
+1. Searching for `"SUSPEND"` fails to match `"ADMIN_USER_SUSPEND"` because Prisma expects an exact string match.
+2. In `AdminAuditLogsPage.tsx`, typing even a single character triggers the 350ms debounce and requests `?action=s` or `?entityType=s`. Because the backend performs an exact match for `"s"`, the log table immediately empties out.
+
+**Fix / Approach:**
+1. In `apps/api/src/modules/audit/audit.repository.ts`, update `action` and `entityType` query filters to use Prisma's `{ contains: term, mode: "insensitive" }`.
+2. In `apps/web/src/pages/admin/AdminAuditLogsPage.tsx`, ensure input filters are trimmed and queries seamlessly match partial actions (e.g. `"SUSPEND"`, `"USER"`, `"STORE"`).
+
+---
+
+- [x] **RED — Integration (`admin.audit-logs.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/audit-logs?action=SUSPEND` returns audit logs with `action: "ADMIN_USER_SUSPEND"`.
+  - [x] Test: `GET /api/v1/admin/audit-logs?action=suspend` (lowercase) returns audit logs with `action: "ADMIN_USER_SUSPEND"` (case-insensitive).
+  - [x] Test: `GET /api/v1/admin/audit-logs?entityType=store` returns audit logs with `entityType: "STORE"` or `"Store"`.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository] In `apps/api/src/modules/audit/audit.repository.ts`, update `findMany`:
+    ```typescript
+    const where: Prisma.AuditLogWhereInput = {
+      ...(actorRole ? { actorRole } : {}),
+      ...(action ? { action: { contains: action, mode: "insensitive" } } : {}),
+      ...(entityType ? { entityType: { contains: entityType, mode: "insensitive" } } : {}),
+      ...(entityId ? { entityId } : {}),
+      ...(from || to ? {
+        createdAt: {
+          ...(from ? { gte: new Date(from) } : {}),
+          ...(to ? { lte: new Date(to) } : {})
+        }
+      } : {})
+    };
+    ```
+  - [x] Run integration test `pnpm --filter @gorola/api test -- src/__tests__/integration/admin/admin.audit-logs.test.ts` — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`AdminAuditLogsPage.test.tsx`):**
+  - [x] Test: Admin types `"SUSPEND"` into Action Type filter → API query param `action=SUSPEND` is triggered → matching records render in table.
+  - [x] Test: Admin types `"store"` into Entity Type filter → API query param `entityType=store` is triggered → matching records render in table.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Frontend Component:**
+  - [x] In `apps/web/src/pages/admin/AdminAuditLogsPage.tsx`, verify debounce and URL syncing.
+  - [x] Run `pnpm --filter @gorola/web test -- src/pages/admin/AdminAuditLogsPage.test.tsx` — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin navigates to `/admin/audit-logs` → types `"SUSPEND"` into Action Type input → table immediately filters and displays all `ADMIN_USER_SUSPEND` events → Admin types `"store"` into Entity Type input → table displays all Store entity actions → Log export CSV includes filtered results → ✅ Done.
+
+---
+
+### 8.3.5.3 — Admin User Detail Nominee Field Integration & Strict PII Minimization
+
+**Root cause / Goal:**
+1. In `AdminUserDetailPage.tsx`, the Nominee Info card checks `user.nomineeName` and `user.nomineeRelationship`. However, `adminService.getUserDetail(userId)` in `apps/api/src/modules/admin/admin.service.ts` does not select or return `nomineeName` in the DTO. As a result, `user.nomineeName` is always `undefined`, and the card perpetually displays `"Not Configured"`.
+2. **Strict PII Protection Constraint (DPDP Act Sec 14):** Nominee data belongs to a third party (the user's emergency representative). To enforce strict data minimization, the admin panel must **ONLY contain the nominee's name if set** (`nomineeName`), and **NOTHING ELSE** — strictly omitting `nomineeContact` and `nomineeRelationship` to prevent internal exposure of third-party personal contact details.
+
+**Fix / Approach:**
+1. In `apps/api/src/modules/admin/admin.service.ts` (`getUserDetail`), include `nomineeName: user.nomineeName ?? null` in the returned DTO. Strictly do NOT include `nomineeContact` or `nomineeRelationship`.
+2. In `apps/web/src/pages/admin/AdminUserDetailPage.tsx`:
+   - Update `UserDetail` TypeScript type to include `nomineeName?: string | null` only (remove `nomineeContact` and `nomineeRelationship`).
+   - Update the Nominee Info card to display `Nominee Name: {user.nomineeName}` if present, or `"Not Configured"` if null/unset.
+
+---
+
+- [x] **RED — Integration (`admin.users.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/users/:id` for user with configured nominee returns `{ nomineeName: "Aarav Sharma" }`.
+  - [x] Test: `GET /api/v1/admin/users/:id` explicitly does NOT include `nomineeContact` or `nomineeRelationship` in the JSON response payload.
+  - [x] Test: `GET /api/v1/admin/users/:id` for user without nominee returns `{ nomineeName: null }`.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `apps/api/src/modules/admin/admin.service.ts` (`getUserDetail`):
+    ```typescript
+    return {
+      id: user.id,
+      name: user.name,
+      maskedPhone: maskPhone(user.phone),
+      isActive: user.isActive,
+      nomineeName: user.nomineeName ?? null,
+      createdAt: user.createdAt.toISOString(),
+      orders: user.orders.map(...),
+      addresses: user.addresses.map(...)
+    };
+    ```
+  - [x] Run integration test `pnpm --filter @gorola/api test -- src/__tests__/integration/admin/admin.users.test.ts` — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`AdminUserDetailPage.test.tsx`):**
+  - [x] Test: When `nomineeName` is `"Aarav Sharma"`, Nominee Info card displays `"Aarav Sharma"` with zero contact or relationship information rendered.
+  - [x] Test: When `nomineeName` is `null`, Nominee Info card displays `"Not Configured"`.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `apps/web/src/pages/admin/AdminUserDetailPage.tsx`, update `UserDetail` type:
+    ```typescript
+    type UserDetail = {
+      id: string;
+      name: string | null;
+      maskedPhone: string;
+      isActive: boolean;
+      nomineeName?: string | null;
+      createdAt: string;
+      addresses: Array<{ id: string; flatRoom: string | null; landmarkDescription: string }>;
+      orders: Array<{ id: string; storeName: string; total: number; status: string; createdAt: string }>;
+    };
+    ```
+  - [x] [Component] In `AdminUserDetailPage.tsx`:
+    ```tsx
+    <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+      <ShieldCheck className="h-5 w-5 text-gorola-slate" />
+      <div>
+        <p className="text-[10px] uppercase font-black text-gorola-slate/70">Nominee Info</p>
+        <p className="text-sm font-black text-gorola-charcoal">
+          {user.nomineeName ? user.nomineeName : "Not Configured"}
+        </p>
+      </div>
+    </div>
+    ```
+  - [x] Run component test `pnpm --filter @gorola/web test -- src/pages/admin/AdminUserDetailPage.test.tsx` — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin opens `/admin/users/:id` for a user who set a nominee → Nominee Info card displays `"Aarav Sharma"` (name only, zero PII contact leakage) → Admin opens user without nominee → card displays `"Not Configured"` → ✅ Done.
+
+---
+
+### 8.3.5 — Final Quality Gate (Run after all three sub-tasks are complete)
+
+- [x] Run full API test suite: `pnpm --filter @gorola/api test -- --run` → **0 failures (119 test files, 737 passed).**
+- [x] Run full web test suite: `pnpm --filter @gorola/web test -- --run` → **0 failures (95 test files, 541 passed).**
+- [x] Run `pnpm typecheck` → **0 errors.**
+- [x] Run `pnpm lint` → **0 errors, 0 warnings.**
+- [ ] Run E2E test suite: `pnpm test:e2e` → **0 failures.**
+
+---
+
+#### 📝 Session Note: Phase 8.3.5 Execution & Completion (2026-10-02)
+
+- **DPDP UI Alignment & Concise Consent Cards (8.3.5.1):**
+  - Streamlined consent card body across `PrivacySettingsSection.tsx`, `LoginPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `SavedAddressesPage.tsx`, and `AnalyticsConsentBanner.tsx` to state strictly what data is stored, whom it is shared with, and the reason.
+  - Bolds third-party service partners (**Exotel**, **Ola Maps**, **Razorpay**) across all notice cards and statutory notice modals.
+  - Added purpose-specific transparency lines below each card detailing statutory retention (e.g. 7-year GST records, 180-day telemetry auto-purges, 48-hour opt-out scrubbing, erasure mechanisms) and clearly differentiating the statutory notice modal from the platform-wide Privacy Policy.
+  - Resolved typographic vertical baseline misalignment for inline notice modal trigger buttons and icons (`FileText`).
+  - Restructured `PrivacySettingsSection.tsx` consent cards so Opt In / Withdraw buttons reside in the card header, allowing notice text to span full card width.
+  - Created a dedicated public `/privacy` policy page (`PrivacyPolicyPage.tsx`) registered in buyer routes with DPO contact and DPBI escalation details.
+- **Admin Audit Log Substring Search (8.3.5.2):**
+  - Updated `audit.repository.ts` Prisma query filters to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType`, resolving exact-match limitations and 1-character search blanking.
+  - Verified debounced live search in `AdminAuditLogsPage.tsx`.
+- **Admin Nominee PII Protection & Data Minimization (8.3.5.3):**
+  - Updated `admin.service.ts` (`getUserDetail`) to serialize ONLY `nomineeName: user.nomineeName ?? null`, strictly omitting `nomineeContact` and `nomineeRelationship` to prevent third-party PII leakage under DPDP Act Sec 14.
+  - Updated `AdminUserDetailPage.tsx` Nominee Info card to display nominee name or `"Not Configured"`.
+- **Quality Gates Verification:**
+  - Full API test suite: 119 files / 737 tests passed (0 failures).
+  - Full Web test suite: 95 files / 541 tests passed (0 failures).
+  - Typecheck: 0 errors across 4 workspace packages.
+  - Lint: 0 errors, 0 warnings across all apps/packages.
+
+---
 
 ---
 
@@ -1760,5 +2001,22 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Code Quality: `pnpm typecheck` passed (0 errors); `pnpm lint` passed (0 warnings).
     - Zero active `MARKETING_EMAIL` strings remaining in application source code.
     - Documentation: Updated `architecture.md`, `database_schema.md`, `decision_log.md` (`[DECISION-059]`), `DPDP_CONSENT_ARCHITECTURE_GUIDE.md` (v1.7), `phase8_state.md`, `current_state.md`, and `project_data.json`.
-
-
+- **Session 10 — 2026-10-02 — Phase 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) Complete:**
+  - **DPDP UI Alignment & Concise Consent Cards (8.3.5.1):**
+    - Streamlined consent card body across `PrivacySettingsSection.tsx`, `LoginPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `SavedAddressesPage.tsx`, and `AnalyticsConsentBanner.tsx` to state strictly what data is stored, whom it is shared with, and the reason.
+    - Bolds third-party service partners (**Exotel**, **Ola Maps**, **Razorpay**) across all notice cards and statutory notice modals.
+    - Added purpose-specific transparency lines below each card detailing statutory retention (e.g. 7-year GST records, 180-day telemetry auto-purges, 48-hour opt-out scrubbing, erasure mechanisms) and clearly differentiating the statutory notice modal from the platform-wide Privacy Policy.
+    - Resolved typographic vertical baseline misalignment for inline notice modal trigger buttons and icons (`FileText`).
+    - Restructured `PrivacySettingsSection.tsx` consent cards so Opt In / Withdraw buttons reside in the card header, allowing notice text to span full card width.
+    - Created a dedicated public `/privacy` policy page (`PrivacyPolicyPage.tsx`) registered in buyer routes with DPO contact and DPBI escalation details.
+  - **Admin Audit Log Substring Search (8.3.5.2):**
+    - Updated `audit.repository.ts` Prisma query filters to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType`, resolving exact-match limitations and 1-character search blanking.
+    - Verified debounced live search in `AdminAuditLogsPage.tsx`.
+  - **Admin Nominee PII Protection & Data Minimization (8.3.5.3):**
+    - Updated `admin.service.ts` (`getUserDetail`) to serialize ONLY `nomineeName: user.nomineeName ?? null`, strictly omitting `nomineeContact` and `nomineeRelationship` to prevent third-party PII leakage under DPDP Act Sec 14.
+    - Updated `AdminUserDetailPage.tsx` Nominee Info card to display nominee name or `"Not Configured"`.
+  - **Comprehensive Quality Gates:**
+    - Full API test suite: 119 files / 737 tests passed (0 failures).
+    - Full Web test suite: 95 files / 541 tests passed (0 failures).
+    - Typecheck: 0 errors across 4 workspace packages.
+    - Lint: 0 errors, 0 warnings across all apps/packages.

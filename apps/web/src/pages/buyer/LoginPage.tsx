@@ -380,23 +380,34 @@ export function LoginPage(): ReactElement {
         {step === "consent" ? (
           <div className="mt-6 flex flex-col gap-5" data-testid="consent-notice-step">
             <div className="rounded-2xl border border-border/80 bg-white dark:bg-card p-5 text-sm text-gorola-charcoal space-y-3.5 shadow-xs">
-              <div className="flex items-center gap-2 font-semibold text-gorola-pine">
-                <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                Authentication &amp; Account Security
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2 font-semibold text-gorola-pine">
+                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
+                  <span>Authentication &amp; Account Security</span>
+                </div>
+                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                  Essential
+                </span>
               </div>
               <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm">
-                We collect your phone number to send a one-time password (OTP) and authenticate your account under India&apos;s Digital Personal Data Protection (DPDP) Act 2023. We do not sell your personal data.
+                We collect your phone number and share it with our secure SMS gateway (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) to send one-time passwords (OTP) and securely authenticate your account sessions under India&apos;s DPDP Act 2023. We do not sell your personal data.
               </p>
               
-              <div className="flex flex-wrap items-center gap-3 pt-1 text-xs">
-                <ConsentNoticeModal purpose="OTP_AUTH" />
-                <span className="text-muted-foreground/40">&bull;</span>
+              <div className="pt-0.5 text-xs text-muted-foreground">
+                <span>For full details on retention period, data rights, and erasure policies, read the </span>
+                <ConsentNoticeModal
+                  purpose="OTP_AUTH"
+                  triggerLabel="Authentication Notice"
+                  triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                />
+                <span> (or view our platform-wide </span>
                 <a
-                  className="font-medium text-gorola-pine underline hover:text-emerald-700"
+                  className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
                   href="/privacy"
                 >
-                  Privacy Policy &amp; Terms
+                  Privacy Policy
                 </a>
+                <span>).</span>
               </div>
 
               <div className="flex items-start gap-2.5 pt-3.5 border-t border-border/60">

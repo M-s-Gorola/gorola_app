@@ -39,9 +39,7 @@ const mockUserData = {
     addresses: [
       { id: "addr-1", flatRoom: "Flat 402", landmarkDescription: "Near Picture Palace" }
     ],
-    nomineeName: "Bob Walker",
-    nomineeContact: "9999999999",
-    nomineeRelationship: "Spouse"
+    nomineeName: "Bob Walker"
   }
 };
 
@@ -180,7 +178,7 @@ describe("AdminUserDetailPage", () => {
     expect(await screen.findByTestId("user-display-name")).toHaveTextContent("Alice Walker");
     expect(screen.getByTestId("user-status-badge")).toHaveTextContent("Active");
     expect(screen.getByTestId("user-phone")).toHaveTextContent("*********3210");
-    expect(screen.getByText(/Bob Walker \(Spouse\)/)).toBeInTheDocument();
+    expect(screen.getByTestId("user-nominee-info")).toHaveTextContent("Bob Walker");
 
     // Verify registered addresses
     expect(screen.getByText("Flat 402")).toBeInTheDocument();
@@ -197,6 +195,27 @@ describe("AdminUserDetailPage", () => {
     expect(screen.getByText("Authentication & Account Security")).toBeInTheDocument();
     expect(screen.getByText("Order Fulfillment & Location Services")).toBeInTheDocument();
     expect(screen.getByText("Promotions & Seasonal Offers")).toBeInTheDocument();
+  });
+
+  it("renders 'Not Configured' when nomineeName is not set", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/orders")) return Promise.resolve({ data: mockUserOrdersData });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...mockUserData.data,
+            nomineeName: null
+          }
+        }
+      });
+    });
+
+    renderAdminUserDetail();
+
+    expect(await screen.findByTestId("user-display-name")).toHaveTextContent("Alice Walker");
+    expect(screen.getByTestId("user-nominee-info")).toHaveTextContent("Not Configured");
   });
 
   it("handles status suspension modal and PUT trigger", async () => {

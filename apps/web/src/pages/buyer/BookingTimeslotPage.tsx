@@ -695,11 +695,29 @@ export function BookingTimeslotPage(): ReactElement {
                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
                 <span>Promotions &amp; Seasonal Offers (Optional)</span>
               </div>
-              <ConsentNoticeModal purpose="MARKETING_COMMS" />
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                Optional
+              </span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Receive text updates on hill-weather flash sales, regional Mussoorie store discounts, and seasonal agricultural harvest coupons.
+              We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
             </p>
+            <div className="pt-0.5 text-[11px] text-muted-foreground">
+              <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
+              <ConsentNoticeModal
+                purpose="MARKETING_COMMS"
+                triggerLabel="Promotions Notice"
+                triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+              />
+              <span> (or view our platform-wide </span>
+              <a
+                href="/privacy"
+                className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+              >
+                Privacy Policy
+              </a>
+              <span>).</span>
+            </div>
             {!hasMarketingConsent ? (
               <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
                 <Checkbox

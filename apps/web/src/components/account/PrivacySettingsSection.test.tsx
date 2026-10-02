@@ -209,12 +209,9 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(screen.getByTestId("consent-card-ANALYTICS")).toBeInTheDocument();
 
     // ORDER_PROCESSING must mention Ola Maps and Razorpay
-    expect(
-      screen.getByText(/Ola Maps/i)
-    ).toBeInTheDocument();
-    expect(
-      screen.getByText(/processed securely via Razorpay/i)
-    ).toBeInTheDocument();
+    const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    expect(orderCard).toHaveTextContent(/Ola Maps/i);
+    expect(orderCard).toHaveTextContent(/Razorpay for online payments/i);
   });
 
   it("renders distinct inactive status text per consent purpose when consents array is empty", async () => {
@@ -329,4 +326,45 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
       expect(localStorage.getItem("gorola_analytics_consent")).toBe("declined");
     });
   });
+
+  it("renders updated 8.3.5.1 canonical card content with stored data details and distinct transparency lines", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: []
+        }
+      }
+    });
+
+    renderSection();
+
+    expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
+
+    const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    expect(orderCard).toHaveTextContent(/Ola Maps/i);
+    expect(orderCard).toHaveTextContent(/Display Name/i);
+    expect(orderCard).toHaveTextContent(/Razorpay/i);
+    expect(orderCard).toHaveTextContent(/For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the/i);
+    expect(orderCard).toHaveTextContent(/Order Fulfillment Notice/i);
+
+    const otpCard = screen.getByTestId("consent-card-OTP_AUTH");
+    expect(otpCard).toHaveTextContent(/Exotel/i);
+    expect(otpCard).toHaveTextContent(/For full details on retention period, data rights, and erasure policies, read the/i);
+    expect(otpCard).toHaveTextContent(/Authentication Notice/i);
+
+    const marketingCard = screen.getByTestId("consent-card-MARKETING_COMMS");
+    expect(marketingCard).toHaveTextContent(/Exotel/i);
+    expect(marketingCard).toHaveTextContent(/For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the/i);
+    expect(marketingCard).toHaveTextContent(/Promotions Notice/i);
+
+    const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
+    expect(analyticsCard).toHaveTextContent(/For full details on 180-day auto-purge schedules, telemetry anonymization, and opt-out rights, read the/i);
+    expect(analyticsCard).toHaveTextContent(/Analytics Notice/i);
+
+    // Each card must link to the platform-wide Privacy Policy
+    const privacyPolicyLinks = screen.getAllByRole("link", { name: /privacy policy/i });
+    expect(privacyPolicyLinks.length).toBeGreaterThanOrEqual(4);
+  });
 });
+

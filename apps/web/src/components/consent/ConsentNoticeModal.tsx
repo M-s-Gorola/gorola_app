@@ -1,5 +1,5 @@
 import { FileText, ShieldCheck } from "lucide-react";
-import { ReactElement } from "react";
+import { ReactElement, ReactNode } from "react";
 
 import {
   Dialog,
@@ -17,11 +17,11 @@ interface NoticeContent {
   title: string;
   version: string;
   effectiveDate: string;
-  purpose: string;
-  dataCollected: string[];
-  thirdParties: string;
-  retention: string;
-  rights: string;
+  purpose: string | ReactNode;
+  dataCollected: (string | ReactNode)[];
+  thirdParties: string | ReactNode;
+  retention: string | ReactNode;
+  rights: string | ReactNode;
 }
 
 export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
@@ -32,8 +32,11 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
     purpose:
       "We process your personal data exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session security.",
     dataCollected: ["Phone Number"],
-    thirdParties:
-      "Your phone number is transmitted securely via our encrypted internal authentication microservices and shared with our authorized SMS Gateway Partners (such as Exotel) solely for automated OTP delivery. We do not sell or monetize your data.",
+    thirdParties: (
+      <span>
+        Your phone number is transmitted securely via our encrypted internal authentication microservices and shared with our authorized SMS Gateway Partners (such as <strong className="font-semibold text-gorola-charcoal">Exotel</strong>) solely for automated OTP delivery. We do not sell or monetize your data.
+      </span>
+    ),
     retention:
       "Retained for the lifetime of your active account. If you delete your account, this data is permanently erased within 30 days.",
     rights:
@@ -51,10 +54,16 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
       "Display Name (if you have set one) — shared with your assigned store partner and delivery rider for order identification",
       "Transaction & Billing Details (excluding raw credit card data/CVV) — only when online payment is selected"
     ],
-    thirdParties:
-      "Shared strictly on a need-to-know basis with: Ola Maps (spatial routing and geolocation), Razorpay (secure payment processing — only when online payment is selected), Local Store Partners & Assigned Delivery Riders (physical order fulfillment).",
-    retention:
-      "Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by Ola Maps and discarded.",
+    thirdParties: (
+      <span>
+        Shared strictly on a need-to-know basis with: <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> (spatial routing and geolocation), <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> (secure payment processing — only when online payment is selected), and <strong className="font-semibold text-gorola-charcoal">Local Store Partners &amp; Assigned Delivery Riders</strong> (physical order fulfillment).
+      </span>
+    ),
+    retention: (
+      <span>
+        Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> and discarded.
+      </span>
+    ),
     rights:
       "You may update your saved addresses at any time. Contact dpo@gorola.com. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI)."
   },
@@ -69,8 +78,11 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
       "Display Name (if you have set one) — used for personalised greetings",
       "Purchase History & Regional Location (Mussoorie cluster) — used to personalise offers"
     ],
-    thirdParties:
-      "Promotional messages are sent via our authorised SMS gateway partners. No data is shared with external advertising networks or third-party marketers. Your phone number is never sold.",
+    thirdParties: (
+      <span>
+        Promotional messages are sent via our authorised SMS gateway partners (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>). No data is shared with external advertising networks or third-party marketers. Your phone number is never sold.
+      </span>
+    ),
     retention:
       "Processed for marketing until you withdraw your consent. Upon withdrawal, scrubbed from all promotional distributions within 48 hours.",
     rights:
@@ -116,10 +128,10 @@ export function ConsentNoticeModal({
           data-testid={`view-notice-btn-${purpose}`}
           className={
             triggerClassName ??
-            "inline-flex items-center gap-1.5 text-xs font-medium text-gorola-pine hover:underline cursor-pointer transition-colors p-0 bg-transparent border-0"
+            "inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer transition-colors p-0 bg-transparent border-0"
           }
         >
-          <FileText className="h-3.5 w-3.5" />
+          <FileText className="h-3.5 w-3.5 shrink-0 inline-block align-middle -mt-0.5" />
           <span>{triggerLabel}</span>
         </button>
       </DialogTrigger>

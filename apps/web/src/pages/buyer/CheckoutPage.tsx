@@ -520,11 +520,24 @@ export function CheckoutPage(): ReactElement {
                         <span>Order Fulfillment &amp; Location Services</span>
                       </div>
                       <p className="text-muted-foreground leading-relaxed">
-                        Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+                        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
                       </p>
                       
-                      <div className="pt-0.5">
-                        <ConsentNoticeModal purpose="ORDER_PROCESSING" />
+                      <div className="pt-0.5 text-[11px] text-muted-foreground">
+                        <span>For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the </span>
+                        <ConsentNoticeModal
+                          purpose="ORDER_PROCESSING"
+                          triggerLabel="Order Fulfillment Notice"
+                          triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                        />
+                        <span> (or view our platform-wide </span>
+                        <a
+                          href="/privacy"
+                          className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                        >
+                          Privacy Policy
+                        </a>
+                        <span>).</span>
                       </div>
 
                       {!hasOrderProcessingConsent && (
@@ -660,7 +673,11 @@ export function CheckoutPage(): ReactElement {
             <div className="space-y-1 border-t border-gorola-pine/10 pt-3 text-left">
               <div className="flex items-center justify-between">
                 <p className="font-dm-sans text-sm font-semibold text-gorola-charcoal">Delivery Address</p>
-                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
+                <ConsentNoticeModal
+                  purpose="ORDER_PROCESSING"
+                  triggerLabel="Order Fulfillment Notice"
+                  triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                />
               </div>
               <div className="space-y-1 text-left" data-testid="review-delivery-address">
                 {selectedAddressLabel ? (
@@ -687,15 +704,33 @@ export function CheckoutPage(): ReactElement {
                 data-testid="checkout-marketing-opt-in"
                 className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
               >
-                <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
-                  <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                  <span>Promotions &amp; Seasonal Offers (Optional)</span>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
+                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
+                    <span>Promotions &amp; Seasonal Offers (Optional)</span>
+                  </div>
+                  <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                    Optional
+                  </span>
                 </div>
                 <p className="text-xs text-muted-foreground leading-relaxed">
-                  Receive text updates on hill-weather flash sales, regional Mussoorie store discounts, and seasonal agricultural harvest coupons.
+                  We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
                 </p>
-                <div className="pt-0.5">
-                  <ConsentNoticeModal purpose="MARKETING_COMMS" />
+                <div className="pt-0.5 text-[11px] text-muted-foreground">
+                  <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
+                  <ConsentNoticeModal
+                    purpose="MARKETING_COMMS"
+                    triggerLabel="Promotions Notice"
+                    triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                  <span> (or view our platform-wide </span>
+                  <a
+                    href="/privacy"
+                    className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                  >
+                    Privacy Policy
+                  </a>
+                  <span>).</span>
                 </div>
                 <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
                   <Checkbox

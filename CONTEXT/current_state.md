@@ -21,7 +21,7 @@
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | ✅ COMPLETE    | Phase 5.1 to 5.8 complete. Playwright E2E multi-actor tests passing 100% green. |
 | Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing & UX Refinement (6.1–6.17 complete). |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
-| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1, 8.2, 8.3, 8.3.4 complete; 8.4 next) |
+| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1, 8.2, 8.3, 8.3.4, 8.3.5 complete; 8.4 next) |
  
  ---
  
@@ -36,7 +36,7 @@
  | Phase 5 | Rider Interface      | ✅ COMPLETE    | All Phase 5.1–5.8 items complete. |
  | Phase 6 | Subdomain Routing & UX | ✅ COMPLETE    | All Phase 6.1–6.17 items complete (Subdomains, UX, 360° Admin Detail Pages, & Paginated Orders). |
  | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
- | Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee) and 8.3.4 (Consent Overhaul & Admin Panel) complete. |
+ | Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee), 8.3.4, and 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) complete; Phase 8.4 next. |
 
 
 ---

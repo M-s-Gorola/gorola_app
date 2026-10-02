@@ -46,8 +46,8 @@ export class AuditRepository {
 
     const where: Prisma.AuditLogWhereInput = {
       ...(actorRole ? { actorRole } : {}),
-      ...(action ? { action } : {}),
-      ...(entityType ? { entityType } : {}),
+      ...(action ? { action: { contains: action, mode: "insensitive" } } : {}),
+      ...(entityType ? { entityType: { contains: entityType, mode: "insensitive" } } : {}),
       ...(entityId ? { entityId } : {}),
       ...(from || to ? {
         createdAt: {

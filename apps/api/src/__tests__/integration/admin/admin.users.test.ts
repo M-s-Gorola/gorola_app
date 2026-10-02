@@ -574,5 +574,56 @@ describe("Admin Users Integration Tests", () => {
       expect(res.statusCode).toBe(404);
     });
   });
+
+  describe("GET /api/v1/admin/users/:id (DPDP 8.3.5.3 Nominee Integration & PII Minimization)", () => {
+    it("returns nomineeName only and excludes nomineeContact and nomineeRelationship for user with nominee", async () => {
+      const user = await db.user.create({
+        data: {
+          phone: "+919876543299",
+          name: "Test User With Nominee",
+          nomineeName: "Aarav Sharma",
+          nomineeContact: "+919999999999",
+          nomineeRelationship: "Sibling",
+          isActive: true
+        }
+      });
+
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.nomineeName).toBe("Aarav Sharma");
+      expect(json.data).not.toHaveProperty("nomineeContact");
+      expect(json.data).not.toHaveProperty("nomineeRelationship");
+    });
+
+    it("returns nomineeName: null when user has no nominee configured", async () => {
+      const user = await db.user.create({
+        data: {
+          phone: "+919876543298",
+          name: "Test User Without Nominee",
+          isActive: true
+        }
+      });
+
+      const adminToken = await generateAccessToken("admin-123", "ADMIN");
+      const res = await server.inject({
+        method: "GET",
+        url: `/api/v1/admin/users/${user.id}`,
+        headers: { authorization: `Bearer ${adminToken}` }
+      });
+
+      expect(res.statusCode).toBe(200);
+      const json = res.json();
+      expect(json.success).toBe(true);
+      expect(json.data.nomineeName).toBeNull();
+    });
+  });
 });
 

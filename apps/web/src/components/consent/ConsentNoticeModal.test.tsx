@@ -20,13 +20,13 @@ describe("ConsentNoticeModal (DPDP Phase 8.2.9.5)", () => {
 
     const modal = await screen.findByTestId("consent-notice-modal");
     expect(modal).toBeInTheDocument();
-    expect(screen.getByText(/Authentication & Account Security/i)).toBeInTheDocument();
-    expect(screen.getByText(/Purpose of Processing/i)).toBeInTheDocument();
-    expect(screen.getByText(/Categories of Personal Data Collected/i)).toBeInTheDocument();
-    expect(screen.getByText(/Third-Party Recipients & Processors/i)).toBeInTheDocument();
-    expect(screen.getByText(/Retention Period/i)).toBeInTheDocument();
-    expect(screen.getByText(/Your Rights & Complaints/i)).toBeInTheDocument();
-    expect(screen.getByText(/Exotel|authorized SMS Gateway Partners/i)).toBeInTheDocument();
+    expect(modal).toHaveTextContent(/Authentication & Account Security/i);
+    expect(modal).toHaveTextContent(/Purpose of Processing/i);
+    expect(modal).toHaveTextContent(/Categories of Personal Data Collected/i);
+    expect(modal).toHaveTextContent(/Third-Party Recipients & Processors/i);
+    expect(modal).toHaveTextContent(/Retention Period/i);
+    expect(modal).toHaveTextContent(/Your Rights & Complaints/i);
+    expect(modal).toHaveTextContent(/Exotel/i);
     expect(screen.getAllByText(/dpo@gorola.com/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Data Protection Board of India/i).length).toBeGreaterThanOrEqual(1);
   });
@@ -37,12 +37,13 @@ describe("ConsentNoticeModal (DPDP Phase 8.2.9.5)", () => {
 
     await user.click(screen.getByTestId("view-notice-btn-ORDER_PROCESSING"));
 
-    expect(await screen.findByTestId("consent-notice-modal")).toBeInTheDocument();
-    expect(screen.getByText(/Order Fulfillment & Location Services/i)).toBeInTheDocument();
-    expect(screen.getAllByText(/Ola Maps/i).length).toBeGreaterThanOrEqual(1);
-    expect(screen.getByText(/Razorpay/i)).toBeInTheDocument();
-    expect(screen.getByText(/7 years under Indian GST/i)).toBeInTheDocument();
-    expect(screen.getByText(/Your saved delivery address \(including GPS pin\) is stored until you delete it or your account/i)).toBeInTheDocument();
+    const modal = await screen.findByTestId("consent-notice-modal");
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveTextContent(/Order Fulfillment & Location Services/i);
+    expect(modal).toHaveTextContent(/Ola Maps/i);
+    expect(modal).toHaveTextContent(/Razorpay/i);
+    expect(modal).toHaveTextContent(/7 years under Indian GST/i);
+    expect(modal).toHaveTextContent(/Your saved delivery address \(including GPS pin\) is stored until you delete it or your account/i);
     expect(screen.queryByText(/deleted immediately upon successful delivery verification/i)).not.toBeInTheDocument();
     expect(screen.getByText(/Display Name \(if you have set one\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Data Protection Board of India/i).length).toBeGreaterThanOrEqual(1);

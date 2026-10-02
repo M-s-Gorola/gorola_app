@@ -619,6 +619,7 @@ export class AdminService {
       name: user.name,
       maskedPhone: maskPhone(user.phone),
       isActive: user.isActive,
+      nomineeName: user.nomineeName ?? null,
       createdAt: user.createdAt.toISOString(),
       orders: user.orders.map((o) => ({
         id: o.id,
