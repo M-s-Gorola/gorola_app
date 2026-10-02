@@ -31,3 +31,16 @@ export function parseUpdateNomineeInput(body: unknown): UpdateNomineeInput {
   return result.data;
 }
 
+export const acceptPolicySchema = z.object({
+  version: z.string().trim().min(1, "Policy version is required").max(20, "Policy version is too long")
+});
+
+export type AcceptPolicyInput = z.infer<typeof acceptPolicySchema>;
+
+export function parseAcceptPolicyInput(body: unknown): AcceptPolicyInput {
+  const result = acceptPolicySchema.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError("Invalid policy acceptance payload", result.error.flatten());
+  }
+  return result.data;
+}

@@ -27,6 +27,7 @@ type RefreshResponseBody = {
     userId?: string;
     phone?: string;
     name?: string | null;
+    privacyPolicyVersionAccepted?: string | null;
   };
 };
 
@@ -34,6 +35,7 @@ export type FullBuyerSession = AuthTokens & {
   userId: string;
   phone: string;
   name: string | null;
+  privacyPolicyVersionAccepted?: string | null;
 };
 
 function parseRefreshEnvelope(body: unknown): FullBuyerSession {
@@ -52,6 +54,7 @@ function parseRefreshEnvelope(body: unknown): FullBuyerSession {
     accessToken: data.accessToken,
     name: data.name ?? null,
     phone: data.phone,
+    privacyPolicyVersionAccepted: data.privacyPolicyVersionAccepted ?? "1.0",
     refreshToken: data.refreshToken,
     userId: data.userId
   };

@@ -31,11 +31,12 @@ export type BuyerRefreshSuccess = AuthTokenPair & {
   name: string | null;
   phone: string;
   userId: string;
+  privacyPolicyVersionAccepted?: string | undefined;
 };
 
 export type BuyerVerifySuccess = BuyerRefreshSuccess & {
-  isPendingDeletion?: boolean;
-  deletionScheduledFor?: string | null;
+  isPendingDeletion?: boolean | undefined;
+  deletionScheduledFor?: string | null | undefined;
 };
 
 export type OtpStoreRecord = {

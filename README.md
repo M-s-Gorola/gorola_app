@@ -72,9 +72,14 @@ The project uses GitHub Actions for continuous integration and deployment.
   - Pushes to `develop` deploy to **Staging**.
   - Pushes to `main` deploy to **Production** (requires manual approval).
 
-### Deployment Infrastructure
-- **Frontend**: [Vercel](https://vercel.com) (Buyer Web).
-- **Backend**: [Railway](https://railway.app) (Fastify API + PostgreSQL + Redis).
+### Deployment Infrastructure & Responsibilities
+- **Frontend — [Vercel](https://vercel.com) (Buyer Web SPA)**:
+  - **Responsibilities:** Global edge CDN distribution of pre-compiled static assets (`apps/web/dist` via Vite).
+  - **Data Boundary:** Serves static files only. Zero serverless API functions, zero database connections, zero personal data handling (classified as **"Not a Data Processor"** under DPDP Act 2023).
+  - **Network Topology:** The browser fetches the static bundle once; all subsequent API and WebSocket traffic routes **directly from the user's browser to Railway** using `VITE_API_BASE_URL`.
+- **Backend & Database — [Railway](https://railway.app) (Fastify API + PostgreSQL + Redis)**:
+  - **Responsibilities:** Core application engine running Node.js 22 LTS (Fastify API), managed PostgreSQL 15, managed Redis 7, and real-time WebSockets (Socket.IO).
+  - **Data Boundary:** Houses 100% of business logic, authentication (RS256 JWTs, 2FA, OTP), encrypted PII storage, audit logs, and third-party integrations (Razorpay, Ola Maps, Exotel). All DPDP compliance obligations reside within the Railway infrastructure perimeter.
 
 ### Secrets Management
 Detailed instructions for configuring GitHub Environments, Vercel, and Railway secrets can be found here:

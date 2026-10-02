@@ -21,7 +21,7 @@
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | ✅ COMPLETE    | Phase 5.1 to 5.8 complete. Playwright E2E multi-actor tests passing 100% green. |
 | Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing & UX Refinement (6.1–6.17 complete). |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
-| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1, 8.2, 8.3, 8.4, 8.5 complete; 8.6 next) |
+| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1, 8.2, 8.3, 8.4, 8.5, and 8.6 complete; 8.7 next) |
  
  ---
  
@@ -36,7 +36,7 @@
  | Phase 5 | Rider Interface      | ✅ COMPLETE    | All Phase 5.1–5.8 items complete. |
  | Phase 6 | Subdomain Routing & UX | ✅ COMPLETE    | All Phase 6.1–6.17 items complete (Subdomains, UX, 360° Admin Detail Pages, & Paginated Orders). |
  | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
- | Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3, 8.4 (Active Sessions & Security Alerting), and 8.5 (Automated Data Retention & Purge Jobs) complete; Phase 8.6 (Privacy Policy & Legal Pages) next. |
+ | Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1–8.6 complete (DB Security, Consent Management, User Rights, Active Sessions & Security Alerting, Data Retention Workers, Privacy Policy, Terms of Service & Versioning); Phase 8.7 (Non-Code Documentation & DPAs) next. |
 
 
 ---
@@ -89,7 +89,7 @@ _(None currently)_
 | delivery          | ✅         | ✅                | unit: RiderLoginPage, RiderOrdersPage; integration: rider.endpoints, rider.orders |
 | booking           | ❌         | ✅                | integration: booking-schema, booking-order.service |
 
-**Last known test count:** 814 Vitest (516 API + 298 web across 82 test files) + 36 Playwright E2E tests GREEN.
+**Last known test count:** 1,296 Vitest (746 API across 123 files + 550 web across 99 files) + 36 Playwright E2E tests GREEN.
 **E2E (Playwright):** All E2E tests passing green.
 
 ---

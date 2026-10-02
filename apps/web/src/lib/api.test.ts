@@ -89,7 +89,8 @@ describe("createApiClient", () => {
       refreshToken: "new-r",
       userId: "u1",
       phone: "+9199",
-      name: null
+      name: null,
+      privacyPolicyVersionAccepted: "1.0"
     });
     expect(clearSession).not.toHaveBeenCalled();
   });
@@ -190,6 +191,7 @@ describe("bootstrapBuyerAuthSession", () => {
       accessToken: "a",
       name: "N",
       phone: "P",
+      privacyPolicyVersionAccepted: "1.0",
       refreshToken: "r",
       userId: "u"
     });

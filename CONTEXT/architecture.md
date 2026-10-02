@@ -44,10 +44,55 @@
                                                │
                                     ┌──────────▼──────────┐
                                     │  External Services  │
-                                    │  - Fast2SMS (OTP)   │
+                                    │  - Exotel/SMS (OTP)   │
                                     │  - Razorpay (pay)   │
                                     └─────────────────────┘
 ```
+
+## Service Responsibilities & Platform Boundaries
+
+GoRola uses a decoupled architecture splitting static frontend asset delivery (Vercel) from backend computing, business logic, data persistence, and data privacy governance (Railway).
+
+```
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 1. INITIAL ASSET LOAD (One-Time / Cached)                                                   │
+│                                                                                             │
+│  User Browser ─────────── GET index.html, JS chunks, CSS ───────────► Vercel Edge CDN       │
+│  User Browser ◄────────── Static Assets (compiled Vite SPA) ───────── Vercel Edge CDN       │
+│                                                                                             │
+│  * Vercel hosts STATIC ASSETS ONLY. Zero user data, zero SSR, zero API proxying.            │
+│  * Vercel DPDP Classification: "Not a Data Processor" (holds no personal data).             │
+│  * Strict Prohibition: Vercel Analytics must NEVER be enabled (DECISION-061).               │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────────────────────────────────────────────┐
+│ 2. APPLICATION RUNTIME & DATA FLOW (All Session Operations)                                 │
+│                                                                                             │
+│  User Browser ─────────── Direct HTTPS REST / WebSocket ────────────► Railway Fastify API   │
+│  User Browser ◄────────── JSON Response / Push Events ─────────────── Railway Fastify API   │
+│                                                                                             │
+│  * Browser connects DIRECTLY to Railway using VITE_API_BASE_URL (baked at build time).      │
+│  * Railway DPDP Classification: Data Processor / GoRola Infrastructure Perimeter.            │
+│  * 100% of PII, authentication tokens, transactions, and audit trails reside on Railway.    │
+└─────────────────────────────────────────────────────────────────────────────────────────────┘
+```
+
+### Responsibility Breakdown Matrix
+
+| Area / Concern | **Vercel** (Frontend Edge CDN) | **Railway** (Backend & Persistence Infrastructure) |
+|---|---|---|
+| **Primary Responsibility** | Serving pre-compiled static SPA bundles (`apps/web/dist`) over global HTTPS CDN. | Running the core backend API, business logic, databases, background workers, and real-time WebSockets. |
+| **Runtime Environment** | Static File Server / Edge CDN cache. | Node.js 22 LTS (Fastify), PostgreSQL 15, Redis 7. |
+| **Personal Data / PII** | ❌ **Zero personal data.** Never sees, stores, or processes any user PII. | ✅ **100% of personal data.** Stores encrypted PII, hashes, blind indexes, audit trails, and orders. |
+| **DPDP Act Role** | **Not a Data Processor** (file host for non-sensitive public code). | **Data Processor** / Infrastructure Host under GoRola's Data Fiduciary governance. |
+| **Authentication & Tokens** | ❌ None. JWTs are never stored or routed through Vercel. | ✅ Generates & validates JWTs (RS256), sets `HttpOnly; SameSite=None; Secure; Partitioned` refresh cookies, validates 2FA & OTP. |
+| **API & Business Logic** | ❌ None. No serverless functions, no backend routes. | ✅ All domain modules: Auth, Catalog, Cart, Booking, Order, Grievance, DPDP Consent Registry. |
+| **Database & Cache Access** | ❌ No database access. | ✅ Direct connection to managed PostgreSQL 15 (least-privilege `app_service` / `db_owner` roles) and Redis 7. |
+| **External Integrations** | ❌ None. | ✅ Razorpay (UPI/Card payments), Ola Maps (routing/geocoding), Exotel / SMS Gateway (OTP). |
+| **Client Network Path** | Browser fetches static HTML/JS/CSS once (or from cache). | Browser makes **all** subsequent API calls and WebSocket connections directly to Railway. |
+| **Configuration Model** | Monorepo root `vercel.json` (build/output commands) + public `VITE_*` env vars. | Dashboard Service Settings (start/build/healthcheck) + secure dashboard env secrets. |
+
+---
 
 ### Deployment: Vercel & Railway (`GoRola_app` repo root)
 

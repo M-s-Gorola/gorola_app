@@ -29,6 +29,7 @@ export type BuyerUserLookup = {
   name: string;
   phone: string;
   isActive: boolean;
+  privacyPolicyVersionAccepted?: string | undefined;
   deletedAt?: Date | null;
   deletionScheduledFor?: Date | null;
 };
@@ -193,6 +194,7 @@ export class AuthService {
       name: user.name.trim().length === 0 ? null : user.name,
       phone: user.phone,
       userId: user.id,
+      privacyPolicyVersionAccepted: user.privacyPolicyVersionAccepted,
       isPendingDeletion: Boolean(user.deletedAt),
       deletionScheduledFor: user.deletionScheduledFor ? user.deletionScheduledFor.toISOString() : null
     };
@@ -236,7 +238,10 @@ export class AuthService {
     }
     await this.saveUserSessions(user.id, sessions);
 
-    return newTokens;
+    return {
+      ...newTokens,
+      privacyPolicyVersionAccepted: user.privacyPolicyVersionAccepted
+    };
   }
 
   public async logout(input: LogoutInput): Promise<void> {

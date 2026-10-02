@@ -767,6 +767,126 @@ Mounted directly inside the Admin Panel Platform Users detail drawer (`apps/web/
 2. **Expandable Audit Log (`data-testid="consent-log-toggle"` & `data-testid="consent-log-table"`):**  
    Clicking "Show full log (N events)" reveals the paginated history of all `ConsentLog` mutations with purpose, event type (Granted / Withdrawn), formatted UTC date, and masked IP address.
 
+---
+
+## 14. Infrastructure Data-Flow Architecture & DPDP Compliance Perimeter
+
+> **Status:** DECIDED & DOCUMENTED — 2026-10-03 (see also DECISION-061 in decision_log.md)  
+> **Trigger:** Explicit DPDP risk review of the split Vercel (frontend) + Railway (backend) deployment architecture.
+
+### 14.1 — The Two-Platform Architecture
+
+GoRola intentionally runs on two deployment platforms with distinct responsibilities:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         BROWSER (User's Device)                              │
+│                                                                              │
+│  1. Browser fetches app bundle from Vercel CDN (one-time per deploy)         │
+│  2. For ALL data requests, browser speaks DIRECTLY to Railway API            │
+└──────────────────────────┬──────────────────────┬───────────────────────────┘
+                           │                      │
+          ① Static files   │                      │ ② All authenticated API calls
+          (HTML/JS/CSS)    │                      │   (OTP, login, orders, consents,
+          No personal data │                      │   addresses, profile data, etc.)
+                           │                      │
+                           ▼                      ▼
+          ┌─────────────────────┐    ┌────────────────────────────────────────┐
+          │  VERCEL (CDN)       │    │  RAILWAY                               │
+          │                     │    │                                        │
+          │  • Hosts static     │    │  ┌──────────────┐  ┌───────────────┐  │
+          │    dist/ folder     │    │  │  Fastify API  │  │  PostgreSQL   │  │
+          │  • No server-side   │    │  │  (Node.js)    │  │  (All PII)    │  │
+          │    code             │    │  └──────┬───────┘  └───────────────┘  │
+          │  • No personal data │    │         │                              │
+          │  • No cookies       │    │  ┌──────┴───────┐                     │
+          │  • No DB access     │    │  │   Redis       │                     │
+          │  • No logging of    │    │  │ (OTP cache,   │                     │
+          │    user activity    │    │  │  sessions)    │                     │
+          └─────────────────────┘    │  └──────────────┘                     │
+                                     └────────────────────────────────────────┘
+          NOT a Data Processor               ← DPDP COMPLIANCE PERIMETER →
+          under DPDP Act 2023
+```
+
+### 14.2 — Personal Data Inventory by Vendor
+
+The DPDP Act 2023 imposes obligations at the point where personal data is collected, stored, or processed. The following table maps every category of personal data to its physical location:
+
+| Personal Data Category | DPDP Classification | Physical Location | Does Vercel Touch It? | Does Railway Touch It? |
+|---|---|---|---|---|
+| Mobile phone number (AES-256-GCM encrypted) | Sensitive Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Phone hash (HMAC blind index) | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Display Name | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Delivery address + landmark notes | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| GPS coordinates (lat/lng) | Personal Data / Location Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| OTP codes (bcrypt-hashed, 10-min TTL) | Transient Personal Data | Railway Redis | ❌ Never | ✅ Yes — Data Fiduciary |
+| JWT refresh tokens (hashed) | Transient Personal Data | Railway Redis / PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Access tokens (in-memory Zustand only) | Transient Personal Data | Browser RAM — never persisted | ❌ Never | ❌ Never (in-memory) |
+| ConsentLog records (IP, purpose, timestamp) | Compliance Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Order history, item details, prices | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Payment transaction references | Financial Personal Data | Railway PostgreSQL + Razorpay | ❌ Never | ✅ Yes — Data Fiduciary |
+| Nominee contact details | Sensitive Personal Data | Railway PostgreSQL (encrypted) | ❌ Never | ✅ Yes — Data Fiduciary |
+| Grievance submissions | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+
+**Conclusion: Vercel's DPDP classification is "Not a Data Processor."** It holds no personal data and performs no processing on GoRola's behalf. The DPDP compliance perimeter is 100% contained within Railway.
+
+---
+
+### 14.3 — Why Vercel Is Not a Data Processor Under DPDP
+
+The DPDP Act 2023 defines a **Data Processor** as an entity that processes personal data on behalf of a Data Fiduciary. The operative word is *processes personal data*.
+
+Vercel's function for GoRola is:
+1. **Build:** Execute `vite build` to compile TypeScript, React, and CSS into static files. This build happens in a sandboxed CI environment — no user data, no DB access, no API calls to Railway.
+2. **Serve:** Deliver the compiled `dist/` folder to browsers over HTTPS from edge CDN nodes.
+
+Neither function involves personal data. A JavaScript bundle is application source code — it contains no information about any Data Principal. Vercel is, from a DPDP perspective, equivalent to a **file hosting service for non-sensitive software artifacts.**
+
+This is categorically different from Railway, Razorpay, Ola Maps, or the SMS gateway — all of which either store or transmit personal data on GoRola's behalf and are therefore properly classified as sub-processors with corresponding disclosure obligations in GoRola's consent notices.
+
+> **Note on SMS Provider Status:** The OTP SMS provider is currently a **noop stub** (`noop-otp-provider.ts`). The planned provider is **Exotel** (a DLT-registered SMS gateway), accessed via the `OtpProvider` interface. Until Exotel (or equivalent) is integrated and live, no OTP SMS leaves GoRola's infrastructure — the current production workaround is `GOROLA_DUMMY_OTP` (DECISION-019). When the provider is activated, it will transmit phone numbers for OTP delivery and must remain disclosed in the `OTP_AUTH` consent notice.
+
+---
+
+### 14.4 — The One Rule That Must Never Be Broken
+
+**Vercel Analytics must never be enabled.**
+
+Vercel offers a proprietary analytics product that, when enabled, would cause Vercel's edge network to collect: page URLs visited, referrer headers, browser/device metadata, and IP-derived country/region data. This data is associated with individual visitor sessions and constitutes personal data under the DPDP Act (location-derived data, behavioural profiling).
+
+Enabling it without updating GoRola's consent architecture would:
+1. Make Vercel a **Data Processor** for GoRola without a Data Processing Agreement (DPA), violating DPDP Section 8(1).
+2. Introduce an undisclosed third-party sub-processor into the `ANALYTICS` consent pipeline, violating the disclosure requirements of Section 5(2).
+3. Require a consent architecture update — adding Vercel to the `ANALYTICS` `ConsentNoticeModal`, bumping the policy version, and triggering re-consent for all existing users.
+
+**If anyone ever considers enabling Vercel Analytics:** Stop. Read this section. Update the consent architecture first, sign a Railway/Vercel DPA equivalent, update the `ANALYTICS` consent notice, bump `CURRENT_POLICY_VERSION`, and only then enable it.
+
+---
+
+### 14.5 — Cross-Border Transfer Assessment (DPDP Section 16)
+
+DPDP Section 16 empowers the central government to restrict transfer of personal data to specified countries. As of the date of this document (October 2026), no negative list has been notified by the Government of India.
+
+**Even if restrictions were notified in the future, they would not affect Vercel's current role** — because no personal data is transferred to Vercel. CDN delivery of a compiled JavaScript bundle to a browser is not a cross-border personal data transfer. The bundle's content is application code, not user data.
+
+Railway's infrastructure region should be confirmed as `ap-south-1` (Mumbai, India) or equivalent India-region where available, to minimise latency for Mussoorie users and provide a defensible data-residency posture for the personal data that *does* sit on Railway.
+
+---
+
+### 14.6 — Compliance Perimeter Summary Table
+
+| Vendor | Role | Holds Personal Data? | DPDP Classification | DPA Required? | Disclosed in Consent Notices? |
+|---|---|---|---|---|---|
+| **Railway** (API, PostgreSQL, Redis) | Core Infrastructure — GoRola is Data Fiduciary here | ✅ Yes — all PII | Data Processor on GoRola's behalf | ✅ Yes (Railway DPA — see Phase 8.7.2) | ✅ Covered — GoRola is the Fiduciary; Railway processes under GoRola's instructions |
+| **Vercel** (Frontend CDN) | Static File Delivery only | ❌ No personal data | Not a Data Processor | ❌ Not required | ❌ Not required (no personal data involvement) |
+| **Razorpay** | Payment Gateway (UPI/Card only) | ✅ Yes — payment data | Data Processor (RBI-regulated PA) | ✅ Yes (Razorpay ToS/DPA) | ✅ Yes — `ORDER_PROCESSING` notice (conditional Razorpay clause) |
+| **Ola Maps** | Navigation / Geocoding | ✅ Yes — GPS coordinates | Data Processor | ✅ Yes (Ola Maps ToS) | ✅ Yes — `ORDER_PROCESSING` notice |
+| **Exotel / SMS Gateway** (planned — noop stub currently active) | OTP & Marketing SMS | ✅ Yes — phone numbers (when live) | Data Processor (DLT-registered gateway required) | ✅ Yes — required before go-live | ✅ Yes — `OTP_AUTH` notice. When `MARKETING_COMMS` SMS is activated, must also appear in that notice. |
+| **GitHub Actions** | CI/CD Build & Migration Runners | ❌ No personal data — receives DB connection credentials (secrets) only; runs `prisma migrate deploy` (schema DDL, not data queries) | Not a Data Processor | ❌ Not required | ❌ Not required |
+
+
+
 
 
 

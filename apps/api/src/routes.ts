@@ -123,6 +123,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
         name: row.name,
         phone: row.phone,
         isActive: row.isActive,
+        privacyPolicyVersionAccepted: row.privacyPolicyVersionAccepted,
         deletedAt: row.deletedAt,
         deletionScheduledFor: row.deletionScheduledFor
       };
@@ -135,6 +136,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
         name: row.name,
         phone: row.phone,
         isActive: row.isActive,
+        privacyPolicyVersionAccepted: row.privacyPolicyVersionAccepted,
         deletedAt: row.deletedAt,
         deletionScheduledFor: row.deletionScheduledFor
       };
