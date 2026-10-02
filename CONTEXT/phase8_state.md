@@ -1622,9 +1622,11 @@ This creates two critical defects:
   - Resolved typographic vertical baseline misalignment for inline notice modal trigger buttons and icons (`FileText`).
   - Restructured `PrivacySettingsSection.tsx` consent cards so Opt In / Withdraw buttons reside in the card header, allowing notice text to span full card width.
   - Created a dedicated public `/privacy` policy page (`PrivacyPolicyPage.tsx`) registered in buyer routes with DPO contact and DPBI escalation details.
-- **Admin Audit Log Substring Search (8.3.5.2):**
+- **Admin Audit Log Substring Search, Pagination & UI Stability (8.3.5.2):**
   - Updated `audit.repository.ts` Prisma query filters to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType`, resolving exact-match limitations and 1-character search blanking.
-  - Verified debounced live search in `AdminAuditLogsPage.tsx`.
+  - Configured `keepPreviousData` in TanStack Query and persistent filter input mounting in `AdminAuditLogsPage.tsx`, preventing full-page teardowns, filter unmounting, and caret/focus loss during live typing.
+  - Added a dedicated pagination toolbar to `AdminAuditLogsPage.tsx` with dynamic rows per page selector (`10`, `20`, `50`, `100`), entry count indicator, and `Previous`/`Next` page navigation buttons.
+  - Enhanced `audit.repository.ts` date filtering to normalize `to` date strings to `23:59:59.999Z`, making the selected "To Date" 100% inclusive of all events recorded throughout that entire day.
 - **Admin Nominee PII Protection & Data Minimization (8.3.5.3):**
   - Updated `admin.service.ts` (`getUserDetail`) to serialize ONLY `nomineeName: user.nomineeName ?? null`, strictly omitting `nomineeContact` and `nomineeRelationship` to prevent third-party PII leakage under DPDP Act Sec 14.
   - Updated `AdminUserDetailPage.tsx` Nominee Info card to display nominee name or `"Not Configured"`.
@@ -2009,9 +2011,11 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Resolved typographic vertical baseline misalignment for inline notice modal trigger buttons and icons (`FileText`).
     - Restructured `PrivacySettingsSection.tsx` consent cards so Opt In / Withdraw buttons reside in the card header, allowing notice text to span full card width.
     - Created a dedicated public `/privacy` policy page (`PrivacyPolicyPage.tsx`) registered in buyer routes with DPO contact and DPBI escalation details.
-  - **Admin Audit Log Substring Search (8.3.5.2):**
+  - **Admin Audit Log Substring Search, Pagination & UI Stability (8.3.5.2):**
     - Updated `audit.repository.ts` Prisma query filters to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType`, resolving exact-match limitations and 1-character search blanking.
-    - Verified debounced live search in `AdminAuditLogsPage.tsx`.
+    - Configured `keepPreviousData` in TanStack Query and persistent filter input mounting in `AdminAuditLogsPage.tsx`, preventing full-page teardowns, filter unmounting, and caret/focus loss during live typing.
+    - Added a dedicated pagination toolbar to `AdminAuditLogsPage.tsx` with dynamic rows per page selector (`10`, `20`, `50`, `100`), entry count indicator, and `Previous`/`Next` page navigation buttons.
+    - Enhanced `audit.repository.ts` date filtering to normalize `to` date strings to `23:59:59.999Z`, making the selected "To Date" 100% inclusive of all events recorded throughout that entire day.
   - **Admin Nominee PII Protection & Data Minimization (8.3.5.3):**
     - Updated `admin.service.ts` (`getUserDetail`) to serialize ONLY `nomineeName: user.nomineeName ?? null`, strictly omitting `nomineeContact` and `nomineeRelationship` to prevent third-party PII leakage under DPDP Act Sec 14.
     - Updated `AdminUserDetailPage.tsx` Nominee Info card to display nominee name or `"Not Configured"`.

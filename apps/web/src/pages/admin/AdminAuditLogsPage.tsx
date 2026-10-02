@@ -1,7 +1,9 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   ChevronUp,
   Download,
   Eye,
@@ -48,18 +50,25 @@ export function AdminAuditLogsPage(): ReactElement {
   const entityTypeFilter = searchParams.get("entityType") ?? "";
   const fromFilter = searchParams.get("from") ?? "";
   const toFilter = searchParams.get("to") ?? "";
+  const limit = Math.max(1, parseInt(searchParams.get("limit") ?? "20", 10) || 20);
 
   // Local input state for search bars to ensure instant responsive typing without lagging
   const [actionInput, setActionInput] = useState(actionFilter);
   const [entityTypeInput, setEntityTypeInput] = useState(entityTypeFilter);
 
-  // Sync external changes (e.g. direct navigation, reset)
+  // Sync external changes (e.g. direct navigation, reset) without overwriting active typing
   useEffect(() => {
-    setActionInput(searchParams.get("action") ?? "");
+    const urlAction = searchParams.get("action") ?? "";
+    if (urlAction !== actionInput.trim() && document.activeElement?.getAttribute("data-filter-field") !== "action") {
+      setActionInput(urlAction);
+    }
   }, [searchParams.get("action")]);
 
   useEffect(() => {
-    setEntityTypeInput(searchParams.get("entityType") ?? "");
+    const urlEntityType = searchParams.get("entityType") ?? "";
+    if (urlEntityType !== entityTypeInput.trim() && document.activeElement?.getAttribute("data-filter-field") !== "entityType") {
+      setEntityTypeInput(urlEntityType);
+    }
   }, [searchParams.get("entityType")]);
 
   // Cursor-based pagination state
@@ -70,21 +79,24 @@ export function AdminAuditLogsPage(): ReactElement {
   // Expandable rows state
   const [expandedLogIds, setExpandedLogIds] = useState<Set<string>>(new Set());
 
-  const limit = 50;
-
   // Sync filter change to URL
   const handleFilterChange = (key: string, value: string) => {
     setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
       if (value) {
-        prev.set(key, value);
+        next.set(key, value);
       } else {
-        prev.delete(key);
+        next.delete(key);
       }
-      return prev;
-    });
+      return next;
+    }, { replace: true });
     // Reset pagination cursors on filter change
     setCursors([null]);
     setCursorIndex(0);
+  };
+
+  const handlePageSizeChange = (newLimit: string) => {
+    handleFilterChange("limit", newLimit === "20" ? "" : newLimit);
   };
 
   // Debounce Action search (350ms)
@@ -109,9 +121,9 @@ export function AdminAuditLogsPage(): ReactElement {
     return () => clearTimeout(timer);
   }, [entityTypeInput]);
 
-  // Fetch audit logs query
+  // Fetch audit logs query with placeholderData: keepPreviousData so data stays mounted during typing
   const { data, isLoading, isError, isFetching, refetch } = useQuery<AuditLogsResponse["data"]>({
-    queryKey: ["admin", "audit-logs", roleFilter, actionFilter, entityTypeFilter, fromFilter, toFilter, currentCursor],
+    queryKey: ["admin", "audit-logs", roleFilter, actionFilter, entityTypeFilter, fromFilter, toFilter, limit, currentCursor],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
       const params = new URLSearchParams();
@@ -126,6 +138,7 @@ export function AdminAuditLogsPage(): ReactElement {
       const res = await api.get<AuditLogsResponse>(`/api/v1/admin/audit-logs?${params.toString()}`);
       return res.data.data;
     },
+    placeholderData: keepPreviousData,
     staleTime: 10000
   });
 
@@ -181,27 +194,7 @@ export function AdminAuditLogsPage(): ReactElement {
     }
   };
 
-  if (isLoading && !data) {
-    return (
-      <div data-testid="audit-logs-loading-skeleton" className="space-y-6 animate-pulse">
-        <div className="h-10 bg-gorola-charcoal/10 rounded-xl w-48" />
-        <div className="h-14 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
-        <div className="h-96 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
-        <AlertTriangle className="h-10 w-10 text-red-500" />
-        <h2 className="text-lg font-bold text-gorola-charcoal">Failed to load platform audit logs</h2>
-        <button onClick={() => void refetch()} className="px-4 py-2 bg-gorola-pine text-white rounded-xl text-sm font-bold">
-          Try Again
-        </button>
-      </div>
-    );
-  }
+  const isInitialLoading = isLoading && !data;
 
   const items = data?.items ?? [];
 
@@ -260,6 +253,7 @@ export function AdminAuditLogsPage(): ReactElement {
           <label className="text-[10px] font-bold text-gorola-slate uppercase tracking-wider">Action Type</label>
           <input
             type="text"
+            data-filter-field="action"
             placeholder="Search action (e.g. SUSPEND)..."
             value={actionInput}
             onChange={(e) => setActionInput(e.target.value)}
@@ -272,6 +266,7 @@ export function AdminAuditLogsPage(): ReactElement {
           <label className="text-[10px] font-bold text-gorola-slate uppercase tracking-wider">Entity Type</label>
           <input
             type="text"
+            data-filter-field="entityType"
             placeholder="Search entity (e.g. Store)..."
             value={entityTypeInput}
             onChange={(e) => setEntityTypeInput(e.target.value)}
@@ -302,8 +297,28 @@ export function AdminAuditLogsPage(): ReactElement {
         </div>
       </section>
 
+      {/* Error state */}
+      {isError && (
+        <div className="flex flex-col items-center justify-center min-h-[300px] text-center space-y-4 bg-white rounded-2xl border border-gorola-charcoal/10 p-8 shadow-sm">
+          <AlertTriangle className="h-10 w-10 text-red-500" />
+          <h2 className="text-lg font-bold text-gorola-charcoal">Failed to load platform audit logs</h2>
+          <button onClick={() => void refetch()} className="px-4 py-2 bg-gorola-pine text-white rounded-xl text-sm font-bold">
+            Try Again
+          </button>
+        </div>
+      )}
+
+      {/* Initial loading skeleton */}
+      {isInitialLoading && (
+        <div data-testid="audit-logs-loading-skeleton" className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm space-y-4 animate-pulse">
+          <div className="h-8 bg-gorola-charcoal/10 rounded-xl w-48" />
+          <div className="h-64 bg-gorola-charcoal/5 rounded-xl w-full" />
+        </div>
+      )}
+
       {/* Logs Table */}
-      <div className="bg-white rounded-2xl border border-gorola-charcoal/10 overflow-hidden shadow-sm">
+      {!isInitialLoading && !isError && (
+        <div className="bg-white rounded-2xl border border-gorola-charcoal/10 overflow-hidden shadow-sm">
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -405,35 +420,73 @@ export function AdminAuditLogsPage(): ReactElement {
           </table>
         </div>
 
-        {/* Pagination */}
-        {data && (data.nextCursor || cursorIndex > 0) && (
-          <div className="flex justify-center items-center gap-4 py-4 border-t border-gorola-charcoal/5 bg-gorola-mint/5">
-            <button
-              disabled={cursorIndex === 0}
-              onClick={() => setCursorIndex((idx) => Math.max(idx - 1, 0))}
-              className="px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 disabled:opacity-50 disabled:pointer-events-none rounded-xl text-xs font-bold shadow-sm transition-all"
-            >
-              Previous
-            </button>
-            <span className="text-xs font-bold text-gorola-slate">Page {cursorIndex + 1}</span>
-            <button
-              disabled={!data.nextCursor}
-              onClick={() => {
-                if (data.nextCursor) {
-                  setCursors((prev) => {
-                    const nextList = [...prev.slice(0, cursorIndex + 1), data.nextCursor];
-                    return nextList;
-                  });
-                  setCursorIndex((idx) => idx + 1);
-                }
-              }}
-              className="px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 disabled:opacity-50 disabled:pointer-events-none rounded-xl text-xs font-bold shadow-sm transition-all"
-            >
-              Next
-            </button>
+        {/* Pagination Toolbar */}
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-4 px-5 py-4 border-t border-gorola-charcoal/5 bg-gorola-mint/[0.04]">
+          <div className="flex items-center gap-2 text-xs text-gorola-slate font-medium">
+            <span>Showing</span>
+            <span className="font-bold text-gorola-charcoal">{items.length}</span>
+            <span>{items.length === 1 ? "log entry" : "log entries"}</span>
+            {isFetching && (
+              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-gorola-pine ml-2">
+                <RefreshCw className="h-3 w-3 animate-spin" /> Updating...
+              </span>
+            )}
           </div>
-        )}
+
+          <div className="flex items-center gap-4">
+            {/* Rows per page selector */}
+            <div className="flex items-center gap-2">
+              <label htmlFor="audit-page-size" className="text-[11px] font-bold text-gorola-slate uppercase tracking-wider">
+                Rows per page:
+              </label>
+              <select
+                id="audit-page-size"
+                data-testid="page-size-select"
+                value={limit.toString()}
+                onChange={(e) => handlePageSizeChange(e.target.value)}
+                className="bg-white border border-gorola-charcoal/10 rounded-lg px-2.5 py-1 text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-1 focus:ring-gorola-pine/30 shadow-xs"
+              >
+                <option value="10">10</option>
+                <option value="20">20</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+            </div>
+
+            {/* Navigation buttons */}
+            <div className="flex items-center gap-2">
+              <button
+                disabled={cursorIndex === 0 || isFetching}
+                onClick={() => setCursorIndex((idx) => Math.max(idx - 1, 0))}
+                className="px-3 py-1.5 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/30 disabled:opacity-40 disabled:pointer-events-none rounded-xl text-xs font-bold text-gorola-charcoal shadow-xs transition-all inline-flex items-center gap-1"
+              >
+                <ChevronLeft className="h-3.5 w-3.5" />
+                Previous
+              </button>
+              <span className="px-3 py-1 text-xs font-bold text-gorola-pine bg-gorola-pine/10 rounded-lg border border-gorola-pine/20">
+                Page {cursorIndex + 1}
+              </span>
+              <button
+                disabled={!data?.nextCursor || isFetching}
+                onClick={() => {
+                  if (data?.nextCursor) {
+                    setCursors((prev) => {
+                      const nextList = [...prev.slice(0, cursorIndex + 1), data.nextCursor];
+                      return nextList;
+                    });
+                    setCursorIndex((idx) => idx + 1);
+                  }
+                }}
+                className="px-3 py-1.5 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/30 disabled:opacity-40 disabled:pointer-events-none rounded-xl text-xs font-bold text-gorola-charcoal shadow-xs transition-all inline-flex items-center gap-1"
+              >
+                Next
+                <ChevronRight className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
+      )}
     </div>
   );
 }

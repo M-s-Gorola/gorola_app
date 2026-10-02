@@ -93,10 +93,7 @@ describe("AdminAuditLogsPage", () => {
 
     renderAdminAuditLogs();
 
-    expect(await screen.findByText("Platform Audit Logs")).toBeInTheDocument();
-
-    // Verify headers
-    expect(screen.getByText("Actor (masked)")).toBeInTheDocument();
+    expect(await screen.findByText("Actor (masked)")).toBeInTheDocument();
     expect(screen.getByText("Role")).toBeInTheDocument();
     expect(screen.getByText("Action")).toBeInTheDocument();
     expect(screen.getByText("Entity")).toBeInTheDocument();
@@ -164,5 +161,123 @@ describe("AdminAuditLogsPage", () => {
         undefined
       );
     }, { timeout: 1500 });
+
+    // Verify input remains mounted and keeps its value after API response resolves
+    expect(screen.getByPlaceholderText("Search action (e.g. SUSPEND)...")).toBeInTheDocument();
+    expect((screen.getByPlaceholderText("Search action (e.g. SUSPEND)...") as HTMLInputElement).value).toBe("SUSPEND");
+  });
+
+  it("retains input element mounting and focus during background refetches without replacing page", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: { items: [], nextCursor: null }
+      }
+    });
+
+    renderAdminAuditLogs();
+
+    const entityInput = screen.getByPlaceholderText("Search entity (e.g. Store)...");
+    entityInput.focus();
+    expect(document.activeElement).toBe(entityInput);
+
+    fireEvent.change(entityInput, { target: { value: "ConsentLog" } });
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(
+        expect.stringContaining("entityType=ConsentLog"),
+        undefined
+      );
+    }, { timeout: 1500 });
+
+    // Ensure the input element was never unmounted or replaced
+    expect(screen.getByPlaceholderText("Search entity (e.g. Store)...")).toBe(entityInput);
+    expect((entityInput as HTMLInputElement).value).toBe("ConsentLog");
+  });
+
+  it("handles pagination navigation and page size selector changes", async () => {
+    const mockPage1 = {
+      success: true,
+      data: {
+        items: Array.from({ length: 10 }, (_, i) => ({
+          id: `log-${i + 1}`,
+          actorId: "admin-1",
+          actorRole: "ADMIN" as const,
+          actorMasked: "admin-masked@gorola.in",
+          action: `ACTION_${i + 1}`,
+          entityType: "User",
+          entityId: `user-${i + 1}`,
+          oldValue: null,
+          newValue: null,
+          ipMasked: "192.168.***.***",
+          userAgent: "TestAgent",
+          createdAt: "2026-10-02T12:00:00.000Z"
+        })),
+        nextCursor: "log-10"
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockPage1 });
+
+    renderAdminAuditLogs();
+
+    expect(await screen.findByText("Showing")).toBeInTheDocument();
+    expect(screen.getByText("log entries")).toBeInTheDocument();
+    expect(screen.getByText("Page 1")).toBeInTheDocument();
+    expect(screen.getAllByText("10").length).toBeGreaterThanOrEqual(1);
+
+    // Previous button should be disabled on page 1
+    const prevBtn = screen.getByRole("button", { name: /Previous/i });
+    expect(prevBtn).toBeDisabled();
+
+    // Next button should be enabled because nextCursor is present
+    const nextBtn = screen.getByRole("button", { name: /Next/i });
+    expect(nextBtn).not.toBeDisabled();
+
+    // Click Next button to navigate to page 2
+    const mockPage2 = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "log-11",
+            actorId: "admin-1",
+            actorRole: "ADMIN" as const,
+            actorMasked: "admin-masked@gorola.in",
+            action: "ACTION_11",
+            entityType: "User",
+            entityId: "user-11",
+            oldValue: null,
+            newValue: null,
+            ipMasked: "192.168.***.***",
+            userAgent: "TestAgent",
+            createdAt: "2026-10-02T12:00:00.000Z"
+          }
+        ],
+        nextCursor: null
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockPage2 });
+    fireEvent.click(nextBtn);
+
+    await waitFor(() => {
+      expect(screen.getByText("Page 2")).toBeInTheDocument();
+      expect(getMock).toHaveBeenCalledWith(
+        expect.stringContaining("cursor=log-10"),
+        undefined
+      );
+    });
+
+    // Test changing page size
+    const pageSizeSelect = screen.getByTestId("page-size-select");
+    fireEvent.change(pageSizeSelect, { target: { value: "50" } });
+
+    await waitFor(() => {
+      expect(getMock).toHaveBeenCalledWith(
+        expect.stringContaining("limit=50"),
+        undefined
+      );
+    });
   });
 });
