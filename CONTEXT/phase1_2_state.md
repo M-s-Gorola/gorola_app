@@ -2098,6 +2098,7 @@ _(Append new entries ” never delete old ones)_
 - Migrated Railway deployment configuration from legacy/deprecated Config as Code (`railway.toml`) to Railway Infrastructure as Code (`.railway/railway.ts`) using the official `@railway/iac` TypeScript SDK (`defineRailway`, `service`, `project`).
 - Added `railway` SDK dependency in root workspace, created `.railway/railway.ts` and `.railway/README.md`, and removed deprecated `railway.toml`.
 - Updated path filter in `.github/workflows/paths.yml` to watch `.railway/**`.
+- Added automated `railway config apply --yes` step in `.github/workflows/deploy-railway.yml` to sync IaC state on Railway before running `railway up`.
 - Updated unit test `apps/api/src/__tests__/unit/deploy/railway.config.test.ts` to validate `.railway/railway.ts`.
 - Updated deployment documentation across `DEPLOYMENT_CONFIG_GUIDE.md`, `README.md`, and `architecture.md`.
 - Verification: unit tests, monorepo typecheck, and lint all pass with 0 errors/warnings.
