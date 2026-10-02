@@ -210,6 +210,11 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
 
     // ORDER_PROCESSING must mention Ola Maps and Razorpay
     const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    // Expand the card if not already open
+    const orderTrigger = orderCard.querySelector('[role="button"]') ?? orderCard;
+    if (orderTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(orderTrigger);
+    }
     expect(orderCard).toHaveTextContent(/Ola Maps/i);
     expect(orderCard).toHaveTextContent(/Razorpay for online payments/i);
   });
@@ -229,15 +234,32 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
 
     const otpCard = screen.getByTestId("consent-card-OTP_AUTH");
+    // OTP_AUTH starts expanded by default — ensure it is open before asserting
+    const otpTrigger = otpCard.querySelector('[role="button"]') ?? otpCard;
+    if (otpTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(otpTrigger);
+    }
     expect(otpCard).toHaveTextContent(/Active since account creation/i);
 
     const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    const orderTrigger = orderCard.querySelector('[role="button"]') ?? orderCard;
+    if (orderTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(orderTrigger);
+    }
     expect(orderCard).toHaveTextContent(/Pending — Activated when you save an address or place your first order/i);
 
     const marketingCard = screen.getByTestId("consent-card-MARKETING_COMMS");
+    const marketingTrigger = marketingCard.querySelector('[role="button"]') ?? marketingCard;
+    if (marketingTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(marketingTrigger);
+    }
     expect(marketingCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
 
     const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
+    const analyticsTrigger = analyticsCard.querySelector('[role="button"]') ?? analyticsCard;
+    if (analyticsTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(analyticsTrigger);
+    }
     expect(analyticsCard).toHaveTextContent(/Withdrawn \/ Inactive — you can enable below/i);
   });
 
@@ -341,24 +363,44 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
 
     expect(await screen.findByText(/Privacy & Consent Preferences/i)).toBeInTheDocument();
 
+    // Expand ORDER_PROCESSING (closed by default)
     const orderCard = screen.getByTestId("consent-card-ORDER_PROCESSING");
+    const orderTrigger = orderCard.querySelector('[role="button"]') ?? orderCard;
+    if (orderTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(orderTrigger);
+    }
     expect(orderCard).toHaveTextContent(/Ola Maps/i);
     expect(orderCard).toHaveTextContent(/Display Name/i);
     expect(orderCard).toHaveTextContent(/Razorpay/i);
     expect(orderCard).toHaveTextContent(/For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the/i);
     expect(orderCard).toHaveTextContent(/Order Fulfillment Notice/i);
 
+    // OTP_AUTH starts expanded by default
     const otpCard = screen.getByTestId("consent-card-OTP_AUTH");
+    const otpTrigger = otpCard.querySelector('[role="button"]') ?? otpCard;
+    if (otpTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(otpTrigger);
+    }
     expect(otpCard).toHaveTextContent(/Exotel/i);
     expect(otpCard).toHaveTextContent(/For full details on retention period, data rights, and erasure policies, read the/i);
     expect(otpCard).toHaveTextContent(/Authentication Notice/i);
 
+    // Expand MARKETING_COMMS (closed by default)
     const marketingCard = screen.getByTestId("consent-card-MARKETING_COMMS");
+    const marketingTrigger = marketingCard.querySelector('[role="button"]') ?? marketingCard;
+    if (marketingTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(marketingTrigger);
+    }
     expect(marketingCard).toHaveTextContent(/Exotel/i);
     expect(marketingCard).toHaveTextContent(/For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the/i);
     expect(marketingCard).toHaveTextContent(/Promotions Notice/i);
 
+    // Expand ANALYTICS (closed by default)
     const analyticsCard = screen.getByTestId("consent-card-ANALYTICS");
+    const analyticsTrigger = analyticsCard.querySelector('[role="button"]') ?? analyticsCard;
+    if (analyticsTrigger.getAttribute("aria-expanded") !== "true") {
+      fireEvent.click(analyticsTrigger);
+    }
     expect(analyticsCard).toHaveTextContent(/For full details on 180-day auto-purge schedules, telemetry anonymization, and opt-out rights, read the/i);
     expect(analyticsCard).toHaveTextContent(/Analytics Notice/i);
 

@@ -1,11 +1,12 @@
 import { isAxiosError } from "axios";
-import { ShieldCheck, ShieldOff } from "lucide-react";
-import type { ReactElement, ReactNode } from "react";
+import { ChevronDown, ChevronUp, ShieldCheck, ShieldOff } from "lucide-react";
+import type { MouseEvent, ReactElement, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
 import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { api } from "@/lib/api";
 import { queryClient } from "@/lib/query-client";
 
@@ -104,13 +105,7 @@ const CANONICAL_ORDER: ConsentPurpose[] = [
 ];
 
 /**
- * Collapses raw ConsentLog rows (which may include many historical rows per
- * purpose) into exactly 4 canonical purpose cards — one per purpose — each
- * reflecting the *latest* grant/withdrawal state.
- *
- * DPDP compliance note: all historical rows are preserved in the DB and are
- * exported via "Download My Data". This UI shows current status for all 4
- * canonical purposes even if a DB row hasn't been created yet.
+ * Collapses raw ConsentLog rows into exactly 4 canonical purpose cards
  */
 function buildPurposeCards(rows: ConsentLogRow[]): PurposeCard[] {
   const byPurpose = new Map<ConsentPurpose, ConsentLogRow[]>();
@@ -170,6 +165,9 @@ function getInactiveStatusText(purpose: ConsentPurpose): string {
 export function PrivacySettingsSection(): ReactElement {
   const [cards, setCards] = useState<PurposeCard[]>([]);
   const [loading, setLoading] = useState(true);
+  const [expandedPurposes, setExpandedPurposes] = useState<Record<string, boolean>>({
+    OTP_AUTH: true
+  });
   const [actionLoading, setActionLoading] = useState<ConsentPurpose | null>(null);
 
   async function loadAndBuildCards(): Promise<void> {
@@ -193,7 +191,15 @@ export function PrivacySettingsSection(): ReactElement {
     void loadAndBuildCards();
   }, []);
 
-  const handleWithdraw = async (purpose: ConsentPurpose): Promise<void> => {
+  const togglePurpose = (purpose: ConsentPurpose): void => {
+    setExpandedPurposes((prev) => ({
+      ...prev,
+      [purpose]: !prev[purpose]
+    }));
+  };
+
+  const handleWithdraw = async (purpose: ConsentPurpose, e?: MouseEvent): Promise<void> => {
+    e?.stopPropagation();
     if (!api) return;
     setActionLoading(purpose);
     try {
@@ -223,7 +229,8 @@ export function PrivacySettingsSection(): ReactElement {
     }
   };
 
-  const handleGrant = async (purpose: ConsentPurpose): Promise<void> => {
+  const handleGrant = async (purpose: ConsentPurpose, e?: MouseEvent): Promise<void> => {
+    e?.stopPropagation();
     if (!api) return;
     setActionLoading(purpose);
     try {
@@ -255,116 +262,156 @@ export function PrivacySettingsSection(): ReactElement {
   };
 
   return (
-    <section className="rounded-2xl border border-gorola-pine/5 bg-white/70 p-6 shadow-sm backdrop-blur-md">
-      <div className="mb-6 flex items-center gap-3">
-        <div className="rounded-full bg-gorola-pine/10 p-2 text-gorola-pine">
-          <ShieldCheck size={20} />
+    <Card className="border-gorola-pine/15 bg-white shadow-sm overflow-hidden">
+      <CardContent className="p-5 sm:p-6 space-y-4">
+        <div className="flex items-start gap-3.5">
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gorola-pine/10 text-gorola-pine">
+            <ShieldCheck className="h-5 w-5" />
+          </span>
+          <div className="space-y-0.5 min-w-0 flex-1">
+            <div className="flex items-center gap-2 flex-wrap">
+              <h2 className="font-heading text-base font-bold text-gorola-charcoal">
+                Privacy &amp; Consent Preferences
+              </h2>
+              <span className="inline-flex items-center rounded-full bg-gorola-sand/60 px-2 py-0.5 text-[10px] font-semibold text-gorola-pine">
+                DPDP Act Sec 6(1)
+              </span>
+            </div>
+            <p className="text-xs text-gorola-slate">
+              Manage statutory consent preferences and access rights under India&apos;s DPDP Act 2023.
+            </p>
+          </div>
         </div>
-        <div>
-          <h2 className="font-heading text-lg font-semibold text-gorola-charcoal">
-            Privacy &amp; Consent Preferences
-          </h2>
-          <p className="text-xs text-gorola-slate">
-            Compliant with India&apos;s Digital Personal Data Protection (DPDP) Act 2023.
-          </p>
-        </div>
-      </div>
 
-      {loading ? (
-        <div className="py-6 text-center text-sm text-gorola-slate">Loading consent settings...</div>
-      ) : cards.length === 0 ? (
-        <div className="py-6 text-center text-sm text-gorola-slate">No consent records found.</div>
-      ) : (
-        <div className="space-y-4">
-          {cards.map((card) => {
-            const meta = PURPOSE_META[card.purpose];
-            return (
-              <div
-                className="rounded-xl border border-border/80 bg-white dark:bg-card p-4 shadow-xs space-y-2.5"
-                key={card.purpose}
-                data-testid={`consent-card-${card.purpose}`}
-              >
-                <div className="flex items-center justify-between gap-3 flex-wrap">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="font-medium text-sm text-gorola-charcoal">{meta.title}</span>
-                    {meta.essential ? (
-                      <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                        Essential
-                      </span>
-                    ) : card.isActive ? (
-                      <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[11px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                        Active
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-medium text-gray-600">
-                        Withdrawn
-                      </span>
-                    )}
-                  </div>
+        <div className="space-y-2.5 pt-1">
+          {loading ? (
+            <div className="py-6 text-center text-sm text-gorola-slate">Loading consent settings...</div>
+          ) : cards.length === 0 ? (
+            <div className="py-6 text-center text-sm text-gorola-slate">No consent records found.</div>
+          ) : (
+            cards.map((card) => {
+              const meta = PURPOSE_META[card.purpose];
+              const isExpanded = Boolean(expandedPurposes[card.purpose]);
 
-                  {!meta.essential ? (
-                    <div>
-                      {card.isActive ? (
-                        <Button
-                          className="h-8 text-xs"
-                          data-testid={`withdraw-btn-${card.purpose}`}
-                          disabled={actionLoading === card.purpose}
-                          onClick={() => void handleWithdraw(card.purpose)}
-                          size="sm"
-                          variant="outline"
-                        >
-                          <ShieldOff className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
-                          {actionLoading === card.purpose ? "Withdrawing..." : "Withdraw"}
-                        </Button>
+              return (
+                <div
+                  className="rounded-xl border border-gorola-charcoal/10 bg-gorola-charcoal/[0.015] overflow-hidden transition-all shadow-xs"
+                  key={card.purpose}
+                  data-testid={`consent-card-${card.purpose}`}
+                >
+                  <div
+                    onClick={() => togglePurpose(card.purpose)}
+                    className="flex items-center justify-between gap-3 p-3.5 sm:p-4 cursor-pointer hover:bg-gorola-charcoal/[0.03] transition-colors select-none"
+                    role="button"
+                    aria-expanded={isExpanded}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        togglePurpose(card.purpose);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-2.5 flex-wrap min-w-0 flex-1">
+                      <span className="font-bold text-sm text-gorola-charcoal">
+                        {meta.title}
+                      </span>
+                      {meta.essential ? (
+                        <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-bold text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
+                          Essential
+                        </span>
+                      ) : card.isActive ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-bold text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                          Active
+                        </span>
                       ) : (
-                        <Button
-                          className="h-8 text-xs bg-gorola-pine text-white hover:bg-gorola-pine/90"
-                          data-testid={`optin-btn-${card.purpose}`}
-                          disabled={actionLoading === card.purpose}
-                          onClick={() => void handleGrant(card.purpose)}
-                          size="sm"
-                        >
-                          <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                          {actionLoading === card.purpose ? "Enabling..." : "Opt In"}
-                        </Button>
+                        <span className="inline-flex items-center rounded-full bg-gray-100 px-2 py-0.5 text-[10px] font-bold text-gray-600">
+                          Withdrawn
+                        </span>
                       )}
                     </div>
-                  ) : null}
-                </div>
 
-                <p className="text-xs text-muted-foreground leading-relaxed">{meta.description}</p>
-                <div className="pt-0.5 text-xs text-muted-foreground">
-                  <span>{meta.transparencyPrompt} </span>
-                  <ConsentNoticeModal
-                    purpose={card.purpose}
-                    triggerLabel={meta.noticeLabel}
-                    triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
-                  />
-                  <span> (or view our platform-wide </span>
-                  <a
-                    href="/privacy"
-                    className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-                  >
-                    Privacy Policy
-                  </a>
-                  <span>).</span>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {!meta.essential && (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          {card.isActive ? (
+                            <Button
+                              className="h-7 sm:h-8 text-xs font-semibold px-2.5 sm:px-3"
+                              data-testid={`withdraw-btn-${card.purpose}`}
+                              disabled={actionLoading === card.purpose}
+                              onClick={(e) => void handleWithdraw(card.purpose, e)}
+                              size="sm"
+                              variant="outline"
+                            >
+                              <ShieldOff className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5 text-muted-foreground" />
+                              {actionLoading === card.purpose ? "Withdrawing..." : "Withdraw"}
+                            </Button>
+                          ) : (
+                            <Button
+                              className="h-7 sm:h-8 text-xs font-semibold px-2.5 sm:px-3 bg-gorola-pine text-white hover:bg-gorola-pine/90"
+                              data-testid={`optin-btn-${card.purpose}`}
+                              disabled={actionLoading === card.purpose}
+                              onClick={(e) => void handleGrant(card.purpose, e)}
+                              size="sm"
+                            >
+                              <ShieldCheck className="mr-1 h-3 w-3 sm:h-3.5 sm:w-3.5" />
+                              {actionLoading === card.purpose ? "Enabling..." : "Opt In"}
+                            </Button>
+                          )}
+                        </div>
+                      )}
+
+                      <div className="flex h-7 w-7 sm:h-8 sm:w-8 items-center justify-center rounded-lg bg-gorola-charcoal/5 text-gorola-charcoal">
+                        {isExpanded ? (
+                          <ChevronUp className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        ) : (
+                          <ChevronDown className="h-3.5 w-3.5 sm:h-4 sm:w-4" />
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {isExpanded && (
+                    <div className="border-t border-gorola-charcoal/5 bg-white p-3.5 sm:p-4 space-y-2.5 text-xs">
+                      <p className="text-muted-foreground leading-relaxed">
+                        {meta.description}
+                      </p>
+                      <div className="pt-0.5 text-muted-foreground">
+                        <span>{meta.transparencyPrompt} </span>
+                        <ConsentNoticeModal
+                          purpose={card.purpose}
+                          triggerLabel={meta.noticeLabel}
+                          triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                        />
+                        <span> (or view our platform-wide </span>
+                        <a
+                          href="/privacy"
+                          className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                        >
+                          Privacy Policy
+                        </a>
+                        <span>).</span>
+                      </div>
+                      <div className="flex items-center gap-2.5 flex-wrap pt-0.5">
+                        <span className="text-[11px] text-muted-foreground">
+                          {card.isActive
+                            ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
+                              ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
+                              : card.purpose === "OTP_AUTH"
+                                ? "Active since account creation"
+                                : `Active (v${card.consentVersion})`
+                            : getInactiveStatusText(card.purpose)}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
-                <div className="flex items-center gap-2.5 flex-wrap pt-0.5 text-xs">
-                  <span className="text-[11px] text-muted-foreground">
-                    {card.isActive
-                      ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
-                        ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
-                        : card.purpose === "OTP_AUTH"
-                          ? "Active since account creation"
-                          : `Active (v${card.consentVersion})`
-                      : getInactiveStatusText(card.purpose)}
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+              );
+            })
+          )}
         </div>
-      )}
-    </section>
+      </CardContent>
+    </Card>
   );
 }
+

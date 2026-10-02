@@ -372,8 +372,10 @@ export function registerAppRoutes(app: FastifyInstance): void {
   registerAuthRoutes(app, {
     adminAuthService,
     authService,
-    storeOwnerAuthService
+    storeOwnerAuthService,
+    tokenVerifier: tokenService
   });
+
 
   registerUserRoutes(app, {
     userRepository: userRepo,

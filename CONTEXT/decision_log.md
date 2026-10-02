@@ -1823,5 +1823,58 @@ Implement **Phase 8.3.4 (DPDP Consent Architecture Overhaul & Admin Consent Pane
 **Tradeoffs:**  
 - Requires a schema migration that casts enum to text and seeds initial configuration rows. Handled safely with data migration SQL before adding foreign key constraints.
 
+---
+
+## [DECISION-060] Rejection of Railway IaC in Favor of Railway Dashboard Configuration (Source of Truth)
+
+**Date:** 2026-10-03  
+**Status:** Accepted  
+
+**Context:**  
+Railway announced the deprecation and end-of-life cutoff (December 1, 2026) for legacy "Config as Code" (`railway.toml` / `railway.json`), urging projects to migrate to Railway Infrastructure as Code (`@railway/iac`). 
+
+In response to this platform-level deprecation, we initially authored Railway Infrastructure as Code (`.railway/railway.ts`) and configured GitHub Actions to synchronize it via `railway config apply --yes --confirm-destructive`.
+
+However, evaluating Railway IaC in practice revealed fundamental misalignments with GoRola's architectural needs:
+1. **Application Code vs Infrastructure Management:** GoRola is a modular monolith backend with a stable, unchanging topology (single Fastify Node API + Postgres + Redis). Our CI/CD pipeline only needs to deploy **application code changes** via `railway up`, not dynamically orchestrate multi-resource cloud topologies.
+2. **Destructive Env Var Deletion Hazard:** `railway config apply` performs a declarative reconciliation of the entire environment state against the IaC file. Because our `railway.ts` only declared build and deploy settings (no `variables` block), Railway treated all dashboard-configured environment variables (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, `DPDP_*`, etc.) as undeclared and marked them for deletion.
+3. **The Destructive Flag Dilemma:**
+   - With `--confirm-destructive`: The CLI silently wiped every environment variable in the Railway environment on every CI run, crashing the app on boot.
+   - Without `--confirm-destructive`: The CLI exited with code 1 whenever the plan contained deletions, breaking the CI/CD pipeline unconditionally.
+4. **Scoping Limitations (`export const partial`):** The `partial` export only scopes service ownership (which service Railway manages), not variable protection within a managed service.
+5. **Maintenance Overhead of `preserve()` Stubs:** The official IaC workaround requires generating and maintaining stubbed `preserve()` definitions for every secret and environment variable in code, adding pointless toil and fragile sync requirements for a single-service monorepo backend.
+
+**Decision:**  
+Completely remove Railway IaC (`.railway/railway.ts`, `.railway/README.md`) and all `railway config apply` steps from the GitHub Actions deployment pipeline (`deploy-railway.yml`, `paths.yml`). Adopt the Railway Web Dashboard configuration as the permanent, single source of truth for service build and deploy settings across both **Staging** and **Production** environments.
+
+**Required Dashboard Settings (Set once per service in Staging & Production):**
+- **Root Directory:** Repository root (`GoRola_app`)
+- **Builder:** `Railpack` (or `Nixpacks` with `nixpacks.toml`)
+- **Build Command:** `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`
+- **Start Command:** `pnpm --filter @gorola/api start`
+- **Healthcheck Path:** `/health`
+- **Restart Policy:** `On Failure` (Max Retries: 10)
+
+**Deployment Mechanism:**  
+CI/CD deploys via standard imperative CLI:
+```bash
+railway up --ci --environment "<env>" --service "$RAILWAY_SERVICE_ID"
+```
+Future builds and deploys pick up these dashboard settings automatically without any risk of configuration drift or secret deletion.
+
+**Rationale:**  
+- Eliminates the fatal risk of environment variables being purged on CI runs.
+- Simplifies CI/CD pipeline to a single, idempotent `railway up` deployment command.
+- Decouples secret management (safely entered in Railway Dashboard / GitHub Secrets) from code repositories.
+- Dashboard settings persist permanently across all future builds and branch deployments.
+
+**Tradeoffs:**  
+- Initial service configuration (Builder, Build Command, Start Command, Healthcheck Path, Restart Policy) must be manually set once in the Railway Dashboard for both Staging and Production environments.
+
+**Alternatives Considered:**  
+1. **Declare all environment variables with `preserve()` in `railway.ts`:** Rejected — requires constantly synchronizing TypeScript stubs whenever new environment variables are introduced, creating high maintenance friction.
+2. **Maintain legacy `railway.toml`:** Rejected — deprecated by Railway with end-of-life cutoff.
+
+
 
 

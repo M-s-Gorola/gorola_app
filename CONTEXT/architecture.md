@@ -113,15 +113,22 @@ Path: `vercel.json` (repository root, same as `GoRola_app`).
 
 ### Railway — Fastify API (Node)
 
-> [!IMPORTANT]
-> **Railway Migration: Config as Code (`railway.toml`) → Infrastructure as Code (`.railway/railway.ts`)**
-> Railway is deprecating legacy "Config as Code" (`railway.toml` / `railway.json`) with a hard cutoff date of **December 1, 2026**. GoRola uses Railway **Infrastructure as Code (IaC)** authored in TypeScript (`.railway/railway.ts`) via the `@railway/iac` / `railway` SDK.
+> [!NOTE]
+> **Railway Service Configuration: Evolution from Config as Code (`railway.toml`) → IaC Evaluation → Dashboard Configuration**
+> Railway is deprecating legacy "Config as Code" (`railway.toml` / `railway.json`) with a hard cutoff on **December 1, 2026** in favor of Railway Infrastructure as Code (`@railway/iac`).
+> 
+> GoRola evaluated migrating to Railway IaC (`.railway/railway.ts`), but **intentionally rejected IaC** for the following architectural reasons:
+> 1. **GoRola only needs code deployments:** We are deploying application code updates to a stable single Fastify service. Heavy IaC resource provisioning is unnecessary overhead.
+> 2. **Destructive Env Var Deletion:** `railway config apply` syncs the entire environment declaratively. Because secret env vars live in Railway and not in code, Railway purges all dashboard environment variables on CI with `--confirm-destructive` (or fails CI without it).
+> 3. **Maintenance Overhead:** The `preserve()` workaround creates pointless manual boilerplate in code.
+> 
+> **Decision:** All build, deploy, healthcheck, and restart settings are configured directly in the **Railway Web Dashboard** for both **Staging** and **Production**. Once saved, **future builds automatically pick up these values**, and CI deploys purely via `railway up --ci`.
 
 #### In plain language
 
-- **`.railway/railway.ts`** (repository root) defines Railway **Infrastructure as Code**: Nixpacks builder, full `buildCommand`, `startCommand`, restart policy, and health check route.
-- **`nixpacks.toml`** only pins **Node major 22** for the Nixpacks Node build image (matches CI and local `.nvmrc`).
-- **`Procfile`** declares a **`web`** process with the same start command as `.railway/railway.ts` so the default process type is unambiguous.
+- **Railway Dashboard Service Settings** (web service in Staging & Production): Configures the builder (`Railpack`/`Nixpacks`), build command, start command, restart policy, and healthcheck path.
+- **`nixpacks.toml`** pins **Node major 22** for the Nixpacks Node build image (matches CI and local `.nvmrc`).
+- **`Procfile`** declares a **`web`** process with the start command (`web: pnpm --filter @gorola/api start`) as fallback.
 - **`apps/api/package.json` → `scripts.build` and `scripts.start`** are the **last mile**: what `pnpm --filter @gorola/api run build` and `pnpm --filter @gorola/api start` actually run (Prisma generate, `tsc`, migrate deploy, `node dist/app.js`). If you change API startup, you change these scripts.
 
 **Root directory for the service:** the **Git repo root** (`GoRola_app`). Do **not** set the deploy root to `apps/api` only — the monorepo needs `pnpm-workspace.yaml` and filters.
@@ -130,37 +137,19 @@ Path: `vercel.json` (repository root, same as `GoRola_app`).
 
 | File | Role |
 |------|------|
-| **`.railway/railway.ts`** | Infrastructure as Code: `builder`, **full `buildCommand`**, **deploy `startCommand`**, `restartPolicyType`, `healthcheckPath`. |
+| **Railway Dashboard Settings** | Source of truth: `builder`, **`buildCommand`**, **`startCommand`**, `restartPolicyType`, `healthcheckPath`. |
 | **`nixpacks.toml`** | `NODE_VERSION` for Nixpacks (Node 22). |
 | **`Procfile`** | `web: …` process line; matches the intended start. |
 | **`apps/api/package.json` → `scripts`** | `build` = Prisma client + TypeScript emit to `dist/`. `start` = migrate then listen. |
 | **Repo root `.env.example` / `project_data.json`** | **Documentation only** — list of variable **names** Railway must have; not the values. |
 
-#### Committed config — `.railway/railway.ts` (Infrastructure as Code)
+#### Service Dashboard Settings Reference (Staging & Production)
 
-Path: `.railway/railway.ts` (repository root).
-
-```typescript
-import { defineRailway, project, service } from "railway/iac";
-
-export default defineRailway(() => {
-  const api = service("api", {
-    build: {
-      builder: "NIXPACKS",
-      buildCommand: "pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build",
-    },
-    deploy: {
-      startCommand: "pnpm --filter @gorola/api start",
-      restartPolicyType: "ON_FAILURE",
-      healthcheckPath: "/health",
-    },
-  });
-
-  return project("gorola", {
-    resources: [api],
-  });
-});
-```
+- **Builder**: `Railpack` (or `Nixpacks`)
+- **Build Command**: `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`
+- **Start Command**: `pnpm --filter @gorola/api start`
+- **Healthcheck Path**: `/health`
+- **Restart Policy**: `On Failure` (Max Retries: `10`)
 
 #### Committed config — `nixpacks.toml`
 
@@ -182,7 +171,7 @@ Path: `Procfile` (repository root).
 web: pnpm --filter @gorola/api start
 ```
 
-#### Committed config — `apps/api` npm scripts (invoked by `.railway/railway.ts`)
+#### Committed config — `apps/api` npm scripts (invoked by startCommand)
 
 The Railway `startCommand` runs `pnpm --filter @gorola/api start`, which uses these scripts in `apps/api/package.json`:
 

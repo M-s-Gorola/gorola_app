@@ -1,3 +1,4 @@
+import { UnauthorizedError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
 import type { AdminAuthService } from "./admin-auth.service.js";
@@ -12,12 +13,17 @@ import {
   parseVerifyOtpInput
 } from "./auth.schema.js";
 import type { AuthService } from "./auth.service.js";
+import type { AccessTokenVerifier } from "./auth.types.js";
 import type { StoreOwnerAuthService } from "./store-owner-auth.service.js";
 
 type AuthControllerDeps = {
-  authService: Pick<AuthService, "logout" | "refreshToken" | "sendOtp" | "verifyOtp">;
+  authService: Pick<
+    AuthService,
+    "logout" | "refreshToken" | "sendOtp" | "verifyOtp" | "getActiveSessions" | "terminateAllSessions"
+  >;
   storeOwnerAuthService: Pick<StoreOwnerAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
   adminAuthService: Pick<AdminAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
+  tokenVerifier?: AccessTokenVerifier;
 };
 
 type SuccessEnvelope<T> = {
@@ -27,6 +33,16 @@ type SuccessEnvelope<T> = {
     requestId: string;
   };
 };
+
+function getClientContext(request: FastifyRequest): { ipAddress: string | null; userAgent: string | null } {
+  const forwarded = request.headers["x-forwarded-for"];
+  const ipAddress =
+    typeof forwarded === "string"
+      ? forwarded.split(",")[0]?.trim() || request.ip || null
+      : request.ip || null;
+  const userAgent = typeof request.headers["user-agent"] === "string" ? request.headers["user-agent"] : null;
+  return { ipAddress, userAgent };
+}
 
 function refreshCookieOptions(): {
   path: string;
@@ -116,6 +132,22 @@ function resolveRefreshToken(
 }
 
 export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDeps): void {
+  const requireBuyerAuth = async (request: FastifyRequest): Promise<{ userId: string }> => {
+    const authHeader = request.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      throw new UnauthorizedError("Missing or invalid authorization header");
+    }
+    const token = authHeader.substring(7);
+    if (!deps.tokenVerifier) {
+      throw new UnauthorizedError("Token verifier unavailable");
+    }
+    const payload = await deps.tokenVerifier.verifyAccessToken(token);
+    if (payload.role !== "BUYER") {
+      throw new UnauthorizedError("Unauthorized role");
+    }
+    return { userId: payload.sub };
+  };
+
   app.post("/api/v1/auth/buyer/send-otp", async (request, reply) => {
     const payload = parseSendOtpInput(request.body as { phone: string });
     await deps.authService.sendOtp(payload);
@@ -124,7 +156,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
 
   app.post("/api/v1/auth/buyer/verify-otp", async (request, reply) => {
     const payload = parseVerifyOtpInput(request.body as { otp: string; phone: string });
-    const result = await deps.authService.verifyOtp(payload);
+    const context = getClientContext(request);
+    const result = await deps.authService.verifyOtp(payload, context);
     reply.setCookie("refreshToken", result.refreshToken, refreshCookieOptions());
     return success(request, reply, {
       accessToken: result.accessToken,
@@ -139,7 +172,8 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
 
   app.post("/api/v1/auth/buyer/refresh", async (request, reply) => {
     const payload = parseRefreshTokenInput(resolveRefreshToken(request, request.body));
-    const tokens = await deps.authService.refreshToken(payload);
+    const context = getClientContext(request);
+    const tokens = await deps.authService.refreshToken(payload, context);
     reply.setCookie("refreshToken", tokens.refreshToken, refreshCookieOptions());
     return success(request, reply, tokens);
   });
@@ -151,6 +185,20 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
     return success(request, reply, { loggedOut: true });
   });
 
+  app.get("/api/v1/auth/sessions", async (request, reply) => {
+    const { userId } = await requireBuyerAuth(request);
+    const { refreshToken } = resolveRefreshToken(request, request.body);
+    const sessions = await deps.authService.getActiveSessions(userId, refreshToken);
+    return success(request, reply, { sessions });
+  });
+
+  app.delete("/api/v1/auth/sessions", async (request, reply) => {
+    const { userId } = await requireBuyerAuth(request);
+    const result = await deps.authService.terminateAllSessions(userId);
+    reply.clearCookie("refreshToken", refreshCookieClearOptions());
+    return success(request, reply, result);
+  });
+
   app.post("/api/v1/auth/store-owner/login", async (request, reply) => {
     const payload = parseStoreOwnerLoginInput(
       request.body as {
@@ -159,6 +207,7 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
         totpCode?: string;
       }
     );
+
     const result = await deps.storeOwnerAuthService.login(payload);
     if ("requiresTwoFactor" in result) {
       return success(request, reply, result);
