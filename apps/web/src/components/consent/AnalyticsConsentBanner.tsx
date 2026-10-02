@@ -147,10 +147,23 @@ export function AnalyticsConsentBanner(): ReactElement | null {
             </span>
           </div>
           <p className="text-xs text-gorola-slate leading-relaxed">
-            We collect anonymous performance telemetry to optimize steep hill routing and app responsiveness across Mussoorie. No personal identity is tracked.
+            We collect anonymous device telemetry and network latency data to identify bugs, optimize steep hill route planning, and improve app performance in weak signal areas across Mussoorie. Zero personal data is tracked.
           </p>
-          <div className="pt-0.5">
-            <ConsentNoticeModal purpose="ANALYTICS" />
+          <div className="pt-0.5 text-[11px] text-muted-foreground">
+            <span>For full details on 180-day auto-purge schedules, telemetry anonymization, and opt-out rights, read the </span>
+            <ConsentNoticeModal
+              purpose="ANALYTICS"
+              triggerLabel="Analytics Notice"
+              triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+            />
+            <span> (or view our platform-wide </span>
+            <a
+              href="/privacy"
+              className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+            >
+              Privacy Policy
+            </a>
+            <span>).</span>
           </div>
         </div>
 

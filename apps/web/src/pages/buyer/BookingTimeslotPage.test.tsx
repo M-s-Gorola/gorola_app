@@ -133,7 +133,7 @@ describe("BookingTimeslotPage", () => {
 
     // Marketing opt-in card should be rendered with notice modal trigger
     expect(screen.getByTestId("booking-marketing-opt-in")).toBeInTheDocument();
-    expect(screen.getByTestId("view-notice-btn-MARKETING_EMAIL")).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-MARKETING_COMMS")).toBeInTheDocument();
 
     // Confirm button is now enabled
     expect(confirmBtn).toBeEnabled();

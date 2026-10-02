@@ -1,6 +1,6 @@
 import { isAxiosError } from "axios";
 import { ShieldCheck, ShieldOff } from "lucide-react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 
@@ -12,7 +12,7 @@ import { queryClient } from "@/lib/query-client";
 // Raw shape returned by GET /api/v1/consent
 type ConsentLogRow = {
   id: string;
-  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_EMAIL" | "ANALYTICS";
+  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
   consentVersion: string;
   noticeText: string;
   isWithdrawn: boolean;
@@ -31,25 +31,67 @@ type PurposeCard = {
   grantedAt: string;
 };
 
-const PURPOSE_META: Record<ConsentPurpose, { title: string; description: string; essential: boolean }> = {
+const PURPOSE_META: Record<
+  ConsentPurpose,
+  {
+    title: string;
+    description: ReactNode;
+    plainText: string;
+    noticeLabel: string;
+    transparencyPrompt: string;
+    essential: boolean;
+  }
+> = {
   OTP_AUTH: {
     title: "Authentication & Account Security",
-    description: "Required to send one-time passwords and secure your account sessions for verification and account safety under India's DPDP Act 2023.",
+    description: (
+      <span>
+        We collect your phone number and share it with our secure SMS gateway (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) to send one-time passwords (OTP) and securely authenticate your account sessions under India&apos;s DPDP Act 2023. We do not sell your personal data.
+      </span>
+    ),
+    plainText:
+      "We collect your phone number and share it with our secure SMS gateway (Exotel) to send one-time passwords (OTP) and securely authenticate your account sessions under India's DPDP Act 2023. We do not sell your personal data.",
+    noticeLabel: "Authentication Notice",
+    transparencyPrompt: "For full details on retention period, data rights, and erasure policies, read the",
     essential: true
   },
   ORDER_PROCESSING: {
     title: "Order Fulfillment & Location Services",
-    description: "Required to share your address and GPS coordinates with Ola Maps, store partners, and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay.",
+    description: (
+      <span>
+        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
+      </span>
+    ),
+    plainText:
+      "We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with Ola Maps for navigation, Razorpay for online payments, and assigned store partners & delivery riders for order fulfillment. Governed by India's DPDP Act 2023.",
+    noticeLabel: "Order Fulfillment Notice",
+    transparencyPrompt: "For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the",
     essential: true
   },
-  MARKETING_EMAIL: {
+  MARKETING_COMMS: {
     title: "Promotions & Seasonal Offers",
-    description: "Receive updates on hill weather flash sales, seasonal discounts, and exclusive coupons from Mussoorie stores.",
+    description: (
+      <span>
+        We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
+      </span>
+    ),
+    plainText:
+      "We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (Exotel) and app notifications. 100% voluntary.",
+    noticeLabel: "Promotions Notice",
+    transparencyPrompt: "For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the",
     essential: false
   },
   ANALYTICS: {
     title: "Usage & Performance Analytics",
-    description: "Help us optimise route planning and app speed across Mussoorie. Zero PII is tracked.",
+    description: (
+      <span>
+        We collect anonymous device telemetry and network latency data to identify bugs, optimize steep hill route planning, and improve app performance in weak signal areas across Mussoorie. Zero personal data is tracked.
+      </span>
+    ),
+    plainText:
+      "We collect anonymous device telemetry and network latency data to identify bugs, optimize steep hill route planning, and improve app performance in weak signal areas across Mussoorie. Zero personal data is tracked.",
+    noticeLabel: "Analytics Notice",
+    transparencyPrompt: "For full details on 180-day auto-purge schedules, telemetry anonymization, and opt-out rights, read the",
     essential: false
   }
 };
@@ -57,7 +99,7 @@ const PURPOSE_META: Record<ConsentPurpose, { title: string; description: string;
 const CANONICAL_ORDER: ConsentPurpose[] = [
   "OTP_AUTH",
   "ORDER_PROCESSING",
-  "MARKETING_EMAIL",
+  "MARKETING_COMMS",
   "ANALYTICS"
 ];
 
@@ -189,7 +231,7 @@ export function PrivacySettingsSection(): ReactElement {
       await api.post<{ success: boolean }>("/api/v1/consent", {
         purpose,
         consentVersion: "1.0",
-        noticeText: meta.description
+        noticeText: meta.plainText
       });
       if (purpose === "ANALYTICS") {
         try {
@@ -238,11 +280,11 @@ export function PrivacySettingsSection(): ReactElement {
             const meta = PURPOSE_META[card.purpose];
             return (
               <div
-                className="flex flex-col justify-between gap-3 rounded-xl border border-border/80 bg-white dark:bg-card p-4 shadow-xs sm:flex-row sm:items-start"
+                className="rounded-xl border border-border/80 bg-white dark:bg-card p-4 shadow-xs space-y-2.5"
                 key={card.purpose}
                 data-testid={`consent-card-${card.purpose}`}
               >
-                <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-medium text-sm text-gorola-charcoal">{meta.title}</span>
                     {meta.essential ? (
@@ -259,47 +301,64 @@ export function PrivacySettingsSection(): ReactElement {
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground leading-relaxed">{meta.description}</p>
-                  <div className="flex items-center gap-2.5 flex-wrap pt-0.5 text-xs">
-                    <ConsentNoticeModal purpose={card.purpose} />
-                    <span className="text-muted-foreground/40">•</span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {card.isActive
-                        ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
-                          ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
-                          : card.purpose === "OTP_AUTH"
-                            ? "Active since account creation"
-                            : `Active (v${card.consentVersion})`
-                        : getInactiveStatusText(card.purpose)}
-                    </span>
-                  </div>
+
+                  {!meta.essential ? (
+                    <div>
+                      {card.isActive ? (
+                        <Button
+                          className="h-8 text-xs"
+                          data-testid={`withdraw-btn-${card.purpose}`}
+                          disabled={actionLoading === card.purpose}
+                          onClick={() => void handleWithdraw(card.purpose)}
+                          size="sm"
+                          variant="outline"
+                        >
+                          <ShieldOff className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
+                          {actionLoading === card.purpose ? "Withdrawing..." : "Withdraw"}
+                        </Button>
+                      ) : (
+                        <Button
+                          className="h-8 text-xs bg-gorola-pine text-white hover:bg-gorola-pine/90"
+                          data-testid={`optin-btn-${card.purpose}`}
+                          disabled={actionLoading === card.purpose}
+                          onClick={() => void handleGrant(card.purpose)}
+                          size="sm"
+                        >
+                          <ShieldCheck className="mr-1 h-3.5 w-3.5" />
+                          {actionLoading === card.purpose ? "Enabling..." : "Opt In"}
+                        </Button>
+                      )}
+                    </div>
+                  ) : null}
                 </div>
 
-                <div>
-                  {!meta.essential && card.isActive ? (
-                    <Button
-                      className="text-xs"
-                      data-testid={`withdraw-btn-${card.purpose}`}
-                      disabled={actionLoading === card.purpose}
-                      onClick={() => void handleWithdraw(card.purpose)}
-                      size="sm"
-                      variant="outline"
-                    >
-                      <ShieldOff className="mr-1 h-3.5 w-3.5 text-muted-foreground" />
-                      {actionLoading === card.purpose ? "Withdrawing..." : "Withdraw"}
-                    </Button>
-                  ) : !meta.essential && !card.isActive ? (
-                    <Button
-                      className="text-xs bg-gorola-pine text-white hover:bg-gorola-pine/90"
-                      data-testid={`optin-btn-${card.purpose}`}
-                      disabled={actionLoading === card.purpose}
-                      onClick={() => void handleGrant(card.purpose)}
-                      size="sm"
-                    >
-                      <ShieldCheck className="mr-1 h-3.5 w-3.5" />
-                      {actionLoading === card.purpose ? "Enabling..." : "Opt In"}
-                    </Button>
-                  ) : null}
+                <p className="text-xs text-muted-foreground leading-relaxed">{meta.description}</p>
+                <div className="pt-0.5 text-xs text-muted-foreground">
+                  <span>{meta.transparencyPrompt} </span>
+                  <ConsentNoticeModal
+                    purpose={card.purpose}
+                    triggerLabel={meta.noticeLabel}
+                    triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                  <span> (or view our platform-wide </span>
+                  <a
+                    href="/privacy"
+                    className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+                  >
+                    Privacy Policy
+                  </a>
+                  <span>).</span>
+                </div>
+                <div className="flex items-center gap-2.5 flex-wrap pt-0.5 text-xs">
+                  <span className="text-[11px] text-muted-foreground">
+                    {card.isActive
+                      ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
+                        ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
+                        : card.purpose === "OTP_AUTH"
+                          ? "Active since account creation"
+                          : `Active (v${card.consentVersion})`
+                      : getInactiveStatusText(card.purpose)}
+                  </span>
                 </div>
               </div>
             );

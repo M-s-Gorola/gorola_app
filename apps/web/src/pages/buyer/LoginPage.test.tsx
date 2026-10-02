@@ -99,9 +99,10 @@ describe("LoginPage", () => {
   it("initial render displays consent notice step, unchecked checkbox, and disabled continue button", async () => {
     renderLogin(["/login"]);
     expect(screen.getByTestId("consent-notice-step")).toBeInTheDocument();
-    expect(
-      screen.getByText(/We collect your phone number to send a one-time password \(OTP\)/i)
-    ).toBeInTheDocument();
+    expect(screen.getByTestId("consent-notice-step")).toHaveTextContent(
+      /We collect your phone number and share it with our secure SMS gateway \(Exotel\)/i
+    );
+    expect(screen.getByText(/For full details on retention period, data rights, and erasure policies, read the/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /privacy policy/i })).toHaveAttribute("href", "/privacy");
     
     const checkbox = screen.getByTestId("consent-acknowledge-checkbox");
@@ -244,7 +245,7 @@ describe("LoginPage", () => {
       });
       expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
         consentVersion: "1.0",
-        noticeText: expect.any(String),
+        noticeText: expect.stringMatching(/One-Time Password.*SMS gateway partner/i),
         purpose: "OTP_AUTH"
       });
     });

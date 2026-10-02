@@ -11,22 +11,20 @@
 
 | Phase   | Name                    | Status      | Notes |
 | ------- | ----------------------- | ----------- | ----- |
-| Phase 8 | DPDP Act 2023 Compliance | 🔴 NOT STARTED | Must be complete before production launch. Sections 8.1–8.7 use the current setup; Section 8.8 is pending client vendor selection (SMS OTP & Call Masking). |
+| Phase 8 | DPDP Act 2023 Compliance | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee), 8.3.4 (Consent Overhaul & Admin Consent Panel), and 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) complete; Phase 8.4 (Session Transparency & Security Alerting) ready to execute. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-09-24
-- **Session Summary:** Completed full Phase 8.2 polish, consent idempotency guards, canonical UI aggregation, and dedicated Privacy Dashboard architecture:
-  - **Dedicated Privacy & Data Rights Page (`/account/privacy`):** Created `PrivacySettingsPage.tsx` at `/account/privacy` hosting all 4 canonical consent cards. Replaced the awkwardly placed bottom card on `/profile` with a clean `Privacy & Consent` Quick Link above Logout.
-  - **Profile Layout Refinement (`ProfilePage.tsx`):** Added `md:items-start` and balanced spacing to eliminate artificial vertical stretching and bottom whitespace on the Personal Info card.
-  - **Idempotency Guard (8.2 & DPDP Sec 10):** Implemented in `consent.service.ts` and `consent.controller.ts` to prevent duplicate `ConsentLog` rows across repeated logins and checkouts with integration tests.
-  - **Cross-Device Analytics Sync (`AnalyticsConsentBanner.tsx`):** Pre-fetches server consent on new devices to sync `localStorage` (`accepted`/`declined`) and prevent repeated banner prompts.
-  - **Universal Heading Standardization:** Synchronized all consent notice headings across `LoginPage.tsx`, `SavedAddressesPage.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `AnalyticsConsentBanner.tsx`, and `PrivacySettingsSection.tsx`. Removed premature "Exotel" reference.
-  - **Quality Gates:** 55/55 Vitest tests passed 100% green; 0 ESLint warnings across monorepo.
-- **Next Session Must Start With:** 8.3 — User Rights: Erasure, Access & Nomination (8.3.1 Right to Erasure `DELETE /api/v1/user/account` & Data Export `GET /api/v1/user/my-data` integrated into `/account/privacy`).
-- **In Progress Right Now:** Ready for Section 8.3 (User Rights: Erasure, Access & Nomination).
+- **Date:** 2026-10-02
+- **Session Summary:** Fully executed and verified Phase 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection):
+  - **8.3.5.1 (Consent Cards Alignment & Purpose-Specific Transparency Lines):** Concise consent cards across all buyer interfaces with bolded third-party services (**Exotel**, **Ola Maps**, **Razorpay**), seamless typographic text baseline alignment for notice modal links, and distinct purpose-specific transparency lines pointing to statutory notices & public `/privacy` policy page.
+  - **8.3.5.2 (Admin Audit Log Substring Search):** `audit.repository.ts` Prisma queries updated to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType` search, verified with debounced UI inputs.
+  - **8.3.5.3 (Admin User Detail Nominee Integration & Strict PII Minimization):** `getUserDetail` API response exposes ONLY `nomineeName` (strictly omitting `nomineeContact` & `nomineeRelationship` to prevent third-party PII exposure) and `AdminUserDetailPage.tsx` displays nominee name or "Not Configured".
+  - **Final Quality Gate:** 100% GREEN (119 API test files / 737 tests passed, 95 Web test files / 541 tests passed, 0 TypeScript errors, 0 ESLint warnings/errors).
+- **Next Session Must Start With:** Phase 8.4 — Session Transparency & Security Alerting (8.4.1 Active Sessions & Remote Revoke).
+- **In Progress Right Now:** None (Phase 8.3.5 complete).
 - **Current Blocker:** None.
 
 
@@ -813,6 +811,834 @@ Under India's DPDP Act Section 12, Data Principals have the statutory right to e
   - [x] Run integration & unit tests — **confirm GREEN.**
 
 ---
+### 8.3.4 — Consent Architecture Overhaul & Admin Consent Panel
+
+> **Type: Backend (schema migration + new endpoint) + Frontend (notice text corrections + admin UI). Full TDD.**
+> **Prerequisite: Phase 8.3.1–8.3.3 must be complete.**
+> **This section has four sequential sub-tasks. Complete them strictly in order — each one is a dependency for the next.**
+
+---
+
+#### Sub-task Overview
+
+| Sub-task | Name | Type | Dependency |
+|----------|------|------|-----------|
+| **8.3.4.1** | Replace `ConsentPurpose` enum with `ConsentPurposeConfig` table & rename `MARKETING_EMAIL` → `MARKETING_COMMS` | Schema + Backend | None — do first |
+| **8.3.4.2** | Correct all consent notice text (GPS retention, name disclosure, marketing channel) | Backend + Frontend | 8.3.4.1 complete |
+| **8.3.4.3** | Add `GET /api/v1/admin/users/:id/consents` endpoint (paginated) | Backend | 8.3.4.1 complete |
+| **8.3.4.4** | Add Consent & Privacy section to Admin User Detail drawer | Frontend | 8.3.4.3 complete |
+
+---
+
+### 8.3.4.1 — Replace `ConsentPurpose` Enum with `ConsentPurposeConfig` Table & Rename `MARKETING_EMAIL` → `MARKETING_COMMS`
+
+**Root cause / Goal:**
+The `ConsentPurpose` PostgreSQL enum (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_EMAIL`, `ANALYTICS`) has two problems:
+
+1. **Wrong enum name:** `MARKETING_EMAIL` implies email is the communication channel. GoRola has no email system — all promotional communication is SMS/push. The correct name is `MARKETING_COMMS`.
+2. **Wrong architectural pattern:** A hardcoded PostgreSQL enum makes it impossible to add, retire, or rename consent purposes without a schema migration + full code deploy + Prisma client regeneration. As DPDP Act 2023 Rules continue to be notified, new consent purposes will be needed (e.g., `THIRD_PARTY_ANALYTICS`, `LOCATION_TRACKING`). Adding them must be a database-level operation, not a code deploy.
+
+**Fix / Approach:**
+Replace the `ConsentPurpose` enum in `schema.prisma` with a new `ConsentPurposeConfig` table that stores purpose metadata (key, display name, description, whether it is essential, retention description). Change `ConsentLog.purpose` from the `ConsentPurpose` enum type to a plain `String` referencing `ConsentPurposeConfig.key`. Generate a single migration that: (a) creates `ConsentPurposeConfig`, (b) drops the old enum column, (c) adds a new `String` column for `purpose`, (d) seeds the four canonical rows with `MARKETING_EMAIL` renamed to `MARKETING_COMMS`, and (e) updates all existing `ConsentLog` rows where `purpose = 'MARKETING_EMAIL'` to `purpose = 'MARKETING_COMMS'`. Update all TypeScript layers — types, Zod schemas, service, repository, controller — to use the string type instead of the Prisma-generated enum type. Confirm no Prisma-generated `ConsentPurpose` enum import remains anywhere.
+
+---
+
+- [x] **RED — Integration (`consent.controller.test.ts`):**
+  - [x] At the top of the file, add one new test: `POST /api/v1/consent` with body `{ purpose: "MARKETING_COMMS", consentVersion: "1.0", noticeText: "test" }` → expect HTTP 201 with `data.purpose === "MARKETING_COMMS"`.
+  - [x] Add one new test: `POST /api/v1/consent` with body `{ purpose: "MARKETING_EMAIL", consentVersion: "1.0", noticeText: "test" }` → expect HTTP 400 `VALIDATION_ERROR` (the old enum value is no longer accepted).
+  - [x] Add one new test: `DELETE /api/v1/consent/MARKETING_COMMS` → expect HTTP 200; `ConsentLog` row updated to `isWithdrawn = true`.
+  - [x] Add one new test: `DELETE /api/v1/consent/MARKETING_EMAIL` → expect HTTP 400 `VALIDATION_ERROR` (invalid purpose string).
+  - [x] **Run — confirm RED (all four new tests fail because `MARKETING_COMMS` does not exist in the current Zod enum; `MARKETING_EMAIL` currently succeeds).**
+
+- [x] **GREEN — Backend (Schema → Migration → Seed → Repository → Service → Controller):**
+
+  - [x] **[Schema]** In `apps/api/prisma/schema.prisma`:
+    - Delete the `enum ConsentPurpose { ... }` block entirely.
+    - Add the following new model:
+      ```prisma
+      model ConsentPurposeConfig {
+        key              String  @id        // e.g. "OTP_AUTH"
+        displayName      String             // e.g. "Authentication & Account Security"
+        description      String             // one-line description
+        isEssential      Boolean @default(false)
+        retentionSummary String             // one-line plain-English retention
+        createdAt        DateTime @default(now())
+        updatedAt        DateTime @updatedAt
+        consents         ConsentLog[]
+      }
+      ```
+    - Change `ConsentLog.purpose` from `ConsentPurpose` to `String`.
+    - Add the relation: `purposeConfig ConsentPurposeConfig @relation(fields: [purpose], references: [key])`.
+    - Remove all `@@map` or `@relation` references to the old enum.
+    - Delete the `ConsentPurpose` import from `consent.types.ts` (it was a Prisma-generated type).
+
+  - [x] **[Migration]** Run:
+    ```
+    pnpm --filter @gorola/api exec prisma migrate dev --name replace_consent_purpose_enum_with_config_table
+    ```
+    using the `db_owner` / `MIGRATION_DATABASE_URL` DDL credential. Verify the generated SQL file contains: `CREATE TABLE "ConsentPurposeConfig"`, `ALTER TABLE "ConsentLog" DROP COLUMN "purpose"` (or equivalent), `ALTER TABLE "ConsentLog" ADD COLUMN "purpose" TEXT`, and a foreign key constraint from `ConsentLog.purpose` → `ConsentPurposeConfig.key`.
+
+  - [x] **[Seed in migration]** The migration SQL file (or a companion seed executed immediately after) must insert the four canonical rows into `ConsentPurposeConfig` AND rename the existing `MARKETING_EMAIL` rows:
+    ```sql
+    INSERT INTO "ConsentPurposeConfig" ("key", "displayName", "description", "isEssential", "retentionSummary", "createdAt", "updatedAt")
+    VALUES
+      ('OTP_AUTH',           'Authentication & Account Security',  'Verifies your identity via One-Time Password.', true,  'Lifetime of account; deleted within 30 days of account erasure.', now(), now()),
+      ('ORDER_PROCESSING',   'Order Fulfillment & Location Services', 'Processes your location and order details for delivery.', true, 'Addresses deleted on erasure. Order GPS nulled on erasure; financials kept 7 years (GST).', now(), now()),
+      ('MARKETING_COMMS',    'Promotions & Seasonal Offers',       'Sends you optional hill-station discounts and store coupons.', false, 'Scrubbed from all distributions within 48 hours of withdrawal.', now(), now()),
+      ('ANALYTICS',          'Usage & Performance Analytics',      'Collects anonymous performance telemetry to improve the app.', false, 'Aggregated logs purged or anonymised after 180 days.', now(), now());
+
+    -- Rename all existing MARKETING_EMAIL rows to MARKETING_COMMS
+    UPDATE "ConsentLog" SET "purpose" = 'MARKETING_COMMS' WHERE "purpose" = 'MARKETING_EMAIL';
+    ```
+
+  - [x] **[Apply to test DB]** Run `pnpm --filter @gorola/api prisma:bootstrap:test` to apply the migration to `gorola_test`. Verify with a direct DB query that `SELECT COUNT(*) FROM "ConsentLog" WHERE purpose = 'MARKETING_EMAIL'` returns 0 and `SELECT * FROM "ConsentPurposeConfig"` returns exactly 4 rows.
+
+  - [x] **[Types — `consent.types.ts`]** Remove `import type { ConsentLog, ConsentPurpose } from "@prisma/client"`. Define `ConsentPurpose` as a plain string union locally:
+    ```typescript
+    export type ConsentPurpose = "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
+    ```
+    Update `RecordConsentInput.purpose` and `ConsentDTO.purpose` to use this local type.
+
+  - [x] **[Schema — `consent.schema.ts`]** Update `consentPurposeEnum` to:
+    ```typescript
+    export const consentPurposeEnum = z.enum([
+      "OTP_AUTH",
+      "ORDER_PROCESSING",
+      "MARKETING_COMMS",
+      "ANALYTICS"
+    ]);
+    ```
+    `MARKETING_EMAIL` must no longer be in this list.
+
+  - [x] **[Service — `consent.service.ts`]** The `ESSENTIAL_PURPOSES` set already uses string literals. Change `"MARKETING_EMAIL"` if it appears. It should not — only `OTP_AUTH` and `ORDER_PROCESSING` are essential. Confirm no stale reference to `MARKETING_EMAIL` exists.
+
+  - [x] **[Repository — `consent.repository.ts`]** No logic change needed. Verify that `findLatestByUserIdAndPurpose` and `withdraw` use the `purpose: ConsentPurpose` parameter type (now the local string union). Confirm all Prisma calls compile correctly with the new schema (the `purposeConfig` relation is not needed in existing queries — purpose is still just a string column for lookup).
+
+  - [x] **[Controller — `consent.controller.ts`]** No route change needed. The Zod schema update in `consent.schema.ts` is sufficient — invalid purpose strings will be rejected at the parse step.
+
+  - [x] Run `pnpm --filter @gorola/api test -- src/__tests__/integration/consent/` — **confirm GREEN.**
+  - [x] Run `pnpm typecheck` — **confirm 0 errors.** No remaining `import { ConsentPurpose } from "@prisma/client"` anywhere in the codebase.
+
+- [x] **RED — Unit / Component (`ConsentNoticeModal.test.tsx`, `PrivacySettingsSection.test.tsx`, all files referencing `MARKETING_EMAIL` as a string literal):**
+  - [x] In `ConsentNoticeModal.test.tsx`: add test — rendering `<ConsentNoticeModal purpose="MARKETING_COMMS" />` and clicking `data-testid="view-notice-btn-MARKETING_COMMS"` opens the modal. **Confirm RED** (key `MARKETING_COMMS` does not exist in `CONSENT_NOTICES` yet).
+  - [x] In `PrivacySettingsSection.test.tsx`: update all mock consent objects with `purpose: "MARKETING_EMAIL"` to `purpose: "MARKETING_COMMS"`. Update all `data-testid` assertions from `consent-card-MARKETING_EMAIL`, `withdraw-btn-MARKETING_EMAIL`, `optin-btn-MARKETING_EMAIL` to use `MARKETING_COMMS`. **Run — confirm RED** (testids don't match yet).
+  - [x] In `PrivacySettingsPage.test.tsx`: same updates — replace every `"MARKETING_EMAIL"` string literal with `"MARKETING_COMMS"`. **Run — confirm RED.**
+  - [x] In `CheckoutPage.test.tsx` and `BookingTimeslotPage.test.tsx`: replace every `"MARKETING_EMAIL"` string literal with `"MARKETING_COMMS"`. **Run — confirm RED.**
+  - [x] **Run all frontend tests — confirm RED.**
+
+- [x] **GREEN — Frontend (Types → Components):**
+  - [x] **[`ConsentNoticeModal.tsx`]** — Rename the key in `CONSENT_NOTICES` from `MARKETING_EMAIL` to `MARKETING_COMMS`. Update the exported `ConsentPurpose` type union to replace `"MARKETING_EMAIL"` with `"MARKETING_COMMS"`.
+  - [x] **[`PrivacySettingsSection.tsx`]** — In the `CONSENT_META` (or equivalent config object), rename the `MARKETING_EMAIL` key to `MARKETING_COMMS`. Update the `ConsentCard` ordering array to use `"MARKETING_COMMS"`. Update the local `ConsentPurpose` type union.
+  - [x] **[`CheckoutPage.tsx`]** — In the `hasMarketingConsent` selector (`c.purpose === "MARKETING_EMAIL"`), change to `"MARKETING_COMMS"`. In the `POST /api/v1/consent` call for marketing opt-in, change `purpose: "MARKETING_EMAIL"` to `purpose: "MARKETING_COMMS"`.
+  - [x] **[`BookingTimeslotPage.tsx`]** — Same two changes as `CheckoutPage.tsx`.
+  - [x] **[`SavedAddressesPage.tsx`]** — Verify no `MARKETING_EMAIL` string appears; if it does, rename to `MARKETING_COMMS`.
+  - [x] Run `pnpm --filter @gorola/web test -- --run` — **confirm GREEN (all previously RED tests now pass).**
+  - [x] Run `pnpm lint` — **confirm 0 warnings.**
+
+- [x] **Verification chain:**
+  - [x] Admin queries `SELECT * FROM "ConsentPurposeConfig"` → sees 4 rows with keys `OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS` → `SELECT COUNT(*) FROM "ConsentLog" WHERE purpose = 'MARKETING_EMAIL'` returns 0 → User opens `/account/privacy` → Privacy Settings panel renders the "Promotions & Seasonal Offers" card with `data-testid="consent-card-MARKETING_COMMS"` → User clicks "View Complete Notice" → modal opens correctly → User opens `/checkout` and opts into marketing → `POST /api/v1/consent` is called with `purpose: "MARKETING_COMMS"` → DB row created with `purpose = 'MARKETING_COMMS'` → ✅ Done.
+
+---
+
+### 8.3.4.2 — Correct All Consent Notice Text (GPS Retention, Conditional Name Disclosure, Marketing Channel)
+
+**Root cause / Goal:**
+Three factual inaccuracies in the consent notices create legal exposure under DPDP Act 2023 Section 5(2), which requires notices to be "clear, plain, and accurate":
+
+1. **GPS retention lie:** The `ORDER_PROCESSING` full notice (in `ConsentNoticeModal.tsx`) states *"Live GPS streams deleted immediately upon successful delivery verification."* This is false. `Address.lat/lng` are stored until the address is deleted. `Order.deliveryLat/deliveryLng` are stored for the 7-year GST retention period (nulled only on account erasure, not on delivery).
+
+2. **Undisclosed name processing:** The user's `name` field is passed to store partners and riders on every order (visible in store order management UI). The `ORDER_PROCESSING` and `MARKETING_COMMS` notices do not disclose this. However, `name` is optional — if never set, the value stored is `"Registered User"` (a non-identifying placeholder). The disclosure must therefore be conditional, following the existing Razorpay pattern: *"Display name (if you have set one)"*.
+
+3. **Wrong channel in `MARKETING_COMMS` purpose/retention text:** After the rename in 8.3.4.1, the modal body text for `MARKETING_COMMS` still says "contact details" without specifying the channel. It must be updated to say "phone number and app notifications" (not "email").
+
+**Fix / Approach:**
+Update only `CONSENT_NOTICES` in `ConsentNoticeModal.tsx` (the full notice modal content) and the inline `noticeText` string literals in `SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, and `LoginPage.tsx`. No schema changes. No new API calls.
+
+---
+
+- [x] **RED — Unit / Component (`ConsentNoticeModal.test.tsx`):**
+  - [x] Test: Render `<ConsentNoticeModal purpose="ORDER_PROCESSING" />`, click `data-testid="view-notice-btn-ORDER_PROCESSING"` → assert modal body contains the text `"Address coordinates stored until address deletion"` (or equivalent agreed wording).
+  - [x] Test: Assert modal body does NOT contain the old text `"deleted immediately upon successful delivery"`.
+  - [x] Test: Assert modal body contains `"Display name (if you have set one)"`.
+  - [x] Test: Render `<ConsentNoticeModal purpose="MARKETING_COMMS" />`, click `data-testid="view-notice-btn-MARKETING_COMMS"` → assert modal body contains `"phone number and app notifications"` and does NOT contain `"email"`.
+  - [x] **Run — confirm RED (all assertions fail against current text).**
+
+- [x] **GREEN — Frontend (`ConsentNoticeModal.tsx` only):**
+  Update `CONSENT_NOTICES` in `apps/web/src/components/consent/ConsentNoticeModal.tsx` as follows. No other file is touched in the GREEN step for the modal.
+
+  - [x] **`ORDER_PROCESSING.dataCollected`** — Replace the existing array with:
+    ```typescript
+    dataCollected: [
+      "Delivery Address & Landmark Notes",
+      "GPS Coordinates (saved address pin & order delivery coordinates)",
+      "Display Name (if you have set one) — shared with your assigned store partner and delivery rider for order identification",
+      "Transaction & Billing Details (excluding raw credit card data/CVV) — only when online payment is selected"
+    ]
+    ```
+  - [x] **`ORDER_PROCESSING.retention`** — Replace with:
+    ```
+    "Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by Ola Maps and discarded."
+    ```
+  - [x] **`MARKETING_COMMS.dataCollected`** — Replace with:
+    ```typescript
+    dataCollected: [
+      "Phone Number — used to send SMS promotional messages",
+      "Display Name (if you have set one) — used for personalised greetings",
+      "Purchase History & Regional Location (Mussoorie cluster) — used to personalise offers"
+    ]
+    ```
+  - [x] **`MARKETING_COMMS.thirdParties`** — Replace with:
+    ```
+    "Promotional messages are sent via our authorised SMS gateway partners. No data is shared with external advertising networks or third-party marketers. Your phone number is never sold."
+    ```
+  - [x] Run `ConsentNoticeModal.test.tsx` — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`SavedAddressesPage.test.tsx`, `CheckoutPage.test.tsx`, `BookingTimeslotPage.test.tsx`, `LoginPage.test.tsx`):**
+  - [x] In `SavedAddressesPage.test.tsx`: add assertion that when address save succeeds, `POST /api/v1/consent` is called with `noticeText` containing the text `"GPS coordinates"`. **Run — confirm RED** (current `noticeText` does not contain "GPS coordinates").
+  - [x] In `CheckoutPage.test.tsx`: add assertion that `POST /api/v1/consent` for `ORDER_PROCESSING` is called with `noticeText` containing `"GPS coordinates"`. **Run — confirm RED.**
+  - [x] In `BookingTimeslotPage.test.tsx`: same assertion for both the address-save call and the booking-confirm call. **Run — confirm RED.**
+  - [x] In `LoginPage.test.tsx`: the existing test asserts `noticeText: expect.any(String)`. Tighten it: assert `noticeText` contains `"One-Time Password"` and contains `"phone number"`. **Run — confirm RED** if the current `CONSENT_NOTICE_TEXT` in `LoginPage.tsx` line 85 does not contain exactly those substrings (it currently says "one-time password (OTP)" so `"One-Time Password"` as case-insensitive match may pass — tighten as needed to produce a RED state that forces an accurate rewrite).
+
+- [x] **GREEN — Frontend (inline `noticeText` strings):**
+  - [x] **[`LoginPage.tsx` line 85]** Replace `CONSENT_NOTICE_TEXT` value with:
+    ```typescript
+    const CONSENT_NOTICE_TEXT =
+      "We collect your phone number to send you a One-Time Password (OTP) and authenticate your account. Your phone number is shared with our authorised SMS gateway partner solely for OTP delivery.";
+    ```
+  - [x] **[`SavedAddressesPage.tsx` lines 85 and 112]** Replace both `noticeText` strings with:
+    ```
+    "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
+    ```
+  - [x] **[`CheckoutPage.tsx` line 326]** Replace the `noticeText` string for `ORDER_PROCESSING` with the same text as above.
+  - [x] **[`BookingTimeslotPage.tsx` lines 125 and 355]** Replace both `noticeText` strings with the same text as above.
+  - [x] Run all updated test files — **confirm GREEN.**
+  - [x] Run `pnpm lint && pnpm typecheck` — **confirm 0 errors, 0 warnings.**
+
+- [x] **Verification chain:**
+  - [x] User opens `/login` → Consent notice step shows accurate OTP/phone text → User opens `View Complete Notice` for `ORDER_PROCESSING` on `/account/privacy` → Modal body shows the GPS storage truth ("stored until address deletion" / "nulled on erasure, financials kept 7 years") → Modal does NOT say "deleted immediately upon delivery" → User opens `MARKETING_COMMS` modal → body says "phone number and app notifications", not "email" → All frontend and integration tests green → ✅ Done.
+
+---
+
+### 8.3.4.3 — Add `GET /api/v1/admin/users/:id/consents` Endpoint (Paginated)
+
+**Root cause / Goal:**
+The existing `GET /api/v1/admin/users/:id` endpoint (handled by `adminService.getUserDetail()`) returns only orders and addresses. Admin operators have no way to see a user's DPDP consent history — which consents they have given, which they have withdrawn, when, and from what IP. This is an operational necessity: when a user challenges a data processing decision, the admin must be able to produce an audit trail. A separate endpoint is required (not bolted onto `getUserDetail`) so the consent log can be paginated independently without loading all historical records on every drawer open.
+
+**Fix / Approach:**
+Add a new method `getUserConsentLogs(userId, page, limit)` to `AdminService`. Add a new route `GET /api/v1/admin/users/:id/consents` in `admin.controller.ts` with query params `page` (default 1) and `limit` (default 20, max 50). The response includes a `summary` object (one entry per `ConsentPurposeConfig.key` showing current active status) and a `logs` array (paginated `ConsentLog` rows, newest first) plus `total` and `totalPages` pagination metadata.
+
+---
+
+- [x] **RED — Integration (`admin.users.test.ts`):**
+  - [x] Test setup: Create a test user. Create two `ConsentLog` rows for that user: one `OTP_AUTH` (active), one `MARKETING_COMMS` (withdrawn). Create one `ConsentPurposeConfig` row for each purpose used.
+  - [x] Test: `GET /api/v1/admin/users/:id/consents` with admin JWT and no query params → HTTP 200 with response shape:
+    ```json
+    {
+      "success": true,
+      "data": {
+        "summary": [
+          { "purpose": "OTP_AUTH", "isActive": true, "givenAt": "<ISO string>", "version": "1.0" },
+          { "purpose": "MARKETING_COMMS", "isActive": false, "withdrawnAt": "<ISO string>", "version": "1.0" }
+        ],
+        "logs": [
+          { "id": "...", "purpose": "...", "isWithdrawn": true|false, "consentVersion": "1.0", "noticeText": "...", "ipAddress": "...", "userAgent": "...", "createdAt": "...", "withdrawnAt": "..." }
+        ],
+        "total": 2,
+        "page": 1,
+        "totalPages": 1,
+        "limit": 20
+      }
+    }
+    ```
+  - [x] Test: `GET /api/v1/admin/users/:id/consents?page=1&limit=1` → `data.logs` has exactly 1 item; `data.total` is 2; `data.totalPages` is 2.
+  - [x] Test: `GET /api/v1/admin/users/:id/consents?page=2&limit=1` → `data.logs` has exactly 1 item (the second log entry).
+  - [x] Test: `GET /api/v1/admin/users/:id/consents` with **buyer JWT** (not admin) → HTTP 403.
+  - [x] Test: `GET /api/v1/admin/users/nonexistent-id/consents` with admin JWT → HTTP 404 with `error.code = "NOT_FOUND"`.
+  - [x] **Run — confirm RED (route does not exist, all tests return 404).**
+
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] **[Service — `admin.service.ts`]** Add method `getUserConsentLogs(userId: string, page: number, limit: number)`:
+    ```typescript
+    public async getUserConsentLogs(userId: string, page: number, limit: number) {
+      // 1. Verify user exists
+      const user = await this.db.user.findFirst({ where: { id: userId, isDeleted: false } });
+      if (!user) throw new NotFoundError("User not found");
+
+      const skip = (page - 1) * limit;
+      const total = await this.db.consentLog.count({ where: { userId } });
+
+      // 2. Paginated log, newest first
+      const logs = await this.db.consentLog.findMany({
+        where: { userId },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit
+      });
+
+      // 3. Summary: latest record per purpose (whether active or not)
+      const allPurposes = await this.db.consentPurposeConfig.findMany();
+      const summary = await Promise.all(
+        allPurposes.map(async (p) => {
+          const latest = await this.db.consentLog.findFirst({
+            where: { userId, purpose: p.key },
+            orderBy: { createdAt: "desc" }
+          });
+          return {
+            purpose: p.key,
+            displayName: p.displayName,
+            isEssential: p.isEssential,
+            isActive: latest ? !latest.isWithdrawn : false,
+            givenAt: latest?.createdAt.toISOString() ?? null,
+            withdrawnAt: latest?.withdrawnAt?.toISOString() ?? null,
+            version: latest?.consentVersion ?? null
+          };
+        })
+      );
+
+      return {
+        summary,
+        logs: logs.map((l) => ({
+          id: l.id,
+          purpose: l.purpose,
+          isWithdrawn: l.isWithdrawn,
+          consentVersion: l.consentVersion,
+          noticeText: l.noticeText,
+          ipAddress: l.ipAddress ?? null,
+          userAgent: l.userAgent ?? null,
+          createdAt: l.createdAt.toISOString(),
+          withdrawnAt: l.withdrawnAt?.toISOString() ?? null
+        })),
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    }
+    ```
+  - [x] **[Controller — `admin.controller.ts`]** Add the new route after the existing `GET /api/v1/admin/users/:id` handler (around line 237):
+    ```typescript
+    const consentLogsQuerySchema = z.object({
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(50).default(20)
+    });
+
+    app.get("/api/v1/admin/users/:id/consents", { preHandler }, async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const parsed = consentLogsQuerySchema.safeParse(request.query);
+      if (!parsed.success) {
+        throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+      }
+      const result = await adminService.getUserConsentLogs(id, parsed.data.page, parsed.data.limit);
+      return {
+        success: true,
+        data: result,
+        meta: { requestId: getRequestId(request, reply) }
+      };
+    });
+    ```
+    **Important:** This route must be registered AFTER `GET /api/v1/admin/users/:id` to avoid Fastify's route matching treating `/consents` as the `:id` param. Verify route ordering carefully.
+  - [x] Run `pnpm --filter @gorola/api test -- src/__tests__/integration/admin/admin.users.test.ts` — **confirm GREEN.**
+  - [x] Run full integration test suite `pnpm --filter @gorola/api test -- --run` — **confirm no regressions.**
+
+- [x] **Verification chain:**
+  - [x] Admin authenticates → sends `GET /api/v1/admin/users/cuid123/consents?page=1&limit=20` → receives `data.summary` with one entry per consent purpose showing current active/inactive state → receives `data.logs` array with all historical `ConsentLog` rows paginated → sends `GET /api/v1/admin/users/cuid123/consents?page=2&limit=5` → receives the second page of results → ✅ Done.
+
+---
+
+### 8.3.4.4 — Add "Consent & Privacy" Section to Admin User Detail Drawer
+
+**Root cause / Goal:**
+`AdminUsersPage.tsx` user-detail drawer currently shows: profile info, registered addresses, order history. There is no visibility into a user's DPDP consent status. This means an admin cannot respond to a regulatory query ("did this user consent to X?") or an internal audit ("when did this user withdraw marketing consent?") without directly querying the database. The drawer must surface: (1) a 4-row consent summary table showing current active/inactive status per purpose, and (2) a collapsible paginated full log of all consent events for that user.
+
+**Fix / Approach:**
+Add a new "Consent & Privacy" section at the bottom of the user detail drawer in `AdminUsersPage.tsx`. Use a separate React Query query (enabled only when `selectedUserId` is non-null) to lazily fetch `GET /api/v1/admin/users/:id/consents`. The summary renders immediately; the full log is behind a "Show full log" expand toggle, and uses the `page` query param with simple Previous/Next pagination controls.
+
+---
+
+- [x] **RED — Unit / Component (`AdminUsersPage.test.tsx`):**
+  - [x] Test setup: Mock `GET /api/v1/admin/users/user-1` to return a valid `UserDetail`. Mock `GET /api/v1/admin/users/user-1/consents` to return:
+    ```json
+    {
+      "summary": [
+        { "purpose": "OTP_AUTH", "displayName": "Authentication & Account Security", "isEssential": true, "isActive": true, "givenAt": "2026-01-01T00:00:00.000Z", "withdrawnAt": null, "version": "1.0" },
+        { "purpose": "MARKETING_COMMS", "displayName": "Promotions & Seasonal Offers", "isEssential": false, "isActive": false, "givenAt": "2026-01-02T00:00:00.000Z", "withdrawnAt": "2026-01-03T00:00:00.000Z", "version": "1.0" }
+      ],
+      "logs": [
+        { "id": "log-1", "purpose": "MARKETING_COMMS", "isWithdrawn": true, "consentVersion": "1.0", "noticeText": "test", "ipAddress": "1.2.3.4", "userAgent": "Mozilla/5.0", "createdAt": "2026-01-02T00:00:00.000Z", "withdrawnAt": "2026-01-03T00:00:00.000Z" }
+      ],
+      "total": 2,
+      "page": 1,
+      "limit": 20,
+      "totalPages": 1
+    }
+    ```
+  - [x] Test: Click `data-testid="view-details-user-1"` → drawer opens → assert `data-testid="consent-summary-section"` is present in the DOM.
+  - [x] Test: In the summary section, assert `data-testid="consent-row-OTP_AUTH"` renders with text "Active" and a green badge.
+  - [x] Test: Assert `data-testid="consent-row-MARKETING_COMMS"` renders with text "Withdrawn" and a grey/red badge.
+  - [x] Test: Assert `data-testid="consent-log-toggle"` button is present.
+  - [x] Test: Click `data-testid="consent-log-toggle"` → assert `data-testid="consent-log-table"` becomes visible.
+  - [x] Test: `consent-log-table` contains one row showing purpose `"MARKETING_COMMS"`, status "Withdrawn", IP "1.2.3.4".
+  - [x] **Run — confirm RED (the consent summary section does not exist in the current drawer).**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] **[Types — `AdminUsersPage.tsx`]** Add the following type definitions at the top of the file:
+    ```typescript
+    type ConsentSummaryItem = {
+      purpose: string;
+      displayName: string;
+      isEssential: boolean;
+      isActive: boolean;
+      givenAt: string | null;
+      withdrawnAt: string | null;
+      version: string | null;
+    };
+
+    type ConsentLogItem = {
+      id: string;
+      purpose: string;
+      isWithdrawn: boolean;
+      consentVersion: string;
+      noticeText: string;
+      ipAddress: string | null;
+      userAgent: string | null;
+      createdAt: string;
+      withdrawnAt: string | null;
+    };
+
+    type UserConsentResponse = {
+      success: boolean;
+      data: {
+        summary: ConsentSummaryItem[];
+        logs: ConsentLogItem[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      };
+    };
+    ```
+
+  - [x] **[State — `AdminUsersPage.tsx`]** Add two new state variables alongside the existing state:
+    ```typescript
+    const [consentLogOpen, setConsentLogOpen] = useState(false);
+    const [consentPage, setConsentPage] = useState(1);
+    ```
+    Reset both to initial values inside the `onClick` handler that sets `selectedUserId` (so the log is collapsed by default every time a new user is opened):
+    ```typescript
+    onClick={() => {
+      setSelectedUserId(user.id);
+      setConsentLogOpen(false);
+      setConsentPage(1);
+    }}
+    ```
+
+  - [x] **[Query — `AdminUsersPage.tsx`]** Add a new `useQuery` directly below the existing `userDetail` query:
+    ```typescript
+    const { data: userConsents, isLoading: isConsentLoading } = useQuery<UserConsentResponse["data"]>({
+      queryKey: ["admin", "user-consents", selectedUserId, consentPage],
+      queryFn: async () => {
+        if (!api) throw new Error("API helper not initialized");
+        const res = await api.get<UserConsentResponse>(
+          `/api/v1/admin/users/${selectedUserId}/consents?page=${consentPage}&limit=20`
+        );
+        return res.data.data;
+      },
+      enabled: !!selectedUserId
+    });
+    ```
+
+  - [x] **[Component — `AdminUsersPage.tsx`]** Inside the drawer, after the closing `</div>` of the "Order History" section and before the closing `</>` of the `userDetail &&` block, add the full "Consent & Privacy" section:
+    ```tsx
+    {/* Consent & Privacy */}
+    <div data-testid="consent-summary-section" className="space-y-3">
+      <h3 className="text-xs font-black uppercase tracking-wider text-gorola-slate">
+        Consent & Privacy (DPDP Act 2023)
+      </h3>
+
+      {isConsentLoading ? (
+        <div className="h-20 bg-gorola-charcoal/5 rounded-xl animate-pulse" />
+      ) : userConsents ? (
+        <>
+          {/* Summary Table */}
+          <div className="border border-gorola-charcoal/10 rounded-xl overflow-hidden bg-white">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gorola-charcoal/5 bg-gorola-charcoal/[0.01]">
+                  <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Purpose</th>
+                  <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Status</th>
+                  <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Since</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gorola-charcoal/5 text-xs">
+                {userConsents.summary.map((row) => (
+                  <tr key={row.purpose} data-testid={`consent-row-${row.purpose}`}>
+                    <td className="px-4 py-3 font-medium text-gorola-charcoal">
+                      {row.displayName}
+                      {row.isEssential && (
+                        <span className="ml-2 text-[9px] font-black uppercase text-gorola-pine bg-gorola-mint/10 px-1.5 py-0.5 rounded-full">
+                          Essential
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
+                        row.isActive
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
+                          : "bg-gray-100 text-gray-600 border-gray-200/50"
+                      }`}>
+                        {row.isActive ? "Active" : row.givenAt ? "Withdrawn" : "Never Given"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-gorola-slate">
+                      {row.isActive && row.givenAt
+                        ? new Date(row.givenAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })
+                        : row.withdrawnAt
+                        ? `Withdrawn ${new Date(row.withdrawnAt).toLocaleDateString("en-IN", { year: "numeric", month: "short", day: "numeric" })}`
+                        : "—"}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Full Log Toggle */}
+          <button
+            data-testid="consent-log-toggle"
+            onClick={() => setConsentLogOpen((o) => !o)}
+            className="text-xs font-bold text-gorola-pine hover:underline flex items-center gap-1"
+          >
+            {consentLogOpen ? "Hide full log" : `Show full log (${userConsents.total} events)`}
+          </button>
+
+          {/* Full Log Table — only rendered when open */}
+          {consentLogOpen && (
+            <div data-testid="consent-log-table" className="border border-gorola-charcoal/10 rounded-xl overflow-hidden bg-white">
+              <table className="w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-gorola-charcoal/5 bg-gorola-charcoal/[0.01]">
+                    <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Purpose</th>
+                    <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Event</th>
+                    <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">Date</th>
+                    <th className="px-4 py-2.5 text-[9px] font-black uppercase tracking-wider text-gorola-slate">IP</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gorola-charcoal/5 text-xs">
+                  {userConsents.logs.map((log) => (
+                    <tr key={log.id}>
+                      <td className="px-4 py-3 font-mono font-bold text-gorola-charcoal">{log.purpose}</td>
+                      <td className="px-4 py-3">
+                        <span className={`font-bold text-[10px] uppercase ${log.isWithdrawn ? "text-rose-600" : "text-emerald-600"}`}>
+                          {log.isWithdrawn ? "Withdrawn" : "Given"}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-gorola-slate">
+                        {new Date(log.isWithdrawn && log.withdrawnAt ? log.withdrawnAt : log.createdAt).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-4 py-3 font-mono text-gorola-slate">{log.ipAddress ?? "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Pagination Controls */}
+              {userConsents.totalPages > 1 && (
+                <div className="flex items-center justify-between px-4 py-3 border-t border-gorola-charcoal/5 text-xs">
+                  <span className="text-gorola-slate">
+                    Page {userConsents.page} of {userConsents.totalPages}
+                  </span>
+                  <div className="flex gap-2">
+                    <button
+                      data-testid="consent-log-prev"
+                      onClick={() => setConsentPage((p) => Math.max(1, p - 1))}
+                      disabled={consentPage <= 1}
+                      className="px-3 py-1.5 border border-gorola-charcoal/10 rounded-lg font-bold text-gorola-slate disabled:opacity-40"
+                    >
+                      Previous
+                    </button>
+                    <button
+                      data-testid="consent-log-next"
+                      onClick={() => setConsentPage((p) => Math.min(userConsents.totalPages, p + 1))}
+                      disabled={consentPage >= userConsents.totalPages}
+                      className="px-3 py-1.5 border border-gorola-charcoal/10 rounded-lg font-bold text-gorola-slate disabled:opacity-40"
+                    >
+                      Next
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+        </>
+      ) : null}
+    </div>
+    ```
+
+  - [x] Run `pnpm --filter @gorola/web test -- --run AdminUsersPage` — **confirm GREEN (all tests including the new consent-section tests pass).**
+  - [x] Run full web test suite `pnpm --filter @gorola/web test -- --run` — **confirm no regressions.**
+
+- [x] **Verification chain:**
+  - [x] Admin logs into admin panel → navigates to Platform Users → clicks "View Details" on any user → drawer slides open → "Consent & Privacy (DPDP Act 2023)" section appears at the bottom showing a 4-row table with `OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS` and their current Active/Withdrawn/Never Given status → Admin clicks "Show full log (N events)" → log table expands showing every `ConsentLog` row for that user with purpose, event type, date, and masked IP → If more than 20 rows exist, Previous/Next pagination buttons appear and work correctly → ✅ Done.
+
+---
+
+### 8.3.4 — Final Quality Gate (Run after all four sub-tasks are complete)
+
+- [x] Run full API test suite: `pnpm --filter @gorola/api test -- --run` → **0 failures.**
+- [x] Run full web test suite: `pnpm --filter @gorola/web test -- --run` → **0 failures.**
+- [x] Run `pnpm typecheck` → **0 errors.**
+- [x] Run `pnpm lint` → **0 errors, 0 warnings.**
+- [x] Confirm no string `"MARKETING_EMAIL"` exists anywhere in the codebase: search across all `.ts` and `.tsx` files → 0 results.
+- [x] Confirm no import `ConsentPurpose from "@prisma/client"` exists anywhere in the codebase → 0 results.
+- [x] Confirm `SELECT COUNT(*) FROM "ConsentLog" WHERE purpose = 'MARKETING_EMAIL'` against both `gorola_dev` and `gorola_test` databases returns 0.
+- [x] Confirm `SELECT COUNT(*) FROM "ConsentPurposeConfig"` returns exactly 4 on both databases.
+
+---
+
+### 8.3.5 — DPDP UI Alignment, Audit Log Search & Nominee PII Protection
+
+> **Type: Backend (repository filters + DTO serialization) + Frontend (consent cards, transparency lines, audit log search & user detail Nominee card). Full TDD.**
+> **Prerequisite: Phase 8.3.4 complete.**
+> **This section has three sequential sub-tasks. Complete them strictly in order.**
+
+---
+
+#### Sub-task Overview
+
+| Sub-task | Name | Type | Dependency |
+|----------|------|------|-----------|
+| **8.3.5.1** | Canonical Consent Cards Content Alignment & Purpose-Specific Transparency Lines | Frontend + Backend | Phase 8.3.4 complete |
+| **8.3.5.2** | Admin Audit Log Substring Search & Case-Insensitive Filtering | Backend + Frontend | None — can run in parallel |
+| **8.3.5.3** | Admin User Detail Nominee Field Integration & Strict PII Minimization | Backend + Frontend | None — can run in parallel |
+
+---
+
+### 8.3.5.1 — Canonical Consent Cards Content Alignment & Purpose-Specific Transparency Lines
+
+**Root cause / Goal:**
+In Phase 8.3.4.2, we corrected the full statutory notices inside `ConsentNoticeModal.tsx`. However, the concise consent cards across buyer interfaces (`PURPOSE_META` in `PrivacySettingsSection.tsx`, `SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `LoginPage.tsx`, `AnalyticsConsentBanner.tsx`) still suffer from gaps in disclosed stored data:
+1. `ORDER_PROCESSING`: Omitted **Display Name (if set)** shared with store partners and delivery riders, Ola Maps spatial routing, Razorpay online payments, and 7-year GST retention terms.
+2. `OTP_AUTH`: Omitted the DLT-registered SMS gateway partner (**Exotel**) and 30-day permanent erasure guarantee upon account deletion.
+3. `MARKETING_COMMS`: Omitted explicit communication channels (**SMS and app notifications**), personal data utilized (phone number, Display Name if set, purchase categories), and the 48-hour opt-out scrubbing policy.
+4. `ANALYTICS`: Omitted the 180-day telemetry auto-purge / anonymization schedule.
+5. Furthermore, consent cards lacked distinct, purpose-specific 1-line transparency prompts placed directly above action buttons/checkboxes that clearly distinguish the quick, purpose-specific Statutory Notice from the overarching, platform-wide Privacy Policy (`/privacy`).
+6. When a user grants consent in `PrivacySettingsSection.tsx`, `handleGrant` sends a brief `meta.description` instead of the canonical statutory text.
+
+**Fix / Approach:**
+1. Update `PURPOSE_META` in `PrivacySettingsSection.tsx` and all inline consent cards (`SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `LoginPage.tsx`, `AnalyticsConsentBanner.tsx`) to contain complete, accurate data disclosures while preserving concise readability.
+2. Add purpose-specific 1-line transparency prompts directly before checkboxes and action buttons:
+   - **ORDER_PROCESSING:** *"For details on location sharing and order data retention, read the [Order Fulfillment Notice] (or view our platform-wide [Privacy Policy])."*
+   - **OTP_AUTH:** *"For details on OTP verification and account security, read the [Authentication Notice] (or view our platform-wide [Privacy Policy])."*
+   - **MARKETING_COMMS:** *"For details on promotional messages and 1-click opt-out, read the [Promotions Notice] (or view our platform-wide [Privacy Policy])."*
+   - **ANALYTICS:** *"For details on performance logs and zero-PII data handling, read the [Analytics Notice] (or view our platform-wide [Privacy Policy])."*
+3. Update `handleGrant` in `PrivacySettingsSection.tsx` to log the canonical notice text from `CONSENT_NOTICES[purpose].purpose` or full statutory summary to `POST /api/v1/consent`.
+
+---
+
+- [x] **RED — Unit / Component Tests:**
+  - [x] `PrivacySettingsSection.test.tsx`:
+    - [x] Test: Renders `ORDER_PROCESSING` card containing `"Ola Maps"`, `"Display Name"`, `"Razorpay"`, and detailed transparency prompt before action button.
+    - [x] Test: Renders `OTP_AUTH` card containing `"Exotel"` and authentication transparency prompt.
+    - [x] Test: Renders `MARKETING_COMMS` card containing `"Exotel"` and promotions transparency prompt.
+    - [x] Test: Renders `ANALYTICS` card and analytics transparency prompt.
+    - [x] Test: Renders distinct purpose transparency lines linking to statutory notice trigger and `/privacy` for each card.
+  - [x] `SavedAddressesPage.test.tsx`:
+    - [x] Test: Renders DPDP fulfillment notice containing `"Ola Maps"`, `"Display Name"`, `"Razorpay"`, followed by the transparency line *"For full details on statutory 7-year GST retention, live GPS handling, and data rights..."* with links before the acknowledgement checkbox.
+  - [x] `CheckoutPage.test.tsx` & `BookingTimeslotPage.test.tsx`:
+    - [x] Test: Renders marketing opt-in card with Exotel disclosure and the purpose transparency line before checkbox.
+  - [x] `LoginPage.test.tsx`:
+    - [x] Test: Renders OTP consent notice with Exotel disclosure and authentication transparency line before checkbox.
+  - [x] `AnalyticsConsentBanner.test.tsx`:
+    - [x] Test: Renders analytics consent card with telemetry purge disclosure and transparency line before Accept/Decline buttons.
+  - [x] `PrivacyPolicyPage.test.tsx`:
+    - [x] Test: Renders public DPDP policy page with bolded third-party services and statutory rights.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Frontend Component Updates:**
+  - [x] In `apps/web/src/components/account/PrivacySettingsSection.tsx`:
+    - Update `PURPOSE_META` descriptions with concise stored data and recipient details.
+    - Add purpose-specific transparency lines and ensure `handleGrant` logs canonical notice text.
+    - Move action button into header row so notice text spans 100% width.
+  - [x] In `apps/web/src/pages/buyer/SavedAddressesPage.tsx`:
+    - Update inline `order-processing-consent-notice` with concise disclosures and transparency line before checkbox.
+  - [x] In `apps/web/src/pages/buyer/LoginPage.tsx`:
+    - Update OTP consent card with Exotel disclosure and transparency line.
+  - [x] In `apps/web/src/pages/buyer/CheckoutPage.tsx` & `BookingTimeslotPage.tsx`:
+    - Update Order Processing & Marketing opt-in cards with standardized text and transparency lines.
+  - [x] In `apps/web/src/components/consent/AnalyticsConsentBanner.tsx`:
+    - Update telemetry disclosures and transparency prompt.
+  - [x] In `apps/web/src/pages/buyer/PrivacyPolicyPage.tsx`:
+    - Create public `/privacy` policy page with full DPDP Act 2023 disclosures and DPO details.
+  - [x] Run `pnpm --filter @gorola/web test -- --run` — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer visits `/account/privacy` → sees all 4 cards with concise stored data & recipient disclosures (Display Name, Ola Maps, Exotel, Razorpay in bold) → each card has distinct transparency line linking to statutory modal and `/privacy` → Buyer adds address on `/account/addresses` → sees full fulfillment notice and transparency line before checking box → Buyer checks out on `/checkout` → sees marketing opt-in with channel & opt-out details → Visiting `/privacy` opens public policy page → ✅ Done.
+
+---
+
+### 8.3.5.2 — Admin Audit Log Substring Search & Case-Insensitive Filtering
+
+**Root cause / Goal:**
+In `apps/api/src/modules/audit/audit.repository.ts`, `findMany` builds the Prisma where filter using strict equality:
+`...(action ? { action } : {})` and `...(entityType ? { entityType } : {})`.
+This creates two critical defects:
+1. Searching for `"SUSPEND"` fails to match `"ADMIN_USER_SUSPEND"` because Prisma expects an exact string match.
+2. In `AdminAuditLogsPage.tsx`, typing even a single character triggers the 350ms debounce and requests `?action=s` or `?entityType=s`. Because the backend performs an exact match for `"s"`, the log table immediately empties out.
+
+**Fix / Approach:**
+1. In `apps/api/src/modules/audit/audit.repository.ts`, update `action` and `entityType` query filters to use Prisma's `{ contains: term, mode: "insensitive" }`.
+2. In `apps/web/src/pages/admin/AdminAuditLogsPage.tsx`, ensure input filters are trimmed and queries seamlessly match partial actions (e.g. `"SUSPEND"`, `"USER"`, `"STORE"`).
+
+---
+
+- [x] **RED — Integration (`admin.audit-logs.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/audit-logs?action=SUSPEND` returns audit logs with `action: "ADMIN_USER_SUSPEND"`.
+  - [x] Test: `GET /api/v1/admin/audit-logs?action=suspend` (lowercase) returns audit logs with `action: "ADMIN_USER_SUSPEND"` (case-insensitive).
+  - [x] Test: `GET /api/v1/admin/audit-logs?entityType=store` returns audit logs with `entityType: "STORE"` or `"Store"`.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository] In `apps/api/src/modules/audit/audit.repository.ts`, update `findMany`:
+    ```typescript
+    const where: Prisma.AuditLogWhereInput = {
+      ...(actorRole ? { actorRole } : {}),
+      ...(action ? { action: { contains: action, mode: "insensitive" } } : {}),
+      ...(entityType ? { entityType: { contains: entityType, mode: "insensitive" } } : {}),
+      ...(entityId ? { entityId } : {}),
+      ...(from || to ? {
+        createdAt: {
+          ...(from ? { gte: new Date(from) } : {}),
+          ...(to ? { lte: new Date(to) } : {})
+        }
+      } : {})
+    };
+    ```
+  - [x] Run integration test `pnpm --filter @gorola/api test -- src/__tests__/integration/admin/admin.audit-logs.test.ts` — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`AdminAuditLogsPage.test.tsx`):**
+  - [x] Test: Admin types `"SUSPEND"` into Action Type filter → API query param `action=SUSPEND` is triggered → matching records render in table.
+  - [x] Test: Admin types `"store"` into Entity Type filter → API query param `entityType=store` is triggered → matching records render in table.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Frontend Component:**
+  - [x] In `apps/web/src/pages/admin/AdminAuditLogsPage.tsx`, verify debounce and URL syncing.
+  - [x] Run `pnpm --filter @gorola/web test -- src/pages/admin/AdminAuditLogsPage.test.tsx` — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin navigates to `/admin/audit-logs` → types `"SUSPEND"` into Action Type input → table immediately filters and displays all `ADMIN_USER_SUSPEND` events → Admin types `"store"` into Entity Type input → table displays all Store entity actions → Log export CSV includes filtered results → ✅ Done.
+
+---
+
+### 8.3.5.3 — Admin User Detail Nominee Field Integration & Strict PII Minimization
+
+**Root cause / Goal:**
+1. In `AdminUserDetailPage.tsx`, the Nominee Info card checks `user.nomineeName` and `user.nomineeRelationship`. However, `adminService.getUserDetail(userId)` in `apps/api/src/modules/admin/admin.service.ts` does not select or return `nomineeName` in the DTO. As a result, `user.nomineeName` is always `undefined`, and the card perpetually displays `"Not Configured"`.
+2. **Strict PII Protection Constraint (DPDP Act Sec 14):** Nominee data belongs to a third party (the user's emergency representative). To enforce strict data minimization, the admin panel must **ONLY contain the nominee's name if set** (`nomineeName`), and **NOTHING ELSE** — strictly omitting `nomineeContact` and `nomineeRelationship` to prevent internal exposure of third-party personal contact details.
+
+**Fix / Approach:**
+1. In `apps/api/src/modules/admin/admin.service.ts` (`getUserDetail`), include `nomineeName: user.nomineeName ?? null` in the returned DTO. Strictly do NOT include `nomineeContact` or `nomineeRelationship`.
+2. In `apps/web/src/pages/admin/AdminUserDetailPage.tsx`:
+   - Update `UserDetail` TypeScript type to include `nomineeName?: string | null` only (remove `nomineeContact` and `nomineeRelationship`).
+   - Update the Nominee Info card to display `Nominee Name: {user.nomineeName}` if present, or `"Not Configured"` if null/unset.
+
+---
+
+- [x] **RED — Integration (`admin.users.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/users/:id` for user with configured nominee returns `{ nomineeName: "Aarav Sharma" }`.
+  - [x] Test: `GET /api/v1/admin/users/:id` explicitly does NOT include `nomineeContact` or `nomineeRelationship` in the JSON response payload.
+  - [x] Test: `GET /api/v1/admin/users/:id` for user without nominee returns `{ nomineeName: null }`.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Backend (Service → Controller):**
+  - [x] [Service] In `apps/api/src/modules/admin/admin.service.ts` (`getUserDetail`):
+    ```typescript
+    return {
+      id: user.id,
+      name: user.name,
+      maskedPhone: maskPhone(user.phone),
+      isActive: user.isActive,
+      nomineeName: user.nomineeName ?? null,
+      createdAt: user.createdAt.toISOString(),
+      orders: user.orders.map(...),
+      addresses: user.addresses.map(...)
+    };
+    ```
+  - [x] Run integration test `pnpm --filter @gorola/api test -- src/__tests__/integration/admin/admin.users.test.ts` — **confirm GREEN.**
+
+- [x] **RED — Unit / Component (`AdminUserDetailPage.test.tsx`):**
+  - [x] Test: When `nomineeName` is `"Aarav Sharma"`, Nominee Info card displays `"Aarav Sharma"` with zero contact or relationship information rendered.
+  - [x] Test: When `nomineeName` is `null`, Nominee Info card displays `"Not Configured"`.
+  - [x] **Run — confirm GREEN.**
+
+- [x] **GREEN — Frontend (Types → Component):**
+  - [x] [Types] In `apps/web/src/pages/admin/AdminUserDetailPage.tsx`, update `UserDetail` type:
+    ```typescript
+    type UserDetail = {
+      id: string;
+      name: string | null;
+      maskedPhone: string;
+      isActive: boolean;
+      nomineeName?: string | null;
+      createdAt: string;
+      addresses: Array<{ id: string; flatRoom: string | null; landmarkDescription: string }>;
+      orders: Array<{ id: string; storeName: string; total: number; status: string; createdAt: string }>;
+    };
+    ```
+  - [x] [Component] In `AdminUserDetailPage.tsx`:
+    ```tsx
+    <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+      <ShieldCheck className="h-5 w-5 text-gorola-slate" />
+      <div>
+        <p className="text-[10px] uppercase font-black text-gorola-slate/70">Nominee Info</p>
+        <p className="text-sm font-black text-gorola-charcoal">
+          {user.nomineeName ? user.nomineeName : "Not Configured"}
+        </p>
+      </div>
+    </div>
+    ```
+  - [x] Run component test `pnpm --filter @gorola/web test -- src/pages/admin/AdminUserDetailPage.test.tsx` — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin opens `/admin/users/:id` for a user who set a nominee → Nominee Info card displays `"Aarav Sharma"` (name only, zero PII contact leakage) → Admin opens user without nominee → card displays `"Not Configured"` → ✅ Done.
+
+---
+
+### 8.3.5 — Final Quality Gate (Run after all three sub-tasks are complete)
+
+- [x] Run full API test suite: `pnpm --filter @gorola/api test -- --run` → **0 failures (119 test files, 737 passed).**
+- [x] Run full web test suite: `pnpm --filter @gorola/web test -- --run` → **0 failures (95 test files, 541 passed).**
+- [x] Run `pnpm typecheck` → **0 errors.**
+- [x] Run `pnpm lint` → **0 errors, 0 warnings.**
+- [ ] Run E2E test suite: `pnpm test:e2e` → **0 failures.**
+
+---
+
+#### 📝 Session Note: Phase 8.3.5 Execution & Completion (2026-10-02)
+
+- **DPDP UI Alignment & Concise Consent Cards (8.3.5.1):**
+  - Streamlined consent card body across `PrivacySettingsSection.tsx`, `LoginPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `SavedAddressesPage.tsx`, and `AnalyticsConsentBanner.tsx` to state strictly what data is stored, whom it is shared with, and the reason.
+  - Bolds third-party service partners (**Exotel**, **Ola Maps**, **Razorpay**) across all notice cards and statutory notice modals.
+  - Added purpose-specific transparency lines below each card detailing statutory retention (e.g. 7-year GST records, 180-day telemetry auto-purges, 48-hour opt-out scrubbing, erasure mechanisms) and clearly differentiating the statutory notice modal from the platform-wide Privacy Policy.
+  - Resolved typographic vertical baseline misalignment for inline notice modal trigger buttons and icons (`FileText`).
+  - Restructured `PrivacySettingsSection.tsx` consent cards so Opt In / Withdraw buttons reside in the card header, allowing notice text to span full card width.
+  - Created a dedicated public `/privacy` policy page (`PrivacyPolicyPage.tsx`) registered in buyer routes with DPO contact and DPBI escalation details.
+- **Admin Audit Log Substring Search, Pagination & UI Stability (8.3.5.2):**
+  - Updated `audit.repository.ts` Prisma query filters to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType`, resolving exact-match limitations and 1-character search blanking.
+  - Configured `keepPreviousData` in TanStack Query and persistent filter input mounting in `AdminAuditLogsPage.tsx`, preventing full-page teardowns, filter unmounting, and caret/focus loss during live typing.
+  - Added a dedicated pagination toolbar to `AdminAuditLogsPage.tsx` with dynamic rows per page selector (`10`, `20`, `50`, `100`), entry count indicator, and `Previous`/`Next` page navigation buttons.
+  - Enhanced `audit.repository.ts` date filtering to normalize `to` date strings to `23:59:59.999Z`, making the selected "To Date" 100% inclusive of all events recorded throughout that entire day.
+- **Admin Nominee PII Protection & Data Minimization (8.3.5.3):**
+  - Updated `admin.service.ts` (`getUserDetail`) to serialize ONLY `nomineeName: user.nomineeName ?? null`, strictly omitting `nomineeContact` and `nomineeRelationship` to prevent third-party PII leakage under DPDP Act Sec 14.
+  - Updated `AdminUserDetailPage.tsx` Nominee Info card to display nominee name or `"Not Configured"`.
+- **Quality Gates Verification:**
+  - Full API test suite: 119 files / 737 tests passed (0 failures).
+  - Full Web test suite: 95 files / 541 tests passed (0 failures).
+  - Typecheck: 0 errors across 4 workspace packages.
+  - Lint: 0 errors, 0 warnings across all apps/packages.
+
+---
+
+---
 
 ### 8.4 — Session Transparency & Security Alerting (Current Setup)
 
@@ -1153,3 +1979,48 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Frontend: Added `<DangerZoneSection />` on `/account/privacy` with 30-day recovery dialog.
   - **Quality & TDD Parity:** 34/34 API unit/integration tests and 16/16 web unit tests GREEN. 0 ESLint errors, 0 TypeScript errors across all workspace projects.
 
+- **Session 9 — 2026-10-02 — Phase 8.3.4 (DPDP Act 2023 Consent Architecture Overhaul & Admin Consent Panel) Complete:**
+  - **Schema & DB Migration (`20261001200359_replace_consent_purpose_enum_with_config_table`):**
+    - Replaced rigid PostgreSQL `ConsentPurpose` enum with dynamic relational `ConsentPurposeConfig` table (`key` PK, `displayName`, `description`, `isEssential`, `retentionSummary`).
+    - Renamed canonical purpose from `MARKETING_EMAIL` to `MARKETING_COMMS` to accurately reflect multi-channel communications (Email, SMS, Push, WhatsApp).
+    - Converted `ConsentLog.purpose` to `TEXT` with foreign key constraint to `ConsentPurposeConfig.key`.
+    - Seeded initial canonical configuration rows (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`) in `gorola_dev` and `gorola_test`.
+    - Updated `apps/api/prisma/seed.ts` to seed `ConsentPurposeConfig` across fresh installations.
+  - **Notice Text Corrections & Statutory Accuracy (DPDP Act Sec 5 & 6):**
+    - Corrected GPS retention disclosures in `ConsentNoticeModal.tsx` and all inline cards (`SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`): clearly stated that address GPS coordinates are retained alongside saved delivery addresses, order GPS is permanently nulled upon account erasure, and financial records are retained for 7 years for GST compliance.
+    - Updated identity disclosures to "Display Name (if you have set one)" rather than implying mandatory full legal name collection.
+    - Clarified that transactional SMS OTPs are routed via TRAI/DLT-registered Indian telecommunication gateways.
+  - **Admin Consents Auditing API (DPDP Act Sec 8 & 10):**
+    - Implemented `GET /api/v1/admin/users/:id/consents` with pagination (`page`, `limit`), returning both an aggregate summary of active consent per configured purpose and a complete, append-only log history.
+    - Added comprehensive integration tests in `admin.users.test.ts` (9/9 tests green).
+  - **Admin User Detail Drawer UI (`AdminUsersPage.tsx`):**
+    - Added dedicated **"Consent & Privacy (DPDP Act 2023)"** section to the user detail side drawer.
+    - Rendered summary table displaying all 4 canonical purposes with `Active` (green) / `Withdrawn` (red) status badges, essential purpose indicators, and latest consent update timestamps.
+    - Built expandable, paginated full consent log audit table with direct pagination controls.
+    - Added unit and interaction test coverage in `AdminUsersPage.test.tsx` (2/2 tests green).
+  - **Comprehensive Quality Gates & Documentation:**
+    - Test Suite: 516/516 backend tests passed across 41 files; 529/529 frontend tests passed across 92 files.
+    - Code Quality: `pnpm typecheck` passed (0 errors); `pnpm lint` passed (0 warnings).
+    - Zero active `MARKETING_EMAIL` strings remaining in application source code.
+    - Documentation: Updated `architecture.md`, `database_schema.md`, `decision_log.md` (`[DECISION-059]`), `DPDP_CONSENT_ARCHITECTURE_GUIDE.md` (v1.7), `phase8_state.md`, `current_state.md`, and `project_data.json`.
+- **Session 10 — 2026-10-02 — Phase 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) Complete:**
+  - **DPDP UI Alignment & Concise Consent Cards (8.3.5.1):**
+    - Streamlined consent card body across `PrivacySettingsSection.tsx`, `LoginPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `SavedAddressesPage.tsx`, and `AnalyticsConsentBanner.tsx` to state strictly what data is stored, whom it is shared with, and the reason.
+    - Bolds third-party service partners (**Exotel**, **Ola Maps**, **Razorpay**) across all notice cards and statutory notice modals.
+    - Added purpose-specific transparency lines below each card detailing statutory retention (e.g. 7-year GST records, 180-day telemetry auto-purges, 48-hour opt-out scrubbing, erasure mechanisms) and clearly differentiating the statutory notice modal from the platform-wide Privacy Policy.
+    - Resolved typographic vertical baseline misalignment for inline notice modal trigger buttons and icons (`FileText`).
+    - Restructured `PrivacySettingsSection.tsx` consent cards so Opt In / Withdraw buttons reside in the card header, allowing notice text to span full card width.
+    - Created a dedicated public `/privacy` policy page (`PrivacyPolicyPage.tsx`) registered in buyer routes with DPO contact and DPBI escalation details.
+  - **Admin Audit Log Substring Search, Pagination & UI Stability (8.3.5.2):**
+    - Updated `audit.repository.ts` Prisma query filters to use `{ contains: term, mode: "insensitive" }` for `action` and `entityType`, resolving exact-match limitations and 1-character search blanking.
+    - Configured `keepPreviousData` in TanStack Query and persistent filter input mounting in `AdminAuditLogsPage.tsx`, preventing full-page teardowns, filter unmounting, and caret/focus loss during live typing.
+    - Added a dedicated pagination toolbar to `AdminAuditLogsPage.tsx` with dynamic rows per page selector (`10`, `20`, `50`, `100`), entry count indicator, and `Previous`/`Next` page navigation buttons.
+    - Enhanced `audit.repository.ts` date filtering to normalize `to` date strings to `23:59:59.999Z`, making the selected "To Date" 100% inclusive of all events recorded throughout that entire day.
+  - **Admin Nominee PII Protection & Data Minimization (8.3.5.3):**
+    - Updated `admin.service.ts` (`getUserDetail`) to serialize ONLY `nomineeName: user.nomineeName ?? null`, strictly omitting `nomineeContact` and `nomineeRelationship` to prevent third-party PII leakage under DPDP Act Sec 14.
+    - Updated `AdminUserDetailPage.tsx` Nominee Info card to display nominee name or `"Not Configured"`.
+  - **Comprehensive Quality Gates:**
+    - Full API test suite: 119 files / 737 tests passed (0 failures).
+    - Full Web test suite: 95 files / 541 tests passed (0 failures).
+    - Typecheck: 0 errors across 4 workspace packages.
+    - Lint: 0 errors, 0 warnings across all apps/packages.

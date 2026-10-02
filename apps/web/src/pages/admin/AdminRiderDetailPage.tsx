@@ -2,55 +2,53 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   ArrowLeft,
-  Calendar,
   ChevronLeft,
   ChevronRight,
-  Layers,
+  DollarSign,
+  Mail,
   MapPin,
+  Package,
   Phone,
   RefreshCw,
   ShoppingBag,
-  TrendingUp,
+  Store as StoreIcon,
   Truck,
   User,
-  X,
+  X
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
-type StoreOwnerItem = {
-  id: string;
-  email: string;
-  createdAt: string;
+type RiderStoreRelation = {
+  storeId: string;
+  isPrimary: boolean;
+  storeName: string;
+  storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
 };
 
-type StoreDetail = {
+type RiderDetail = {
   id: string;
   name: string;
-  description: string;
+  email: string;
   phone: string;
-  address: string;
-  storeType: "QUICK_COMMERCE" | "BOOKING_COMMERCE";
+  maskedPhone: string;
+  riderType: "DELIVERY" | "FIELD_TECHNICIAN";
   isActive: boolean;
+  primaryStoreId: string | null;
+  primaryStoreName: string | null;
+  stores: RiderStoreRelation[];
+  totalDeliveries: number;
+  totalEarnings: number;
   createdAt: string;
-  revenue: number;
-  productCount: number;
-  orderCount: number;
-  owners: StoreOwnerItem[];
-  riderEarningRatePct?: number | null;
+  updatedAt: string;
 };
 
-type StoreDetailResponse = {
-  success: boolean;
-  data: StoreDetail;
-};
-
-type StoreOrder = {
+type RiderOrder = {
   id: string;
   orderNumber: string;
   status: string;
@@ -64,12 +62,11 @@ type StoreOrder = {
   storeId: string;
   userName: string;
   userMaskedPhone: string;
-  riderName?: string | null;
   itemCount: number;
 };
 
-type PaginatedStoreOrdersResponse = {
-  items: StoreOrder[];
+type PaginatedOrdersResponse = {
+  items: RiderOrder[];
   total: number;
   page: number;
   limit: number;
@@ -107,39 +104,53 @@ type OrderDetailResponse = {
   riderName?: string | null;
 };
 
-export function AdminStoreDetailPage(): ReactElement {
+export function AdminRiderDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { isSubdomainMode } = resolveSubdomain(typeof window !== "undefined" ? window.location.hostname : "");
 
-  const [riderEarningRate, setRiderEarningRate] = useState<string>("");
-
   // Orders Pagination & Filter State
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersStatusFilter, setOrdersStatusFilter] = useState<string>("");
 
-  // Modal State
+  // Modal states
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [confirmStatusModalOpen, setConfirmStatusModalOpen] = useState(false);
 
-  const { data: store, isLoading, isError, isFetching, refetch } = useQuery<StoreDetail>({
-    queryKey: ["admin", "store-detail", id],
+  const formatCurrency = (val: number): string => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR"
+    }).format(val);
+  };
+
+  // 1. Fetch Rider Profile Detail
+  const {
+    data: rider,
+    isLoading: isRiderLoading,
+    isError: isRiderError
+  } = useQuery<RiderDetail>({
+    queryKey: ["admin", "rider-detail", id],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<StoreDetailResponse>(`/api/v1/admin/stores/${id}`);
+      const res = await api.get<{ success: boolean; data: RiderDetail }>(
+        `/api/v1/admin/riders/${id}`
+      );
       return res.data.data;
     },
-    enabled: !!id,
+    enabled: Boolean(id),
+    staleTime: 10000
   });
 
-  // Fetch Paginated Store Orders
+  // 2. Fetch Paginated Rider Orders
   const {
     data: ordersData,
     isLoading: isOrdersLoading,
     isFetching: isOrdersFetching,
     refetch: refetchOrders
-  } = useQuery<PaginatedStoreOrdersResponse>({
-    queryKey: ["admin", "store-orders", id, ordersPage, ordersStatusFilter],
+  } = useQuery<PaginatedOrdersResponse>({
+    queryKey: ["admin", "rider-orders", id, ordersPage, ordersStatusFilter],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
       const params = new URLSearchParams({
@@ -149,8 +160,8 @@ export function AdminStoreDetailPage(): ReactElement {
       if (ordersStatusFilter) {
         params.append("status", ordersStatusFilter);
       }
-      const res = await api.get<{ success: boolean; data: PaginatedStoreOrdersResponse }>(
-        `/api/v1/admin/stores/${id}/orders?${params.toString()}`
+      const res = await api.get<{ success: boolean; data: PaginatedOrdersResponse }>(
+        `/api/v1/admin/riders/${id}/orders?${params.toString()}`
       );
       return res.data.data;
     },
@@ -158,7 +169,7 @@ export function AdminStoreDetailPage(): ReactElement {
     staleTime: 5000
   });
 
-  // Fetch Specific Order Details for Modal Breakdown
+  // 3. Fetch Specific Order Details for Modal Breakdown
   const {
     data: orderDetail,
     isLoading: isOrderDetailLoading
@@ -175,283 +186,219 @@ export function AdminStoreDetailPage(): ReactElement {
     staleTime: 10000
   });
 
-  useEffect(() => {
-    if (store) {
-      setRiderEarningRate(store.riderEarningRatePct !== null && store.riderEarningRatePct !== undefined ? String(store.riderEarningRatePct) : "");
-    }
-  }, [store]);
-
-  const updateRiderRateMutation = useMutation({
-    mutationFn: async (rate: number | null) => {
-      if (!api) throw new Error("API helper not initialized");
-      const res = await api.put<{ success: boolean; data: unknown }>(`/api/v1/admin/stores/${id}/rider-earning-rate`, {
-        riderEarningRatePct: rate
-      });
+  // 4. Mutation to Toggle Rider Active Status
+  const toggleStatusMutation = useMutation({
+    mutationFn: async () => {
+      if (!api || !id || !rider) throw new Error("Missing dependencies");
+      const res = await api.put<{ success: boolean; data: unknown }>(
+        `/api/v1/admin/riders/${id}`,
+        {
+          isActive: !rider.isActive
+        }
+      );
       return res.data;
     },
     onSuccess: () => {
-      toast.success("Rider earning rate override updated successfully");
-      void queryClient.invalidateQueries({ queryKey: ["admin", "store-detail", id] });
+      toast.success(
+        rider?.isActive
+          ? "Rider partner account suspended successfully"
+          : "Rider partner account activated successfully"
+      );
+      setConfirmStatusModalOpen(false);
+      void queryClient.invalidateQueries({ queryKey: ["admin", "rider-detail", id] });
+      void queryClient.invalidateQueries({ queryKey: ["admin", "riders"] });
     },
-    onError: () => {
-      toast.error("Failed to update store rider earning rate");
+    onError: (err: unknown) => {
+      const errorObj = err as { response?: { data?: { message?: string } } };
+      toast.error(errorObj?.response?.data?.message || "Failed to update rider status");
     }
   });
 
-  const formatCurrency = (val: number): string => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR"
-    }).format(val);
-  };
-
-  if (isLoading) {
+  if (isRiderLoading) {
     return (
-      <div className="space-y-6 animate-pulse">
-        <div className="h-10 bg-gorola-charcoal/10 rounded-xl w-48" />
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="h-28 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
-          <div className="h-28 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
-          <div className="h-28 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
+      <div className="space-y-6 animate-pulse" data-testid="rider-detail-loading">
+        <div className="h-6 w-36 bg-gorola-charcoal/10 rounded-lg" />
+        <div className="h-44 bg-white rounded-3xl border border-gorola-charcoal/10" />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="h-64 bg-white rounded-3xl border border-gorola-charcoal/10" />
+          <div className="h-64 bg-white rounded-3xl border border-gorola-charcoal/10" />
         </div>
-        <div className="h-96 bg-white rounded-2xl border border-gorola-charcoal/5 shadow-sm" />
       </div>
     );
   }
 
-  if (isError || !store) {
+  if (isRiderError || !rider) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[400px] text-center space-y-4">
-        <AlertTriangle className="h-10 w-10 text-red-500" />
-        <h2 className="text-lg font-bold text-gorola-charcoal">Failed to load store details</h2>
-        <div className="flex gap-3">
-          <button onClick={() => navigate(getScopedPath("/admin/stores", "admin", isSubdomainMode))} className="px-4 py-2 border border-gorola-charcoal/10 rounded-xl text-sm font-bold text-gorola-slate">
-            Back to List
-          </button>
-          <button onClick={() => void refetch()} className="px-4 py-2 bg-gorola-pine text-white rounded-xl text-sm font-bold">
-            Try Again
-          </button>
-        </div>
+      <div className="min-h-[400px] flex flex-col items-center justify-center text-center space-y-4">
+        <AlertTriangle className="h-12 w-12 text-rose-500" />
+        <h2 className="text-xl font-black text-gorola-charcoal">Rider partner not found</h2>
+        <p className="text-sm text-gorola-slate max-w-sm">
+          The requested rider record does not exist or has been removed from the platform.
+        </p>
+        <button
+          onClick={() => navigate(getScopedPath("/admin/riders", "admin", isSubdomainMode))}
+          className="px-4 py-2 bg-gorola-pine text-white rounded-xl text-xs font-bold"
+        >
+          Back to Platform Riders
+        </button>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header / Breadcrumb */}
-      <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="space-y-1">
-          <button
-            onClick={() => navigate(getScopedPath("/admin/stores", "admin", isSubdomainMode))}
-            className="inline-flex items-center gap-1.5 text-xs font-bold text-gorola-pine hover:text-gorola-pine-dark uppercase tracking-wider transition-all mb-2"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" /> Back to Stores
-          </button>
-          <div className="flex items-center gap-3">
-            <h1 className="font-heading text-3xl font-bold text-gorola-charcoal">{store.name}</h1>
-            <span
-              className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                store.isActive
-                  ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
-                  : "bg-rose-100 text-rose-800 border-rose-200/50"
-              }`}
-            >
-              {store.isActive ? "Active" : "Suspended"}
-            </span>
-          </div>
-          <p className="text-sm text-gorola-slate font-dm-sans">{store.description || "No description provided."}</p>
-        </div>
-
+    <div className="space-y-8 max-w-7xl mx-auto pb-12 font-sans">
+      {/* Navigation Breadcrumb Header */}
+      <div className="flex items-center justify-between">
         <button
-          onClick={() => void refetch()}
-          disabled={isFetching}
-          className="px-4 py-2.5 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm transition-all disabled:opacity-50"
+          onClick={() => navigate(getScopedPath("/admin/riders", "admin", isSubdomainMode))}
+          className="inline-flex items-center gap-2 text-xs font-bold text-gorola-slate hover:text-gorola-charcoal transition-colors"
+          data-testid="back-to-riders-button"
         >
-          <RefreshCw className={`h-4 w-4 text-gorola-pine ${isFetching ? "animate-spin" : ""}`} />
-          Refresh Details
+          <ArrowLeft className="h-4 w-4" />
+          <span>Back to Platform Riders</span>
         </button>
-      </header>
-
-      {/* Metrics Cards */}
-      <section className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white border border-gorola-charcoal/10 rounded-2xl p-6 shadow-sm flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-gorola-pine/10 border border-gorola-pine/20 flex items-center justify-center text-gorola-pine">
-            <TrendingUp className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wider">Total Revenue</p>
-            <h3 className="text-2xl font-bold text-gorola-charcoal mt-1">{formatCurrency(store.revenue)}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gorola-charcoal/10 rounded-2xl p-6 shadow-sm flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-amber-100/60 border border-amber-200/50 flex items-center justify-center text-amber-700">
-            <ShoppingBag className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wider">Completed Orders</p>
-            <h3 className="text-2xl font-bold text-gorola-charcoal mt-1">{store.orderCount}</h3>
-          </div>
-        </div>
-
-        <div className="bg-white border border-gorola-charcoal/10 rounded-2xl p-6 shadow-sm flex items-center gap-4">
-          <div className="h-12 w-12 rounded-xl bg-blue-50 border border-blue-100 flex items-center justify-center text-blue-600">
-            <Layers className="h-6 w-6" />
-          </div>
-          <div>
-            <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wider">Total Products</p>
-            <h3 className="text-2xl font-bold text-gorola-charcoal mt-1">{store.productCount}</h3>
-          </div>
-        </div>
-      </section>
-
-      {/* Detail Sections Grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Unified Store Information (Profile + Owners) */}
-        <section className="lg:col-span-2 bg-white border border-gorola-charcoal/10 rounded-2xl p-6 shadow-sm space-y-6">
-          <div>
-            <h2 className="font-heading text-lg font-bold text-gorola-charcoal border-b border-gorola-charcoal/5 pb-3">
-              Store Information
-            </h2>
-
-            {/* Profile Attributes */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
-              <div className="flex items-start gap-3">
-                <Calendar className="h-5 w-5 text-gorola-slate shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wide">Registered On</p>
-                  <p className="text-sm font-semibold text-gorola-charcoal mt-0.5">
-                    {new Date(store.createdAt).toLocaleDateString("en-IN", {
-                      year: "numeric",
-                      month: "long",
-                      day: "numeric",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Layers className="h-5 w-5 text-gorola-slate shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wide">Commerce Type</p>
-                  <span
-                    className={`inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border mt-1 ${
-                      store.storeType === "QUICK_COMMERCE"
-                        ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
-                        : "bg-amber-100 text-amber-800 border-amber-200/50"
-                    }`}
-                  >
-                    {store.storeType === "QUICK_COMMERCE" ? "Quick Commerce" : "Booking Commerce"}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <Phone className="h-5 w-5 text-gorola-slate shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wide">Phone Number</p>
-                  <p className="text-sm font-semibold text-gorola-charcoal mt-0.5">{store.phone}</p>
-                </div>
-              </div>
-
-              <div className="flex items-start gap-3">
-                <MapPin className="h-5 w-5 text-gorola-slate shrink-0 mt-0.5" />
-                <div>
-                  <p className="text-[10px] text-gorola-slate font-bold uppercase tracking-wide">Landmark Address</p>
-                  <p className="text-sm font-semibold text-gorola-charcoal mt-0.5">{store.address}</p>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Store Owners Sub-section */}
-          <div className="border-t border-gorola-charcoal/5 pt-5 space-y-3">
-            <h3 className="text-xs font-bold text-gorola-slate uppercase tracking-wider">
-              Store Owners
-            </h3>
-
-            {store.owners.length === 0 ? (
-              <p className="text-xs text-gorola-slate italic">No store owners registered.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                {store.owners.map((owner) => (
-                  <div
-                    key={owner.id}
-                    className="flex items-center gap-3 bg-gorola-charcoal/[0.02] border border-gorola-charcoal/5 rounded-xl p-3"
-                  >
-                    <div className="h-8 w-8 rounded-full bg-gorola-pine/10 flex items-center justify-center text-gorola-pine shrink-0">
-                      <User className="h-4 w-4" />
-                    </div>
-                    <div className="min-w-0">
-                      <p className="text-xs font-bold text-gorola-charcoal truncate">{owner.email}</p>
-                      <p className="text-[10px] text-gorola-slate mt-0.5">
-                        Created: {new Date(owner.createdAt).toLocaleDateString("en-IN")}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* Rider Earning Rate Override */}
-        <section className="bg-white border border-gorola-charcoal/10 rounded-2xl p-6 shadow-sm flex flex-col justify-between">
-          <div>
-            <h2 className="font-heading text-lg font-bold text-gorola-charcoal border-b border-gorola-charcoal/5 pb-3">
-              Rider Earning Rate Override
-            </h2>
-            <p className="text-xs text-gorola-slate font-dm-sans leading-relaxed pt-3">
-              Specify a custom percentage rate of the delivery charge that riders for this store will receive. Leave blank to inherit the global rate.
-            </p>
-          </div>
-
-          <form
-            onSubmit={(e) => {
-              e.preventDefault();
-              const value = riderEarningRate.trim() === "" ? null : Number(riderEarningRate);
-              if (value !== null && (isNaN(value) || value < 0)) {
-                toast.error("Please enter a valid percentage rate");
-                return;
-              }
-              updateRiderRateMutation.mutate(value);
-            }}
-            className="space-y-4 font-dm-sans pt-4"
-          >
-            <div className="space-y-1.5">
-              <label htmlFor="store-rider-earning-rate-input" className="text-xs font-bold text-gorola-charcoal block">
-                Store Earning Rate (%)
-              </label>
-              <input
-                id="store-rider-earning-rate-input"
-                data-testid="store-rider-earning-rate-input"
-                type="text"
-                value={riderEarningRate}
-                onChange={(e) => setRiderEarningRate(e.target.value)}
-                className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
-                placeholder="e.g. 90"
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={updateRiderRateMutation.isPending}
-              className="w-full bg-gorola-pine hover:bg-gorola-pine/90 text-white font-bold text-xs px-6 py-2.5 rounded-xl cursor-pointer transition-all duration-300 disabled:opacity-50"
-            >
-              {updateRiderRateMutation.isPending ? "Saving..." : "Save Earning Rate"}
-            </button>
-          </form>
-        </section>
       </div>
 
-      {/* Paginated Store Orders Section */}
+      {/* Rider Overview Profile Card */}
+      <div className="bg-white border border-gorola-charcoal/10 rounded-3xl p-6 md:p-8 shadow-sm space-y-6">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-gorola-charcoal/10 pb-6">
+          <div className="flex items-center gap-4">
+            <div className="h-14 w-14 rounded-2xl bg-gorola-pine/10 border border-gorola-pine/20 flex items-center justify-center text-gorola-pine font-black text-xl">
+              {rider.name.charAt(0).toUpperCase()}
+            </div>
+            <div>
+              <div className="flex items-center gap-3">
+                <h1 className="text-2xl font-black text-gorola-charcoal" data-testid="rider-display-name">
+                  {rider.name}
+                </h1>
+                <span
+                  data-testid="rider-type-badge"
+                  className={`px-2.5 py-0.5 text-[10px] font-black tracking-wider uppercase rounded-full border ${
+                    rider.riderType === "DELIVERY"
+                      ? "bg-emerald-100 text-emerald-800 border-emerald-200/60"
+                      : "bg-purple-100 text-purple-800 border-purple-200/60"
+                  }`}
+                >
+                  {rider.riderType === "DELIVERY" ? "Delivery" : "Technician"}
+                </span>
+                <span
+                  data-testid="rider-status-badge"
+                  className={`px-3 py-1 text-[11px] font-black tracking-wider uppercase rounded-full ${
+                    rider.isActive
+                      ? "bg-emerald-100 text-emerald-800"
+                      : "bg-red-100 text-red-800"
+                  }`}
+                >
+                  {rider.isActive ? "Active" : "Suspended"}
+                </span>
+              </div>
+              <p className="text-xs text-gorola-slate font-medium mt-1">Rider ID: {rider.id}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setConfirmStatusModalOpen(true)}
+              data-testid="toggle-rider-status-button"
+              className={`px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm ${
+                rider.isActive
+                  ? "bg-red-50 text-red-700 border border-red-200 hover:bg-red-100"
+                  : "bg-emerald-50 text-emerald-700 border border-emerald-200 hover:bg-emerald-100"
+              }`}
+            >
+              {rider.isActive ? "Suspend Rider" : "Activate Rider"}
+            </button>
+          </div>
+        </div>
+
+        {/* Profile Info Attributes Grid */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+            <Phone className="h-5 w-5 text-gorola-slate" />
+            <div>
+              <p className="text-[10px] uppercase font-black text-gorola-slate/70">Phone Number</p>
+              <p className="text-sm font-black text-gorola-charcoal" data-testid="rider-phone">
+                {rider.maskedPhone}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+            <Mail className="h-5 w-5 text-gorola-slate" />
+            <div>
+              <p className="text-[10px] uppercase font-black text-gorola-slate/70">Email Address</p>
+              <p className="text-sm font-mono font-bold text-gorola-charcoal" data-testid="rider-email">
+                {rider.email}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+            <Package className="h-5 w-5 text-gorola-slate" />
+            <div>
+              <p className="text-[10px] uppercase font-black text-gorola-slate/70">Total Deliveries</p>
+              <p className="text-sm font-black text-gorola-charcoal" data-testid="rider-total-deliveries">
+                {rider.totalDeliveries}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+            <DollarSign className="h-5 w-5 text-emerald-600" />
+            <div>
+              <p className="text-[10px] uppercase font-black text-gorola-slate/70">Total Earnings</p>
+              <p className="text-sm font-black text-emerald-700" data-testid="rider-total-earnings">
+                {formatCurrency(rider.totalEarnings)}
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Assigned Stores Section */}
+      <div className="bg-white border border-gorola-charcoal/10 rounded-3xl p-6 shadow-sm space-y-4">
+        <div className="flex items-center justify-between border-b border-gorola-charcoal/10 pb-4">
+          <div className="flex items-center gap-2">
+            <StoreIcon className="h-5 w-5 text-gorola-pine" />
+            <h2 className="text-lg font-black text-gorola-charcoal">Assigned Stores</h2>
+          </div>
+          <span className="text-xs font-bold text-gorola-slate">
+            {rider.stores.length} {rider.stores.length === 1 ? "Store" : "Stores"}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {rider.stores.length === 0 ? (
+            <p className="text-xs text-gorola-slate italic py-4 col-span-full">No stores currently assigned.</p>
+          ) : (
+            rider.stores.map((s) => (
+              <div
+                key={s.storeId}
+                className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center justify-between"
+              >
+                <div>
+                  <h4 className="text-xs font-black text-gorola-charcoal">{s.storeName}</h4>
+                  <p className="text-[10px] font-bold text-gorola-slate uppercase mt-0.5">
+                    {s.storeType === "QUICK_COMMERCE" ? "Quick Commerce" : "Booking Commerce"}
+                  </p>
+                </div>
+                {s.isPrimary && (
+                  <span className="px-2 py-0.5 bg-blue-50 text-blue-700 text-[10px] font-black uppercase rounded-full border border-blue-200">
+                    Primary Store
+                  </span>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {/* Paginated Rider Deliveries Section */}
       <div className="bg-white border border-gorola-charcoal/10 rounded-3xl p-6 shadow-sm space-y-6">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gorola-charcoal/10 pb-4">
           <div className="flex items-center gap-2">
-            <ShoppingBag className="h-5 w-5 text-gorola-pine" />
-            <h2 className="text-lg font-black text-gorola-charcoal">Store Orders & Transactions</h2>
+            <Truck className="h-5 w-5 text-gorola-pine" />
+            <h2 className="text-lg font-black text-gorola-charcoal">Fulfillment & Delivery History</h2>
             {ordersData && (
               <span className="px-2.5 py-0.5 bg-gorola-charcoal/5 rounded-full text-xs font-bold text-gorola-slate ml-2">
                 {ordersData.total}
@@ -467,15 +414,14 @@ export function AdminStoreDetailPage(): ReactElement {
                 setOrdersStatusFilter(e.target.value);
                 setOrdersPage(1);
               }}
-              data-testid="store-orders-status-filter"
-              aria-label="Filter store orders by status"
+              data-testid="rider-orders-status-filter"
+              aria-label="Filter deliveries by status"
               className="px-3 py-1.5 bg-white border border-gorola-charcoal/10 rounded-xl text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20"
             >
               <option value="">All Statuses</option>
               <option value="DELIVERED">Delivered</option>
               <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
               <option value="PREPARING">Preparing</option>
-              <option value="PLACED">Placed</option>
               <option value="CANCELLED">Cancelled</option>
             </select>
 
@@ -484,22 +430,22 @@ export function AdminStoreDetailPage(): ReactElement {
               onClick={() => void refetchOrders()}
               disabled={isOrdersFetching}
               className="p-2 border border-gorola-charcoal/10 hover:border-gorola-pine/20 rounded-xl text-gorola-slate transition-all disabled:opacity-50"
-              aria-label="Refresh store orders"
+              aria-label="Refresh deliveries"
             >
               <RefreshCw className={`h-4 w-4 text-gorola-pine ${isOrdersFetching ? "animate-spin" : ""}`} />
             </button>
           </div>
         </div>
 
-        {/* Store Orders Table */}
-        <div className="overflow-x-auto" data-testid="store-orders-table">
+        {/* Deliveries Table */}
+        <div className="overflow-x-auto" data-testid="rider-orders-table">
           <table className="w-full text-left border-collapse">
             <thead>
               <tr className="border-b border-gorola-charcoal/10 bg-gorola-charcoal/[0.02]">
                 <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Order ID</th>
+                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Store</th>
                 <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Customer</th>
                 <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Status</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Rider</th>
                 <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Items</th>
                 <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Total</th>
                 <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Date</th>
@@ -510,13 +456,13 @@ export function AdminStoreDetailPage(): ReactElement {
               {isOrdersLoading ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-xs text-gorola-slate">
-                    Loading store orders...
+                    Loading delivery history...
                   </td>
                 </tr>
               ) : !ordersData || ordersData.items.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="p-8 text-center text-xs text-gorola-slate">
-                    No order records found for this store.
+                    No delivery records found for this rider.
                   </td>
                 </tr>
               ) : (
@@ -524,6 +470,9 @@ export function AdminStoreDetailPage(): ReactElement {
                   <tr key={order.id} className="hover:bg-gorola-charcoal/[0.01] transition-colors">
                     <td className="p-3 font-mono font-bold text-xs text-gorola-charcoal whitespace-nowrap">
                       #{order.id.slice(-8).toUpperCase()}
+                    </td>
+                    <td className="p-3 text-xs font-bold text-gorola-charcoal whitespace-nowrap">
+                      {order.storeName}
                     </td>
                     <td className="p-3 whitespace-nowrap">
                       <p className="text-xs font-bold text-gorola-charcoal">{order.userName}</p>
@@ -542,9 +491,6 @@ export function AdminStoreDetailPage(): ReactElement {
                         {order.status}
                       </span>
                     </td>
-                    <td className="p-3 text-xs text-gorola-charcoal whitespace-nowrap font-medium">
-                      {order.riderName || "—"}
-                    </td>
                     <td className="p-3 text-xs text-gorola-slate whitespace-nowrap font-medium">
                       {order.itemCount} items
                     </td>
@@ -561,7 +507,7 @@ export function AdminStoreDetailPage(): ReactElement {
                     <td className="p-3 text-right whitespace-nowrap">
                       <button
                         type="button"
-                        data-testid={`view-store-order-${order.id}`}
+                        data-testid={`view-rider-order-${order.id}`}
                         onClick={() => setSelectedOrderId(order.id)}
                         className="px-2.5 py-1 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-xs font-bold text-gorola-pine shadow-sm transition-all"
                       >
@@ -607,7 +553,7 @@ export function AdminStoreDetailPage(): ReactElement {
       {/* Order Details Breakdown Modal */}
       {selectedOrderId && (
         <div
-          data-testid="store-order-details-modal"
+          data-testid="rider-order-details-modal"
           className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
         >
           <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl space-y-6 my-8 animate-in zoom-in-95 duration-200">
@@ -787,6 +733,44 @@ export function AdminStoreDetailPage(): ReactElement {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* Confirmation Modal for Suspending/Activating Rider */}
+      {confirmStatusModalOpen && (
+        <div className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+            <h3 className="text-lg font-bold text-gorola-charcoal">
+              {rider.isActive ? "Suspend Rider Partner?" : "Activate Rider Partner?"}
+            </h3>
+            <p className="text-xs text-gorola-slate leading-relaxed">
+              {rider.isActive
+                ? `Suspending ${rider.name} will prevent them from accepting new order dispatches across all assigned stores.`
+                : `Activating ${rider.name} will allow them to receive order dispatches.`}
+            </p>
+            <div className="flex items-center justify-end gap-3 pt-4 border-t border-gorola-charcoal/10">
+              <button
+                type="button"
+                onClick={() => setConfirmStatusModalOpen(false)}
+                className="px-4 py-2 text-xs font-bold text-gorola-slate hover:bg-gorola-mint/10 rounded-xl"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={toggleStatusMutation.isPending}
+                onClick={() => toggleStatusMutation.mutate()}
+                data-testid="confirm-rider-status-change"
+                className={`px-5 py-2 text-xs font-black rounded-xl text-white shadow-md ${
+                  rider.isActive
+                    ? "bg-rose-600 hover:bg-rose-700"
+                    : "bg-emerald-600 hover:bg-emerald-700"
+                }`}
+              >
+                {toggleStatusMutation.isPending ? "Updating..." : "Confirm"}
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -47,6 +47,129 @@ describe("Consent API (DPDP 8.2.1)", () => {
     await disconnectPrisma();
   });
 
+  it("POST /api/v1/consent with MARKETING_COMMS records consent and returns 201", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const phone = "+919876543290";
+    const { accessToken } = await getBuyerAccessToken(server, phone);
+
+    const res = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      payload: {
+        consentVersion: "1.0",
+        noticeText: "Promotions and hill-station discounts.",
+        purpose: "MARKETING_COMMS"
+      },
+      url: "/api/v1/consent"
+    });
+
+    expect(res.statusCode).toBe(201);
+    const body = res.json() as {
+      data: { consentVersion: string; id: string; purpose: string };
+      success: boolean;
+    };
+    expect(body.success).toBe(true);
+    expect(body.data.purpose).toBe("MARKETING_COMMS");
+  });
+
+  it("POST /api/v1/consent with MARKETING_EMAIL is rejected with 400 VALIDATION_ERROR", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const phone = "+919876543291";
+    const { accessToken } = await getBuyerAccessToken(server, phone);
+
+    const res = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      payload: {
+        consentVersion: "1.0",
+        noticeText: "Old marketing email notice",
+        purpose: "MARKETING_EMAIL"
+      },
+      url: "/api/v1/consent"
+    });
+
+    expect(res.statusCode).toBe(400);
+    const body = res.json() as {
+      error: { code: string };
+      success: boolean;
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+  });
+
+  it("DELETE /api/v1/consent/MARKETING_COMMS withdraws marketing consent successfully", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const phone = "+919876543292";
+    const { accessToken, userId } = await getBuyerAccessToken(server, phone);
+
+    await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      payload: {
+        consentVersion: "1.0",
+        noticeText: "Promotions and hill-station discounts.",
+        purpose: "MARKETING_COMMS"
+      },
+      url: "/api/v1/consent"
+    });
+
+    const deleteRes = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "DELETE",
+      url: "/api/v1/consent/MARKETING_COMMS"
+    });
+
+    expect(deleteRes.statusCode).toBe(200);
+    const body = deleteRes.json() as { success: boolean };
+    expect(body.success).toBe(true);
+
+    const consent = await db.consentLog.findFirst({
+      where: { purpose: "MARKETING_COMMS", userId }
+    });
+    expect(consent?.isWithdrawn).toBe(true);
+    expect(consent?.withdrawnAt).not.toBeNull();
+  });
+
+  it("DELETE /api/v1/consent/MARKETING_EMAIL is rejected with 400 VALIDATION_ERROR", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const phone = "+919876543293";
+    const { accessToken } = await getBuyerAccessToken(server, phone);
+
+    const deleteRes = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "DELETE",
+      url: "/api/v1/consent/MARKETING_EMAIL"
+    });
+
+    expect(deleteRes.statusCode).toBe(400);
+    const body = deleteRes.json() as {
+      error: { code: string };
+      success: boolean;
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+  });
+
   it("POST /api/v1/consent records consent and returns 201 with consent record", async () => {
     process.env.GOROLA_TEST_OTP = "111222";
     const server = createServer({
@@ -115,8 +238,8 @@ describe("Consent API (DPDP 8.2.1)", () => {
       method: "POST",
       payload: {
         consentVersion: "1.0",
-        noticeText: "We collect email for marketing updates",
-        purpose: "MARKETING_EMAIL"
+        noticeText: "We collect phone for promotions",
+        purpose: "MARKETING_COMMS"
       },
       url: "/api/v1/consent"
     });
@@ -136,7 +259,7 @@ describe("Consent API (DPDP 8.2.1)", () => {
     expect(body.data.consents).toHaveLength(2);
     const purposes = body.data.consents.map((c) => c.purpose);
     expect(purposes).toContain("OTP_AUTH");
-    expect(purposes).toContain("MARKETING_EMAIL");
+    expect(purposes).toContain("MARKETING_COMMS");
   });
 
   it("DELETE /api/v1/consent/:purpose withdraws non-essential consent", async () => {
@@ -154,8 +277,8 @@ describe("Consent API (DPDP 8.2.1)", () => {
       method: "POST",
       payload: {
         consentVersion: "1.0",
-        noticeText: "Marketing emails",
-        purpose: "MARKETING_EMAIL"
+        noticeText: "Promotions and discounts",
+        purpose: "MARKETING_COMMS"
       },
       url: "/api/v1/consent"
     });
@@ -163,7 +286,7 @@ describe("Consent API (DPDP 8.2.1)", () => {
     const deleteRes = await server.inject({
       headers: { authorization: `Bearer ${accessToken}` },
       method: "DELETE",
-      url: "/api/v1/consent/MARKETING_EMAIL"
+      url: "/api/v1/consent/MARKETING_COMMS"
     });
 
     expect(deleteRes.statusCode).toBe(200);
@@ -171,7 +294,7 @@ describe("Consent API (DPDP 8.2.1)", () => {
     expect(body.success).toBe(true);
 
     const consent = await db.consentLog.findFirst({
-      where: { purpose: "MARKETING_EMAIL", userId }
+      where: { purpose: "MARKETING_COMMS", userId }
     });
     expect(consent?.isWithdrawn).toBe(true);
     expect(consent?.withdrawnAt).not.toBeNull();
@@ -304,8 +427,8 @@ describe("Consent idempotency guard (DPDP Section 10)", () => {
 
       const payload = {
         consentVersion: "1.0",
-        noticeText: "Marketing emails opt-in.",
-        purpose: "MARKETING_EMAIL"
+        noticeText: "Marketing comms opt-in.",
+        purpose: "MARKETING_COMMS"
       };
 
       // Grant consent
@@ -322,7 +445,7 @@ describe("Consent idempotency guard (DPDP Section 10)", () => {
       await server.inject({
         headers: { authorization: `Bearer ${accessToken}` },
         method: "DELETE",
-        url: "/api/v1/consent/MARKETING_EMAIL"
+        url: "/api/v1/consent/MARKETING_COMMS"
       });
 
       // Re-grant after withdrawal — idempotency guard checks isWithdrawn,
@@ -341,7 +464,7 @@ describe("Consent idempotency guard (DPDP Section 10)", () => {
 
       const rows = await db.consentLog.findMany({
         orderBy: { createdAt: "asc" },
-        where: { purpose: "MARKETING_EMAIL", userId }
+        where: { purpose: "MARKETING_COMMS", userId }
       });
       expect(rows).toHaveLength(2);
       expect(rows[0]?.isWithdrawn).toBe(true);

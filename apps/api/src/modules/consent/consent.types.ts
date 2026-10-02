@@ -1,6 +1,12 @@
-import type { ConsentLog, ConsentPurpose } from "@prisma/client";
+import type { ConsentLog } from "@prisma/client";
 
-export type { ConsentLog, ConsentPurpose };
+export type { ConsentLog };
+
+export type ConsentPurpose =
+  | "OTP_AUTH"
+  | "ORDER_PROCESSING"
+  | "MARKETING_COMMS"
+  | "ANALYTICS";
 
 export type RecordConsentInput = {
   userId: string;

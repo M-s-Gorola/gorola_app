@@ -26,20 +26,20 @@
 | Phase 6.14 | UPI & Card Payment Integration (Razorpay) | COMPLETE | Wire UPI and Card payment methods end-to-end using a swappable Razorpay adapter. Admin toggles activate the payment gateway. Full TDD with mocked adapter — real Razorpay keys plug in without changing tests. |
 | Phase 6.15 | Analytics Volume Graphs, Settings Manager & Auto-Suggestions | COMPLETE | Adding number of orders/bookings graphs with store multi-select, platform settings manager for fees, and buyer global autocomplete search suggestions. |
 | Phase 6.16 | Watermark Restore & Live Location Popup | COMPLETE | Restore map watermark (Phase 6.16.1), live buyer location bouncing icon and transparent popup (Phase 6.16.2), and map Use My Location button (Phase 6.16.3). |
+| Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | 🟡 IN PROGRESS | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-06-24
-- **Session Summary:** 
-  - Completed Phase 6.16.3: Added the `"📍 Use My Location"` button to `OlaAddressMapPicker`, integrating browser Geolocation API and Ola Maps Places reverse-geocoding API to pan the map, center the marker, and update search queries.
-  - Refactored `BuyerNav.tsx` to conditionally render the location icon only when the coordinates are successfully resolved, and updated the GSAP animation hook to depend on `coords` to prevent timing errors.
-  - Resolved the stale geolocation state bug in `useBuyerLocation.ts` by resetting `coords` on error and clearing errors on success.
-  - Updated the hero section to cleanly display "Mussoorie" when unauthenticated instead of raw geocoded locality labels.
-  - Wrote robust Vitest unit tests covering all success, loading, and denial cases with 100% green coverage.
-- **Next Session Must Start With:** Phase 8.1 (DPDP Act Compliance).
-- **In Progress Right Now:** None.
+- **Date:** 2026-10-02
+- **Session Summary:** Prepared comprehensive TDD plan for Phase 6.17: Admin 360° Visibility, Dedicated Detail Pages & Order Pagination.
+  - Phase 6.17.1: Order Detail Name Fallback (`Registered User`) and Audit Timeline Actor Resolution.
+  - Phase 6.17.2: Dedicated Full Admin User Detail Page (`/admin/users/:id`) with Paginated User Orders and DPDP Consent sections.
+  - Phase 6.17.3: Dedicated Full Admin Rider Detail Page (`/admin/riders/:id`) with Paginated Rider Deliveries and Earnings.
+  - Phase 6.17.4: Store Detail Page (`/admin/stores/:id`) Paginated Orders Section.
+- **Next Session Must Start With:** Phase 6.17.1 (TDD RED: Order detail name resolution and timeline tests).
+- **In Progress Right Now:** Phase 6.17 (Admin 360° Visibility & Order Pagination).
 - **Current Blocker:** None.
 
 ---
@@ -902,8 +902,119 @@ Currently, the buyer application uses the top navbar for Cart and Profile access
 - [x] Update `CONTEXT/phase6_state.md`: Phase 6.16 status set to `COMPLETE`. Session notes added. ✅
 
 ---
+## Phase 6.17 Checklist — Admin 360° Visibility, Dedicated Detail Pages & Order Pagination
+
+**Root Cause / Goal:**
+1. **Name & Timeline Polish:** In Admin Orders, unregistered profile names currently render as blank strings (due to `?? "Guest"` on `""`) rather than defaulting to `"Registered User"` like the Store Owner portal. Furthermore, `OrderStatusHistory.changedBy` displays cryptic raw CUID strings (`store-owner:cms6...`, `rider:cms6...`) in the audit timeline rather than human-readable actor names.
+2. **User Detail Limitations:** The current user slide-over drawer in `AdminUsersPage.tsx` becomes unusable as user order volume grows, lacking order pagination and forcing all data into a cramped sheet.
+3. **Rider Detail Absence:** Admins have no view/detail page for delivery riders (`/admin/riders/:id`) to inspect profile details, assigned stores, lifetime metrics, or paginated delivery history.
+4. **Store Detail Orders Absence:** `AdminStoreDetailPage.tsx` displays aggregate counts and store owners but lacks an actual paginated listing of orders placed at the store.
+
+**Fix / Approach:**
+* **Phase 6.17.1:** Update `AdminOrdersPage.tsx` to use `{orderDetail.user?.name || "Registered User"}` and enrich `adminService.getOrderDetail()` to resolve `statusHistory.changedBy` actor IDs into human-readable entity labels (`Rider (Name)`, `Store Owner (Name/Email)`, `Registered User / Buyer Name`, `System`).
+* **Phase 6.17.2:** Implement `GET /api/v1/admin/users/:id/orders` with pagination. Build `AdminUserDetailPage.tsx` mounted at `/admin/users/:id` featuring user header info, registered addresses, DPDP consent summary & paginated logs, and a full paginated orders table.
+* **Phase 6.17.3:** Implement `GET /api/v1/admin/riders/:id` and `GET /api/v1/admin/riders/:id/orders` with pagination. Build `AdminRiderDetailPage.tsx` mounted at `/admin/riders/:id` featuring rider status, assigned stores, earnings summary, and paginated deliveries table.
+* **Phase 6.17.4:** Implement `GET /api/v1/admin/stores/:id/orders` with pagination & order type filters. Enhance `AdminStoreDetailPage.tsx` with a responsive paginated store orders table.
+
+---
+
+### Phase 6.17.1: Order Detail Name Resolution & Audit Timeline Enrichment
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.orders.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/orders/:id` resolves `statusHistory` actors (`rider:<id>` $\rightarrow$ `Rider (Rider Name)`, `store-owner:<id>` $\rightarrow$ `Store Owner (Email)`, `buyer:<id>` $\rightarrow$ `Registered User` or display name, `SYSTEM` $\rightarrow$ `System`).
+  - [x] Test: `GET /api/v1/admin/orders/:id` returns `userName: "Registered User"` when buyer's name is `""` or `null`.
+- [x] **GREEN — Backend Implementation:**
+  - [x] Update `admin.service.ts` in `getOrderDetail(orderId)` to join/lookup actors for all status history events and map `changedBy` to human-readable strings.
+- [x] **RED — Frontend Unit (`apps/web/src/pages/admin/AdminOrdersPage.test.tsx`):**
+  - [x] Test: `AdminOrdersPage` renders `"Registered User"` in the Information card when buyer name is empty string `""`.
+  - [x] Test: `AdminOrdersPage` renders enriched actor names in the Audit Timeline.
+- [x] **GREEN — Frontend Implementation:**
+  - [x] Update `AdminOrdersPage.tsx`: Replace `{orderDetail.user?.name ?? "Guest"}` with `{orderDetail.user?.name || "Registered User"}`.
+
+---
+
+### Phase 6.17.2: Dedicated Full Admin User Detail Page & Paginated User Orders
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.users.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/users/:id/orders` returns 200 with paginated orders `{ items, total, page, limit, totalPages }`.
+  - [x] Test: `GET /api/v1/admin/users/:id/orders?status=DELIVERED` filters orders by status.
+  - [x] Test: `GET /api/v1/admin/users/:id/orders` returns 404 for nonexistent user ID.
+- [x] **GREEN — Backend Implementation:**
+  - [x] [Service] Add `getUserOrders(userId, { page, limit, status })` to `admin.service.ts`.
+  - [x] [Controller] Register `GET /api/v1/admin/users/:id/orders` with Zod query validation in `admin.controller.ts`.
+- [x] **RED — Frontend Unit (`apps/web/src/pages/admin/AdminUserDetailPage.test.tsx`):**
+  - [x] Test: `AdminUserDetailPage` renders user profile details, addresses, and status badge.
+  - [x] Test: `AdminUserDetailPage` renders DPDP Act Consent summary cards and fetches paginated consent logs.
+  - [x] Test: `AdminUserDetailPage` renders paginated order history table with page navigation.
+  - [x] Test: Clicking an order in the user orders table opens the Order Details modal.
+- [x] **GREEN — Frontend Implementation:**
+  - [x] [Page] Create `apps/web/src/pages/admin/AdminUserDetailPage.tsx` with user overview, addresses, DPDP privacy section, and paginated orders table.
+  - [x] [Routes] Register `/admin/users/:id` in `apps/web/src/app/routes/admin.tsx`.
+  - [x] [Page] Update `AdminUsersPage.tsx`: Navigate to `/admin/users/:id` on row click instead of opening the slide-over drawer.
+
+---
+
+### Phase 6.17.3: Dedicated Full Admin Rider Detail Page & Paginated Deliveries
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.riders.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/riders/:id` returns rider profile, assigned stores, and delivery metrics.
+  - [x] Test: `GET /api/v1/admin/riders/:id/orders` returns paginated list of orders delivered by the rider.
+  - [x] Test: `GET /api/v1/admin/riders/:id` returns 404 for invalid rider ID.
+- [x] **GREEN — Backend Implementation:**
+  - [x] [Service] Add `getRiderDetail(riderId)` and `getRiderOrders(riderId, { page, limit, status })` to `admin.service.ts`.
+  - [x] [Controller] Register `GET /api/v1/admin/riders/:id` and `GET /api/v1/admin/riders/:id/orders` in `admin.controller.ts`.
+- [x] **RED — Frontend Unit (`apps/web/src/pages/admin/AdminRiderDetailPage.test.tsx`):**
+  - [x] Test: `AdminRiderDetailPage` renders rider profile, phone, rider type, and assigned stores list.
+  - [x] Test: `AdminRiderDetailPage` renders paginated delivered orders table with status badges and totals.
+  - [x] Test: `AdminRiderDetailPage` handles status toggle (Active / Inactive) mutation.
+- [x] **GREEN — Frontend Implementation:**
+  - [x] [Page] Create `apps/web/src/pages/admin/AdminRiderDetailPage.tsx`.
+  - [x] [Routes] Register `/admin/riders/:id` in `apps/web/src/app/routes/admin.tsx`.
+  - [x] [Page] Update `AdminRidersPage.tsx`: Add "View Details" action / row click navigating to `/admin/riders/:id`.
+
+---
+
+### Phase 6.17.4: Store Detail Page (`/admin/stores/:id`) Paginated Orders Section
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.stores.test.ts`):**
+  - [x] Test: `GET /api/v1/admin/stores/:id/orders` returns paginated orders for the store with items count, buyer display name, total, and status.
+  - [x] Test: `GET /api/v1/admin/stores/:id/orders` returns 404 for invalid store ID.
+- [x] **GREEN — Backend Implementation:**
+  - [x] [Service] Add `getStoreOrders(storeId, { page, limit, status })` to `admin.service.ts`.
+  - [x] [Controller] Register `GET /api/v1/admin/stores/:id/orders` in `admin.controller.ts`.
+- [x] **RED — Frontend Unit (`apps/web/src/pages/admin/AdminStoreDetailPage.test.tsx`):**
+  - [x] Test: `AdminStoreDetailPage` renders paginated store orders table with filters.
+  - [x] Test: `AdminStoreDetailPage` opens order breakdown modal on View Details click.
+- [x] **GREEN — Frontend Implementation:**
+  - [x] Update `AdminStoreDetailPage.tsx` to include the responsive paginated store orders table with status and order breakdown modal.
+
+---
+
+### Phase 6.17.5: Full Regression & Quality Gates
+
+- [x] **API Tests:** `pnpm --filter @gorola/api test -- --run` (all 119 files, 735 tests passing). ✅
+- [x] **Web Tests:** `pnpm --filter @gorola/web test -- --run` (all 94 files, 537 tests passing). ✅
+- [x] **Typecheck:** `pnpm typecheck` (0 errors across monorepo). ✅
+- [x] **Lint:** `pnpm lint` (0 errors, 0 warnings). ✅
+
+---
 
 ## Session Notes (Phase 6)
+
+### 2026-10-02: Phase 6.17 — Admin 360° Visibility, Dedicated Detail Pages & Order Pagination
+- **Problem:**
+  1. Unregistered buyer names rendered as empty string (`""`) in Admin Orders instead of defaulting to `"Registered User"`.
+  2. Order Status Audit History rendered cryptic raw IDs (e.g. `rider:cuid...`, `store-owner:cuid...`) instead of human-readable actor names, and redundant note strings appeared when riders accepted orders.
+  3. Admin Users interface used a cramped slide-over drawer lacking order pagination, creating usability bottlenecks for high-volume accounts.
+  4. Delivery riders lacked a dedicated detail/profile page (`/admin/riders/:id`) to inspect contact details, assigned stores, active status toggle, and paginated delivery history.
+  5. Store Details page (`/admin/stores/:id`) lacked a paginated list of orders placed at the store.
+- **Solution & TDD Execution:**
+  - **Phase 6.17.1:** Enriched `adminService.getOrderDetail()` to resolve actor identities across all roles (`Rider (name)`, `Store Owner (email)`, `Registered User / Buyer`, `Admin`, `System`) and sanitize duplicate rider status notes. Updated `AdminOrdersPage.tsx` fallback to `"Registered User"`.
+  - **Phase 6.17.2:** Built `GET /api/v1/admin/users/:id/orders` with pagination and status filters. Created full-screen `AdminUserDetailPage.tsx` (`/admin/users/:id`) with profile overview, delivery addresses, DPDP privacy consent cards/logs, and paginated orders table with order breakdown modal.
+  - **Phase 6.17.3:** Implemented `GET /api/v1/admin/riders/:id` and `GET /api/v1/admin/riders/:id/orders`. Built full-screen `AdminRiderDetailPage.tsx` (`/admin/riders/:id`) with profile details, active status toggle, assigned store list, and paginated delivery history table.
+  - **Phase 6.17.4:** Implemented `GET /api/v1/admin/stores/:id/orders`. Enhanced `AdminStoreDetailPage.tsx` with a responsive paginated store orders table and order breakdown modal.
+  - **Phase 6.17.5:** Full regression passes cleanly — 119 API test files (735 tests), 94 Web test files (537 tests), 0 TypeScript errors, 0 ESLint errors.
+- **Result:** Complete 360° Admin visibility, robust pagination across high-volume entities, and frictionless admin workflows.
 
 ### 2026-05-16: E2E Stabilization & Smart Redirect
 - **Problem:** E2E tests were hanging for 5 minutes after passing (36/36) because of OpenTelemetry trying to flush traces to a non-existent collector.
@@ -980,6 +1091,7 @@ Currently, the buyer application uses the top navbar for Cart and Profile access
   - All 49 test files containing 214 tests pass successfully in the workspace (`pnpm test` is 100% green).
   - Clean TypeScript compilation (`tsc --noEmit` exits with code 0).
   - Workspace-wide lint check is completely green (`eslint` exits with code 0).
+
 
 ### 2026-05-21: Fixing Smooth Scroll Page Transitions in Buyer Window
 - **Problem (Stuck Scroll Position on Page Transition):** Because `react-router-dom` maintains standard viewport positions on client-side routing, navigating from the Home Page or Profile Page to `/account/orders` did not reset the scroll position to the top. Furthermore, because Lenis operates globally over the viewport, changing pages dynamically left Lenis unaware of drastic shifts in page scroll height, locking the scrollbar or rendering smooth scrolling unresponsive on newly navigated pages.

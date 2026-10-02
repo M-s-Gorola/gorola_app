@@ -19,9 +19,9 @@
 | Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | ✅ COMPLETE    | 2.1–2.23 complete. **File locked.** |
 | Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | ✅ COMPLETE    | Phase 3 and Phase 4 fully complete. All E2E runs passing cleanly. |
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | ✅ COMPLETE    | Phase 5.1 to 5.8 complete. Playwright E2E multi-actor tests passing 100% green. |
-| Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing, UX refinement, and TDD parity. |
+| Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing & UX Refinement (6.1–6.17 complete). |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
-| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1 & 8.2 complete; 8.3 in progress with 30d grace recovery) |
+| Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1, 8.2, 8.3, 8.3.4, 8.3.5 complete; 8.4 next) |
  
  ---
  
@@ -34,9 +34,9 @@
  | Phase 3 | Store Owner Panel    | ✅ COMPLETE    | Phase 3.1–3.10.1 complete. All E2E tests passing. |
  | Phase 4 | Admin Panel          | ✅ COMPLETE    | All Phase 4.1–4.10 items complete. |
  | Phase 5 | Rider Interface      | ✅ COMPLETE    | All Phase 5.1–5.8 items complete. |
-| Phase 6 | Subdomain Routing    | ✅ COMPLETE    | All 6.1–6.9 checklists and UX refinements complete. |
-| Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
-| Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1 & 8.2 complete. Section 8.3 (Right to Erasure with 30-Day Recovery, Access & Nominee) in progress. |
+ | Phase 6 | Subdomain Routing & UX | ✅ COMPLETE    | All Phase 6.1–6.17 items complete (Subdomains, UX, 360° Admin Detail Pages, & Paginated Orders). |
+ | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
+ | Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee), 8.3.4, and 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) complete; Phase 8.4 next. |
 
 
 ---
@@ -72,9 +72,10 @@ _(None currently)_
 | Module            | Unit Tests | Integration Tests | Coverage Notes |
 | ----------------- | ---------- | ----------------- | -------------- |
 | auth              | ✅         | ✅                | unit: auth.service, auth.middleware, store-owner-auth.service, admin-auth.service; integration: auth.controller |
-| user              | ❌         | ✅                | integration: user.repository |
+| user              | ❌         | ✅                | integration: user.repository, user.my-data, user.nominee, user.account-deletion |
+| consent           | ❌         | ✅                | integration: consent.controller, consent.audit |
 | store-owner       | ❌         | ✅                | integration: store-owner.repository |
-| admin             | ❌         | ✅                | integration: admin.repository |
+| admin             | ❌         | ✅                | integration: admin.repository, admin.users (consents) |
 | **web (buyer)**   | **✅**     | ✅ COMPLETE     | 36 E2E scenarios passing. |
 | catalog           | ❌         | ✅                | integration: 339+ tests across all API modules |
 | cart              | ❌         | ✅                | integration: cart.repository, cart.controller |
@@ -86,9 +87,9 @@ _(None currently)_
 | feature-flag      | ❌         | ✅                | integration: feature-flag.repository |
 | audit             | ❌         | ✅                | integration: audit.repository |
 | delivery          | ✅         | ✅                | unit: RiderLoginPage, RiderOrdersPage; integration: rider.endpoints, rider.orders |
-| booking           | ❌         | ✅                | integration: booking-schema |
+| booking           | ❌         | ✅                | integration: booking-schema, booking-order.service |
 
-**Last known test count:** 1247 Vitest (719 API + 528 web across 211 test files) + 36 Playwright E2E tests GREEN.
+**Last known test count:** 814 Vitest (516 API + 298 web across 82 test files) + 36 Playwright E2E tests GREEN.
 **E2E (Playwright):** All E2E tests passing green.
 
 ---
@@ -102,10 +103,11 @@ gorola/
 │   │   ├── src/
 │   │   │   ├── modules/
 │   │   │   │   ├── auth/             # Buyer OTP + Store/Admin/Rider auth
-│   │   │   │   ├── user/             # Buyer profile, addresses
+│   │   │   │   ├── consent/          # DPDP consent recording, listing, withdrawal
+│   │   │   │   ├── user/             # Buyer profile, addresses, portability, nominee, erasure
 │   │   │   │   ├── store/            # Store management (Phase 3 controllers here)
 │   │   │   │   ├── store-owner/      # Store owner auth + dashboard
-│   │   │   │   ├── admin/            # Admin panel (Phase 4 controllers here)
+│   │   │   │   ├── admin/            # Admin panel + User consent auditing
 │   │   │   │   ├── catalog/          # Categories, Products, Variants, SubCategories
 │   │   │   │   ├── cart/             # Cart management
 │   │   │   │   ├── order/            # Order lifecycle
@@ -132,8 +134,10 @@ gorola/
 └── CONTEXT/
     ├── current_state.md              ← THIS FILE (master index)
     ├── phase1_2_state.md             ← Phase 1 & 2 checklists (locks after 2.23)
-    ├── phase3_4_state.md             ← Phase 3 & 4 checklists (active work file)
-    ├── phase5_state.md               ← Phase 5 checklist (independent)
+    ├── phase3_4_state.md             ← Phase 3 & 4 checklists
+    ├── phase5_state.md               ← Phase 5 checklist
+    ├── phase8_state.md               ← Phase 8 checklist (DPDP Act)
+    ├── database_schema.md            ← PostgreSQL schema & migrations reference
     ├── AGENT_ENTRY.md                ← Read this first
     ├── architecture.md
     ├── rules_and_spec.md
@@ -152,9 +156,18 @@ gorola/
 
 _(Append new entries here — never delete old entries.)_
 
+**2026-10-02 — DECISION-059 (DPDP Consent Architecture Overhaul & Dynamic Purpose Table):**
+- Replaced PostgreSQL `ConsentPurpose` enum with `ConsentPurposeConfig` relational table.
+- Standardized `MARKETING_EMAIL` $\rightarrow$ `MARKETING_COMMS` across DB rows, API routes, types, Zod schemas, and frontend components.
+- Added administrative user consent audit API (`GET /api/v1/admin/users/:id/consents`) and Admin Users detail drawer "Consent & Privacy" section.
+
 **2026-05-11 — Context Split:**
 - Split `current_state.md` into 4 files: this master index + `phase1_2_state.md`, `phase3_4_state.md`, `phase5_state.md`.
 - Per-session tracking (Last Updated, In Progress, Next Task) moved into each phase file. `current_state.md` is now a stable reference — only update at phase boundary events.
+- Phase 3 and 4 backend controllers (Service → Controller → Routes) added explicitly to every section.
+- Phase 5 expanded from stub to full 6-section TDD plan. Rider frontend in `apps/web/src/pages/rider/` using `RiderRoute` guard — matching store/admin pattern.
+- Discount code E2E: seed `TESTDEAL10` in Playwright `beforeAll` (Phase 3.7 adds store UI for creation).
+- Weather mode E2E: use `DevWeatherToggle` (only visible in `import.meta.env.DEV`; Playwright targets Vite dev server so DEV=true). into each phase file. `current_state.md` is now a stable reference — only update at phase boundary events.
 - Phase 3 and 4 backend controllers (Service → Controller → Routes) added explicitly to every section.
 - Phase 5 expanded from stub to full 6-section TDD plan. Rider frontend in `apps/web/src/pages/rider/` using `RiderRoute` guard — matching store/admin pattern.
 - Discount code E2E: seed `TESTDEAL10` in Playwright `beforeAll` (Phase 3.7 adds store UI for creation).

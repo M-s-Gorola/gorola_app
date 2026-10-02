@@ -236,6 +236,45 @@ export function registerAdminRoutes(
     };
   });
 
+  const consentLogsQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(20)
+  });
+
+  app.get("/api/v1/admin/users/:id/consents", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = consentLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+    const result = await adminService.getUserConsentLogs(id, parsed.data.page, parsed.data.limit);
+    return {
+      success: true,
+      data: result,
+      meta: { requestId: getRequestId(request, reply) }
+    };
+  });
+
+  const userOrdersQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    status: z.enum(["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "PENDING_APPROVAL", "APPROVED"]).optional()
+  });
+
+  app.get("/api/v1/admin/users/:id/orders", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = userOrdersQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+    const result = await adminService.getUserOrders(id, parsed.data.page, parsed.data.limit, parsed.data.status);
+    return {
+      success: true,
+      data: result,
+      meta: { requestId: getRequestId(request, reply) }
+    };
+  });
+
   app.put("/api/v1/admin/users/:id/suspend", { preHandler }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const adminId = request.user?.sub;
@@ -334,6 +373,28 @@ export function registerAdminRoutes(
   app.get("/api/v1/admin/stores/:id", { preHandler }, async (request, reply) => {
     const { id } = request.params as { id: string };
     const result = await adminService.getStoreDetail(id);
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const storeOrdersQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    status: z.enum(["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "PENDING_APPROVAL", "APPROVED"]).optional()
+  });
+
+  app.get("/api/v1/admin/stores/:id/orders", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = storeOrdersQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+    const result = await adminService.getStoreOrders(id, cleanUndefined(parsed.data));
     return {
       success: true,
       data: result,
@@ -985,6 +1046,40 @@ export function registerAdminRoutes(
     return {
       success: true,
       data: rider,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.get("/api/v1/admin/riders/:id", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const rider = await adminService.getRiderDetail(id);
+    return {
+      success: true,
+      data: rider,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const riderOrdersQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(50).default(10),
+    status: z.enum(["PLACED", "PREPARING", "OUT_FOR_DELIVERY", "DELIVERED", "CANCELLED", "PENDING_APPROVAL", "APPROVED"]).optional()
+  });
+
+  app.get("/api/v1/admin/riders/:id/orders", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = riderOrdersQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+    const result = await adminService.getRiderOrders(id, cleanUndefined(parsed.data));
+    return {
+      success: true,
+      data: result,
       meta: {
         requestId: getRequestId(request, reply)
       }

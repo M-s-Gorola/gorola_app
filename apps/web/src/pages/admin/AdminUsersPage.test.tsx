@@ -40,6 +40,7 @@ function renderAdminUsers(initialEntries: InitialEntry[] = ["/admin/users"]): vo
       <QueryClientProvider client={queryClient}>
         <Routes>
           <Route path="/admin/users" element={<AdminUsersPage />} />
+          <Route path="/admin/users/:id" element={<div>User Detail Full Page</div>} />
         </Routes>
       </QueryClientProvider>
     </MemoryRouter>
@@ -89,36 +90,6 @@ describe("AdminUsersPage", () => {
     expect(screen.getByText("₹350.00")).toBeInTheDocument();
     expect(screen.getByText("Active")).toBeInTheDocument();
 
-    // Mock detail endpoint when opening drawer
-    const mockUserDetail = {
-      success: true,
-      data: {
-        id: "user-1",
-        name: "Abhishek Sharma",
-        maskedPhone: "*********3210",
-        isActive: true,
-        createdAt: "2026-06-04T12:00:00.000Z",
-        orders: [
-          { id: "order-1", storeName: "Milk Palace", total: 150.0, status: "DELIVERED", createdAt: "2026-06-04T12:00:00.000Z" }
-        ],
-        addresses: [
-          { id: "addr-1", flatRoom: "Room 10", landmarkDescription: "Near Park" }
-        ]
-      }
-    };
-
-    getMock.mockResolvedValueOnce({ data: mockUserDetail });
-
-    // Click "View Details" row / button
-    const detailsBtn = screen.getByTestId("view-details-user-1");
-    fireEvent.click(detailsBtn);
-
-    // Verify drawer details
-    expect(await screen.findByTestId("user-details-drawer")).toBeInTheDocument();
-    expect(await screen.findByText("Milk Palace")).toBeInTheDocument();
-    expect(screen.getByText(/Room 10/)).toBeInTheDocument();
-    expect(screen.getByText(/Near Park/)).toBeInTheDocument();
-
     // Suspend Toggle confirmation dialog
     putMock.mockResolvedValueOnce({ data: { success: true } });
     getMock.mockResolvedValueOnce({ data: mockUsersData }); // list refresh mock
@@ -126,7 +97,7 @@ describe("AdminUsersPage", () => {
     const toggleBtn = screen.getByTestId("toggle-status-user-1");
     fireEvent.click(toggleBtn);
 
-    expect(screen.getByText("Are you sure you want to suspend this user?")).toBeInTheDocument();
+    expect(screen.getByText("Suspend User Account?")).toBeInTheDocument();
 
     const confirmBtn = screen.getByTestId("confirm-status-change");
     fireEvent.click(confirmBtn);
@@ -134,5 +105,34 @@ describe("AdminUsersPage", () => {
     await waitFor(() => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/admin/users/user-1/suspend", {});
     });
+  });
+
+  it("navigates to dedicated user detail full page when clicking View Details", async () => {
+    const mockUsersData = {
+      success: true,
+      data: [
+        {
+          id: "user-1",
+          maskedPhone: "*********3210",
+          name: "Abhishek Sharma",
+          orderCount: 1,
+          totalSpent: 100.0,
+          createdAt: "2026-06-04T12:00:00.000Z",
+          isActive: true
+        }
+      ]
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockUsersData });
+
+    renderAdminUsers();
+
+    expect(await screen.findByText("Platform Users")).toBeInTheDocument();
+
+    const detailsBtn = screen.getByTestId("view-details-user-1");
+    fireEvent.click(detailsBtn);
+
+    // Verify router navigated to detail full page
+    expect(await screen.findByText("User Detail Full Page")).toBeInTheDocument();
   });
 });

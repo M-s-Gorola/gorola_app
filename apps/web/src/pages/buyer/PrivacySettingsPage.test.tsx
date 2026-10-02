@@ -63,7 +63,7 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
             },
             {
               id: "c3",
-              purpose: "MARKETING_EMAIL",
+              purpose: "MARKETING_COMMS",
               consentVersion: "1.0",
               noticeText: "Marketing updates",
               isWithdrawn: false,
@@ -86,14 +86,14 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
 
     expect(await screen.findByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-ORDER_PROCESSING")).toBeInTheDocument();
-    expect(screen.getByTestId("consent-card-MARKETING_EMAIL")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-MARKETING_COMMS")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-ANALYTICS")).toBeInTheDocument();
 
     // Verify Essential badges on mandatory cards
     expect(screen.getAllByText(/Essential/i)).toHaveLength(2);
   });
 
-  it("allows withdrawing MARKETING_EMAIL consent from the privacy page", async () => {
+  it("allows withdrawing MARKETING_COMMS consent from the privacy page", async () => {
     const user = userEvent.setup();
 
     getMock.mockResolvedValue({
@@ -103,7 +103,7 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
           consents: [
             {
               id: "c-mkt",
-              purpose: "MARKETING_EMAIL",
+              purpose: "MARKETING_COMMS",
               consentVersion: "1.0",
               noticeText: "Marketing",
               isWithdrawn: false,
@@ -121,7 +121,7 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
         data: {
           consent: {
             id: "c-mkt",
-            purpose: "MARKETING_EMAIL",
+            purpose: "MARKETING_COMMS",
             isWithdrawn: true,
             withdrawnAt: "2026-09-22T01:00:00Z"
           }
@@ -131,11 +131,11 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
 
     renderPrivacyPage();
 
-    const withdrawBtn = await screen.findByTestId("withdraw-btn-MARKETING_EMAIL");
+    const withdrawBtn = await screen.findByTestId("withdraw-btn-MARKETING_COMMS");
     await user.click(withdrawBtn);
 
     await waitFor(() => {
-      expect(deleteMock).toHaveBeenCalledWith("/api/v1/consent/MARKETING_EMAIL");
+      expect(deleteMock).toHaveBeenCalledWith("/api/v1/consent/MARKETING_COMMS");
     });
   });
 

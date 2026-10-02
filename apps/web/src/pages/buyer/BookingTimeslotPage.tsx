@@ -102,7 +102,7 @@ export function BookingTimeslotPage(): ReactElement {
     (c) => c.purpose === "ORDER_PROCESSING" && !c.isWithdrawn
   );
   const hasMarketingConsent = activeConsents.some(
-    (c) => c.purpose === "MARKETING_EMAIL" && !c.isWithdrawn
+    (c) => c.purpose === "MARKETING_COMMS" && !c.isWithdrawn
   );
 
   const createMutation = useMutation({
@@ -122,7 +122,7 @@ export function BookingTimeslotPage(): ReactElement {
         const p = api?.post("/api/v1/consent", {
           purpose: "ORDER_PROCESSING",
           consentVersion: "1.0",
-          noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
         });
         if (p && typeof p.catch === "function") {
           p.catch(() => {});
@@ -352,7 +352,7 @@ export function BookingTimeslotPage(): ReactElement {
           const p = api?.post("/api/v1/consent", {
             purpose: "ORDER_PROCESSING",
             consentVersion: "1.0",
-            noticeText: "Your address, landmark notes, and GPS coordinates are shared with Ola Maps for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via Razorpay. Governed by India's DPDP Act 2023."
+            noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
           });
           if (p && typeof p.catch === "function") {
             p.catch(() => {});
@@ -362,12 +362,12 @@ export function BookingTimeslotPage(): ReactElement {
         }
       }
 
-      // Record MARKETING_EMAIL only if the user explicitly opted in this session
+      // Record MARKETING_COMMS only if the user explicitly opted in this session
       // and they haven't already granted it previously.
       if (marketingOptIn && !hasMarketingConsent) {
         try {
           const p2 = api?.post("/api/v1/consent", {
-            purpose: "MARKETING_EMAIL",
+            purpose: "MARKETING_COMMS",
             consentVersion: "1.0",
             noticeText: "You agreed to receive promotional offers and seasonal discounts."
           });
@@ -695,11 +695,29 @@ export function BookingTimeslotPage(): ReactElement {
                 <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
                 <span>Promotions &amp; Seasonal Offers (Optional)</span>
               </div>
-              <ConsentNoticeModal purpose="MARKETING_EMAIL" />
+              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
+                Optional
+              </span>
             </div>
             <p className="text-xs text-muted-foreground leading-relaxed">
-              Receive text updates on hill-weather flash sales, regional Mussoorie store discounts, and seasonal agricultural harvest coupons.
+              We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
             </p>
+            <div className="pt-0.5 text-[11px] text-muted-foreground">
+              <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
+              <ConsentNoticeModal
+                purpose="MARKETING_COMMS"
+                triggerLabel="Promotions Notice"
+                triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+              />
+              <span> (or view our platform-wide </span>
+              <a
+                href="/privacy"
+                className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+              >
+                Privacy Policy
+              </a>
+              <span>).</span>
+            </div>
             {!hasMarketingConsent ? (
               <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
                 <Checkbox

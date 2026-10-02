@@ -215,7 +215,9 @@
     "RiderStore — id, riderId (FK DeliveryRider), storeId (FK Store), isPrimary (Boolean) — junction table for multi-store rider assignment; unique(riderId, storeId)",
     "RiderLocation — id, riderId (FK DeliveryRider), lat (Decimal 10,7), lng (Decimal 10,7), updatedAt — upserted on each GPS push",
     "BookingOrder — id, orderId (unique FK Order), scheduledDate, timeslot, requiresFasting, approvalStatus (BookingApprovalStatus), approvedAt?, approvedByOwnerId?, rejectionReason?, assignedTechnicianId?",
-    "RiderEarning — id, riderId (FK DeliveryRider), orderId (unique FK Order), amount (Decimal 10,2), earningType (EarningType default PER_ORDER), distanceKm (Decimal 8,3 — null for PER_ORDER; km for future PER_KM), createdAt — PLANNED Phase 5.7; see DECISION-056"
+    "RiderEarning — id, riderId (FK DeliveryRider), orderId (unique FK Order), amount (Decimal 10,2), earningType (EarningType default PER_ORDER), distanceKm (Decimal 8,3 — null for PER_ORDER; km for future PER_KM), createdAt — PLANNED Phase 5.7; see DECISION-056",
+    "ConsentPurposeConfig — key (PK String), displayName (String), description (String), isEssential (Boolean), retentionSummary (String), createdAt, updatedAt",
+    "ConsentLog — id (PK String), userId (FK User), purpose (FK ConsentPurposeConfig.key String), consentVersion (String), noticeText (String), ipAddress (String), isWithdrawn (Boolean), withdrawnAt (DateTime?), createdAt (DateTime)"
   ],
   "api_versioning": "URL prefix — /api/v1/...",
   "test_strategy": {

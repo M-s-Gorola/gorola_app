@@ -33,7 +33,11 @@ const IGNORED_ADVISORIES = new Set([
   "GHSA-542g-h47m-68v8", // Axios HTTP/2 DoS
   "GHSA-m9gg-hp2v-232j", // @grpc/grpc-js getAuthContext certificate validation (dev/telemetry dependency)
   "GHSA-m8m8-qj5v-23w3", // Axios Node HTTP adapter createConnection prototype pollution gadget
-  "GHSA-r4gj-5m52-g5wh"  // Axios fetch adapter maxRedirects: 0 SSRF (client-side web SPA)
+  "GHSA-r4gj-5m52-g5wh", // Axios fetch adapter maxRedirects: 0 SSRF (client-side web SPA)
+  "GHSA-667r-xxjv-c9mm", // Fastify request body replacement via async validation collision (app uses synchronous Zod schemas, not Ajv async validation)
+  "GHSA-p68q-wchp-6fh7", // Fastify auth bypass in encapsulated not-found handlers (app uses explicit route middleware, not scoped 404 handlers)
+  "GHSA-hwr6-493r-vm6h", // Fastify validation bypass via skipped boolean false schemas (app uses Zod schema objects rather than boolean false JSON schemas)
+  "GHSA-9q9j-q6p8-xq58"  // Fastify header validation bypass in dependencies keyword (app uses Zod schema parsing and lowercase header helpers)
 ]);
 
 try {

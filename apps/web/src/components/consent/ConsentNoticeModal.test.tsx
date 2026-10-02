@@ -20,39 +20,45 @@ describe("ConsentNoticeModal (DPDP Phase 8.2.9.5)", () => {
 
     const modal = await screen.findByTestId("consent-notice-modal");
     expect(modal).toBeInTheDocument();
-    expect(screen.getByText(/Authentication & Account Security/i)).toBeInTheDocument();
-    expect(screen.getByText(/Purpose of Processing/i)).toBeInTheDocument();
-    expect(screen.getByText(/Categories of Personal Data Collected/i)).toBeInTheDocument();
-    expect(screen.getByText(/Third-Party Recipients & Processors/i)).toBeInTheDocument();
-    expect(screen.getByText(/Retention Period/i)).toBeInTheDocument();
-    expect(screen.getByText(/Your Rights & Complaints/i)).toBeInTheDocument();
-    expect(screen.getByText(/Exotel|authorized SMS Gateway Partners/i)).toBeInTheDocument();
+    expect(modal).toHaveTextContent(/Authentication & Account Security/i);
+    expect(modal).toHaveTextContent(/Purpose of Processing/i);
+    expect(modal).toHaveTextContent(/Categories of Personal Data Collected/i);
+    expect(modal).toHaveTextContent(/Third-Party Recipients & Processors/i);
+    expect(modal).toHaveTextContent(/Retention Period/i);
+    expect(modal).toHaveTextContent(/Your Rights & Complaints/i);
+    expect(modal).toHaveTextContent(/Exotel/i);
     expect(screen.getAllByText(/dpo@gorola.com/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Data Protection Board of India/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders ORDER_PROCESSING notice with Ola Maps, Razorpay, and DPBI grievance text", async () => {
+  it("renders ORDER_PROCESSING notice with accurate GPS retention and display name disclosures", async () => {
     const user = userEvent.setup();
     render(<ConsentNoticeModal purpose="ORDER_PROCESSING" />);
 
     await user.click(screen.getByTestId("view-notice-btn-ORDER_PROCESSING"));
 
-    expect(await screen.findByTestId("consent-notice-modal")).toBeInTheDocument();
-    expect(screen.getByText(/Order Fulfillment & Location Services/i)).toBeInTheDocument();
-    expect(screen.getByText(/Ola Maps/i)).toBeInTheDocument();
-    expect(screen.getByText(/Razorpay/i)).toBeInTheDocument();
-    expect(screen.getByText(/7 years under Indian GST/i)).toBeInTheDocument();
+    const modal = await screen.findByTestId("consent-notice-modal");
+    expect(modal).toBeInTheDocument();
+    expect(modal).toHaveTextContent(/Order Fulfillment & Location Services/i);
+    expect(modal).toHaveTextContent(/Ola Maps/i);
+    expect(modal).toHaveTextContent(/Razorpay/i);
+    expect(modal).toHaveTextContent(/7 years under Indian GST/i);
+    expect(modal).toHaveTextContent(/Your saved delivery address \(including GPS pin\) is stored until you delete it or your account/i);
+    expect(screen.queryByText(/deleted immediately upon successful delivery verification/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/Display Name \(if you have set one\)/i)).toBeInTheDocument();
     expect(screen.getAllByText(/Data Protection Board of India/i).length).toBeGreaterThanOrEqual(1);
   });
 
-  it("renders MARKETING_EMAIL notice with voluntary withdrawal terms", async () => {
+  it("renders MARKETING_COMMS notice with SMS promotion channel and voluntary withdrawal terms", async () => {
     const user = userEvent.setup();
-    render(<ConsentNoticeModal purpose="MARKETING_EMAIL" />);
+    render(<ConsentNoticeModal purpose="MARKETING_COMMS" />);
 
-    await user.click(screen.getByTestId("view-notice-btn-MARKETING_EMAIL"));
+    await user.click(screen.getByTestId("view-notice-btn-MARKETING_COMMS"));
 
     expect(await screen.findByTestId("consent-notice-modal")).toBeInTheDocument();
     expect(screen.getByText(/Promotions & Seasonal Offers/i)).toBeInTheDocument();
+    expect(screen.getByText(/Phone Number — used to send SMS promotional messages/i)).toBeInTheDocument();
+    expect(screen.getByText(/authorised SMS gateway partners/i)).toBeInTheDocument();
     expect(screen.getAllByText(/withdraw your consent/i).length).toBeGreaterThanOrEqual(1);
   });
 
