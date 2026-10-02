@@ -14,7 +14,7 @@ To ensure that only our GitHub Actions CI/CD pipeline triggers deployments, we i
 | Platform    | How to disable                                                                                                                                                                                                    | "As Code" implementation                                                                                 |
 | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
 | **Vercel**  | Project → **Settings** → _Build and Deployment_ → **Ignored build step** → **Behavior: Don’t build anything** (command: `exit 0`).                                                                                | Root `vercel.json` includes `"git": { "deploymentEnabled": false }`.                                     |
-| **Railway** | API service → **Settings** → **Source** (or **Git**): **Disconnect** the GitHub repository. New commits will no longer trigger automatic builds.                                                                 | Disconnection is a platform-level setting (not configured in `.railway/railway.ts`).                     |
+| **Railway** | API service → **Settings** → **Source** (or **Git**): **Disconnect** the GitHub repository. New commits will no longer trigger automatic builds.                                                                 | Platform-level setting configured in the Railway dashboard.                                               |
 
 ---
 
@@ -34,22 +34,34 @@ Controls the deployment of the buyer web app.
 - `buildCommand`: Builds shared packages first, then the web app.
 - `outputDirectory`: Points to `apps/web/dist` (the result of the Vite build).
 
-### Railway (`.railway/railway.ts` — Infrastructure as Code)
+### Railway (Dashboard Service Settings — Source of Truth)
 
-> [!IMPORTANT]
-> **Railway Migration Notice: Config as Code (`railway.toml`) → Infrastructure as Code (`.railway/railway.ts`)**
-> Railway has deprecated legacy Config as Code (`railway.toml` / `railway.json`) with a hard cutoff on **December 1, 2026**. GoRola uses Railway **Infrastructure as Code (IaC)** via the official TypeScript SDK (`railway/iac`) in `.railway/railway.ts`.
+> [!NOTE]
+> **Evolution: Legacy Config as Code (`railway.toml`) → IaC Evaluation → Dashboard Configuration**
+> - **Legacy Config as Code Deprecation:** Railway is deprecating legacy "Config as Code" (`railway.toml` / `railway.json`) with a hard cutoff on **December 1, 2026**, pushing projects toward Railway **Infrastructure as Code (IaC)** (`@railway/iac` / `railway.ts`).
+> - **Why We Explored IaC:** To keep service configurations version-controlled in response to Railway's hard sunset of `railway.toml`, we initially authored `.railway/railway.ts`.
+> - **Why IaC is NOT Suitable for GoRola (Rejected):**
+>   1. **GoRola only requires code deployments:** Our infrastructure (single Fastify API service + Postgres + Redis) is stable. We only push application code changes, making heavy IaC orchestration unnecessary overhead.
+>   2. **Destructive Env Var Deletion Hazard:** `railway config apply` declaratively reconciles dashboard state against the IaC file. Because secrets/environment variables (`DATABASE_URL`, `REDIS_URL`, `JWT_SECRET`, etc.) live securely in the Railway Dashboard and are not declared in `railway.ts`, Railway assumes they are "undeclared" and marks them for deletion.
+>   3. **The `--confirm-destructive` Trap:** Passing `--confirm-destructive` in CI silently wiped all environment variables on every pipeline run, crashing the app on boot. Omitting the flag caused the CLI to exit with code 1, breaking CI permanently.
+>   4. **Pointless Maintenance Overhead:** The only "official" IaC workaround is generating and maintaining `preserve()` stubs for every env var in TypeScript, creating ongoing toil for a single-service app.
+> - **The Final Architecture:** We completely removed `.railway/railway.ts` and `railway config apply`. Service build and deploy settings are configured directly in the **Railway Web Dashboard** for both **Staging** and **Production**. Once configured, **future builds automatically pick up these values**, and deployments simply upload code via `railway up --ci`.
 
-Controls the deployment and resource configuration of the Fastify API:
-- `builder`: Set to `NIXPACKS`.
-- `buildCommand`: Installs dependencies and builds the shared package + API (`pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`).
-- `startCommand`: Runs `pnpm --filter @gorola/api start`.
-- `restartPolicyType`: `ON_FAILURE`.
-- `healthcheckPath`: `/health`.
+#### Required Dashboard Settings (Configure on `web` / API service in both Staging & Production):
+
+Navigate to Railway Project → Select your **API Service (`web`)** → **Settings** tab:
+
+| Setting Category | Field | Required Value | Notes |
+| :--- | :--- | :--- | :--- |
+| **General / Source** | **Root Directory** | `/` (or `GoRola_app` repo root) | Monorepo root required for `pnpm-workspace.yaml` |
+| **Build** | **Builder** | `Railpack` (or `Nixpacks`) | Default container builder |
+| **Build** | **Build Command** | `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build` | Builds shared package then API |
+| **Deploy** | **Start Command** | `pnpm --filter @gorola/api start` | Automatically runs Prisma migrations + boots server |
+| **Deploy** | **Restart Policy** | `On Failure` (Max Retries: `10`) | Auto-recovers on transient failure |
 
 ### Node Environment (`nixpacks.toml` & `Procfile`)
 - `nixpacks.toml`: Pins the Node version to `22` for Railway’s Nixpacks builder.
-- `Procfile`: Explicitly defines the `web` process to ensure Railway starts the server correctly.
+- `Procfile`: Explicitly defines the `web` process (`web: pnpm --filter @gorola/api start`) as fallback process type.
 
 ---
 

@@ -96,3 +96,32 @@ export function resetLoggerForTests(options?: LoggerResetTestOptions): void {
   appLoggerSingleton = undefined;
   testReset = options;
 }
+
+export type SecurityAlertPayload = {
+  alertType: "FAILED_AUTH_BURST" | "RATE_LIMIT_BURST" | "SUSPICIOUS_ACCESS" | "ANOMALOUS_REVOCATION";
+  ipAddress?: string | null | undefined;
+  userId?: string | null | undefined;
+  path?: string | null | undefined;
+  message: string;
+  details?: Record<string, unknown> | undefined;
+};
+
+
+/**
+ * Logs a structured SECURITY_ALERT JSON event for DPDP Sec 8(5) and security monitoring.
+ */
+export function logSecurityAlert(logger: Logger, alert: SecurityAlertPayload): void {
+  logger.warn(
+    {
+      event: "SECURITY_ALERT",
+      alertType: alert.alertType,
+      ipAddress: alert.ipAddress ?? null,
+      userId: alert.userId ?? null,
+      path: alert.path ?? null,
+      details: alert.details ?? {},
+      timestamp: new Date().toISOString()
+    },
+    `[SECURITY_ALERT] ${alert.message}`
+  );
+}
+

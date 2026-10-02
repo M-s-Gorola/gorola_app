@@ -373,8 +373,7 @@
 ### 1.9 ” Railway Deployment
 
 - [x] Railway project created with services: Node.js API, PostgreSQL 15, Redis 7
-- [x] All environment variables set in Railway dashboard (see root `.env.example` and `project_data` ” no secrets in repo)
-- [x] `.railway/railway.ts` (monorepo root Infrastructure as Code, migrated from legacy `railway.toml`) + `Procfile` — Nixpacks `buildCommand` builds `@gorola/shared` then `@gorola/api`; `startCommand` = `pnpm --filter @gorola/api start` (which runs `prisma migrate deploy && node dist/app.js`; `node dist/app.js` **starts the server** via `isNodeMainModule` in `app.ts`)
+- [x] Railway service settings configured in Railway Dashboard (source of truth) + `Procfile` fallback — Nixpacks/Railpack `buildCommand` builds `@gorola/shared` then `@gorola/api`; `startCommand` = `pnpm --filter @gorola/api start` (which runs `prisma migrate deploy && node dist/app.js`; `node dist/app.js` **starts the server** via `isNodeMainModule` in `app.ts`)
 - [x] **Build** (Railway) vs **start** (migrations + listen): `apps/api` `build` = `prisma generate && tsc`; `start` = migrate + `node dist/app.js` _(checklist’s old “build = migrate+node” line was split correctly to match Railway)_
 - [x] Vercel project **deployed and linked** to this repo (`vercel.json` at monorepo root: install / build / `apps/web/dist`). Production **`VITE_API_BASE_URL`** = Railway API origin. **Vercel origin** added to Railway **`CORS_ALLOWED_ORIGINS`**. **Verified:** browser from Vercel URL → `GET /api/health` → `data.status: "ok"`.
 

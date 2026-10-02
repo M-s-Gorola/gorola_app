@@ -1,5 +1,6 @@
 import type { ReactElement } from "react";
 
+import { ActiveSessionsSection } from "@/components/account/ActiveSessionsSection";
 import { DangerZoneSection } from "@/components/account/DangerZoneSection";
 import { DataNomineeSection } from "@/components/account/DataNomineeSection";
 import { DataPortabilitySection } from "@/components/account/DataPortabilitySection";
@@ -25,6 +26,7 @@ export function PrivacySettingsPage(): ReactElement {
 
         <div className="space-y-6">
           <PrivacySettingsSection />
+          <ActiveSessionsSection />
           <DataPortabilitySection />
           <DataNomineeSection />
           <DangerZoneSection />
@@ -33,4 +35,5 @@ export function PrivacySettingsPage(): ReactElement {
     </div>
   );
 }
+
 
