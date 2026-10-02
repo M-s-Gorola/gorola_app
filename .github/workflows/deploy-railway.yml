@@ -94,6 +94,12 @@ jobs:
 
 
 
+      # Apply Infrastructure as Code (.railway/railway.ts) to sync service settings before deploy:
+      - name: Apply Railway Infrastructure as Code
+        shell: bash
+        run: |
+          railway config apply --yes --environment "${{ inputs.environment }}"
+
       # Deploy to the Railway environment matching this workflow's input.
       # Label format: "<branch> <short-sha>" for traceability in the Railway dashboard.
       # Retry logic: catches the known log-streaming flake; non-transient errors exit immediately.
