@@ -15,8 +15,8 @@ const rootPackageJson = path.join(repoRoot, "package.json");
 const procfile = path.join(repoRoot, "Procfile");
 
 // Railway IaC (.railway/railway.ts + railway config apply) has been removed.
-// Build settings (builder, buildCommand, startCommand, healthcheckPath,
-// restartPolicyType) are now configured directly in the Railway dashboard.
+// Build settings (builder, buildCommand, startCommand, restartPolicyType)
+// are now configured directly in the Railway dashboard.
 // This suite validates the remaining deployment config that lives in the repo.
 describe("Phase 1.9 — Railway Deployment Config (Procfile / scripts / Node version)", () => {
   it("exposes a Procfile web process using the API start script", async () => {

@@ -57,7 +57,6 @@ Navigate to Railway Project → Select your **API Service (`web`)** → **Settin
 | **Build** | **Builder** | `Railpack` (or `Nixpacks`) | Default container builder |
 | **Build** | **Build Command** | `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build` | Builds shared package then API |
 | **Deploy** | **Start Command** | `pnpm --filter @gorola/api start` | Automatically runs Prisma migrations + boots server |
-| **Deploy** | **Healthcheck Path** | `/health` | Validates API readiness |
 | **Deploy** | **Restart Policy** | `On Failure` (Max Retries: `10`) | Auto-recovers on transient failure |
 
 ### Node Environment (`nixpacks.toml` & `Procfile`)

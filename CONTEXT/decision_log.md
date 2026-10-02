@@ -1852,7 +1852,6 @@ Completely remove Railway IaC (`.railway/railway.ts`, `.railway/README.md`) and 
 - **Builder:** `Railpack` (or `Nixpacks` with `nixpacks.toml`)
 - **Build Command:** `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`
 - **Start Command:** `pnpm --filter @gorola/api start`
-- **Healthcheck Path:** `/health`
 - **Restart Policy:** `On Failure` (Max Retries: 10)
 
 **Deployment Mechanism:**  

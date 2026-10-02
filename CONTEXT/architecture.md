@@ -137,7 +137,7 @@ Path: `vercel.json` (repository root, same as `GoRola_app`).
 
 | File | Role |
 |------|------|
-| **Railway Dashboard Settings** | Source of truth: `builder`, **`buildCommand`**, **`startCommand`**, `restartPolicyType`, `healthcheckPath`. |
+| **Railway Dashboard Settings** | Source of truth: `builder`, **`buildCommand`**, **`startCommand`**, `restartPolicyType`. |
 | **`nixpacks.toml`** | `NODE_VERSION` for Nixpacks (Node 22). |
 | **`Procfile`** | `web: …` process line; matches the intended start. |
 | **`apps/api/package.json` → `scripts`** | `build` = Prisma client + TypeScript emit to `dist/`. `start` = migrate then listen. |
@@ -148,7 +148,6 @@ Path: `vercel.json` (repository root, same as `GoRola_app`).
 - **Builder**: `Railpack` (or `Nixpacks`)
 - **Build Command**: `pnpm install --frozen-lockfile && pnpm --filter @gorola/shared build && pnpm --filter @gorola/api run build`
 - **Start Command**: `pnpm --filter @gorola/api start`
-- **Healthcheck Path**: `/health`
 - **Restart Policy**: `On Failure` (Max Retries: `10`)
 
 #### Committed config — `nixpacks.toml`
