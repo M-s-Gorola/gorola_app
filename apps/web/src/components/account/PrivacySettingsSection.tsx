@@ -13,7 +13,7 @@ import { queryClient } from "@/lib/query-client";
 // Raw shape returned by GET /api/v1/consent
 type ConsentLogRow = {
   id: string;
-  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
+  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS" | "AGE_DECLARATION";
   consentVersion: string;
   noticeText: string;
   isWithdrawn: boolean;
@@ -21,7 +21,7 @@ type ConsentLogRow = {
   createdAt: string;
 };
 
-type ConsentPurpose = ConsentLogRow["purpose"];
+type ConsentPurpose = "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
 
 // Canonical 4-card display shape — one entry per purpose
 type PurposeCard = {
@@ -111,6 +111,7 @@ function buildPurposeCards(rows: ConsentLogRow[]): PurposeCard[] {
   const byPurpose = new Map<ConsentPurpose, ConsentLogRow[]>();
 
   for (const row of rows) {
+    if (row.purpose === "AGE_DECLARATION") continue;
     const bucket = byPurpose.get(row.purpose) ?? [];
     bucket.push(row);
     byPurpose.set(row.purpose, bucket);
@@ -164,6 +165,7 @@ function getInactiveStatusText(purpose: ConsentPurpose): string {
 
 export function PrivacySettingsSection(): ReactElement {
   const [cards, setCards] = useState<PurposeCard[]>([]);
+  const [ageConfirmedDate, setAgeConfirmedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedPurposes, setExpandedPurposes] = useState<Record<string, boolean>>({
     OTP_AUTH: true
@@ -175,12 +177,18 @@ export function PrivacySettingsSection(): ReactElement {
     try {
       const res = await api.get<{ success: boolean; data: { consents: ConsentLogRow[] } }>("/api/v1/consent");
       if (res.data?.success && Array.isArray(res.data.data?.consents)) {
+        const ageConsent = res.data.data.consents.find(
+          (c) => c.purpose === "AGE_DECLARATION" && !c.isWithdrawn
+        );
+        setAgeConfirmedDate(ageConsent ? ageConsent.createdAt : null);
         setCards(buildPurposeCards(res.data.data.consents));
       } else {
+        setAgeConfirmedDate(null);
         setCards(buildPurposeCards([]));
       }
     } catch (err) {
       console.error("Failed to load consents:", err);
+      setAgeConfirmedDate(null);
       setCards(buildPurposeCards([]));
     } finally {
       setLoading(false);
@@ -282,6 +290,25 @@ export function PrivacySettingsSection(): ReactElement {
             </p>
           </div>
         </div>
+
+        {ageConfirmedDate && (
+          <div
+            data-testid="age-confirmation-line"
+            className="flex items-center gap-2.5 rounded-xl border border-gorola-pine/20 bg-gorola-pine/5 px-3.5 py-2.5 text-xs text-gorola-charcoal font-medium shadow-xs"
+          >
+            <ShieldCheck className="h-4 w-4 text-gorola-pine shrink-0" />
+            <span>
+              Age confirmed on{" "}
+              <strong className="font-semibold text-gorola-charcoal">
+                {new Date(ageConfirmedDate).toLocaleDateString("en-IN", {
+                  day: "numeric",
+                  month: "short",
+                  year: "numeric"
+                })}
+              </strong>
+            </span>
+          </div>
+        )}
 
         <div className="space-y-2.5 pt-1">
           {loading ? (

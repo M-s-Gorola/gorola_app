@@ -1,3 +1,4 @@
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@gorola/shared";
 import { zodResolver } from "@hookform/resolvers/zod";
 import type { AxiosError } from "axios";
 import gsap from "gsap";
@@ -7,6 +8,7 @@ import { useForm } from "react-hook-form";
 import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
+import { AgeStep } from "@/components/auth/AgeStep";
 import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -26,14 +28,16 @@ type PhoneFormValues = z.infer<typeof phoneSchema>;
 type VerifyEnvelope = {
   success?: boolean;
   data?: {
-    accessToken: string;
-    refreshToken: string;
+    accessToken?: string;
+    refreshToken?: string;
     phone?: string;
     userId?: string;
     name?: string | null;
     privacyPolicyVersionAccepted?: string | null;
     isPendingDeletion?: boolean;
     deletionScheduledFor?: string | null;
+    ageGateRequired?: boolean;
+    ageTicket?: string;
   };
 };
 
@@ -83,20 +87,19 @@ function displayCountdown(seconds: number): string {
   return `${mins}:${secs.toString().padStart(2, "0")}`;
 }
 
-const CONSENT_NOTICE_TEXT =
-  "We collect your phone number to send you a One-Time Password (OTP) and authenticate your account. Your phone number is shared with our authorised SMS gateway partner solely for OTP delivery.";
-
 export function LoginPage(): ReactElement {
   const navigate = useNavigate();
   const location = useLocation();
   const setBuyerSession = useAuthStore((s) => s.setBuyerSession);
 
   const shellRef = useRef<HTMLDivElement>(null);
-  const [step, setStep] = useState<"consent" | "phone" | "otp" | "reactivate">("consent");
+  const [step, setStep] = useState<"consent" | "phone" | "otp" | "reactivate" | "age" | "ageBlocked">("consent");
 
   const otpInputRefs = useRef<Array<HTMLInputElement | null>>([]);
 
   const [phoneE164, setPhoneE164] = useState<string | null>(null);
+  const [ageTicket, setAgeTicket] = useState<string | null>(null);
+  const [ageError, setAgeError] = useState<string | null>(null);
   const [otpNonce, bumpOtpNonce] = useReducer((n: number) => n + 1, 0);
   const [ttlRemaining, setTtlRemaining] = useState(300);
 
@@ -169,6 +172,10 @@ export function LoginPage(): ReactElement {
       setStep("otp");
     } catch (e) {
       const st = getApiErrorPayload(e);
+      if (st.code === "AGE_GATE_LOCKED") {
+        setStep("ageBlocked");
+        return;
+      }
       const msg =
         st.code === "RATE_LIMITED"
           ? (st.message ?? "Too many attempts — try again later.")
@@ -225,19 +232,10 @@ export function LoginPage(): ReactElement {
       accessToken: sessionData.accessToken,
       name: sessionData.name,
       phone: sessionData.phone,
-      privacyPolicyVersionAccepted: sessionData.privacyPolicyVersionAccepted ?? "1.0",
+      privacyPolicyVersionAccepted: sessionData.privacyPolicyVersionAccepted ?? CURRENT_PRIVACY_POLICY_VERSION,
       refreshToken: sessionData.refreshToken,
       userId: sessionData.userId
     });
-
-    // Record statutory OTP_AUTH consent
-    void api
-      ?.post("/api/v1/consent", {
-        consentVersion: "1.0",
-        noticeText: CONSENT_NOTICE_TEXT,
-        purpose: "OTP_AUTH"
-      })
-      .catch(() => {});
 
     const from = (location.state as { from?: { pathname?: string; search?: string } } | null)?.from;
     let target = "/";
@@ -302,11 +300,23 @@ export function LoginPage(): ReactElement {
 
       const body = res.data as VerifyEnvelope;
       const data = body.success === true && body.data !== undefined ? body.data : undefined;
-      const accessToken = data?.accessToken;
-      const refreshToken = data?.refreshToken;
-      const userId = data?.userId;
+      if (data === undefined) {
+        setOtpError("Unexpected response.");
+        return;
+      }
+
+      // Age gate branch
+      if (data.ageGateRequired === true && typeof data.ageTicket === "string") {
+        setAgeTicket(data.ageTicket);
+        setAgeError(null);
+        setStep("age");
+        return;
+      }
+
+      const accessToken = data.accessToken;
+      const refreshToken = data.refreshToken;
+      const userId = data.userId;
       if (
-        data === undefined ||
         typeof accessToken !== "string" ||
         typeof refreshToken !== "string" ||
         typeof userId !== "string"
@@ -332,7 +342,7 @@ export function LoginPage(): ReactElement {
         accessToken,
         name: data.name ?? null,
         phone: data.phone ?? phoneE164,
-        privacyPolicyVersionAccepted: data.privacyPolicyVersionAccepted ?? "1.0",
+        privacyPolicyVersionAccepted: data.privacyPolicyVersionAccepted ?? CURRENT_PRIVACY_POLICY_VERSION,
         refreshToken,
         userId
       });
@@ -356,6 +366,71 @@ export function LoginPage(): ReactElement {
     }
   }
 
+  async function handleConfirmAge(dateOfBirthIso: string): Promise<void> {
+    if (!ageTicket || api === null) return;
+    setAgeError(null);
+    try {
+      const res = await api.post<VerifyEnvelope>("/api/v1/auth/buyer/confirm-age", {
+        ageTicket,
+        dateOfBirth: dateOfBirthIso,
+        acknowledgedNotice: true,
+        consentVersion: CURRENT_PRIVACY_POLICY_VERSION
+      });
+
+      const body = res.data as VerifyEnvelope;
+      const data = body.success === true && body.data !== undefined ? body.data : undefined;
+      const accessToken = data?.accessToken;
+      const refreshToken = data?.refreshToken;
+      const userId = data?.userId;
+
+      if (
+        data === undefined ||
+        typeof accessToken !== "string" ||
+        typeof refreshToken !== "string" ||
+        typeof userId !== "string"
+      ) {
+        setAgeError("Unexpected response.");
+        return;
+      }
+
+      setAgeTicket(null);
+
+      if (data.isPendingDeletion === true) {
+        setPendingDeletion({
+          accessToken,
+          deletionScheduledFor: data.deletionScheduledFor ?? null,
+          name: data.name ?? null,
+          phone: data.phone ?? phoneE164 ?? "",
+          refreshToken,
+          userId
+        });
+        setStep("reactivate");
+        return;
+      }
+
+      completeBuyerLogin({
+        accessToken,
+        name: data.name ?? null,
+        phone: data.phone ?? phoneE164 ?? "",
+        privacyPolicyVersionAccepted: data.privacyPolicyVersionAccepted ?? CURRENT_PRIVACY_POLICY_VERSION,
+        refreshToken,
+        userId
+      });
+    } catch (e) {
+      const payload = getApiErrorPayload(e);
+      if (payload.code === "AGE_REQUIREMENT_NOT_MET" || payload.code === "AGE_GATE_LOCKED") {
+        setAgeTicket(null);
+        setStep("ageBlocked");
+      } else if (payload.code === "AGE_TICKET_INVALID") {
+        setAgeTicket(null);
+        setStep("phone");
+        setPhoneError("Your session expired. Please enter your phone number again.");
+      } else {
+        setAgeError(payload.message ?? "Age verification failed.");
+      }
+    }
+  }
+
   async function resend(): Promise<void> {
     if (!phoneE164 || ttlRemaining > 0 || api === null) return;
     setSendLoading(true);
@@ -366,6 +441,10 @@ export function LoginPage(): ReactElement {
       bumpOtpNonce();
     } catch (e) {
       const payload = getApiErrorPayload(e);
+      if (payload.code === "AGE_GATE_LOCKED") {
+        setStep("ageBlocked");
+        return;
+      }
       setOtpError(
         payload.code === "RATE_LIMITED"
           ? (payload.message ?? "Too many attempts.")
@@ -393,6 +472,9 @@ export function LoginPage(): ReactElement {
                   Essential
                 </span>
               </div>
+              <p className="font-medium text-xs sm:text-sm text-gorola-charcoal">
+                GoRola is for people aged 18 and over.
+              </p>
               <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm">
                 We collect your phone number and share it with our secure SMS gateway (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) to send one-time passwords (OTP) and securely authenticate your account sessions under India&apos;s DPDP Act 2023. We do not sell your personal data.
               </p>
@@ -479,6 +561,12 @@ export function LoginPage(): ReactElement {
               {sendLoading ? "Sending..." : "Send OTP"}
             </Button>
           </form>
+        ) : step === "age" || step === "ageBlocked" ? (
+          <AgeStep
+            mode={step === "ageBlocked" ? "blocked" : "entry"}
+            onConfirm={handleConfirmAge}
+            error={ageError}
+          />
         ) : step === "reactivate" ? (
           <div className="mt-6 flex flex-col gap-5" data-testid="reactivate-account-step">
             <div className="rounded-xl border border-amber-300 bg-amber-50/80 p-5 text-sm text-gorola-charcoal space-y-3 dark:border-amber-700/50 dark:bg-amber-950/30">
@@ -602,3 +690,4 @@ export function LoginPage(): ReactElement {
     </div>
   );
 }
+

@@ -173,6 +173,7 @@ export class UserRepository {
       id: string;
       name: string;
       phone: string;
+      ageConfirmedAt: string | null;
       createdAt: string;
       updatedAt: string;
     };
@@ -244,6 +245,7 @@ export class UserRepository {
         id: user.id,
         name: user.name,
         phone: decryptedPhone,
+        ageConfirmedAt: user.ageConfirmedAt ? user.ageConfirmedAt.toISOString() : null,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString()
       },

@@ -1,3 +1,4 @@
+import { CURRENT_PRIVACY_POLICY_VERSION, GRIEVANCE_EMAIL } from "@gorola/shared";
 import { FileText, ShieldCheck } from "lucide-react";
 import { ReactElement, ReactNode } from "react";
 
@@ -27,10 +28,10 @@ interface NoticeContent {
 export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
   OTP_AUTH: {
     title: "Authentication & Account Security",
-    version: "1.0",
+    version: CURRENT_PRIVACY_POLICY_VERSION,
     effectiveDate: "29/09/2026",
     purpose:
-      "We process your personal data exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session security.",
+      "GoRola is for people aged 18 and over. We process your personal data exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session security.",
     dataCollected: ["Phone Number"],
     thirdParties: (
       <span>
@@ -39,8 +40,7 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
     ),
     retention:
       "Retained for the lifetime of your active account. If you delete your account, this data is permanently erased within 30 days.",
-    rights:
-      "You have the right to access, rectify, or erase your data. Contact dpo@gorola.com. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI)."
+    rights: `You have the right to access, rectify, or erase your data. Contact ${GRIEVANCE_EMAIL}. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
   },
   ORDER_PROCESSING: {
     title: "Order Fulfillment & Location Services",
@@ -64,8 +64,7 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
         Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> and discarded.
       </span>
     ),
-    rights:
-      "You may update your saved addresses at any time. Contact dpo@gorola.com. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI)."
+    rights: `You may update your saved addresses at any time. Contact ${GRIEVANCE_EMAIL}. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
   },
   MARKETING_COMMS: {
     title: "Promotions & Seasonal Offers",

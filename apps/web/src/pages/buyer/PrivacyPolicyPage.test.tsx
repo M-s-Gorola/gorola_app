@@ -48,6 +48,11 @@ describe("PrivacyPolicyPage (/privacy)", () => {
     // Section 7: Children's Data
     expect(screen.getByRole("heading", { name: /7\. Protection of Children's Data/i })).toBeInTheDocument();
     expect(screen.getAllByText(/18 years of age/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/date of birth/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/do not store/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/90 days/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/hashed/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/privacy@gorola\.in/i).length).toBeGreaterThanOrEqual(1);
 
     // Section 8: Security & Breach Protocol
     expect(screen.getByRole("heading", { name: /8\. Technical Security Safeguards & Breach Notification/i })).toBeInTheDocument();

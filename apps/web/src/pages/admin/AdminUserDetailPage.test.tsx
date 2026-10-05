@@ -107,6 +107,15 @@ const mockConsentsData = {
         givenAt: null,
         withdrawnAt: null,
         version: null
+      },
+      {
+        purpose: "AGE_DECLARATION",
+        displayName: "Age Confirmation",
+        isEssential: true,
+        isActive: true,
+        givenAt: "2026-06-01T12:00:00.000Z",
+        withdrawnAt: null,
+        version: "v1.1"
       }
     ],
     logs: [
@@ -195,6 +204,11 @@ describe("AdminUserDetailPage", () => {
     expect(screen.getByText("Authentication & Account Security")).toBeInTheDocument();
     expect(screen.getByText("Order Fulfillment & Location Services")).toBeInTheDocument();
     expect(screen.getByText("Promotions & Seasonal Offers")).toBeInTheDocument();
+    expect(screen.getByText("Age Confirmation")).toBeInTheDocument();
+    const consentSummarySection = screen.getByTestId("consent-summary-section");
+    const rows = within(consentSummarySection).getAllByRole("row");
+    // 1 header row + 5 data rows = 6 rows
+    expect(rows).toHaveLength(6);
   });
 
   it("renders 'Not Configured' when nomineeName is not set", async () => {

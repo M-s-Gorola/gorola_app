@@ -243,11 +243,8 @@ describe("LoginPage", () => {
         otp: "123456",
         phone: "+919876543210"
       });
-      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
-        consentVersion: "1.0",
-        noticeText: expect.stringMatching(/One-Time Password.*SMS gateway partner/i),
-        purpose: "OTP_AUTH"
-      });
+      // Server-side dual consent (8.8.5) replaces client-side POST /api/v1/consent
+      expect(postMock).not.toHaveBeenCalledWith("/api/v1/consent", expect.anything());
     });
 
     expect(useAuthStore.getState().accessToken).toBe("access");
@@ -589,4 +586,285 @@ describe("LoginPage", () => {
     expect(await screen.findByTestId("consent-notice-modal")).toBeInTheDocument();
     expect(screen.getAllByText(/Authentication & Account Security/i).length).toBeGreaterThanOrEqual(1);
   });
+
+  describe("Age Gate Flow (Phase 8.8.10)", () => {
+    it("verify-otp answering { ageGateRequired: true, ageTicket } moves to age step and completes login via confirm-age without /api/v1/consent call", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const testTicket = "a".repeat(64);
+
+      postMock
+        .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } }) // send-otp
+        .mockResolvedValueOnce({
+          data: {
+            success: true,
+            data: {
+              ageGateRequired: true,
+              ageTicket: testTicket
+            }
+          }
+        }) // verify-otp
+        .mockResolvedValueOnce({
+          data: {
+            success: true,
+            data: {
+              accessToken: "new_access_token",
+              refreshToken: "new_refresh_token",
+              userId: "new_user_1",
+              name: null,
+              phone: "+919876543210",
+              privacyPolicyVersionAccepted: "1.1",
+              ageGateRequired: false
+            }
+          }
+        }); // confirm-age
+
+      renderLogin(["/login"]);
+      await advanceToPhoneStep(user);
+      await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+      await user.click(screen.getByRole("button", { name: /send otp/i }));
+
+      await screen.findByText(/Enter OTP/i);
+      for (let i = 0; i < 6; i++) {
+        const label = String(i + 1);
+        await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+      }
+      await user.click(screen.getByRole("button", { name: /verify/i }));
+
+      // Moves to age step
+      expect(await screen.findByTestId("age-step")).toBeInTheDocument();
+      expect(screen.getByText(/GoRola is available only to people aged 18 and over/i)).toBeInTheDocument();
+
+      // Enter adult DOB
+      await user.type(screen.getByTestId("age-day"), "14");
+      await user.type(screen.getByTestId("age-month"), "05");
+      await user.type(screen.getByTestId("age-year"), "1990");
+      await user.click(screen.getByTestId("age-continue-btn"));
+
+      // Confirm step
+      expect(await screen.findByTestId("age-confirm-text")).toHaveTextContent("You entered 14 May 1990. Is this correct?");
+      await user.click(screen.getByTestId("age-confirm-yes-btn"));
+
+      await waitFor(() => {
+        expect(postMock).toHaveBeenCalledWith("/api/v1/auth/buyer/confirm-age", {
+          ageTicket: testTicket,
+          dateOfBirth: "1990-05-14",
+          acknowledgedNotice: true,
+          consentVersion: "1.1"
+        });
+        expect(postMock).not.toHaveBeenCalledWith("/api/v1/consent", expect.anything());
+      });
+
+      expect(useAuthStore.getState().accessToken).toBe("new_access_token");
+      expect(useAuthStore.getState().refreshToken).toBe("new_refresh_token");
+      expect(useAuthStore.getState().userId).toBe("new_user_1");
+      expect(screen.getByTestId("home")).toBeInTheDocument();
+
+      // Strict PII / Ticket no-persistence check
+      expect(JSON.stringify(localStorage)).not.toContain("1990-05-14");
+      expect(JSON.stringify(sessionStorage)).not.toContain("1990-05-14");
+      expect(JSON.stringify(localStorage)).not.toContain(testTicket);
+      expect(JSON.stringify(sessionStorage)).not.toContain(testTicket);
+      expect(JSON.stringify(useAuthStore.getState())).not.toContain(testTicket);
+      expect(window.location.href).not.toContain(testTicket);
+    });
+
+    it("403 AGE_REQUIREMENT_NOT_MET from confirm-age transitions to age-blocked-step with refusal copy and no return control", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const testTicket = "b".repeat(64);
+
+      postMock
+        .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } }) // send-otp
+        .mockResolvedValueOnce({
+          data: {
+            success: true,
+            data: {
+              ageGateRequired: true,
+              ageTicket: testTicket
+            }
+          }
+        }) // verify-otp
+        .mockRejectedValueOnce({
+          response: {
+            status: 403,
+            data: {
+              success: false,
+              error: {
+                code: "AGE_REQUIREMENT_NOT_MET",
+                message: "We can't create an account for you. GoRola is available only to people aged 18 and over."
+              }
+            }
+          }
+        }); // confirm-age rejection
+
+      renderLogin(["/login"]);
+      await advanceToPhoneStep(user);
+      await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+      await user.click(screen.getByRole("button", { name: /send otp/i }));
+
+      await screen.findByText(/Enter OTP/i);
+      for (let i = 0; i < 6; i++) {
+        const label = String(i + 1);
+        await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+      }
+      await user.click(screen.getByRole("button", { name: /verify/i }));
+
+      expect(await screen.findByTestId("age-step")).toBeInTheDocument();
+      await user.type(screen.getByTestId("age-day"), "10");
+      await user.type(screen.getByTestId("age-month"), "03");
+      await user.type(screen.getByTestId("age-year"), "2012");
+      await user.click(screen.getByTestId("age-continue-btn"));
+
+      await user.click(screen.getByTestId("age-confirm-yes-btn"));
+
+      const blockedStep = await screen.findByTestId("age-blocked-step");
+      expect(blockedStep).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /we can't create your account/i })).toBeInTheDocument();
+      expect(blockedStep).toHaveTextContent("GoRola is available only to people aged 18 and over. If you think this is a mistake, write to privacy@gorola.in.");
+
+      // No return control
+      expect(screen.queryByTestId("age-day")).not.toBeInTheDocument();
+      expect(screen.queryByTestId("age-continue-btn")).not.toBeInTheDocument();
+
+      // Strict no-persistence check
+      expect(JSON.stringify(localStorage)).not.toContain("2012");
+      expect(JSON.stringify(sessionStorage)).not.toContain("2012");
+      expect(JSON.stringify(localStorage)).not.toContain(testTicket);
+      expect(JSON.stringify(sessionStorage)).not.toContain(testTicket);
+    });
+
+    it("403 AGE_GATE_LOCKED from send-otp directly transitions to age-blocked-step", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+
+      postMock.mockRejectedValueOnce({
+        response: {
+          status: 403,
+          data: {
+            success: false,
+            error: {
+              code: "AGE_GATE_LOCKED",
+              message: "Phone number is locked due to age restriction."
+            }
+          }
+        }
+      });
+
+      renderLogin(["/login"]);
+      await advanceToPhoneStep(user);
+      await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+      await user.click(screen.getByRole("button", { name: /send otp/i }));
+
+      expect(await screen.findByTestId("age-blocked-step")).toBeInTheDocument();
+      expect(screen.getByRole("heading", { name: /we can't create your account/i })).toBeInTheDocument();
+    });
+
+    it("401 AGE_TICKET_INVALID from confirm-age returns to phone step with session expired notice", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const testTicket = "c".repeat(64);
+
+      postMock
+        .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } }) // send-otp
+        .mockResolvedValueOnce({
+          data: {
+            success: true,
+            data: {
+              ageGateRequired: true,
+              ageTicket: testTicket
+            }
+          }
+        }) // verify-otp
+        .mockRejectedValueOnce({
+          response: {
+            status: 401,
+            data: {
+              success: false,
+              error: {
+                code: "AGE_TICKET_INVALID",
+                message: "Invalid or expired age verification ticket"
+              }
+            }
+          }
+        }); // confirm-age expired
+
+      renderLogin(["/login"]);
+      await advanceToPhoneStep(user);
+      await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+      await user.click(screen.getByRole("button", { name: /send otp/i }));
+
+      await screen.findByText(/Enter OTP/i);
+      for (let i = 0; i < 6; i++) {
+        const label = String(i + 1);
+        await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+      }
+      await user.click(screen.getByRole("button", { name: /verify/i }));
+
+      expect(await screen.findByTestId("age-step")).toBeInTheDocument();
+      await user.type(screen.getByTestId("age-day"), "14");
+      await user.type(screen.getByTestId("age-month"), "05");
+      await user.type(screen.getByTestId("age-year"), "1990");
+      await user.click(screen.getByTestId("age-continue-btn"));
+
+      await user.click(screen.getByTestId("age-confirm-yes-btn"));
+
+      // Returned to phone step with expired notice
+      expect(await screen.findByLabelText(/phone number/i)).toBeInTheDocument();
+      expect(screen.getByText("Your session expired. Please enter your phone number again.")).toBeInTheDocument();
+    });
+
+    it("legacy user in deletion grace confirming adult age transitions to reactivate-account-step", async () => {
+      const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+      const testTicket = "d".repeat(64);
+
+      postMock
+        .mockResolvedValueOnce({ data: { success: true, data: { sent: true } } }) // send-otp
+        .mockResolvedValueOnce({
+          data: {
+            success: true,
+            data: {
+              ageGateRequired: true,
+              ageTicket: testTicket
+            }
+          }
+        }) // verify-otp
+        .mockResolvedValueOnce({
+          data: {
+            success: true,
+            data: {
+              accessToken: "pending_access_token",
+              refreshToken: "pending_refresh_token",
+              userId: "legacy_pending_user_1",
+              name: "Ananya",
+              phone: "+919876543210",
+              privacyPolicyVersionAccepted: "1.1",
+              ageGateRequired: false,
+              isPendingDeletion: true,
+              deletionScheduledFor: "2026-10-30T12:00:00.000Z"
+            }
+          }
+        }); // confirm-age returns isPendingDeletion
+
+      renderLogin(["/login"]);
+      await advanceToPhoneStep(user);
+      await user.type(screen.getByLabelText(/phone number/i), "9876543210");
+      await user.click(screen.getByRole("button", { name: /send otp/i }));
+
+      await screen.findByText(/Enter OTP/i);
+      for (let i = 0; i < 6; i++) {
+        const label = String(i + 1);
+        await user.type(screen.getByRole("spinbutton", { name: new RegExp(`^Digit ${label}$`, "i") }), String(i + 1));
+      }
+      await user.click(screen.getByRole("button", { name: /verify/i }));
+
+      expect(await screen.findByTestId("age-step")).toBeInTheDocument();
+      await user.type(screen.getByTestId("age-day"), "14");
+      await user.type(screen.getByTestId("age-month"), "05");
+      await user.type(screen.getByTestId("age-year"), "1990");
+      await user.click(screen.getByTestId("age-continue-btn"));
+
+      await user.click(screen.getByTestId("age-confirm-yes-btn"));
+
+      expect(await screen.findByTestId("reactivate-account-step")).toBeInTheDocument();
+      expect(screen.getByText(/30 Oct 2026/i)).toBeInTheDocument();
+    });
+  });
 });
+

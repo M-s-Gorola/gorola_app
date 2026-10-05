@@ -42,7 +42,7 @@ export function PrivacyPolicyPage(): ReactElement {
                 GoRola Privacy Policy
               </h1>
               <p className="font-dm-sans text-xs text-gorola-slate">
-                Statutory Compliance Notice &bull; Digital Personal Data Protection (DPDP) Act 2023 &bull; Version 1.0 (Effective 29/09/2026)
+                Statutory Compliance Notice &bull; Digital Personal Data Protection (DPDP) Act 2023 &bull; Version 1.1 (Effective 29/09/2026)
               </p>
             </div>
           </div>
@@ -199,7 +199,7 @@ export function PrivacyPolicyPage(): ReactElement {
             </h2>
             <div className="space-y-2 text-xs text-gorola-slate leading-relaxed">
               <p>
-                In compliance with Section 9 of the DPDP Act 2023, GoRola is strictly restricted to individuals who are at least <strong>18 years of age</strong>. We do not knowingly collect, process, or track personal data belonging to minors. If we discover personal data of a minor has been collected without verifiable parental consent, it is immediately deleted.
+                GoRola is for people who are at least <strong>18 years of age</strong>. When you first create an account we ask for your date of birth once, to confirm this. We do not store your date of birth — we keep only the date on which you confirmed you are an adult. We do not knowingly collect or process personal data of anyone under 18. If we learn that someone under 18 has an account, we close it and erase their personal data. If someone is refused at sign-up, we keep a one-way scrambled (hashed) form of their phone number, which cannot be read back, for 90 days only, solely to stop repeated sign-up attempts, and then delete it. If you are a parent or guardian and believe a child is using GoRola, write to <a href="mailto:privacy@gorola.in" className="font-semibold text-gorola-pine underline hover:text-emerald-700">privacy@gorola.in</a>.
               </p>
             </div>
           </div>

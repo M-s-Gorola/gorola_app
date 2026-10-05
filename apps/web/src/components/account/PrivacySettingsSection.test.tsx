@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -407,6 +407,52 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     // Each card must link to the platform-wide Privacy Policy
     const privacyPolicyLinks = screen.getAllByRole("link", { name: /privacy policy/i });
     expect(privacyPolicyLinks.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("renders age-confirmation-line with confirmation date when AGE_DECLARATION is present and maintains exactly 4 purpose cards", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: [
+            {
+              id: "c-age",
+              purpose: "AGE_DECLARATION",
+              consentVersion: "1.1",
+              noticeText: "Age declaration",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-10-05T12:00:00.000Z"
+            },
+            {
+              id: "c-otp",
+              purpose: "OTP_AUTH",
+              consentVersion: "1.1",
+              noticeText: "OTP auth",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-10-05T12:00:00.000Z"
+            }
+          ]
+        }
+      }
+    });
+
+    renderSection();
+
+    const ageLine = await screen.findByTestId("age-confirmation-line");
+    expect(ageLine).toBeInTheDocument();
+    expect(ageLine).toHaveTextContent(/Age confirmed on/i);
+    expect(ageLine).toHaveTextContent(/5/i);
+    expect(ageLine).toHaveTextContent(/2026/i);
+
+    // Ensure NO withdraw button inside age-confirmation-line
+    expect(within(ageLine).queryByRole("button")).not.toBeInTheDocument();
+
+    // Exactly 4 canonical purpose cards rendered, never a 5th card for AGE_DECLARATION
+    const cards = screen.getAllByTestId(/^consent-card-/);
+    expect(cards).toHaveLength(4);
+    expect(screen.queryByTestId("consent-card-AGE_DECLARATION")).not.toBeInTheDocument();
   });
 });
 

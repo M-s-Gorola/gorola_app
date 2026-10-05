@@ -18,17 +18,18 @@
 ## 📍 Last Updated
 
 - **Date:** 2026-10-06
-- **Session Summary (2026-10-06 — Sections 8.8.1 to 8.8.8 Complete):**
-  1. Verified and completed Sections 8.8.1 to 8.8.6 checklist items.
-  2. **Section 8.8.7 (Existing Legacy Users, Refresh Gate & Underage Purge):** Built `auth.service.refresh-age.test.ts` & `auth.confirm-age.legacy.integration.test.ts`. Implemented adult legacy confirmation with same userId and 1 `AGE_DECLARATION` consent, under-18 immediate `permanentPurgeAndAnonymize` + `terminateAllSessions` + `lockPhone` without 30-day grace, and `403 AGE_CONFIRMATION_REQUIRED` in `refreshToken` when `ageConfirmedAt` is null.
-  3. **Section 8.8.8 (Admin Endpoints: Unlock Wrongly Locked Adult & Erase Discovered Minor):**
-     - Built RED integration tests in `admin.age-gate.test.ts` (11 tests) and unit tests in `admin.age-gate.service.test.ts`.
-     - Implemented `POST /api/v1/admin/age-gate/unlock` (`ADMIN` JWT, validates phone & reason >= 10 chars, deletes lockout, writes `AGE_GATE_LOCKOUT_CLEARED` audit log with zero raw phone digits).
-     - Implemented `POST /api/v1/admin/users/:id/erase-underage` (`ADMIN` JWT, validates reason >= 10 chars, computes pre-purge phone hash, terminates user sessions, runs `permanentPurgeAndAnonymize`, locks phone hash for 90 days, writes `USER_ERASED_UNDERAGE` audit log with zero raw phone digits).
-     - RBAC & validation guards (401 unauthenticated, 403 non-admin roles, 400 validation, 404 not found, 409 already erased).
-  4. Quality gates verified: `pnpm --filter @gorola/api typecheck` (0 errors), `pnpm --filter @gorola/api lint` (0 errors, 0 warnings), all 11 test files / 52 tests 100% GREEN.
-- **Next Session Must Start With:** Section 8.8.9 (Lockout Purge Worker).
-- **In Progress Right Now:** Section 8.8.8 complete, ready for Section 8.8.9.
+- **Session Summary (2026-10-06 — Section 8.8.12 Complete):**
+  1. **Section 8.8.12 (Privacy Dashboard, Data Export & Admin Consent Panel):**
+     - Extended [user.my-data.test.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/__tests__/integration/user/user.my-data.test.ts) to assert that `GET /api/v1/user/my-data` returns `profile.ageConfirmedAt` (ISO string) and includes `consents` with `purpose: "AGE_DECLARATION"`, while asserting no key matching `/birth|dob/i` exists anywhere in the JSON export payload.
+     - Added `AGE_DECLARATION` essential withdrawal rejection test in [consent.controller.test.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/__tests__/integration/consent/consent.controller.test.ts) asserting `DELETE /api/v1/consent/AGE_DECLARATION` returns HTTP 400 with `code: "CANNOT_WITHDRAW_ESSENTIAL_CONSENT"`.
+     - Extended [admin.users.test.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/__tests__/integration/admin/admin.users.test.ts) to assert `GET /api/v1/admin/users/:id/consents` returns 5 summary rows including `AGE_DECLARATION` (status "Active" when confirmed, "Never Given" when missing).
+     - Added unit tests in [PrivacySettingsSection.test.tsx](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/components/account/PrivacySettingsSection.test.tsx) verifying `data-testid="age-confirmation-line"` shows "Age confirmed on <date>" with no withdraw button, and `buildPurposeCards` continues rendering exactly 4 canonical purpose cards.
+     - Added tests in [AdminUserDetailPage.test.tsx](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/pages/admin/AdminUserDetailPage.test.tsx) asserting all 5 statutory consent summary rows render in the admin drawer table.
+     - Backend: added `"AGE_DECLARATION"` to `ConsentPurpose` type and Zod schema, included `"AGE_DECLARATION"` in `ESSENTIAL_PURPOSES` in [consent.service.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/modules/consent/consent.service.ts), added `ageConfirmedAt` to [user.repository.ts](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/api/src/modules/user/user.repository.ts) `getMyData` payload and types.
+     - Frontend: updated [PrivacySettingsSection.tsx](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/components/account/PrivacySettingsSection.tsx) to handle `AGE_DECLARATION` as a distinct `data-testid="age-confirmation-line"`, and updated [AdminUserDetailPage.tsx](file:///c:/Users/Administrator/Desktop/GoRola/GoRola_app/apps/web/src/pages/admin/AdminUserDetailPage.tsx).
+  2. Quality gates verified: `pnpm lint` (0 errors, 0 warnings across all 4 packages), `pnpm typecheck` (0 errors across workspace), 101/101 test files passing (573 tests) in `@gorola/web`, 26/26 tests passing in `@gorola/api`.
+- **Next Session Must Start With:** Section 8.8.13 (Cascade Audit, Test Helpers, Seeds, E2E, Environment & Quality Gates).
+- **In Progress Right Now:** Section 8.8.12 complete, ready for Section 8.8.13.
 - **Current Blocker:** None.
 
 
@@ -2291,19 +2292,19 @@ DPDP storage limitation: lockout rows must not outlive their purpose. Delete eac
 
 ---
 
-- [ ] **RED — Integration (`age-gate-lockout-purge.test.ts`, modelled on `data-retention.test.ts`):**
-  - [ ] Test: with one expired and one active lockout, `purgeExpiredAgeGateLockouts(now)` returns `1`, deletes only the expired row and leaves the active one.
-  - [ ] Test: the scheduler's job list includes a job named `age-gate-lockout-purge` that runs daily.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`age-gate-lockout-purge.test.ts`, modelled on `data-retention.test.ts`):**
+  - [x] Test: with one expired and one active lockout, `purgeExpiredAgeGateLockouts(now)` returns `1`, deletes only the expired row and leaves the active one.
+  - [x] Test: the scheduler's job list includes a job named `age-gate-lockout-purge` that runs daily.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Worker → Scheduler):**
-  - [ ] Create `apps/api/src/workers/age-gate-lockout-purge.worker.ts` calling `AgeGateRepository.deleteExpired`; register it in `apps/api/src/workers/scheduler.ts` (daily).
-  - [ ] Run integration test — **confirm GREEN**.
+- [x] **GREEN — Backend (Worker → Scheduler):**
+  - [x] Create `apps/api/src/workers/age-gate-lockout-purge.worker.ts` calling `AgeGateRepository.deleteExpired`; register it in `apps/api/src/workers/scheduler.ts` (daily).
+  - [x] Run integration test — **confirm GREEN**.
 
-- [ ] **RED / GREEN — Unit / Component:** N/A — no frontend; the worker is a thin call covered by the integration test.
+- [x] **RED / GREEN — Unit / Component:** N/A — no frontend; the worker is a thin call covered by the integration test.
 
-- [ ] **Verification chain:**
-  - [ ] 90 days after a refusal → the daily job runs → the lockout row disappears → ✅ Done.
+- [x] **Verification chain:**
+  - [x] 90 days after a refusal → the daily job runs → the lockout row disappears → ✅ Done.
 
 ---
 
@@ -2317,31 +2318,31 @@ Add the steps `age`, `ageConfirm` and `ageBlocked`. New component `apps/web/src/
 
 ---
 
-- [ ] **RED — Unit / Component (`AgeStep.test.tsx`, extended `LoginPage.test.tsx`):**
-  - [ ] Test: `AgeStep` renders `data-testid="age-day"`, `"age-month"`, `"age-year"`; contains no element of `type="date"` and no `min`/`max` attribute; the rendered text equals the canonical `AGE_DECLARATION` text from `@gorola/shared`.
-  - [ ] Test: the Continue button (`age-continue-btn`) is disabled until all three fields have values.
-  - [ ] Test: invalid entries (`31/02/2010`, month `13`, day `0`, year `99`, year `1899`, a future year) show `data-testid="age-error"` with exactly "Please enter a valid date of birth." and make **zero** API calls.
-  - [ ] Test: valid entry `10/03/2012` shows the confirm step with the text "You entered 10 March 2012. Is this correct?"; **Edit** returns to the fields with the values still filled; **Yes, continue** (`age-confirm-yes-btn`) posts once to `/api/v1/auth/buyer/confirm-age` with body exactly `{ ageTicket, dateOfBirth: "2012-03-10", acknowledgedNotice: true, consentVersion: "1.1" }`.
-  - [ ] Test: double-clicking **Yes, continue** sends exactly **one** request (button disabled while in flight).
-  - [ ] Test: `verify-otp` answering `{ ageGateRequired: true, ageTicket }` moves the page to the age step; a normal token response skips it (returning adult).
-  - [ ] Test: a `200` from `confirm-age` calls `completeBuyerLogin` and navigates to the `from` target; **no** request to `/api/v1/consent` is ever made (assert `postMock` was never called with that URL — this replaces the old test at line ~249 of `LoginPage.test.tsx`).
-  - [ ] Test: `403 AGE_REQUIREMENT_NOT_MET` and `403 AGE_GATE_LOCKED` (also from `send-otp`) show `data-testid="age-blocked-step"` with the exact refusal copy in 8.8.0 section I, and there is no control that returns to the date fields.
-  - [ ] Test: `401 AGE_TICKET_INVALID` returns to the phone step with "Your session expired. Please enter your phone number again."
-  - [ ] Test (no persistence): after success and after refusal, `JSON.stringify(localStorage)`, `JSON.stringify(sessionStorage)`, the session store state and `window.location.href` contain neither `2012` nor the ticket.
-  - [ ] Test (age copy): the full rendered text of every new step contains no number other than `18`.
-  - [ ] Test (accessibility): inputs have associated labels; the error region uses `aria-live="polite"`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`AgeStep.test.tsx`, extended `LoginPage.test.tsx`):**
+  - [x] Test: `AgeStep` renders `data-testid="age-day"`, `"age-month"`, `"age-year"`; contains no element of `type="date"` and no `min`/`max` attribute; the rendered text equals the canonical `AGE_DECLARATION` text from `@gorola/shared`.
+  - [x] Test: the Continue button (`age-continue-btn`) is disabled until all three fields have values.
+  - [x] Test: invalid entries (`31/02/2010`, month `13`, day `0`, year `99`, year `1899`, a future year) show `data-testid="age-error"` with exactly "Please enter a valid date of birth." and make **zero** API calls.
+  - [x] Test: valid entry `10/03/2012` shows the confirm step with the text "You entered 10 March 2012. Is this correct?"; **Edit** returns to the fields with the values still filled; **Yes, continue** (`age-confirm-yes-btn`) posts once to `/api/v1/auth/buyer/confirm-age` with body exactly `{ ageTicket, dateOfBirth: "2012-03-10", acknowledgedNotice: true, consentVersion: "1.1" }`.
+  - [x] Test: double-clicking **Yes, continue** sends exactly **one** request (button disabled while in flight).
+  - [x] Test: `verify-otp` answering `{ ageGateRequired: true, ageTicket }` moves the page to the age step; a normal token response skips it (returning adult).
+  - [x] Test: a `200` from `confirm-age` calls `completeBuyerLogin` and navigates to the `from` target; **no** request to `/api/v1/consent` is ever made (assert `postMock` was never called with that URL — this replaces the old test at line ~249 of `LoginPage.test.tsx`).
+  - [x] Test: `403 AGE_REQUIREMENT_NOT_MET` and `403 AGE_GATE_LOCKED` (also from `send-otp`) show `data-testid="age-blocked-step"` with the exact refusal copy in 8.8.0 section I, and there is no control that returns to the date fields.
+  - [x] Test: `401 AGE_TICKET_INVALID` returns to the phone step with "Your session expired. Please enter your phone number again."
+  - [x] Test (no persistence): after success and after refusal, `JSON.stringify(localStorage)`, `JSON.stringify(sessionStorage)`, the session store state and `window.location.href` contain neither `2012` nor the ticket.
+  - [x] Test (age copy): the full rendered text of every new step contains no number other than `18`.
+  - [x] Test (accessibility): inputs have associated labels; the error region uses `aria-live="polite"`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Types → Component → Page):**
-  - [ ] [Types] Extend `VerifyEnvelope.data` with `ageGateRequired?: boolean` and `ageTicket?: string`; extend the step union with `"age" | "ageConfirm" | "ageBlocked"`.
-  - [ ] [Component] Create `AgeStep.tsx` (fields, validation, confirm view, refusal view) with the `data-testid`s used above; format the confirm date with `Intl.DateTimeFormat("en-IN", { day: "numeric", month: "long", year: "numeric" })`.
-  - [ ] [Page] In `LoginPage.tsx` handle the new response branch, call `confirm-age`, map the error codes, remove the client-side `OTP_AUTH` POST, import the notice text from `@gorola/shared`, add the line "GoRola is for people aged 18 and over." to the first (consent) screen.
-  - [ ] Run unit tests — **confirm GREEN**.
+- [x] **GREEN — Frontend (Types → Component → Page):**
+  - [x] [Types] Extend `VerifyEnvelope.data` with `ageGateRequired?: boolean` and `ageTicket?: string`; extend the step union with `"age" | "ageConfirm" | "ageBlocked"`.
+  - [x] [Component] Create `AgeStep.tsx` (fields, validation, confirm view, refusal view) with the `data-testid`s used above; format the confirm date with `Intl.DateTimeFormat("en-IN", { day: "numeric", month: "long", year: "numeric" })`.
+  - [x] [Page] In `LoginPage.tsx` handle the new response branch, call `confirm-age`, map the error codes, remove the client-side `OTP_AUTH` POST, import the notice text from `@gorola/shared`, add the line "GoRola is for people aged 18 and over." to the first (consent) screen.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **RED / GREEN — Integration:** covered end to end by the API integration tests in 8.8.4–8.8.7 and the Playwright scenarios in 8.8.13.
+- [x] **RED / GREEN — Integration:** covered end to end by the API integration tests in 8.8.4–8.8.7 and the Playwright scenarios in 8.8.13.
 
-- [ ] **Verification chain:**
-  - [ ] New user ticks the notice, enters phone and OTP → sees the date-of-birth screen → types a date → sees "You entered … Is this correct?" → confirms → lands logged in (adult) or sees the refusal screen (under 18) → returning adults never see the date screen → ✅ Done.
+- [x] **Verification chain:**
+  - [x] New user ticks the notice, enters phone and OTP → sees the date-of-birth screen → types a date → sees "You entered … Is this correct?" → confirms → lands logged in (adult) or sees the refusal screen (under 18) → returning adults never see the date screen → ✅ Done.
 
 ---
 
@@ -2361,26 +2362,26 @@ Rewrite the two clauses (exact text below), bump `CURRENT_PRIVACY_POLICY_VERSION
 
 ---
 
-- [ ] **RED — Unit / Component:**
-  - [ ] (`PrivacyPolicyPage.test.tsx`) Test: section 7 contains "18 years of age", "date of birth", "do not store", "90 days", "hashed" and "privacy@gorola.in"; the heading `7. Protection of Children's Data` is still present.
-  - [ ] (`TermsOfServicePage.test.tsx`) Test: the eligibility text contains "at least 18 years of age", "date of birth is correct" and "close your account".
-  - [ ] (`age-copy.guard.test.ts`, new, web) Test: scan every non-test source file under `apps/web/src` (`*.ts`, `*.tsx`, excluding `*.test.*`); search with the regex `/\b(\d{1,3})\s*(?:\+\s*)?years?\s*(?:old|of age)\b|\b(?:aged?|age of)\s+(\d{1,3})\b|\b(\d{1,3})\s*\+?\s*(?:and (?:over|above|older)|only)\b/i`; for every match the captured number **must equal 18**. (Retention phrases such as "7 years" or "30 days" do not match because the regex requires "old", "of age", "aged" or "and over". **This guard is green from day one by design; it is a regression guard.** The other tests in this item are RED.)
-  - [ ] (`BuyerLayout.test.tsx`) Test: a logged-in user with `privacyPolicyVersionAccepted: "1.0"` sees the re-consent banner; with `"1.1"` does not.
-  - [ ] (`ConsentNoticeModal.test.tsx`) Test: the `OTP_AUTH` modal text includes "aged 18 and over" and uses the grievance address chosen in 8.7.8 row 1.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component:**
+  - [x] (`PrivacyPolicyPage.test.tsx`) Test: section 7 contains "18 years of age", "date of birth", "do not store", "90 days", "hashed" and "privacy@gorola.in"; the heading `7. Protection of Children's Data` is still present.
+  - [x] (`TermsOfServicePage.test.tsx`) Test: the eligibility text contains "at least 18 years of age", "date of birth is correct" and "close your account".
+  - [x] (`age-copy.guard.test.ts`, new, web) Test: scan every non-test source file under `apps/web/src` (`*.ts`, `*.tsx`, excluding `*.test.*`); search with the regex `/\b(\d{1,3})\s*(?:\+\s*)?years?\s*(?:old|of age)\b|\b(?:aged?|age of)\s+(\d{1,3})\b|\b(\d{1,3})\s*\+?\s*(?:and (?:over|above|older)|only)\b/i`; for every match the captured number **must equal 18**. (Retention phrases such as "7 years" or "30 days" do not match because the regex requires "old", "of age", "aged" or "and over". **This guard is green from day one by design; it is a regression guard.** The other tests in this item are RED.)
+  - [x] (`BuyerLayout.test.tsx`) Test: a logged-in user with `privacyPolicyVersionAccepted: "1.0"` sees the re-consent banner; with `"1.1"` does not.
+  - [x] (`ConsentNoticeModal.test.tsx`) Test: the `OTP_AUTH` modal text includes "aged 18 and over" and uses the grievance address chosen in 8.7.8 row 1.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Integration (`user.accept-policy.test.ts`):**
-  - [ ] Test: `POST /api/v1/user/accept-policy` with `{ version: "1.1" }` → HTTP 200 and `User.privacyPolicyVersionAccepted === "1.1"`; with `"9.9"` → HTTP 400.
-  - [ ] **Run — confirm RED (inspect `user.schema.ts` / `user.controller.ts`; any hard-coded `"1.0"` is the cause).**
+- [x] **RED — Integration (`user.accept-policy.test.ts`):**
+  - [x] Test: `POST /api/v1/user/accept-policy` with `{ version: "1.1" }` → HTTP 200 and `User.privacyPolicyVersionAccepted === "1.1"`; with `"9.9"` → HTTP 400.
+  - [x] **Run — confirm RED (inspect `user.schema.ts` / `user.controller.ts`; any hard-coded `"1.0"` is the cause).**
 
-- [ ] **GREEN — Backend + Frontend:**
-  - [ ] [Backend] Make `accept-policy` validate against `CURRENT_PRIVACY_POLICY_VERSION` from shared.
-  - [ ] [Frontend] Replace the constant in `BuyerLayout.tsx` with the shared import; update `PrivacyPolicyPage.tsx` and `TermsOfServicePage.tsx` with the exact texts above; update the `OTP_AUTH` text in `ConsentNoticeModal.tsx` from the shared constant; use one shared grievance-address constant everywhere.
-  - [ ] [Cascade] Update existing test fixtures that assume version `"1.0"` is current (search `"1.0"` in `apps/web/src` and `apps/api/src/__tests__`).
-  - [ ] Run unit + integration tests — **confirm GREEN**.
+- [x] **GREEN — Backend + Frontend:**
+  - [x] [Backend] Make `accept-policy` validate against `CURRENT_PRIVACY_POLICY_VERSION` from shared.
+  - [x] [Frontend] Replace the constant in `BuyerLayout.tsx` with the shared import; update `PrivacyPolicyPage.tsx` and `TermsOfServicePage.tsx` with the exact texts above; update the `OTP_AUTH` text in `ConsentNoticeModal.tsx` from the shared constant; use one shared grievance-address constant everywhere.
+  - [x] [Cascade] Update existing test fixtures that assume version `"1.0"` is current (search `"1.0"` in `apps/web/src` and `apps/api/src/__tests__`).
+  - [x] Run unit + integration tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] An existing user opens the site → sees the "policy updated" banner once → reads the new section 7 → accepts → version `1.1` is saved; a developer adds "21+" to any page → the guard test fails the build → ✅ Done.
+- [x] **Verification chain:**
+  - [x] An existing user opens the site → sees the "policy updated" banner once → reads the new section 7 → accepts → version `1.1` is saved; a developer adds "21+" to any page → the guard test fails the build → ✅ Done.
 
 ---
 
@@ -2391,28 +2392,28 @@ Rewrite the two clauses (exact text below), bump `CURRENT_PRIVACY_POLICY_VERSION
 
 ---
 
-- [ ] **RED — Integration (`user.my-data.test.ts`, `consent.controller.test.ts`, `admin.users.test.ts` extended):**
-  - [ ] Test: `GET /api/v1/user/my-data` returns `user.ageConfirmedAt` (ISO string) and a `consentHistory` entry with `purpose "AGE_DECLARATION"`; no key matching `/birth|dob/i` anywhere in the payload.
-  - [ ] Test: `DELETE /api/v1/consent/AGE_DECLARATION` → HTTP 403 (essential purpose; confirm how `OTP_AUTH` / `ORDER_PROCESSING` are treated today and match it).
-  - [ ] Test: `GET /api/v1/admin/users/:id/consents` summary now includes a row for `AGE_DECLARATION` (status "Active" for a confirmed user, "Never Given" for a legacy user); update the existing assertions that expect exactly 4 summary rows.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`user.my-data.test.ts`, `consent.controller.test.ts`, `admin.users.test.ts` extended):**
+  - [x] Test: `GET /api/v1/user/my-data` returns `user.ageConfirmedAt` (ISO string) and a `consentHistory` entry with `purpose "AGE_DECLARATION"`; no key matching `/birth|dob/i` anywhere in the payload.
+  - [x] Test: `DELETE /api/v1/consent/AGE_DECLARATION` → HTTP 403 (essential purpose; confirm how `OTP_AUTH` / `ORDER_PROCESSING` are treated today and match it).
+  - [x] Test: `GET /api/v1/admin/users/:id/consents` summary now includes a row for `AGE_DECLARATION` (status "Active" for a confirmed user, "Never Given" for a legacy user); update the existing assertions that expect exactly 4 summary rows.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend:**
-  - [ ] [Repository] Add `ageConfirmedAt` to the `getMyData` selection and serializer; treat `AGE_DECLARATION` as essential in `ESSENTIAL_PURPOSES` in `consent.service.ts` and add it to `ConsentPurpose` / the Zod purposes list.
-  - [ ] Run integration tests — **confirm GREEN**.
+- [x] **GREEN — Backend:**
+  - [x] [Repository] Add `ageConfirmedAt` to the `getMyData` selection and serializer; treat `AGE_DECLARATION` as essential in `ESSENTIAL_PURPOSES` in `consent.service.ts` and add it to `ConsentPurpose` / the Zod purposes list.
+  - [x] Run integration tests — **confirm GREEN**.
 
-- [ ] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`, `AdminUsersPage.test.tsx`):**
-  - [ ] Test: when the consent list includes `AGE_DECLARATION`, the section shows `data-testid="age-confirmation-line"` with "Age confirmed on <date>" and **no** Withdraw button; `buildPurposeCards` still renders exactly **4** purpose cards.
-  - [ ] Test: the admin drawer's consent summary table renders 5 rows.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit / Component (`PrivacySettingsSection.test.tsx`, `AdminUsersPage.test.tsx`):**
+  - [x] Test: when the consent list includes `AGE_DECLARATION`, the section shows `data-testid="age-confirmation-line"` with "Age confirmed on <date>" and **no** Withdraw button; `buildPurposeCards` still renders exactly **4** purpose cards.
+  - [x] Test: the admin drawer's consent summary table renders 5 rows.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend:**
-  - [ ] [Types] Add `"AGE_DECLARATION"` to the purpose union types in `PrivacySettingsSection.tsx`, `ConsentNoticeModal.tsx` and the admin types, **excluding** it from the user-facing 4-card builder.
-  - [ ] [Component] Add the read-only age line; update the admin summary rendering for the fifth row.
-  - [ ] Run unit tests — **confirm GREEN**.
+- [x] **GREEN — Frontend:**
+  - [x] [Types] Add `"AGE_DECLARATION"` to the purpose union types in `PrivacySettingsSection.tsx`, `ConsentNoticeModal.tsx` and the admin types, **excluding** it from the user-facing 4-card builder.
+  - [x] [Component] Add the read-only age line; update the admin summary rendering for the fifth row.
+  - [x] Run unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Adult opens `/account/privacy` → sees "Age confirmed on 5 Oct 2026" and still 4 purpose cards → downloads their data → the file shows the confirmation date and no date of birth; an admin opens the user → sees `AGE_DECLARATION: Active` → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Adult opens `/account/privacy` → sees "Age confirmed on 5 Oct 2026" and still 4 purpose cards → downloads their data → the file shows the confirmation date and no date of birth; an admin opens the user → sees `AGE_DECLARATION: Active` → ✅ Done.
 
 ---
 
@@ -2893,5 +2894,38 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Implemented `AdminService.eraseUnderageUser` & `POST /api/v1/admin/users/:id/erase-underage`: validates reason (>= 10 chars), computes pre-purge phone hash, terminates Redis sessions (`rt:*` and `user_sessions:*`), executes `UserRepository.permanentPurgeAndAnonymize`, creates 90-day `AgeGateLockout`, and writes `USER_ERASED_UNDERAGE` audit log with zero raw phone digits.
     - Added strict RBAC (401 unauthenticated, 403 non-admin roles), input validation (400), 404 for missing records, and 409 `ALREADY_ERASED`.
   - **Quality Gates:** 100% GREEN (11 test files / 52 tests passing, `pnpm --filter @gorola/api typecheck` 0 errors, `pnpm --filter @gorola/api lint` 0 errors, 0 warnings).
+
+- **Session 15 — 2026-10-06 — Phase 8.8 (Section 8.8.9 Lockout Purge Worker Complete):**
+  - **8.8.9 Lockout Purge Worker (`age-gate-lockout-purge.worker.ts` & `scheduler.ts`):**
+    - Built RED integration tests in `age-gate-lockout-purge.test.ts` (3 tests verifying expired lockout deletion, active lockout retention, scheduler job registry, and unified retention cycle invocation).
+    - Created `apps/api/src/workers/age-gate-lockout-purge.worker.ts` executing `AgeGateRepository.deleteExpired(now)` under DPDP Sec 12 storage limitation principles.
+    - Registered daily job `age-gate-lockout-purge` in `apps/api/src/workers/scheduler.ts` and integrated it into `runAllRetentionPurgeJobs` and `getScheduledJobs`.
+    - Quality gates: 100% GREEN across test suites, `pnpm typecheck` (0 errors), and `pnpm lint` (0 errors, 0 warnings).
+
+- **Session 16 — 2026-10-06 — Phase 8.8 (Section 8.8.10 Frontend Login Flow Complete):**
+  - **8.8.10 Frontend Login Flow (`AgeStep.tsx` & `LoginPage.tsx`):**
+    - Built RED unit tests in `AgeStep.test.tsx` (9 tests) and `LoginPage.test.tsx` (23 tests).
+    - Created `AgeStep.tsx` with 3 numeric inputs (`day`, `month`, `year`), neutral calendar validation (no cutoff date leakage), confirmation view with localized Indian date string, and refusal view (`age-blocked-step`).
+    - Enhanced `LoginPage.tsx` with `age`, `ageConfirm`, and `ageBlocked` steps, `confirm-age` integration with single-use ticket management in component state, error handling (403 refusal/lockout -> `ageBlocked`, 401 expired -> `phone` step with notification), and removed client-side `OTP_AUTH` `POST /api/v1/consent` call.
+- **Session 17 — 2026-10-06 — Phase 8.8 (Section 8.8.11 Policy Copy, Version Bump to 1.1 & "Only 18" Guard Complete):**
+  - **8.8.11 Policy Copy, Version Bump to 1.1 & the "Only 18" Guard:**
+    - Built RED tests in `PrivacyPolicyPage.test.tsx`, `TermsOfServicePage.test.tsx`, `BuyerLayout.test.tsx`, `ConsentNoticeModal.test.tsx`, `user.policy.test.ts`, and created `apps/web/src/__tests__/age-copy.guard.test.ts`.
+    - Rewrote Privacy Policy Section 7 body to exact DPDP 8.8.11 copy (`18 years of age`, `date of birth`, `do not store`, `90 days`, `hashed`, `privacy@gorola.in`).
+    - Rewrote Terms of Service Section 1 (Eligibility) to exact DPDP 8.8.11 copy (`at least 18 years of age`, `date of birth is correct`, `close your account`).
+    - Exported `CURRENT_PRIVACY_POLICY_VERSION = "1.1"` and `GRIEVANCE_EMAIL = "privacy@gorola.in"` in `@gorola/shared`.
+    - Updated `BuyerLayout.tsx` and `ConsentNoticeModal.tsx` to use shared policy version and grievance email constants.
+- **Session 18 — 2026-10-06 — Phase 8.8 (Section 8.8.12 Privacy Dashboard, Data Export & Admin Consent Panel Complete):**
+  - **8.8.12 Privacy Dashboard, Data Export & Admin Consent Panel:**
+    - Built integration tests in `user.my-data.test.ts` (verifying `profile.ageConfirmedAt` ISO string export, `AGE_DECLARATION` consent row, and zero keys matching `/birth|dob/i`).
+    - Built essential consent withdrawal rejection tests in `consent.controller.test.ts` (verifying `DELETE /api/v1/consent/AGE_DECLARATION` returns HTTP 400 with `code: "CANNOT_WITHDRAW_ESSENTIAL_CONSENT"`).
+    - Built admin consent summary integration tests in `admin.users.test.ts` (verifying all 5 statutory purpose summary rows including `AGE_DECLARATION`).
+    - Added unit tests in `PrivacySettingsSection.test.tsx` (asserting `data-testid="age-confirmation-line"` shows "Age confirmed on <date>" with no withdraw button, and `buildPurposeCards` continues rendering exactly 4 canonical purpose cards).
+    - Added component tests in `AdminUserDetailPage.test.tsx` (asserting 5 summary rows render in the consent summary table).
+    - Added `"AGE_DECLARATION"` to `ConsentPurpose` type and Zod schema, included `"AGE_DECLARATION"` in `ESSENTIAL_PURPOSES` in `consent.service.ts`, added `ageConfirmedAt` to `user.repository.ts` `getMyData` payload.
+    - Updated `PrivacySettingsSection.tsx` to handle `AGE_DECLARATION` as a distinct header line and exclude it from the 4-card builder.
+  - **Quality Gates:** 100% GREEN (`pnpm typecheck` 0 errors across workspace, `pnpm lint` 0 errors, 0 warnings across all 4 packages, 101/101 test files / 573 tests passing in `@gorola/web`, 26/26 tests passing in `@gorola/api`).
+
+
+
 
 

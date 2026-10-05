@@ -21,7 +21,9 @@ describe("GET /api/v1/user/my-data (DPDP Right to Access & Data Portability)", (
           id: "usr_123",
           name: "Vikram Sharma",
           phone: "+919876543210",
-          createdAt: "2026-05-10T10:00:00.000Z"
+          ageConfirmedAt: "2026-05-10T10:00:00.000Z",
+          createdAt: "2026-05-10T10:00:00.000Z",
+          updatedAt: "2026-05-10T10:00:00.000Z"
         },
         addresses: [
           {
@@ -74,6 +76,15 @@ describe("GET /api/v1/user/my-data (DPDP Right to Access & Data Portability)", (
             isWithdrawn: false,
             createdAt: "2026-05-10T10:05:00.000Z",
             withdrawnAt: null
+          },
+          {
+            id: "c_3",
+            purpose: "AGE_DECLARATION",
+            consentVersion: "1.1",
+            noticeText: "Age confirmation notice",
+            isWithdrawn: false,
+            createdAt: "2026-05-10T10:00:00.000Z",
+            withdrawnAt: null
           }
         ]
       })
@@ -103,9 +114,17 @@ describe("GET /api/v1/user/my-data (DPDP Right to Access & Data Portability)", (
     expect(body.success).toBe(true);
     expect(body.data.profile.name).toBe("Vikram Sharma");
     expect(body.data.profile.phone).toBe("+919876543210");
+    expect(body.data.profile.ageConfirmedAt).toBe("2026-05-10T10:00:00.000Z");
     expect(body.data.addresses).toHaveLength(1);
     expect(body.data.orders).toHaveLength(1);
-    expect(body.data.consents).toHaveLength(2);
+    expect(body.data.consents).toHaveLength(3);
+    const ageConsent = body.data.consents.find((c: { purpose: string }) => c.purpose === "AGE_DECLARATION");
+    expect(ageConsent).toBeDefined();
+    expect(ageConsent.consentVersion).toBe("1.1");
+
+    // DPDP Section 11 & Rule: payload must never contain keys matching /birth|dob/i
+    const rawPayload = JSON.stringify(body);
+    expect(rawPayload).not.toMatch(/birth|dob/i);
     expect(userRepository.getMyData).toHaveBeenCalledWith("usr_123");
   });
 

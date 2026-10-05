@@ -100,5 +100,49 @@ describe("BuyerLayout", () => {
     await user.click(cartBtn);
     expect(openSpy).toHaveBeenCalled();
   });
+
+  it("shows the re-consent banner when logged-in user accepted version 1.0", async () => {
+    const { useAuthStore } = await import("@/store/auth.store");
+    useAuthStore.setState({
+      accessToken: "valid-jwt",
+      role: "BUYER",
+      userId: "u-1",
+      name: "Rohan",
+      phone: "+919876543210",
+      privacyPolicyVersionAccepted: "1.0"
+    });
+
+    render(
+      <MemoryRouter>
+        <BuyerLayout>
+          <h1>Content</h1>
+        </BuyerLayout>
+      </MemoryRouter>
+    );
+
+    expect(screen.getByTestId("privacy-policy-update-banner")).toBeInTheDocument();
+  });
+
+  it("does not show the re-consent banner when logged-in user accepted version 1.1", async () => {
+    const { useAuthStore } = await import("@/store/auth.store");
+    useAuthStore.setState({
+      accessToken: "valid-jwt",
+      role: "BUYER",
+      userId: "u-1",
+      name: "Rohan",
+      phone: "+919876543210",
+      privacyPolicyVersionAccepted: "1.1"
+    });
+
+    render(
+      <MemoryRouter>
+        <BuyerLayout>
+          <h1>Content</h1>
+        </BuyerLayout>
+      </MemoryRouter>
+    );
+
+    expect(screen.queryByTestId("privacy-policy-update-banner")).not.toBeInTheDocument();
+  });
 });
 

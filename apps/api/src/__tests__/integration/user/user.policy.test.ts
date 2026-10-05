@@ -39,7 +39,7 @@ describe("user policy routes - Edge & Special Cases", () => {
   });
 
   describe("POST /api/v1/user/accept-policy", () => {
-    it("Happy path: should accept policy version and return 200 with sanitized data", async () => {
+    it("Happy path: should accept policy version 1.1 and return 200 with sanitized data", async () => {
       const userRepository = createUserRepositoryMock();
       const tokenVerifier = createTokenVerifierMock();
 
@@ -47,7 +47,7 @@ describe("user policy routes - Edge & Special Cases", () => {
       tokenVerifier.verifyAccessToken.mockResolvedValueOnce(mockUser);
       userRepository.acceptPolicyVersion.mockResolvedValueOnce({
         id: "u123",
-        privacyPolicyVersionAccepted: "2.0"
+        privacyPolicyVersionAccepted: "1.1"
       });
 
       const server = createServer({
@@ -63,15 +63,40 @@ describe("user policy routes - Edge & Special Cases", () => {
         headers: {
           authorization: "Bearer valid-token"
         },
-        payload: { version: "2.0" }
+        payload: { version: "1.1" }
       });
 
       expect(response.statusCode).toBe(200);
       const body = response.json();
       expect(body.success).toBe(true);
       expect(body.data.accepted).toBe(true);
-      expect(body.data.version).toBe("2.0");
-      expect(userRepository.acceptPolicyVersion).toHaveBeenCalledWith("u123", "2.0");
+      expect(body.data.version).toBe("1.1");
+      expect(userRepository.acceptPolicyVersion).toHaveBeenCalledWith("u123", "1.1");
+    });
+
+    it("Edge case: should reject invalid policy version string ('9.9') with 400", async () => {
+      const userRepository = createUserRepositoryMock();
+      const tokenVerifier = createTokenVerifierMock();
+
+      tokenVerifier.verifyAccessToken.mockResolvedValueOnce({ sub: "u123", role: "BUYER" });
+
+      const server = createServer({
+        disableRedis: true,
+        // @ts-expect-error - mock dependencies
+        registerRoutes: (app) => registerUserRoutes(app, { userRepository, tokenVerifier })
+      });
+      servers.push(server);
+
+      const response = await server.inject({
+        method: "POST",
+        url: "/api/v1/user/accept-policy",
+        headers: {
+          authorization: "Bearer valid-token"
+        },
+        payload: { version: "9.9" }
+      });
+
+      expect(response.statusCode).toBe(400);
     });
 
     it("Security case: should return 401 when unauthenticated", async () => {

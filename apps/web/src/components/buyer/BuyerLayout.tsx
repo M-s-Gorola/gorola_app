@@ -1,3 +1,4 @@
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@gorola/shared";
 import { ClipboardList, Home, ShoppingCart, UserRound } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -28,7 +29,7 @@ export function BuyerLayout({ children }: BuyerLayoutProps): ReactElement {
 
   return (
     <div className="flex min-h-screen flex-col bg-transparent transition-colors duration-500 ease-in-out">
-      <PrivacyPolicyUpdateBanner currentVersion="1.0" />
+      <PrivacyPolicyUpdateBanner currentVersion={CURRENT_PRIVACY_POLICY_VERSION} />
       <BuyerCartHydration />
       <BuyerNav />
       <CartDrawer />
