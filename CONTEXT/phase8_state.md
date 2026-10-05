@@ -2582,8 +2582,8 @@ The new rule changes who may log in. Every place that creates buyers through `ve
 - [x] `architecture.md`: add the `age-gate` module to the Module Map and the confirm-age step to the buyer auth data flow — done 2026-10-05.
 - [x] `database_schema.md`: add `AgeGateLockout` and the two `User` columns — done 2026-10-05.
 - [x] `DPDP Act/DPDP_CONSENT_ARCHITECTURE_GUIDE.md`: section 2 diagram and heading updated to five pipelines, section 15.7 rewritten for the admin screen — done 2026-10-05.
-- [ ] `architecture.md`: add the admin age-gate routes and screen to the admin section of the Module Map.
-- [ ] `current_state.md`: environment table (8.8.13), test counts, and "Phase 8" notes.
+- [x] `architecture.md`: add the admin age-gate routes and screen to the admin section of the Module Map — done 2026-10-05.
+- [x] `current_state.md`: environment table (8.8.13), test counts, and "Phase 8" notes — done 2026-10-05.
 - [x] `project_data.json`: entities updated with `AgeGateLockout` and full `User`/DPDP schema — done 2026-10-05.
 - [ ] This file: tick the 8.8 items as they are completed and update the "📍 Last Updated" block.
 
