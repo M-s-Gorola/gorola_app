@@ -116,13 +116,16 @@ export function registerAppRoutes(app: FastifyInstance): void {
   const userRepo = new UserRepository(prisma);
 
   const authService = new AuthService({
-    ensureBuyerUser: async (phone) => {
-      const row = await userRepo.ensureBuyerByPhone(phone);
+    findBuyerByPhone: async (phone) => {
+      const row = await userRepo.findByPhoneForAuth(phone);
+      if (row === null) return null;
       return {
         id: row.id,
         name: row.name,
         phone: row.phone,
         isActive: row.isActive,
+        ageConfirmedAt: row.ageConfirmedAt,
+        ageConfirmedPolicyVersion: row.ageConfirmedPolicyVersion,
         privacyPolicyVersionAccepted: row.privacyPolicyVersionAccepted,
         deletedAt: row.deletedAt,
         deletionScheduledFor: row.deletionScheduledFor

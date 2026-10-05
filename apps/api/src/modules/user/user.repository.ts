@@ -62,7 +62,12 @@ export class UserRepository {
     return toDomainUser(user);
   }
 
+  public async findByPhoneForAuth(phone: string): Promise<User | null> {
+    return this.findByPhone(phone, { includeDeleted: true });
+  }
+
   /**
+   * Seeds and test helpers only — never call from an authentication path.
    * Buyer OTP onboarding: reuse row by active phone or create verified buyer (`name` empty until profile step).
    */
   public async ensureBuyerByPhone(phone: string): Promise<User> {
@@ -87,7 +92,9 @@ export class UserRepository {
         name: "",
         phone: encryptedPhone,
         phoneHash: piiHash,
-        isVerified: true
+        isVerified: true,
+        ageConfirmedAt: new Date(),
+        ageConfirmedPolicyVersion: "1.1"
       }
     });
     return toDomainUser(created)!;

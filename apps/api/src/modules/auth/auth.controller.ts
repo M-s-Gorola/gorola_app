@@ -158,6 +158,12 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
     const payload = parseVerifyOtpInput(request.body as { otp: string; phone: string });
     const context = getClientContext(request);
     const result = await deps.authService.verifyOtp(payload, context);
+    if ("ageGateRequired" in result && result.ageGateRequired) {
+      return success(request, reply, {
+        ageGateRequired: true,
+        ageTicket: result.ageTicket
+      });
+    }
     reply.setCookie("refreshToken", result.refreshToken, refreshCookieOptions());
     return success(request, reply, {
       accessToken: result.accessToken,

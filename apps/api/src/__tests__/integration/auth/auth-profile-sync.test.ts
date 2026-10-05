@@ -29,8 +29,20 @@ describe("Regression: Profile Persistence (Session Sync)", () => {
     // 1. Seed a user
     const user = await prisma.user.upsert({
       where: { phone },
-      update: { name: "Original Name", isVerified: true, isDeleted: false },
-      create: { phone, name: "Original Name", isVerified: true }
+      update: {
+        name: "Original Name",
+        isVerified: true,
+        isDeleted: false,
+        ageConfirmedAt: new Date(),
+        ageConfirmedPolicyVersion: "1.1"
+      },
+      create: {
+        phone,
+        name: "Original Name",
+        isVerified: true,
+        ageConfirmedAt: new Date(),
+        ageConfirmedPolicyVersion: "1.1"
+      }
     });
 
     // 2. Obtain a session (Login/Verify OTP flow)

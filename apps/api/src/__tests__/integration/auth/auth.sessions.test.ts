@@ -38,6 +38,7 @@ describe("Phase 8.4.1 — Active Sessions & Remote Revoke", () => {
     name: "Mussoorie Buyer",
     phone: "+919876543210",
     isActive: true,
+    ageConfirmedAt: new Date(),
     deletedAt: null,
     deletionScheduledFor: null
   };
@@ -63,7 +64,7 @@ describe("Phase 8.4.1 — Active Sessions & Remote Revoke", () => {
     });
 
     authService = new AuthService({
-      ensureBuyerUser: async () => testUser,
+      findBuyerByPhone: async () => testUser,
       findUserById: async (id) => (id === testUser.id ? testUser : null),
       otpProvider: createNoopOtpProvider(),
       otpTtlSeconds: 5 * 60,
@@ -134,13 +135,13 @@ describe("Phase 8.4.1 — Active Sessions & Remote Revoke", () => {
 
     // 2. Establish Session 2 (e.g. from Laptop)
     await authService.sendOtp({ phone: testUser.phone });
-    const session2 = await authService.verifyOtp({
+    const session2 = (await authService.verifyOtp({
       phone: testUser.phone,
       otp: "111222"
     }, {
       ipAddress: "14.139.240.10",
       userAgent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
-    });
+    })) as import("../../../modules/auth/auth.types.js").BuyerVerifySuccess;
 
     // 3. Request sessions using Session 2's access token and refresh cookie
     const res = await server.inject({
@@ -172,10 +173,16 @@ describe("Phase 8.4.1 — Active Sessions & Remote Revoke", () => {
 
     // Create 2 sessions
     await authService.sendOtp({ phone: testUser.phone });
-    const session1 = await authService.verifyOtp({ phone: testUser.phone, otp: "111222" });
+    const session1 = (await authService.verifyOtp({
+      phone: testUser.phone,
+      otp: "111222"
+    })) as import("../../../modules/auth/auth.types.js").BuyerVerifySuccess;
 
     await authService.sendOtp({ phone: testUser.phone });
-    const session2 = await authService.verifyOtp({ phone: testUser.phone, otp: "111222" });
+    const session2 = (await authService.verifyOtp({
+      phone: testUser.phone,
+      otp: "111222"
+    })) as import("../../../modules/auth/auth.types.js").BuyerVerifySuccess;
 
     // Assert both refresh tokens exist in Redis
     expect(await redis.get(`rt:${session1.refreshToken}`)).not.toBeNull();

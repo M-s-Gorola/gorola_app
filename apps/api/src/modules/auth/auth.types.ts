@@ -37,6 +37,21 @@ export type BuyerRefreshSuccess = AuthTokenPair & {
 export type BuyerVerifySuccess = BuyerRefreshSuccess & {
   isPendingDeletion?: boolean | undefined;
   deletionScheduledFor?: string | null | undefined;
+  ageGateRequired?: false | undefined;
+};
+
+export type BuyerVerifyAgeGateRequired = {
+  ageGateRequired: true;
+  ageTicket: string;
+};
+
+export type BuyerVerifyResult = BuyerVerifySuccess | BuyerVerifyAgeGateRequired;
+
+export type AgeTicketRecord = {
+  phone: string;
+  existingUserId: string | null;
+  ip: string | null;
+  createdAt: string;
 };
 
 export type OtpStoreRecord = {
