@@ -4,12 +4,17 @@ import { AppError, RateLimitError, UnauthorizedError, ValidationError } from "@g
 import { compare, hash } from "bcryptjs";
 
 import { getLogger, logSecurityAlert } from "../../lib/logger.js";
+import { evaluateDateOfBirth } from "../age-gate/age.util.js";
+import { type AgeGateRepository, ageGateRepository } from "../age-gate/age-gate.repository.js";
 import { type AgeGateService, ageGateService } from "../age-gate/age-gate.service.js";
+import { verifyDeviceCookie } from "../age-gate/age-gate-cookie.js";
 import type {
   ActiveSession,
+  AgeTicketRecord,
   BuyerRefreshSuccess,
   BuyerVerifyResult,
   BuyerVerifySuccess,
+  ConfirmAgeInput,
   LogoutInput,
   OtpProvider,
   OtpStoreRecord,
@@ -45,6 +50,7 @@ export type AuthServiceDependencies = {
   redis: RedisLikeClient;
   tokenService: TokenService;
   ageGateService?: AgeGateService;
+  ageGateRepository?: AgeGateRepository;
 };
 
 export class AuthService {
@@ -210,6 +216,151 @@ export class AuthService {
     };
   }
 
+  public async confirmAge(
+    input: ConfirmAgeInput,
+    context?: SessionContext,
+    deviceCookie?: string | null
+  ): Promise<BuyerVerifySuccess> {
+    const now = new Date();
+
+    const ticketHash = crypto.createHash("sha256").update(input.ageTicket).digest("hex");
+    const ticketKey = `age_ticket:${ticketHash}`;
+
+    // 1. Look up the ticket
+    const rawTicket = await this.deps.redis.get(ticketKey);
+    if (!rawTicket) {
+      throw new AppError("Invalid or expired age verification ticket", {
+        code: "AGE_TICKET_INVALID",
+        statusCode: 401
+      });
+    }
+
+    const ticketRecord = JSON.parse(rawTicket) as AgeTicketRecord;
+
+    // 2. Check device cooldown cookie if present
+    if (deviceCookie && verifyDeviceCookie(deviceCookie, now)) {
+      throw new AppError("Phone number is locked due to age restriction.", {
+        code: "AGE_GATE_LOCKED",
+        statusCode: 403
+      });
+    }
+
+    // 3. Evaluate Date of Birth
+    const evaluation = evaluateDateOfBirth(input.dateOfBirth, now);
+    if (!evaluation.valid) {
+      throw new ValidationError("Invalid date of birth");
+    }
+
+    // Adult path (8.8.5 & 8.8.7)
+    if (evaluation.isAdult) {
+      // 4. Consume ticket atomically
+      const deletedCount = await this.deps.redis.del(ticketKey);
+      if (deletedCount === 0) {
+        throw new AppError("Invalid or expired age verification ticket", {
+          code: "AGE_TICKET_INVALID",
+          statusCode: 401
+        });
+      }
+
+      const repo = this.deps.ageGateRepository ?? ageGateRepository;
+
+      // 5. Existing legacy user vs new buyer
+      if (ticketRecord.existingUserId) {
+        const updatedUser = await repo.confirmAdultLegacyBuyer({
+          userId: ticketRecord.existingUserId,
+          consentVersion: input.consentVersion,
+          ipAddress: context?.ipAddress,
+          userAgent: context?.userAgent,
+          now
+        });
+
+        return this.completeLogin(
+          {
+            id: updatedUser.id,
+            name: updatedUser.name,
+            phone: updatedUser.phone,
+            isActive: updatedUser.isActive,
+            ageConfirmedAt: updatedUser.ageConfirmedAt,
+            ageConfirmedPolicyVersion: updatedUser.ageConfirmedPolicyVersion,
+            privacyPolicyVersionAccepted: updatedUser.privacyPolicyVersionAccepted,
+            deletedAt: updatedUser.deletedAt,
+            deletionScheduledFor: updatedUser.deletionScheduledFor
+          },
+          context
+        );
+      }
+
+      // New buyer creation
+      const createdUser = await repo.createAdultBuyerWithConsents({
+        phone: ticketRecord.phone,
+        consentVersion: input.consentVersion,
+        ipAddress: context?.ipAddress,
+        userAgent: context?.userAgent,
+        now
+      });
+
+      // 6. Complete login and return tokens
+      return this.completeLogin(
+        {
+          id: createdUser.id,
+          name: createdUser.name,
+          phone: createdUser.phone,
+          isActive: createdUser.isActive,
+          ageConfirmedAt: createdUser.ageConfirmedAt,
+          ageConfirmedPolicyVersion: createdUser.ageConfirmedPolicyVersion,
+          privacyPolicyVersionAccepted: createdUser.privacyPolicyVersionAccepted
+        },
+        context
+      );
+    }
+
+    // Under-18 path (8.8.6 & 8.8.7)
+    // 1. Consume ticket atomically so it cannot be reused
+    await this.deps.redis.del(ticketKey);
+
+    // 2. If legacy user exists, permanently purge & anonymize immediately
+    if (ticketRecord.existingUserId) {
+      await this.terminateAllSessions(ticketRecord.existingUserId);
+      const { UserRepository } = await import("../user/user.repository.js");
+      const userRepo = new UserRepository();
+      await userRepo.permanentPurgeAndAnonymize(ticketRecord.existingUserId);
+    }
+
+    // 3. Lock phone number
+    const ageGate = this.deps.ageGateService ?? ageGateService;
+    const lockout = await ageGate.lockPhone(ticketRecord.phone, now);
+
+    // 4. Write AuditLog row
+    const prisma = (await import("../../lib/prisma.js")).getPrismaClient();
+    await prisma.auditLog.create({
+      data: {
+        actorId: "anonymous",
+        actorRole: "SYSTEM",
+        action: "AGE_GATE_LOCKOUT_CREATED",
+        entityType: "AgeGateLockout",
+        entityId: lockout.id,
+        ip: context?.ipAddress ?? "unknown",
+        userAgent: context?.userAgent ?? "unknown",
+        newValue: {
+          lockedUntil: lockout.lockedUntil.toISOString(),
+          strikeCount: lockout.strikeCount
+        }
+      }
+    });
+
+    // 5. Record refusal for IP-based abuse alert
+    await ageGate.recordRefusal(context?.ipAddress);
+
+    // 6. Throw error with canonical refusal message
+    throw new AppError(
+      "We can't create an account for you. GoRola is available only to people aged 18 and over.",
+      {
+        code: "AGE_REQUIREMENT_NOT_MET",
+        statusCode: 403
+      }
+    );
+  }
+
   private async completeLogin(
     user: BuyerUserLookup,
     context?: SessionContext
@@ -255,6 +406,13 @@ export class AuthService {
     const user = await this.deps.findUserById(payload.userId);
     if (user === null || !user.isActive) {
       throw new UnauthorizedError("User session no longer valid.");
+    }
+
+    if (!user.ageConfirmedAt) {
+      throw new AppError("Age confirmation required", {
+        code: "AGE_CONFIRMATION_REQUIRED",
+        statusCode: 403
+      });
     }
 
     const newTokens = await this.deps.tokenService.issueTokens({

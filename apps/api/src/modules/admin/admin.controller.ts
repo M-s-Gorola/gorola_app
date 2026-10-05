@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { getPrismaClient } from "../../lib/prisma.js";
 import { requireAuth, requireRole } from "../auth/auth.middleware.js";
-import type { AccessTokenVerifier } from "../auth/auth.types.js";
+import type { AccessTokenVerifier, RedisLikeClient } from "../auth/auth.types.js";
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
 import { AdminService } from "./admin.service.js";
@@ -42,10 +42,12 @@ export function registerAdminRoutes(
     orderService?: OrderService;
     orders?: OrderRepository;
     systemSettingService?: SystemSettingService;
+    redis?: RedisLikeClient;
   }
 ): void {
   const prisma = getPrismaClient();
-  const adminService = new AdminService(prisma);
+  const redis = deps.redis ?? ((app as unknown as { redis?: RedisLikeClient }).redis);
+  const adminService = new AdminService(prisma, redis);
   const preHandler = [requireAuth(deps.tokenVerifier), requireRole(["ADMIN"])];
 
   app.get("/api/v1/admin/dashboard", { preHandler }, async (request, reply) => {
@@ -315,6 +317,78 @@ export function registerAdminRoutes(
         id: result.id,
         isActive: result.isActive
       },
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const unlockAgeGateSchema = z.object({
+    phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number format"),
+    reason: z.string().min(10, "Reason must be at least 10 characters").max(500)
+  });
+
+  app.post("/api/v1/admin/age-gate/unlock", { preHandler }, async (request, reply) => {
+    const parsed = unlockAgeGateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid unlock parameters", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.unlockAgeGate(
+      parsed.data.phone,
+      parsed.data.reason,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const eraseUnderageSchema = z.object({
+    reason: z.string().min(10, "Reason must be at least 10 characters").max(500)
+  });
+
+  app.post("/api/v1/admin/users/:id/erase-underage", { preHandler }, async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const parsed = eraseUnderageSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid erase parameters", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.eraseUnderageUser(
+      id,
+      parsed.data.reason,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
       meta: {
         requestId: getRequestId(request, reply)
       }

@@ -17,16 +17,19 @@
 
 ## 📍 Last Updated
 
-- **Date:** 2026-10-05
-- **Session Summary (2026-10-05 — documentation and planning only; NO application code was changed):** (1) Researched every third-party provider and rewrote 8.7.2 as a provider register with accurate DPA steps — the earlier steps were largely inaccurate. (2) Amended DECISION-061: Vercel needs no DPDP DPA, but the free Hobby plan is non-commercial-only, so production needs Pro. (3) Found that the "18+ only" statement in the Privacy Policy and Terms had no enforcement in code, and planned Section 8.8 (Age Eligibility Gate) in full TDD format with decision record DECISION-062. (4) Added Consent Guide section 15 (age flow, parental-consent reasoning). (5) Renumbered the vendor-dependent SMS OTP / call-masking work from 8.8 to 8.9. *Previous session (2026-10-03) — Phase 8.6:* Fully completed and verified Phase 8.6 (Privacy Policy & Legal Pages) and end-to-end versioning re-consent flow in strict TDD format (RED-GREEN-REFACTOR):
-  - **8.6.1 (`/privacy` Statutory Privacy Policy):** Expanded `PrivacyPolicyPage.tsx` with all 11 DPDP Act 2023 statutory sections (Data Fiduciary details, PII categories, purposes, retention schedules, third-party processors, user rights, children's data 18+ requirement, 72h breach notification, DPO/DPBI escalation, versioning, Dehradun jurisdiction). Updated `BuyerFooter.tsx` with statutory links.
-  - **8.6.2 (`/terms` Terms of Service):** Implemented `TermsOfServicePage.tsx` covering 18+ eligibility, Mussoorie hill delivery & dynamic weather modes, pricing & Razorpay payments, cancellation/refunds, force majeure, and dispute resolution. Registered route in `buyer.tsx`.
-  - **8.6.3 (Privacy Policy Versioning & Dynamic Re-Consent):** Added `privacyPolicyVersionAccepted` to `User` in `schema.prisma`, generated and deployed migration `20261002215446_add_privacy_policy_version_to_user`, implemented `POST /api/v1/user/accept-policy` route, updated auth serialization in `routes.ts`, `api.ts`, and `LoginPage.tsx`, and built `PrivacyPolicyUpdateBanner.tsx` supporting both guest and logged-in buyer re-consent. Fixed layout stacking so the banner renders clearly above `BuyerNav`. Reverted test target version to `1.0`.
-  - **Mobile Layout Polish:** Added `pb-24` bottom clearance to `BuyerFooter.tsx` so all footer links and page content scroll cleanly into view above the fixed mobile bottom bar.
-  - **Final Quality Gate:** 100% GREEN (123 API test files / 750 tests passed, 99 Web test files passed, 0 TypeScript errors across 4 workspace projects, 0 ESLint errors).
-- **Next Session Must Start With:** Section 8.8.1 (age-gate schema, RED tests first) — and, in parallel and not blocked by code, the non-code action checklist in 8.7.8 (Vercel Pro upgrade before first real customer, Railway DPA, vendor emails, counsel review). Section 8.9 stays last.
-- **In Progress Right Now:** None — 8.7 documentation corrected, 8.8 planned; no code started.
-- **Current Blocker:** None for starting 8.8 code. The 8.7.8 items depend on external vendor replies and counsel review.
+- **Date:** 2026-10-06
+- **Session Summary (2026-10-06 — Sections 8.8.1 to 8.8.8 Complete):**
+  1. Verified and completed Sections 8.8.1 to 8.8.6 checklist items.
+  2. **Section 8.8.7 (Existing Legacy Users, Refresh Gate & Underage Purge):** Built `auth.service.refresh-age.test.ts` & `auth.confirm-age.legacy.integration.test.ts`. Implemented adult legacy confirmation with same userId and 1 `AGE_DECLARATION` consent, under-18 immediate `permanentPurgeAndAnonymize` + `terminateAllSessions` + `lockPhone` without 30-day grace, and `403 AGE_CONFIRMATION_REQUIRED` in `refreshToken` when `ageConfirmedAt` is null.
+  3. **Section 8.8.8 (Admin Endpoints: Unlock Wrongly Locked Adult & Erase Discovered Minor):**
+     - Built RED integration tests in `admin.age-gate.test.ts` (11 tests) and unit tests in `admin.age-gate.service.test.ts`.
+     - Implemented `POST /api/v1/admin/age-gate/unlock` (`ADMIN` JWT, validates phone & reason >= 10 chars, deletes lockout, writes `AGE_GATE_LOCKOUT_CLEARED` audit log with zero raw phone digits).
+     - Implemented `POST /api/v1/admin/users/:id/erase-underage` (`ADMIN` JWT, validates reason >= 10 chars, computes pre-purge phone hash, terminates user sessions, runs `permanentPurgeAndAnonymize`, locks phone hash for 90 days, writes `USER_ERASED_UNDERAGE` audit log with zero raw phone digits).
+     - RBAC & validation guards (401 unauthenticated, 403 non-admin roles, 400 validation, 404 not found, 409 already erased).
+  4. Quality gates verified: `pnpm --filter @gorola/api typecheck` (0 errors), `pnpm --filter @gorola/api lint` (0 errors, 0 warnings), all 11 test files / 52 tests 100% GREEN.
+- **Next Session Must Start With:** Section 8.8.9 (Lockout Purge Worker).
+- **In Progress Right Now:** Section 8.8.8 complete, ready for Section 8.8.9.
+- **Current Blocker:** None.
 
 
 > ⚠️ **Update THIS block at the end of every session** (not `current_state.md`). Also mark completed checklist items `[x]` and append to the Session Notes section at the bottom. Update `current_state.md` ONLY when Phase 8 changes status (NOT STARTED → IN PROGRESS → COMPLETE).
@@ -1997,26 +2000,26 @@ Add two nullable columns to `User`, one new table `AgeGateLockout` with no relat
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/__tests__/integration/age-gate/age-gate.schema.test.ts`):**
-  - [ ] Test: `db.user.create({ data: { ..., ageConfirmedAt: new Date(), ageConfirmedPolicyVersion: "1.1" } })` succeeds and reads back both values.
-  - [ ] Test: `db.ageGateLockout.create({ data: { phoneHash: "h1", lockedUntil } })` succeeds; a second create with `phoneHash: "h1"` rejects with Prisma error code `P2002` (unique).
-  - [ ] Test: `SELECT * FROM "ConsentPurposeConfig" WHERE key = 'AGE_DECLARATION'` returns exactly 1 row with `isEssential = true`.
-  - [ ] Test: `db.consentLog.create` with `purpose: "AGE_DECLARATION"` succeeds for an existing user.
-  - [ ] Test: deleting the `User` row does **not** delete an `AgeGateLockout` row (no relation).
-  - [ ] **Run — confirm RED (columns, table and purpose do not exist).**
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/age-gate/age-gate.schema.test.ts`):**
+  - [x] Test: `db.user.create({ data: { ..., ageConfirmedAt: new Date(), ageConfirmedPolicyVersion: "1.1" } })` succeeds and reads back both values.
+  - [x] Test: `db.ageGateLockout.create({ data: { phoneHash: "h1", lockedUntil } })` succeeds; a second create with `phoneHash: "h1"` rejects with Prisma error code `P2002` (unique).
+  - [x] Test: `SELECT * FROM "ConsentPurposeConfig" WHERE key = 'AGE_DECLARATION'` returns exactly 1 row with `isEssential = true`.
+  - [x] Test: `db.consentLog.create` with `purpose: "AGE_DECLARATION"` succeeds for an existing user.
+  - [x] Test: deleting the `User` row does **not** delete an `AgeGateLockout` row (no relation).
+  - [x] **Run — confirm RED (columns, table and purpose do not exist).**
 
-- [ ] **GREEN — Backend (Schema → Migration → Seed):**
-  - [ ] [Schema] In `schema.prisma` add to `User`: `ageConfirmedAt DateTime?` and `ageConfirmedPolicyVersion String?`.
-  - [ ] [Schema] Add model: `model AgeGateLockout { id String @id @default(cuid()); phoneHash String @unique; lockedUntil DateTime; strikeCount Int @default(1); createdAt DateTime @default(now()); updatedAt DateTime @updatedAt; @@index([lockedUntil]) }` (written one field per line in the real file).
-  - [ ] [Migration] Run `pnpm --filter @gorola/api exec prisma migrate dev --name add_age_gate_lockout_and_age_confirmation` with the `DIRECT_URL` / `db_owner` role. **Edit the generated SQL** to append: `INSERT INTO "ConsentPurposeConfig" ("key", "displayName", "description", "isEssential", "retentionSummary", "createdAt", "updatedAt") VALUES ('AGE_DECLARATION', 'Age Confirmation', 'Confirmation that you are 18 or over. Your date of birth is used once and never stored.', true, 'The date you confirmed is kept for the life of your account. Your date of birth is never stored.', NOW(), NOW()) ON CONFLICT ("key") DO NOTHING;` (confirm the exact column names against the existing `20261001200359_replace_consent_purpose_enum_with_config_table` migration).
-  - [ ] [Seed] Add the same row to the `ConsentPurposeConfig` upserts in `apps/api/prisma/seed.ts` and `seed-e2e.ts`.
-  - [ ] [Apply] Deploy to `gorola_dev` and `gorola_test` via `pnpm --filter @gorola/api prisma:bootstrap:test` **before** any other work (Mandatory Rules for Schema Changes).
-  - [ ] Run the integration test — **confirm GREEN**. Then run ALL suites (unit, integration, E2E bootstrap, `pnpm typecheck`, `pnpm lint`) — **confirm GREEN** (no existing code reads the new columns yet).
+- [x] **GREEN — Backend (Schema → Migration → Seed):**
+  - [x] [Schema] In `schema.prisma` add to `User`: `ageConfirmedAt DateTime?` and `ageConfirmedPolicyVersion String?`.
+  - [x] [Schema] Add model: `model AgeGateLockout { id String @id @default(cuid()); phoneHash String @unique; lockedUntil DateTime; strikeCount Int @default(1); createdAt DateTime @default(now()); updatedAt DateTime @updatedAt; @@index([lockedUntil]) }` (written one field per line in the real file).
+  - [x] [Migration] Run `pnpm --filter @gorola/api exec prisma migrate dev --name add_age_gate_lockout_and_age_confirmation` with the `DIRECT_URL` / `db_owner` role. **Edit the generated SQL** to append: `INSERT INTO "ConsentPurposeConfig" ("key", "displayName", "description", "isEssential", "retentionSummary", "createdAt", "updatedAt") VALUES ('AGE_DECLARATION', 'Age Confirmation', 'Confirmation that you are 18 or over. Your date of birth is used once and never stored.', true, 'The date you confirmed is kept for the life of your account. Your date of birth is never stored.', NOW(), NOW()) ON CONFLICT ("key") DO NOTHING;` (confirm the exact column names against the existing `20261001200359_replace_consent_purpose_enum_with_config_table` migration).
+  - [x] [Seed] Add the same row to the `ConsentPurposeConfig` upserts in `apps/api/prisma/seed.ts` and `seed-e2e.ts`.
+  - [x] [Apply] Deploy to `gorola_dev` and `gorola_test` via `pnpm --filter @gorola/api prisma:bootstrap:test` **before** any other work (Mandatory Rules for Schema Changes).
+  - [x] Run the integration test — **confirm GREEN**. Then run ALL suites (unit, integration, E2E bootstrap, `pnpm typecheck`, `pnpm lint`) — **confirm GREEN** (no existing code reads the new columns yet).
 
-- [ ] **RED / GREEN — Unit / Component:** N/A — schema-only item; no frontend or pure logic. Coverage for the new columns arrives in 8.8.2–8.8.10.
+- [x] **RED / GREEN — Unit / Component:** N/A — schema-only item; no frontend or pure logic. Coverage for the new columns arrives in 8.8.2–8.8.10.
 
-- [ ] **Verification chain:**
-  - [ ] Developer runs migrations → `User` has the two nullable columns, `AgeGateLockout` exists with a unique `phoneHash`, and the `AGE_DECLARATION` purpose is present in a fresh database **without running the seed** → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Developer runs migrations → `User` has the two nullable columns, `AgeGateLockout` exists with a unique `phoneHash`, and the `AGE_DECLARATION` purpose is present in a fresh database **without running the seed** → ✅ Done.
 
 ---
 
@@ -2032,25 +2035,25 @@ Create `packages/shared/src/age-gate.ts` (`MINIMUM_AGE_YEARS = 18`), `packages/s
 
 ---
 
-- [ ] **RED — Unit (`apps/api/src/__tests__/unit/age-gate/age.util.test.ts`)** (use fixed `now` values; no real clock):
-  - [ ] Test: `now = 2026-10-05T10:00:00+05:30`: dob `2008-10-05` → `{ valid: true, isAdult: true }` (18th birthday today); `2008-10-06` → `isAdult: false`; `2008-10-04` → `isAdult: true`.
-  - [ ] Test (time zone): `now = 2026-10-04T19:00:00Z` (= 5 Oct 00:30 IST): dob `2008-10-05` → adult. `now = 2026-10-05T19:00:00Z` (= 6 Oct 00:30 IST): dob `2008-10-06` → adult although UTC date is still 5 Oct.
-  - [ ] Test (leap): dob `2008-02-29`: `now = 2026-02-28` → not adult; `now = 2026-03-01` → adult. `now = 2028-02-29`: dob `2010-02-28` → adult, dob `2010-03-01` → not adult.
-  - [ ] Test (invalid → `{ valid: false }`): `"2010-02-30"`, `"2010-13-01"`, `"2010-2-5"`, `"abcd"`, `""`, `"   "`, `"1899-12-31"`, a future date `"2026-10-06"` with `now` of 5 Oct 2026, `"2010-01-01T00:00:00Z"`, and the injection string `"2010-01-01'; DROP TABLE \"User\";--"`.
-  - [ ] Test: the function never throws for any input including `undefined as unknown as string`, numbers and objects (returns `{ valid: false }`).
-  - [ ] Test: the returned object contains **only** `valid` and `isAdult` (never echoes the date).
-  - [ ] **Run — confirm RED (file does not exist).**
+- [x] **RED — Unit (`apps/api/src/__tests__/unit/age-gate/age.util.test.ts`)** (use fixed `now` values; no real clock):
+  - [x] Test: `now = 2026-10-05T10:00:00+05:30`: dob `2008-10-05` → `{ valid: true, isAdult: true }` (18th birthday today); `2008-10-06` → `isAdult: false`; `2008-10-04` → `isAdult: true`.
+  - [x] Test (time zone): `now = 2026-10-04T19:00:00Z` (= 5 Oct 00:30 IST): dob `2008-10-05` → adult. `now = 2026-10-05T19:00:00Z` (= 6 Oct 00:30 IST): dob `2008-10-06` → adult although UTC date is still 5 Oct.
+  - [x] Test (leap): dob `2008-02-29`: `now = 2026-02-28` → not adult; `now = 2026-03-01` → adult. `now = 2028-02-29`: dob `2010-02-28` → adult, dob `2010-03-01` → not adult.
+  - [x] Test (invalid → `{ valid: false }`): `"2010-02-30"`, `"2010-13-01"`, `"2010-2-5"`, `"abcd"`, `""`, `"   "`, `"1899-12-31"`, a future date `"2026-10-06"` with `now` of 5 Oct 2026, `"2010-01-01T00:00:00Z"`, and the injection string `"2010-01-01'; DROP TABLE \"User\";--"`.
+  - [x] Test: the function never throws for any input including `undefined as unknown as string`, numbers and objects (returns `{ valid: false }`).
+  - [x] Test: the returned object contains **only** `valid` and `isAdult` (never echoes the date).
+  - [x] **Run — confirm RED (file does not exist).**
 
-- [ ] **GREEN — Backend / Shared:**
-  - [ ] [Shared] Create `packages/shared/src/age-gate.ts`, `packages/shared/src/consent-notices.ts`, export from the package index; add `CURRENT_PRIVACY_POLICY_VERSION = "1.1"`. Rebuild the shared package.
-  - [ ] [Notice text] `OTP_AUTH` v1.1 = the existing `CONSENT_NOTICE_TEXT` from `LoginPage.tsx`, moved verbatim, plus the sentence "GoRola is for people aged 18 and over." `AGE_DECLARATION` v1.1 = the exact DOB-screen text in 8.8.0 section I.
-  - [ ] [Util] Create `apps/api/src/modules/age-gate/age.util.ts` implementing the rule above using `Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" })`.
-  - [ ] Run unit test — **confirm GREEN**.
+- [x] **GREEN — Backend / Shared:**
+  - [x] [Shared] Create `packages/shared/src/age-gate.ts`, `packages/shared/src/consent-notices.ts`, export from the package index; add `CURRENT_PRIVACY_POLICY_VERSION = "1.1"`. Rebuild the shared package.
+  - [x] [Notice text] `OTP_AUTH` v1.1 = the existing `CONSENT_NOTICE_TEXT` from `LoginPage.tsx`, moved verbatim, plus the sentence "GoRola is for people aged 18 and over." `AGE_DECLARATION` v1.1 = the exact DOB-screen text in 8.8.0 section I.
+  - [x] [Util] Create `apps/api/src/modules/age-gate/age.util.ts` implementing the rule above using `Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" })`.
+  - [x] Run unit test — **confirm GREEN**.
 
-- [ ] **RED / GREEN — Integration & Frontend:** N/A for this item — pure functions and constants; HTTP-level proof arrives in 8.8.4–8.8.7 and component-level proof in 8.8.10–8.8.11.
+- [x] **RED / GREEN — Integration & Frontend:** N/A for this item — pure functions and constants; HTTP-level proof arrives in 8.8.4–8.8.7 and component-level proof in 8.8.10–8.8.11.
 
-- [ ] **Verification chain:**
-  - [ ] A date of birth is supplied to `evaluateDateOfBirth` at 00:30 IST on someone's 18th birthday → the answer is "adult" → on the day before it is "not adult" → ✅ Done.
+- [x] **Verification chain:**
+  - [x] A date of birth is supplied to `evaluateDateOfBirth` at 00:30 IST on someone's 18th birthday → the answer is "adult" → on the day before it is "not adult" → ✅ Done.
 
 ---
 
@@ -2064,29 +2067,29 @@ Create module `apps/api/src/modules/age-gate/` with `age-gate.repository.ts` (Pr
 
 ---
 
-- [ ] **RED — Integration (`age-gate.repository.test.ts`, real test DB):**
-  - [ ] Test: `upsertLock(hash, lockedUntil)` creates a row with `strikeCount = 1`; calling it again for the same hash sets `strikeCount = 2` and the new `lockedUntil`, still exactly 1 row.
-  - [ ] Test: `findActiveByPhoneHash(hash, now)` returns the row when `lockedUntil > now` and `null` when `lockedUntil <= now`.
-  - [ ] Test: `deleteByPhoneHash(hash)` returns `1` for an existing row and `0` otherwise; `deleteExpired(now)` deletes only rows with `lockedUntil <= now` and returns the count.
-  - [ ] Test (privacy): after locking phone `+919876543210`, `SELECT row_to_json(t)::text FROM "AgeGateLockout" t` does not contain `9876543210`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`age-gate.repository.test.ts`, real test DB):**
+  - [x] Test: `upsertLock(hash, lockedUntil)` creates a row with `strikeCount = 1`; calling it again for the same hash sets `strikeCount = 2` and the new `lockedUntil`, still exactly 1 row.
+  - [x] Test: `findActiveByPhoneHash(hash, now)` returns the row when `lockedUntil > now` and `null` when `lockedUntil <= now`.
+  - [x] Test: `deleteByPhoneHash(hash)` returns `1` for an existing row and `0` otherwise; `deleteExpired(now)` deletes only rows with `lockedUntil <= now` and returns the count.
+  - [x] Test (privacy): after locking phone `+919876543210`, `SELECT row_to_json(t)::text FROM "AgeGateLockout" t` does not contain `9876543210`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Unit (`age-gate.service.test.ts`, repository mocked; `age-gate-cookie.test.ts`):**
-  - [ ] Test: `lockPhone("+919876543210", now)` calls the repository with `phoneHash === hashPII("+919876543210")` and `lockedUntil === now + 90 days` (default) — and the repository mock is **never** called with the raw phone.
-  - [ ] Test: with `AGE_GATE_LOCKOUT_DAYS=30` the expiry is `now + 30 days`; an invalid value (`"abc"`, `"0"`, `"-5"`) falls back to 90.
-  - [ ] Test: `isPhoneLocked` returns `true` only when the repository returns an active row.
-  - [ ] Test: phone input `"+91'; DROP TABLE \"User\";--"` is hashed and passed on without throwing.
-  - [ ] Test (cookie): `signDeviceCookie(now)` → `verifyDeviceCookie(value, now)` is `true`; a changed character → `false`; `now + 24h + 1s` → `false`; `""`, `"garbage"`, `"123.abc"` → `false`; verification uses `crypto.timingSafeEqual`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`age-gate.service.test.ts`, repository mocked; `age-gate-cookie.test.ts`):**
+  - [x] Test: `lockPhone("+919876543210", now)` calls the repository with `phoneHash === hashPII("+919876543210")` and `lockedUntil === now + 90 days` (default) — and the repository mock is **never** called with the raw phone.
+  - [x] Test: with `AGE_GATE_LOCKOUT_DAYS=30` the expiry is `now + 30 days`; an invalid value (`"abc"`, `"0"`, `"-5"`) falls back to 90.
+  - [x] Test: `isPhoneLocked` returns `true` only when the repository returns an active row.
+  - [x] Test: phone input `"+91'; DROP TABLE \"User\";--"` is hashed and passed on without throwing.
+  - [x] Test (cookie): `signDeviceCookie(now)` → `verifyDeviceCookie(value, now)` is `true`; a changed character → `false`; `now + 24h + 1s` → `false`; `""`, `"garbage"`, `"123.abc"` → `false`; verification uses `crypto.timingSafeEqual`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Repository → Service → Cookie util):**
-  - [ ] [Repository] Implement `upsertLock`, `findActiveByPhoneHash`, `deleteByPhoneHash`, `deleteExpired`.
-  - [ ] [Service] Implement `isPhoneLocked(phone, now)`, `lockPhone(phone, now)`, `unlockPhone(phone)`; read `AGE_GATE_LOCKOUT_DAYS` / `AGE_GATE_DEVICE_COOLDOWN_HOURS` from the validated env config (add both to the env schema with defaults 90 / 24).
-  - [ ] [Cookie] `age-gate-cookie.ts`: value `"<expiryEpochSeconds>.<hmacHex>"`, HMAC over `"ag:<expiry>"` with the same secret; expiry = now + cooldown hours.
-  - [ ] Run integration + unit tests — **confirm GREEN**.
+- [x] **GREEN — Backend (Repository → Service → Cookie util):**
+  - [x] [Repository] Implement `upsertLock`, `findActiveByPhoneHash`, `deleteByPhoneHash`, `deleteExpired`.
+  - [x] [Service] Implement `isPhoneLocked(phone, now)`, `lockPhone(phone, now)`, `unlockPhone(phone)`; read `AGE_GATE_LOCKOUT_DAYS` / `AGE_GATE_DEVICE_COOLDOWN_HOURS` from the validated env config (add both to the env schema with defaults 90 / 24).
+  - [x] [Cookie] `age-gate-cookie.ts`: value `"<expiryEpochSeconds>.<hmacHex>"`, HMAC over `"ag:<expiry>"` with the same secret; expiry = now + cooldown hours.
+  - [x] Run integration + unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] A phone is locked → the database holds only a hash, an expiry and a strike count → `isPhoneLocked` answers `true` until the expiry passes → ✅ Done.
+- [x] **Verification chain:**
+  - [x] A phone is locked → the database holds only a hash, an expiry and a strike count → `isPhoneLocked` answers `true` until the expiry passes → ✅ Done.
 
 ---
 
@@ -2100,33 +2103,33 @@ Create module `apps/api/src/modules/age-gate/` with `age-gate.repository.ts` (Pr
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/__tests__/integration/auth/auth.age-gate.integration.test.ts`):**
-  - [ ] Test: new phone `send-otp` → `verify-otp` returns HTTP 200 with `data.ageGateRequired === true` and `data.ageTicket` matching `/^[a-f0-9]{64}$/`; the body has **no** `accessToken`, `refreshToken` or `userId`; there is **no** `Set-Cookie: refreshToken`; `db.user.count({ where: { phoneHash } })` is `0`.
-  - [ ] Test: existing user with `ageConfirmedAt` set → `verify-otp` returns tokens exactly as before (`accessToken`, `refreshToken`, `userId`), and `data.ageGateRequired` is absent or `false`.
-  - [ ] Test: existing legacy user (`ageConfirmedAt = null`) → `verify-otp` returns `ageGateRequired: true`, no tokens; the `User` row is unchanged.
-  - [ ] Test: Redis key `age_ticket:<sha256 of the returned ticket>` exists with TTL between 1 and 600; its JSON value contains `phone` and `createdAt` and does **not** contain the key `dateOfBirth`; no Redis key equals the plain ticket.
-  - [ ] Test: after `verify-otp`, the `otp:<phone>` Redis key is gone, so repeating the same `verify-otp` returns 401 `OTP not found`.
-  - [ ] Test: with an active `AgeGateLockout` for the phone, `send-otp` returns HTTP 403 `error.code === "AGE_GATE_LOCKED"`, the OTP provider's `sendOtp` is called **zero** times, and no `otp:<phone>` key exists.
-  - [ ] Test: with a lockout whose `lockedUntil` is in the past, `send-otp` returns 200.
-  - [ ] Test: wrong-OTP, expired-OTP and 3-attempt lockout behaviours are unchanged (existing tests stay green).
-  - [ ] **Run — confirm RED (today a User is created and tokens are returned for a new phone).**
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/auth/auth.age-gate.integration.test.ts`):**
+  - [x] Test: new phone `send-otp` → `verify-otp` returns HTTP 200 with `data.ageGateRequired === true` and `data.ageTicket` matching `/^[a-f0-9]{64}$/`; the body has **no** `accessToken`, `refreshToken` or `userId`; there is **no** `Set-Cookie: refreshToken`; `db.user.count({ where: { phoneHash } })` is `0`.
+  - [x] Test: existing user with `ageConfirmedAt` set → `verify-otp` returns tokens exactly as before (`accessToken`, `refreshToken`, `userId`), and `data.ageGateRequired` is absent or `false`.
+  - [x] Test: existing legacy user (`ageConfirmedAt = null`) → `verify-otp` returns `ageGateRequired: true`, no tokens; the `User` row is unchanged.
+  - [x] Test: Redis key `age_ticket:<sha256 of the returned ticket>` exists with TTL between 1 and 600; its JSON value contains `phone` and `createdAt` and does **not** contain the key `dateOfBirth`; no Redis key equals the plain ticket.
+  - [x] Test: after `verify-otp`, the `otp:<phone>` Redis key is gone, so repeating the same `verify-otp` returns 401 `OTP not found`.
+  - [x] Test: with an active `AgeGateLockout` for the phone, `send-otp` returns HTTP 403 `error.code === "AGE_GATE_LOCKED"`, the OTP provider's `sendOtp` is called **zero** times, and no `otp:<phone>` key exists.
+  - [x] Test: with a lockout whose `lockedUntil` is in the past, `send-otp` returns 200.
+  - [x] Test: wrong-OTP, expired-OTP and 3-attempt lockout behaviours are unchanged (existing tests stay green).
+  - [x] **Run — confirm RED (today a User is created and tokens are returned for a new phone).**
 
-- [ ] **RED — Unit (`auth.service.test.ts`, extended):**
-  - [ ] Test: when `findBuyerByPhone` returns `null`, `verifyOtp` returns `{ ageGateRequired: true, ageTicket }` and `tokenService.issueTokens` is called **zero** times.
-  - [ ] Test: `AuthServiceDependencies` no longer contains `ensureBuyerUser` (compile-time) and `auth.service.ts` source text contains neither `ensureBuyerUser` nor `ensureBuyerByPhone` (a small guard test reading the file).
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`auth.service.test.ts`, extended):**
+  - [x] Test: when `findBuyerByPhone` returns `null`, `verifyOtp` returns `{ ageGateRequired: true, ageTicket }` and `tokenService.issueTokens` is called **zero** times.
+  - [x] Test: `AuthServiceDependencies` no longer contains `ensureBuyerUser` (compile-time) and `auth.service.ts` source text contains neither `ensureBuyerUser` nor `ensureBuyerByPhone` (a small guard test reading the file).
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Types → Repository → Service → Controller → Wiring):**
-  - [ ] [Types] In `auth.types.ts` add `AgeTicketRecord`, `BuyerVerifyResult = BuyerVerifySuccess | { ageGateRequired: true; ageTicket: string }`; in `auth.service.ts` add `ageConfirmedAt?: Date | null` to `BuyerUserLookup`.
-  - [ ] [Repository] In `UserRepository` add `findByPhoneForAuth(phone)` (by `phoneHash`, includes soft-deleted).
-  - [ ] [Service] Replace `ensureBuyerUser` with `findBuyerByPhone` + inject `AgeGateService` and the clock; add `issueAgeTicket`; implement the logic above. Extract the token/session part of `verifyOtp` into a private `completeLogin(user, context)` (reused by 8.8.5).
-  - [ ] [Controller] In `auth.controller.ts` `send-otp`: check the lock first. `verify-otp`: if the result has `ageGateRequired`, return `success(request, reply, { ageGateRequired: true, ageTicket })` and **do not** set the refresh cookie.
-  - [ ] [Wiring] In `routes.ts` replace the `ensureBuyerUser` dependency with `findBuyerByPhone` and pass `AgeGateService`.
-  - [ ] [Guard] Add a code comment on `UserRepository.ensureBuyerByPhone`: "Seeds and test helpers only — never call from an authentication path."
-  - [ ] Run integration + unit tests — **confirm GREEN**.
+- [x] **GREEN — Backend (Types → Repository → Service → Controller → Wiring):**
+  - [x] [Types] In `auth.types.ts` add `AgeTicketRecord`, `BuyerVerifyResult = BuyerVerifySuccess | { ageGateRequired: true; ageTicket: string }`; in `auth.service.ts` add `ageConfirmedAt?: Date | null` to `BuyerUserLookup`.
+  - [x] [Repository] In `UserRepository` add `findByPhoneForAuth(phone)` (by `phoneHash`, includes soft-deleted).
+  - [x] [Service] Replace `ensureBuyerUser` with `findBuyerByPhone` + inject `AgeGateService` and the clock; add `issueAgeTicket`; implement the logic above. Extract the token/session part of `verifyOtp` into a private `completeLogin(user, context)` (reused by 8.8.5).
+  - [x] [Controller] In `auth.controller.ts` `send-otp`: check the lock first. `verify-otp`: if the result has `ageGateRequired`, return `success(request, reply, { ageGateRequired: true, ageTicket })` and **do not** set the refresh cookie.
+  - [x] [Wiring] In `routes.ts` replace the `ensureBuyerUser` dependency with `findBuyerByPhone` and pass `AgeGateService`.
+  - [x] [Guard] Add a code comment on `UserRepository.ensureBuyerByPhone`: "Seeds and test helpers only — never call from an authentication path."
+  - [x] Run integration + unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] A new phone enters a valid OTP → the API answers "age check required" with a one-time ticket and creates nothing → a previously refused phone cannot even receive an OTP → ✅ Done.
+- [x] **Verification chain:**
+  - [x] A new phone enters a valid OTP → the API answers "age check required" with a one-time ticket and creates nothing → a previously refused phone cannot even receive an OTP → ✅ Done.
 
 ---
 
@@ -2147,39 +2150,39 @@ Request validation (Zod in `auth.schema.ts`): `ageTicket` matches `/^[a-f0-9]{64
 
 ---
 
-- [ ] **RED — Integration (`apps/api/src/__tests__/integration/auth/auth.confirm-age.integration.test.ts`):**
-  - [ ] Test: valid ticket + `{ dateOfBirth: "1990-05-14", acknowledgedNotice: true, consentVersion: "1.1" }` → HTTP 200; `data.accessToken` and `data.userId` are strings; `data.privacyPolicyVersionAccepted === "1.1"`; `Set-Cookie` contains `refreshToken`.
-  - [ ] Test: DB — exactly 1 `User` for the `phoneHash`; `ageConfirmedAt` within 5 seconds of now; `ageConfirmedPolicyVersion === "1.1"`; `isVerified === true`; `privacyPolicyVersionAccepted === "1.1"`.
-  - [ ] Test: DB — exactly 2 `ConsentLog` rows for the user, purposes `OTP_AUTH` and `AGE_DECLARATION`, `consentVersion === "1.1"`, `noticeText` strictly equal to the canonical strings from `@gorola/shared`, `ipAddress` not null. (Send a deliberately different `noticeText` in the body — it must be ignored.)
-  - [ ] Test: DB — exactly 1 `AuditLog` with `action = "AGE_CONFIRMED"`, `actorRole = "BUYER"`, `newValue` having no key matching `/birth|dob/i`.
-  - [ ] Test (DOB never persists): `JSON.stringify` of the `User` row, all `ConsentLog` rows and all `AuditLog` rows for the user does **not** contain `"1990-05-14"` or `"1990"`; scanning every Redis key and value does not contain it; the captured logger output (`getLogger` test stream) contains neither `"1990-05-14"` nor the ticket value.
-  - [ ] Test: sending the same request again → HTTP 401 `AGE_TICKET_INVALID`; still exactly 1 `User`.
-  - [ ] Test (race): two simultaneous requests with one ticket → exactly one 200 and one 401; exactly 1 `User`.
-  - [ ] Test: invalid payloads → HTTP 400 `VALIDATION_ERROR` **and the same ticket then succeeds** with a valid body: `"2010-02-30"`, a future date, `"1899-01-01"`, `"not-a-date"`, a missing `dateOfBirth`, `dateOfBirth: 19900514` (number), and `"1990-05-14'; DROP TABLE \"User\";--"`.
-  - [ ] Test: `acknowledgedNotice` missing or `false` → 400; `consentVersion: "9.9"` → 400; in both cases no `User` is created and the ticket still works.
-  - [ ] Test: ticket missing, `"x"`, or 64 random hex characters → HTTP 401 `AGE_TICKET_INVALID`.
-  - [ ] Test (atomicity): force the `AGE_DECLARATION` insert to fail (spy on the repository) → HTTP 500; `User` count 0, `ConsentLog` count 0 and no `AGE_CONFIRMED` audit row for that phone (all-or-nothing).
-  - [ ] Test (conflict): a `User` for that phone appears between ticket and confirm → HTTP 409 `CONFLICT`, no duplicate.
-  - [ ] **Run — confirm RED (endpoint does not exist).**
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/auth/auth.confirm-age.integration.test.ts`):**
+  - [x] Test: valid ticket + `{ dateOfBirth: "1990-05-14", acknowledgedNotice: true, consentVersion: "1.1" }` → HTTP 200; `data.accessToken` and `data.userId` are strings; `data.privacyPolicyVersionAccepted === "1.1"`; `Set-Cookie` contains `refreshToken`.
+  - [x] Test: DB — exactly 1 `User` for the `phoneHash`; `ageConfirmedAt` within 5 seconds of now; `ageConfirmedPolicyVersion === "1.1"`; `isVerified === true`; `privacyPolicyVersionAccepted === "1.1"`.
+  - [x] Test: DB — exactly 2 `ConsentLog` rows for the user, purposes `OTP_AUTH` and `AGE_DECLARATION`, `consentVersion === "1.1"`, `noticeText` strictly equal to the canonical strings from `@gorola/shared`, `ipAddress` not null. (Send a deliberately different `noticeText` in the body — it must be ignored.)
+  - [x] Test: DB — exactly 1 `AuditLog` with `action = "AGE_CONFIRMED"`, `actorRole = "BUYER"`, `newValue` having no key matching `/birth|dob/i`.
+  - [x] Test (DOB never persists): `JSON.stringify` of the `User` row, all `ConsentLog` rows and all `AuditLog` rows for the user does **not** contain `"1990-05-14"` or `"1990"`; scanning every Redis key and value does not contain it; the captured logger output (`getLogger` test stream) contains neither `"1990-05-14"` nor the ticket value.
+  - [x] Test: sending the same request again → HTTP 401 `AGE_TICKET_INVALID`; still exactly 1 `User`.
+  - [x] Test (race): two simultaneous requests with one ticket → exactly one 200 and one 401; exactly 1 `User`.
+  - [x] Test: invalid payloads → HTTP 400 `VALIDATION_ERROR` **and the same ticket then succeeds** with a valid body: `"2010-02-30"`, a future date, `"1899-01-01"`, `"not-a-date"`, a missing `dateOfBirth`, `dateOfBirth: 19900514` (number), and `"1990-05-14'; DROP TABLE \"User\";--"`.
+  - [x] Test: `acknowledgedNotice` missing or `false` → 400; `consentVersion: "9.9"` → 400; in both cases no `User` is created and the ticket still works.
+  - [x] Test: ticket missing, `"x"`, or 64 random hex characters → HTTP 401 `AGE_TICKET_INVALID`.
+  - [x] Test (atomicity): force the `AGE_DECLARATION` insert to fail (spy on the repository) → HTTP 500; `User` count 0, `ConsentLog` count 0 and no `AGE_CONFIRMED` audit row for that phone (all-or-nothing).
+  - [x] Test (conflict): a `User` for that phone appears between ticket and confirm → HTTP 409 `CONFLICT`, no duplicate.
+  - [x] **Run — confirm RED (endpoint does not exist).**
 
-- [ ] **RED — Unit (`auth.service.confirm-age.test.ts`, all dependencies mocked):**
-  - [ ] Test: adult DOB → `createAdultBuyerWithConsents` called exactly once; `lockPhone` zero times; tokens issued once.
-  - [ ] Test: invalid DOB → `redis.del`, the repository and `lockPhone` are never called.
-  - [ ] Test: `redis.del` returns `0` → `AGE_TICKET_INVALID`, repository never called.
-  - [ ] Test: the version stored equals `CURRENT_PRIVACY_POLICY_VERSION` from shared.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`auth.service.confirm-age.test.ts`, all dependencies mocked):**
+  - [x] Test: adult DOB → `createAdultBuyerWithConsents` called exactly once; `lockPhone` zero times; tokens issued once.
+  - [x] Test: invalid DOB → `redis.del`, the repository and `lockPhone` are never called.
+  - [x] Test: `redis.del` returns `0` → `AGE_TICKET_INVALID`, repository never called.
+  - [x] Test: the version stored equals `CURRENT_PRIVACY_POLICY_VERSION` from shared.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Schema → Repository → Service → Controller → Logger):**
-  - [ ] [Schema] `confirmAgeSchema` + `parseConfirmAgeInput` in `auth.schema.ts`.
-  - [ ] [Repository] `AgeGateRepository.createAdultBuyerWithConsents` (single `$transaction`; the repository contains no business `if/else`).
-  - [ ] [Service] `AuthService.confirmAge` in the exact order above; reuse `completeLogin`.
-  - [ ] [Controller] Register `POST /api/v1/auth/buyer/confirm-age`; set the refresh cookie with `refreshCookieOptions()`; response envelope identical to `verify-otp` success plus `ageGateRequired: false`.
-  - [ ] [Logger] Add `dateOfBirth`, `*.dateOfBirth`, `body.dateOfBirth`, `req.body.dateOfBirth`, `ageTicket`, `*.ageTicket`, `body.ageTicket`, `req.body.ageTicket` to `REDACT_PATHS` in `apps/api/src/lib/logger.ts`.
-  - [ ] [Coverage] Auth module coverage must stay at 100% (project rule).
-  - [ ] Run integration + unit tests — **confirm GREEN**.
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller → Logger):**
+  - [x] [Schema] `confirmAgeSchema` + `parseConfirmAgeInput` in `auth.schema.ts`.
+  - [x] [Repository] `AgeGateRepository.createAdultBuyerWithConsents` (single `$transaction`; the repository contains no business `if/else`).
+  - [x] [Service] `AuthService.confirmAge` in the exact order above; reuse `completeLogin`.
+  - [x] [Controller] Register `POST /api/v1/auth/buyer/confirm-age`; set the refresh cookie with `refreshCookieOptions()`; response envelope identical to `verify-otp` success plus `ageGateRequired: false`.
+  - [x] [Logger] Add `dateOfBirth`, `*.dateOfBirth`, `body.dateOfBirth`, `req.body.dateOfBirth`, `ageTicket`, `*.ageTicket`, `body.ageTicket`, `req.body.ageTicket` to `REDACT_PATHS` in `apps/api/src/lib/logger.ts`.
+  - [x] [Coverage] Auth module coverage must stay at 100% (project rule).
+  - [x] Run integration + unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] Adult enters OTP → enters 14 May 1990 → confirms → one transaction creates the account and both consent rows → user is logged in → a database dump contains no date of birth anywhere → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Adult enters OTP → enters 14 May 1990 → confirms → one transaction creates the account and both consent rows → user is logged in → a database dump contains no date of birth anywhere → ✅ Done.
 
 ---
 
@@ -2193,32 +2196,32 @@ In the same `confirmAge` flow, after the ticket is consumed, a valid date that i
 
 ---
 
-- [ ] **RED — Integration (`auth.confirm-age.minor.integration.test.ts`):**
-  - [ ] Test: ticket + `dateOfBirth: "2012-03-10"` → HTTP 403 `error.code === "AGE_REQUIREMENT_NOT_MET"`; body has no tokens; `Set-Cookie` includes `gorola_ag` with `HttpOnly` and `Max-Age=86400`.
-  - [ ] Test: DB — `User` count for the phone is `0`; exactly 1 `AgeGateLockout` with `phoneHash === hashPII(phone)`, `lockedUntil` within 1 minute of now + 90 days, `strikeCount === 1`; its row JSON contains neither the phone digits nor `2012`.
-  - [ ] Test: DB — exactly 1 `AuditLog` `AGE_GATE_LOCKOUT_CREATED`, `actorRole SYSTEM`, `newValue` keys exactly `lockedUntil` and `strikeCount`; zero `ConsentLog` rows were created.
-  - [ ] Test: replaying the same ticket → HTTP 401 `AGE_TICKET_INVALID`.
-  - [ ] Test: afterwards `send-otp` for that phone → HTTP 403 `AGE_GATE_LOCKED`; OTP provider `sendOtp` called zero times.
-  - [ ] Test (cooling-off): with the `gorola_ag` cookie, a *different* phone completes OTP and `confirm-age` with an **adult** DOB → HTTP 403 `AGE_GATE_LOCKED`, no user created; with an expired or tampered cookie the same flow → HTTP 200.
-  - [ ] Test (boundary, with a controllable clock): at `now = 2026-10-05 IST`, dob `2008-10-06` → 403 refusal; dob `2008-10-05` → 200 account.
-  - [ ] Test (strikes): an expired lockout row followed by a new refusal → `strikeCount === 2` and a new `lockedUntil`, still 1 row.
-  - [ ] Test (abuse alert): 5 refusals from one IP within 24 h → the captured log stream contains exactly one entry with `alertType "AGE_GATE_ABUSE"`; the 6th request is still processed normally.
-  - [ ] Test (no cutoff leak): refusal bodies for dob `2008-10-06` and `2012-01-01` are identical except `meta.requestId`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`auth.confirm-age.minor.integration.test.ts`):**
+  - [x] Test: ticket + `dateOfBirth: "2012-03-10"` → HTTP 403 `error.code === "AGE_REQUIREMENT_NOT_MET"`; body has no tokens; `Set-Cookie` includes `gorola_ag` with `HttpOnly` and `Max-Age=86400`.
+  - [x] Test: DB — `User` count for the phone is `0`; exactly 1 `AgeGateLockout` with `phoneHash === hashPII(phone)`, `lockedUntil` within 1 minute of now + 90 days, `strikeCount === 1`; its row JSON contains neither the phone digits nor `2012`.
+  - [x] Test: DB — exactly 1 `AuditLog` `AGE_GATE_LOCKOUT_CREATED`, `actorRole SYSTEM`, `newValue` keys exactly `lockedUntil` and `strikeCount`; zero `ConsentLog` rows were created.
+  - [x] Test: replaying the same ticket → HTTP 401 `AGE_TICKET_INVALID`.
+  - [x] Test: afterwards `send-otp` for that phone → HTTP 403 `AGE_GATE_LOCKED`; OTP provider `sendOtp` called zero times.
+  - [x] Test (cooling-off): with the `gorola_ag` cookie, a *different* phone completes OTP and `confirm-age` with an **adult** DOB → HTTP 403 `AGE_GATE_LOCKED`, no user created; with an expired or tampered cookie the same flow → HTTP 200.
+  - [x] Test (boundary, with a controllable clock): at `now = 2026-10-05 IST`, dob `2008-10-06` → 403 refusal; dob `2008-10-05` → 200 account.
+  - [x] Test (strikes): an expired lockout row followed by a new refusal → `strikeCount === 2` and a new `lockedUntil`, still 1 row.
+  - [x] Test (abuse alert): 5 refusals from one IP within 24 h → the captured log stream contains exactly one entry with `alertType "AGE_GATE_ABUSE"`; the 6th request is still processed normally.
+  - [x] Test (no cutoff leak): refusal bodies for dob `2008-10-06` and `2012-01-01` are identical except `meta.requestId`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Unit (`age-gate.service.test.ts`, extended):**
-  - [ ] Test: `recordRefusal(ip)` raises the alert exactly when the counter value is `5`; not at `4` and not at `6`.
-  - [ ] Test: audit payload built for a refusal contains no phone, hash or date.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`age-gate.service.test.ts`, extended):**
+  - [x] Test: `recordRefusal(ip)` raises the alert exactly when the counter value is `5`; not at `4` and not at `6`.
+  - [x] Test: audit payload built for a refusal contains no phone, hash or date.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Repository → Service → Controller):**
-  - [ ] [Repository/Service] Implement the minor branch of `confirmAge` as described; extend `RedisLikeClient` if `incr`/`expire` are not available.
-  - [ ] [Types] Add `"AGE_GATE_ABUSE"` to the `alertType` union of `SecurityAlertPayload` in `apps/api/src/lib/logger.ts` (today it allows only `FAILED_AUTH_BURST`, `RATE_LIMIT_BURST`, `SUSPICIOUS_ACCESS`, `ANOMALOUS_REVOCATION`). This alert is written to the log only; no e-mail or push is sent. Admins see the volume on the **Age Gate** screen (8.8.14).
-  - [ ] [Controller] Map the `AppError`s; set the `gorola_ag` cookie on the refusal response only; check the cookie in `confirm-age` step 2.
-  - [ ] Run integration + unit tests — **confirm GREEN**.
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository/Service] Implement the minor branch of `confirmAge` as described; extend `RedisLikeClient` if `incr`/`expire` are not available.
+  - [x] [Types] Add `"AGE_GATE_ABUSE"` to the `alertType` union of `SecurityAlertPayload` in `apps/api/src/lib/logger.ts` (today it allows only `FAILED_AUTH_BURST`, `RATE_LIMIT_BURST`, `SUSPICIOUS_ACCESS`, `ANOMALOUS_REVOCATION`). This alert is written to the log only; no e-mail or push is sent. Admins see the volume on the **Age Gate** screen (8.8.14).
+  - [x] [Controller] Map the `AppError`s; set the `gorola_ag` cookie on the refusal response only; check the cookie in `confirm-age` step 2.
+  - [x] Run integration + unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] A person enters a date that makes them under 18 → sees the refusal screen → nothing but a hashed phone and an expiry is stored → trying again with the same number (even with a corrected date) is blocked before any SMS is sent → ✅ Done.
+- [x] **Verification chain:**
+  - [x] A person enters a date that makes them under 18 → sees the refusal screen → nothing but a hashed phone and an expiry is stored → trying again with the same number (even with a corrected date) is blocked before any SMS is sent → ✅ Done.
 
 ---
 
@@ -2232,24 +2235,24 @@ Users created before this section have `ageConfirmedAt = null`. They must pass t
 
 ---
 
-- [ ] **RED — Integration (`auth.confirm-age.legacy.integration.test.ts`):**
-  - [ ] Test: legacy user + adult DOB → HTTP 200 with the **same** `userId`; `ageConfirmedAt` set; exactly 1 `AGE_DECLARATION` `ConsentLog` and still exactly 1 `User`; an `AGE_CONFIRMED` audit row.
-  - [ ] Test: legacy user + under-18 DOB → HTTP 403 `AGE_REQUIREMENT_NOT_MET`; afterwards the user row has `name = "[deleted]"`, `phone = "DELETED_<id>"`, `phoneHash = null`, `isActive = false`, `isDeleted = true`; all addresses deleted; order totals and invoice numbers intact; Redis `rt:*` keys for the user are gone; an `AgeGateLockout` row exists for the **pre-purge** hash.
-  - [ ] Test: legacy user in the 30-day deletion grace + adult DOB → HTTP 200 with `isPendingDeletion: true`; `POST /api/v1/user/reactivate-account` then succeeds.
-  - [ ] Test: `POST /api/v1/auth/buyer/refresh` for a user with `ageConfirmedAt = null` → HTTP 403 `AGE_CONFIRMATION_REQUIRED`; for a confirmed user → HTTP 200.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`auth.confirm-age.legacy.integration.test.ts`):**
+  - [x] Test: legacy user + adult DOB → HTTP 200 with the **same** `userId`; `ageConfirmedAt` set; exactly 1 `AGE_DECLARATION` `ConsentLog` and still exactly 1 `User`; an `AGE_CONFIRMED` audit row.
+  - [x] Test: legacy user + under-18 DOB → HTTP 403 `AGE_REQUIREMENT_NOT_MET`; afterwards the user row has `name = "[deleted]"`, `phone = "DELETED_<id>"`, `phoneHash = null`, `isActive = false`, `isDeleted = true`; all addresses deleted; order totals and invoice numbers intact; Redis `rt:*` keys for the user are gone; an `AgeGateLockout` row exists for the **pre-purge** hash.
+  - [x] Test: legacy user in the 30-day deletion grace + adult DOB → HTTP 200 with `isPendingDeletion: true`; `POST /api/v1/user/reactivate-account` then succeeds.
+  - [x] Test: `POST /api/v1/auth/buyer/refresh` for a user with `ageConfirmedAt = null` → HTTP 403 `AGE_CONFIRMATION_REQUIRED`; for a confirmed user → HTTP 200.
+  - [x] **Run — confirm RED.**
 
-- [ ] **RED — Unit (`auth.service.refresh.test.ts`, extended):**
-  - [ ] Test: `refreshToken` throws `AGE_CONFIRMATION_REQUIRED` when `findUserById` returns `ageConfirmedAt: null`; issues tokens when set.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`auth.service.refresh-age.test.ts`, extended):**
+  - [x] Test: `refreshToken` throws `AGE_CONFIRMATION_REQUIRED` when `findUserById` returns `ageConfirmedAt: null`; issues tokens when set.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend + Frontend plumbing:**
-  - [ ] [Service] Implement the existing-user branches in `confirmAge`; add the check in `refreshToken`; include `ageConfirmedAt` in the `findUserById` lookup mapping in `routes.ts`.
-  - [ ] [Frontend] In the shared API client's refresh-failure handling, treat `AGE_CONFIRMATION_REQUIRED` like an expired session: clear the session and redirect to `/login` (add a test beside the existing refresh-failure test).
-  - [ ] Run integration + unit tests — **confirm GREEN**.
+- [x] **GREEN — Backend + Frontend plumbing:**
+  - [x] [Service] Implement the existing-user branches in `confirmAge`; add the check in `refreshToken`; include `ageConfirmedAt` in the `findUserById` lookup mapping in `routes.ts`.
+  - [x] [Frontend] In the shared API client's refresh-failure handling, treat `AGE_CONFIRMATION_REQUIRED` like an expired session: clear the session and redirect to `/login` (add a test beside the existing refresh-failure test).
+  - [x] Run integration + unit tests — **confirm GREEN**.
 
-- [ ] **Verification chain:**
-  - [ ] An old test account logs in → is asked for a date of birth once → adult: continues with the same account; under 18: account is erased immediately and the number is locked → ✅ Done.
+- [x] **Verification chain:**
+  - [x] An old test account logs in → is asked for a date of birth once → adult: continues with the same account; under 18: account is erased immediately and the number is locked → ✅ Done.
 
 ---
 
@@ -2260,24 +2263,24 @@ The policy promises that a minor found using GoRola is erased, and an adult who 
 
 ---
 
-- [ ] **RED — Integration (`admin.age-gate.test.ts`):**
-  - [ ] Test: `POST /api/v1/admin/age-gate/unlock` with an ADMIN JWT and `{ phone: "+919876543210", reason: "Verified by call-back, adult confirmed" }` → HTTP 200 `{ cleared: true }`; the `AgeGateLockout` row is gone; one `AuditLog` `AGE_GATE_LOCKOUT_CLEARED`, `actorRole ADMIN`, `newValue` contains the `reason` and **no** phone number.
-  - [ ] Test: no token → HTTP 401; BUYER JWT and STORE_OWNER JWT → HTTP 403.
-  - [ ] Test: `reason` shorter than 10 characters → 400; malformed phone → 400; phone without an active lockout → 404.
-  - [ ] Test: `POST /api/v1/admin/users/:id/erase-underage` with `{ reason }` → HTTP 200 `{ erased: true }`; the user is anonymised exactly as in 8.8.7; a lockout exists for the pre-purge hash; all sessions revoked; one `AuditLog` `USER_ERASED_UNDERAGE`.
-  - [ ] Test: unknown user id → 404; already-erased user → HTTP 409 `ALREADY_ERASED`; non-admin tokens → 401/403.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Integration (`admin.age-gate.test.ts`):**
+  - [x] Test: `POST /api/v1/admin/age-gate/unlock` with an ADMIN JWT and `{ phone: "+919876543210", reason: "Verified by call-back, adult confirmed" }` → HTTP 200 `{ cleared: true }`; the `AgeGateLockout` row is gone; one `AuditLog` `AGE_GATE_LOCKOUT_CLEARED`, `actorRole ADMIN`, `newValue` contains the `reason` and **no** phone number.
+  - [x] Test: no token → HTTP 401; BUYER JWT and STORE_OWNER JWT → HTTP 403.
+  - [x] Test: `reason` shorter than 10 characters → 400; malformed phone → 400; phone without an active lockout → 404.
+  - [x] Test: `POST /api/v1/admin/users/:id/erase-underage` with `{ reason }` → HTTP 200 `{ erased: true }`; the user is anonymised exactly as in 8.8.7; a lockout exists for the pre-purge hash; all sessions revoked; one `AuditLog` `USER_ERASED_UNDERAGE`.
+  - [x] Test: unknown user id → 404; already-erased user → HTTP 409 `ALREADY_ERASED`; non-admin tokens → 401/403.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Schema → Service → Controller → Routes):**
-  - [ ] [Schema] Zod schemas in the admin module for both bodies.
-  - [ ] [Service] Methods on `admin.service.ts` calling `AgeGateService.unlockPhone` and the shared erase-underage routine (hash first, then revoke tokens, `permanentPurgeAndAnonymize`, then lock). Write the audit rows.
-  - [ ] [Controller] Register both routes guarded by `authenticateToken` and `requireRole(ActorRole.ADMIN)`.
-  - [ ] Run integration test — **confirm GREEN**.
+- [x] **GREEN — Backend (Schema → Service → Controller → Routes):**
+  - [x] [Schema] Zod schemas in the admin module for both bodies.
+  - [x] [Service] Methods on `admin.service.ts` calling `AgeGateService.unlockPhone` and the shared erase-underage routine (hash first, then revoke tokens, `permanentPurgeAndAnonymize`, then lock). Write the audit rows.
+  - [x] [Controller] Register both routes guarded by `authenticateToken` and `requireRole(ActorRole.ADMIN)`.
+  - [x] Run integration test — **confirm GREEN**.
 
-- [ ] **RED / GREEN — Unit / Component:** N/A — the screens are specified in 8.8.14. Service logic is covered through the integration tests above plus a unit test that the erase routine computes the hash **before** the purge.
+- [x] **RED / GREEN — Unit / Component:** N/A — the screens are specified in 8.8.14. Service logic is covered through the integration tests above plus a unit test that the erase routine computes the hash **before** the purge.
 
-- [ ] **Verification chain:**
-  - [ ] A wrongly locked adult emails the Grievance Officer → call-back confirms → admin calls unlock with a reason → the person can request an OTP again; a parent reports a minor → admin calls erase-underage → the account is anonymised and the number is locked → ✅ Done.
+- [x] **Verification chain:**
+  - [x] A wrongly locked adult emails the Grievance Officer → call-back confirms → admin calls unlock with a reason → the person can request an OTP again; a parent reports a minor → admin calls erase-underage → the account is anonymised and the number is locked → ✅ Done.
 
 ---
 
@@ -2868,3 +2871,27 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
   - **Renumbering:** the vendor-dependent SMS OTP / call-masking section moved from 8.8 to 8.9 (still last).
   - **Findings to act on:** `HMAC_SECRET` / `ENCRYPTION_KEY` fall back to built-in defaults when unset (8.7.8 row 3); two different grievance email addresses exist in the product (8.7.8 row 1, fixed in 8.8.11).
   - **Admin pipeline added (8.8.14, documentation only):** full case pipeline from the complaint e-mail to the **Admin → Age Gate** screen (`/admin/age-gate`): look up by phone, Lock card / Account card, Unlock (approve), Decline appeal (disapprove), Suspend (reversible ban), Erase underage account (permanent ban), reasons required, audit rows without phone numbers, reply templates, TDD tiers and four Playwright journeys. New endpoints: `lookup`, `lockouts`, `decline`; `suspend` gains an optional reason and now revokes sessions (existing code only set `isActive=false`). The system sends no e-mail. The close-out checklist moved to 8.8.15; the Consent Guide diagram now shows five pipelines and section 15.7 describes the admin handling.
+- **Session 13 — 2026-10-06 — Phase 8.8 (Sections 8.8.1–8.8.6 Implementation & Verification):**
+  - **8.8.1 Schema & Seeds:** Added `ageConfirmedAt` and `ageConfirmedPolicyVersion` to `User`, `AgeGateLockout` table, migration with `AGE_DECLARATION` seeded into `ConsentPurposeConfig`. Added `ConsentPurposeConfig` upserts to `seed.ts`.
+  - **8.8.2 Shared Constants & Pure Logic:** Added `MINIMUM_AGE_YEARS = 18`, `CURRENT_PRIVACY_POLICY_VERSION = "1.1"`, canonical `OTP_AUTH` and `AGE_DECLARATION` texts in `@gorola/shared`. Created pure `evaluateDateOfBirth(dob, now)` adhering to `Asia/Kolkata` midnight boundaries and leap-year rules.
+  - **8.8.3 Lockout Repo, Service & Cookie:** Implemented `AgeGateRepository`, `AgeGateService` (with `hashPII` blind indexing), and HMAC-SHA256 signed `gorola_ag` device cooldown cookies (`verifyDeviceCookie` with `crypto.timingSafeEqual`).
+  - **8.8.4 OTP Lockout Check & Age Ticket:** Implemented lockout gate on `sendOtp` (403 `AGE_GATE_LOCKED`), replaced `ensureBuyerUser` with `findBuyerByPhone`, issued single-use hashed age tickets (`age_ticket:<sha256(ticket)>`, TTL 600s).
+  - **8.8.5 `confirm-age` Adult Path:** Implemented atomic account creation + dual server-side canonical consent logs (`OTP_AUTH` + `AGE_DECLARATION`) + `AGE_CONFIRMED` audit log in single Prisma `$transaction`. Registered `POST /api/v1/auth/buyer/confirm-age` route in Fastify. Redacted `dateOfBirth` and `ageTicket` in Logger.
+  - **8.8.6 `confirm-age` Under-18 Path:** Implemented refusal flow with atomic single-use ticket consumption (`redis.del`), hashed phone lockout creation (`AgeGateService.lockPhone`), `AGE_GATE_LOCKOUT_CREATED` system audit log, 24h IP-based refusal counter with `AGE_GATE_ABUSE` security alert on the 5th attempt, tamper-evident HMAC-SHA256 `gorola_ag` device cooling-off cookie, and 403 `AGE_REQUIREMENT_NOT_MET` response.
+  - **Quality Gates:** 100% GREEN (all age-gate & auth test files passed, 0 TypeScript errors, 0 ESLint errors/warnings).
+
+- **Session 14 — 2026-10-06 — Phase 8.8 (Sections 8.8.7–8.8.8 Implementation & Verification):**
+  - **8.8.7 Existing Users Without `ageConfirmedAt` (Legacy Gate, Refresh Gate & Underage Purge):**
+    - Built unit tests in `auth.service.refresh-age.test.ts` and integration tests in `auth.confirm-age.legacy.integration.test.ts`.
+    - Implemented `AgeGateRepository.confirmAdultLegacyBuyer`: updates `ageConfirmedAt`, `ageConfirmedPolicyVersion`, and records exactly 1 `AGE_DECLARATION` `ConsentLog` and `AGE_CONFIRMED` `AuditLog` without creating redundant `User` or `OTP_AUTH` rows.
+    - Implemented underage purge in `AuthService.confirmAge`: computes pre-purge phone hash, terminates all active sessions, triggers immediate `UserRepository.permanentPurgeAndAnonymize` (skipping the 30-day grace period), locks phone hash for 90 days, and returns `403 AGE_REQUIREMENT_NOT_MET`.
+    - Implemented refresh token age gate in `AuthService.refreshToken`: returns `403 AGE_CONFIRMATION_REQUIRED` when `user.ageConfirmedAt` is null, forcing fresh OTP login and age confirmation.
+    - Added frontend API client handling in `apps/web/src/lib/api.ts` to clear session and redirect to login on `403 AGE_CONFIRMATION_REQUIRED`.
+  - **8.8.8 Admin Endpoints (Unlock Wrongly Locked Adult & Erase Discovered Minor):**
+    - Built integration tests in `admin.age-gate.test.ts` (11 tests) and unit tests in `admin.age-gate.service.test.ts`.
+    - Implemented `AdminService.unlockAgeGate` & `POST /api/v1/admin/age-gate/unlock`: validates E.164 phone and reason (>= 10 chars), deletes `AgeGateLockout` record, writes `AGE_GATE_LOCKOUT_CLEARED` audit log with zero raw phone digits.
+    - Implemented `AdminService.eraseUnderageUser` & `POST /api/v1/admin/users/:id/erase-underage`: validates reason (>= 10 chars), computes pre-purge phone hash, terminates Redis sessions (`rt:*` and `user_sessions:*`), executes `UserRepository.permanentPurgeAndAnonymize`, creates 90-day `AgeGateLockout`, and writes `USER_ERASED_UNDERAGE` audit log with zero raw phone digits.
+    - Added strict RBAC (401 unauthenticated, 403 non-admin roles), input validation (400), 404 for missing records, and 409 `ALREADY_ERASED`.
+  - **Quality Gates:** 100% GREEN (11 test files / 52 tests passing, `pnpm --filter @gorola/api typecheck` 0 errors, `pnpm --filter @gorola/api lint` 0 errors, 0 warnings).
+
+

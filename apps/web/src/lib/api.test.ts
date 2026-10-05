@@ -111,6 +111,29 @@ describe("createApiClient", () => {
     expect(clearSession).toHaveBeenCalled();
   });
 
+  it("on 401, when refresh returns 403 AGE_CONFIRMATION_REQUIRED, clears session and redirects to login", async () => {
+    const clearSession = vi.fn();
+    const client = createApiClient(
+      opts({
+        getAccessToken: () => "old-token",
+        getRefreshToken: () => "legacy-unconfirmed-refresh",
+        clearSession
+      })
+    );
+    mock = new MockAdapter(client);
+    mock.onGet("/api/v1/cart").reply(401);
+    mock.onPost("/api/v1/auth/buyer/refresh").reply(403, {
+      success: false,
+      error: {
+        code: "AGE_CONFIRMATION_REQUIRED",
+        message: "Age confirmation required"
+      }
+    });
+
+    await expect(client.get("/api/v1/cart")).rejects.toBeTruthy();
+    expect(clearSession).toHaveBeenCalled();
+  });
+
   it("on concurrent 401s, deduplicates refresh and retries both requests successfully", async () => {
     const setTokens = vi.fn();
     const clearSession = vi.fn();

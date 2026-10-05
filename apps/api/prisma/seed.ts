@@ -271,6 +271,63 @@ async function main(): Promise<void> {
     skipDuplicates: true
   });
 
+  const consentPurposes = [
+    {
+      key: "OTP_AUTH",
+      displayName: "Authentication & Account Security",
+      description: "Verifies your identity via One-Time Password.",
+      isEssential: true,
+      retentionSummary: "Lifetime of account; deleted within 30 days of account erasure."
+    },
+    {
+      key: "ORDER_PROCESSING",
+      displayName: "Order Fulfillment & Location Services",
+      description: "Processes your location and order details for delivery.",
+      isEssential: true,
+      retentionSummary: "Addresses deleted on erasure. Order GPS nulled on erasure; financials kept 7 years (GST)."
+    },
+    {
+      key: "MARKETING_COMMS",
+      displayName: "Promotions & Seasonal Offers",
+      description: "Sends you optional hill-station discounts and store coupons.",
+      isEssential: false,
+      retentionSummary: "Scrubbed from all distributions within 48 hours of withdrawal."
+    },
+    {
+      key: "ANALYTICS",
+      displayName: "Usage & Performance Analytics",
+      description: "Collects anonymous performance telemetry to improve the app.",
+      isEssential: false,
+      retentionSummary: "Aggregated logs purged or anonymised after 180 days."
+    },
+    {
+      key: "AGE_DECLARATION",
+      displayName: "Age Confirmation",
+      description: "Confirmation that you are 18 or over. Your date of birth is used once and never stored.",
+      isEssential: true,
+      retentionSummary: "The date you confirmed is kept for the life of your account. Your date of birth is never stored."
+    }
+  ];
+
+  for (const purpose of consentPurposes) {
+    await prisma.consentPurposeConfig.upsert({
+      where: { key: purpose.key },
+      update: {
+        displayName: purpose.displayName,
+        description: purpose.description,
+        isEssential: purpose.isEssential,
+        retentionSummary: purpose.retentionSummary
+      },
+      create: {
+        key: purpose.key,
+        displayName: purpose.displayName,
+        description: purpose.description,
+        isEssential: purpose.isEssential,
+        retentionSummary: purpose.retentionSummary
+      }
+    });
+  }
+
   console.info("Seed completed", {
     stores: [storeA.name, storeB.name, storeC.name, storeD.name, storeE.name],
     admin: ADMIN_EMAIL

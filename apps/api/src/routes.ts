@@ -12,6 +12,8 @@ import { registerAdminRoutes } from "./modules/admin/admin.controller.js";
 import { AdminRepository } from "./modules/admin/admin.repository.js";
 import { SystemSettingRepository } from "./modules/admin/system-setting.repository.js";
 import { SystemSettingService } from "./modules/admin/system-setting.service.js";
+import { AgeGateRepository } from "./modules/age-gate/age-gate.repository.js";
+import { AgeGateService } from "./modules/age-gate/age-gate.service.js";
 import { AuditRepository } from "./modules/audit/audit.repository.js";
 import { AdminAuthService } from "./modules/auth/admin-auth.service.js";
 import { registerAuthRoutes } from "./modules/auth/auth.controller.js";
@@ -139,6 +141,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
         name: row.name,
         phone: row.phone,
         isActive: row.isActive,
+        ageConfirmedAt: row.ageConfirmedAt,
+        ageConfirmedPolicyVersion: row.ageConfirmedPolicyVersion,
         privacyPolicyVersionAccepted: row.privacyPolicyVersionAccepted,
         deletedAt: row.deletedAt,
         deletionScheduledFor: row.deletionScheduledFor
@@ -147,7 +151,9 @@ export function registerAppRoutes(app: FastifyInstance): void {
     otpProvider: createNoopOtpProvider(),
     otpTtlSeconds: 5 * 60,
     redis,
-    tokenService
+    tokenService,
+    ageGateService: new AgeGateService(new AgeGateRepository(prisma), redis),
+    ageGateRepository: new AgeGateRepository(prisma)
   });
 
   const checkoutCartRepo = new CartRepository(prisma);
@@ -397,7 +403,8 @@ export function registerAppRoutes(app: FastifyInstance): void {
     tokenVerifier: tokenService,
     orderService: buyerOrderSvc,
     orders: orderRepoOrders,
-    systemSettingService
+    systemSettingService,
+    redis
   });
 
   app.get("/api/v1/stores/:id", async (request, reply) => {

@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError } from "@gorola/shared";
 import type { PrismaClient, User } from "@prisma/client";
 
 import { decryptPII, encryptPII, hashPII } from "../../lib/crypto.js";
+import { getPrismaClient } from "../../lib/prisma.js";
 
 export type CreateUserInput = {
   phone: string;
@@ -29,7 +30,11 @@ function toDomainUser(user: User | null): User | null {
 }
 
 export class UserRepository {
-  public constructor(private readonly db: PrismaClient) {}
+  public constructor(private readonly customDb?: PrismaClient) {}
+
+  private get db(): PrismaClient {
+    return this.customDb ?? getPrismaClient();
+  }
 
   public async findById(
     id: string,
@@ -435,5 +440,4 @@ export class UserRepository {
   }
 }
 
-
-
+export const userRepository = new UserRepository();

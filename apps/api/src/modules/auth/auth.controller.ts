@@ -1,9 +1,11 @@
-import { UnauthorizedError } from "@gorola/shared";
+import { AppError, UnauthorizedError } from "@gorola/shared";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 
+import { signDeviceCookie } from "../age-gate/age-gate-cookie.js";
 import type { AdminAuthService } from "./admin-auth.service.js";
 import {
   parseAdminLoginInput,
+  parseConfirmAgeInput,
   parseLogoutInput,
   parseRefreshTokenInput,
   parseSendOtpInput,
@@ -13,13 +15,13 @@ import {
   parseVerifyOtpInput
 } from "./auth.schema.js";
 import type { AuthService } from "./auth.service.js";
-import type { AccessTokenVerifier } from "./auth.types.js";
+import type { AccessTokenVerifier, ConfirmAgeInput } from "./auth.types.js";
 import type { StoreOwnerAuthService } from "./store-owner-auth.service.js";
 
 type AuthControllerDeps = {
   authService: Pick<
     AuthService,
-    "logout" | "refreshToken" | "sendOtp" | "verifyOtp" | "getActiveSessions" | "terminateAllSessions"
+    "logout" | "refreshToken" | "sendOtp" | "verifyOtp" | "confirmAge" | "getActiveSessions" | "terminateAllSessions"
   >;
   storeOwnerAuthService: Pick<StoreOwnerAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
   adminAuthService: Pick<AdminAuthService, "login" | "setup2FA" | "verify2FA" | "refreshToken" | "logout">;
@@ -175,6 +177,41 @@ export function registerAuthRoutes(app: FastifyInstance, deps: AuthControllerDep
       isPendingDeletion: result.isPendingDeletion ?? false,
       deletionScheduledFor: result.deletionScheduledFor ?? null
     });
+  });
+
+  app.post("/api/v1/auth/buyer/confirm-age", async (request, reply) => {
+    const payload = parseConfirmAgeInput(request.body as ConfirmAgeInput);
+    const context = getClientContext(request);
+    const cookies = request.cookies as Record<string, string | undefined> | undefined;
+    const deviceCookie = cookies?.["gorola_ag"] ?? null;
+    try {
+      const result = await deps.authService.confirmAge(payload, context, deviceCookie);
+
+      reply.setCookie("refreshToken", result.refreshToken, refreshCookieOptions());
+      return success(request, reply, {
+        accessToken: result.accessToken,
+        name: result.name,
+        phone: result.phone,
+        refreshToken: result.refreshToken,
+        userId: result.userId,
+        privacyPolicyVersionAccepted: result.privacyPolicyVersionAccepted ?? "1.1",
+        ageGateRequired: false,
+        isPendingDeletion: result.isPendingDeletion ?? false,
+        deletionScheduledFor: result.deletionScheduledFor ?? null
+      });
+    } catch (err: unknown) {
+      if (err instanceof AppError && err.code === "AGE_REQUIREMENT_NOT_MET") {
+        const agCookie = signDeviceCookie(new Date(), 24);
+        reply.setCookie("gorola_ag", agCookie, {
+          httpOnly: true,
+          secure: process.env.NODE_ENV === "production",
+          sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+          path: "/",
+          maxAge: 86400
+        });
+      }
+      throw err;
+    }
   });
 
   app.post("/api/v1/auth/buyer/refresh", async (request, reply) => {

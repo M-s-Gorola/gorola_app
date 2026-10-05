@@ -15,6 +15,13 @@ export type LogoutInput = {
   refreshToken: string;
 };
 
+export type ConfirmAgeInput = {
+  ageTicket: string;
+  dateOfBirth: string;
+  acknowledgedNotice: boolean;
+  consentVersion: string;
+};
+
 export type AuthTokenPair = {
   accessToken: string;
   refreshToken: string;

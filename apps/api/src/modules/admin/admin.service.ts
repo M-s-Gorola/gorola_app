@@ -4,11 +4,14 @@ import { hash } from "bcryptjs";
 
 import { decryptPII, encryptPII, hashPII, maskPhone } from "../../lib/crypto.js";
 import { getRedisClient } from "../../lib/redis.js";
+import { AgeGateRepository } from "../age-gate/age-gate.repository.js";
 import { AuditRepository } from "../audit/audit.repository.js";
+import type { RedisLikeClient } from "../auth/auth.types.js";
 import { CategoryRepository } from "../catalog/category.repository.js";
 import { SubCategoryRepository } from "../catalog/sub-category.repository.js";
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
+import { UserRepository } from "../user/user.repository.js";
 
 
 
@@ -61,10 +64,18 @@ export class AdminService {
   private readonly subCategoryRepo: SubCategoryRepository;
   private readonly auditRepo: AuditRepository;
 
-  public constructor(private readonly db: PrismaClient) {
+  public constructor(
+    private readonly db: PrismaClient,
+    private readonly redis?: RedisLikeClient
+  ) {
     this.categoryRepo = new CategoryRepository(db);
     this.subCategoryRepo = new SubCategoryRepository(db);
     this.auditRepo = new AuditRepository(db);
+  }
+
+  private get redisClient(): RedisLikeClient | null {
+    if (this.redis) return this.redis;
+    return getRedisClient() as unknown as RedisLikeClient | null;
   }
 
   public async getDashboard(
@@ -745,6 +756,115 @@ export class AdminService {
     });
 
     return updated;
+  }
+
+  public async unlockAgeGate(
+    phone: string,
+    reason: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ): Promise<{ cleared: boolean }> {
+    const phoneHash = hashPII(phone);
+    const existingLock = await this.db.ageGateLockout.findFirst({
+      where: { phoneHash }
+    });
+
+    if (!existingLock) {
+      throw new NotFoundError("Active age gate lockout not found for this phone number");
+    }
+
+    await this.db.ageGateLockout.deleteMany({
+      where: { phoneHash }
+    });
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "AGE_GATE_LOCKOUT_CLEARED",
+        entityType: "AgeGateLockout",
+        entityId: existingLock.id,
+        newValue: { reason },
+        ip,
+        userAgent
+      }
+    });
+
+    return { cleared: true };
+  }
+
+  public async eraseUnderageUser(
+    userId: string,
+    reason: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ): Promise<{ erased: boolean }> {
+    const user = await this.db.user.findUnique({
+      where: { id: userId }
+    });
+
+    if (!user) {
+      throw new NotFoundError("User not found");
+    }
+
+    if (user.isDeleted || user.phone.startsWith("DELETED_") || !user.phoneHash) {
+      throw new AppError("User is already erased", {
+        code: "ALREADY_ERASED",
+        statusCode: 409
+      });
+    }
+
+    // Pre-compute phoneHash BEFORE purging/anonymizing
+    const phoneHash = user.phoneHash ?? hashPII(decryptPII(user.phone));
+
+    // Revoke sessions
+    const redis = this.redisClient;
+    if (redis) {
+      try {
+        const rawSessions = await redis.get(`user_sessions:${userId}`);
+        if (rawSessions) {
+          const sessions = JSON.parse(rawSessions) as Array<{ refreshToken: string }>;
+          for (const s of sessions) {
+            if (s.refreshToken) {
+              await redis.del(`rt:${s.refreshToken}`);
+            }
+          }
+        }
+        await redis.del(`user_sessions:${userId}`);
+      } catch {
+        // Ignore session revocation cleanup errors
+      }
+    }
+
+    // Permanent purge & anonymize
+    const userRepo = new UserRepository(this.db);
+    await userRepo.permanentPurgeAndAnonymize(userId);
+
+    // Lock for 90 days
+    const lockoutDays = parseInt(process.env.AGE_GATE_LOCKOUT_DAYS || "90", 10);
+    const lockedUntil = new Date(
+      Date.now() + (isNaN(lockoutDays) || lockoutDays <= 0 ? 90 : lockoutDays) * 24 * 60 * 60 * 1000
+    );
+
+    const ageGateRepo = new AgeGateRepository(this.db);
+    await ageGateRepo.upsertLock(phoneHash, lockedUntil);
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "USER_ERASED_UNDERAGE",
+        entityType: "User",
+        entityId: userId,
+        newValue: { reason },
+        ip,
+        userAgent
+      }
+    });
+
+    return { erased: true };
   }
 
   public async getUserConsentLogs(userId: string, page: number, limit: number) {
