@@ -2,7 +2,7 @@
 
 > **Database Engine:** PostgreSQL 15 (Railway / Local Dev & Test)  
 > **ORM:** Prisma ORM  
-> **Last Updated:** 2026-10-02 (Post-Migration `20261001200359_replace_consent_purpose_enum_with_config_table`)
+> **Last Updated:** 2026-10-05 (Phase 8.8 — Age Gate Lockout & DPDP Architecture Alignment)
 
 ---
 
@@ -27,7 +27,7 @@
 
 #### `ConsentPurposeConfig`
 Stores canonical DPDP consent purposes and regulatory metadata.
-- `key` (`TEXT`, PK): Primary purpose identifier (e.g. `'OTP_AUTH'`, `'ORDER_PROCESSING'`, `'MARKETING_COMMS'`, `'ANALYTICS'`).
+- `key` (`TEXT`, PK): Primary purpose identifier (canonical keys: `'OTP_AUTH'`, `'ORDER_PROCESSING'`, `'MARKETING_COMMS'`, `'ANALYTICS'`, `'AGE_DECLARATION'`).
 - `displayName` (`TEXT`): Human-readable title for UI cards and notice headers.
 - `description` (`TEXT`): Summary of processing purpose.
 - `isEssential` (`BOOLEAN`, default `false`): Whether consent is mandatory for core platform operation.
@@ -42,10 +42,26 @@ Append-only immutable ledger of all user consent decisions.
 - `purpose` (`TEXT`, FK `ConsentPurposeConfig.key`): Purpose identifier.
 - `consentVersion` (`TEXT`, default `'1.0'`): Privacy policy version consented against.
 - `noticeText` (`TEXT`): Exact verbatim disclosure text displayed at the moment of consent.
-- `ipAddress` (`TEXT`): IP address of the client at consent time.
+- `ipAddress` (`TEXT?`): IP address of the client at consent time.
+- `userAgent` (`TEXT?`): HTTP User-Agent header at consent capture for audit trail.
 - `isWithdrawn` (`BOOLEAN`, default `false`): Whether consent was subsequently withdrawn.
 - `withdrawnAt` (`TIMESTAMP?`): Timestamp of consent withdrawal.
 - `createdAt` (`TIMESTAMP`): Timestamp of consent grant.
+- `updatedAt` (`TIMESTAMP`): Last modified timestamp.
+
+#### `AgeGateLockout`
+Cooldown lockout ledger for mobile numbers that failed the neutral age gate (under 18).
+- `id` (`TEXT`, PK): CUID identifier.
+- `phoneHash` (`TEXT`, unique): HMAC-SHA256 blind index of mobile phone number (`hashPII`).
+- `lockedUntil` (`TIMESTAMP`): Expiration timestamp of the 90-day cooldown lockout.
+- `strikeCount` (`INT`, default `1`): Number of under-age attempts recorded against this phone hash.
+- `createdAt` (`TIMESTAMP`): Lockout creation timestamp.
+- `updatedAt` (`TIMESTAMP`): Last modification timestamp.
+- *Indexes:* `@@index([lockedUntil])`.
+- *Isolation Guarantee:* Standalone table with **no foreign keys** to `User` or `ConsentLog`. Ensures:
+  1. An under-18 user who is rejected never creates a `User` or `ConsentLog` record.
+  2. If an adult user is deleted via DPDP Section 12 erasure, cascading deletes never wipe active fraud or age lockouts.
+  3. Purge worker removes records where `lockedUntil < NOW()` independently.
 
 ---
 
@@ -65,6 +81,9 @@ Buyer and registered customer identity.
 - `nomineeName` (`TEXT?`): Designated DPDP nominee full name.
 - `nomineeContact` (`TEXT?`): Designated DPDP nominee contact details.
 - `nomineeRelationship` (`TEXT?`): Designated DPDP nominee relationship.
+- `privacyPolicyVersionAccepted` (`TEXT`, default `'1.0'`): Privacy policy version accepted during authentication.
+- `ageConfirmedAt` (`TIMESTAMP?`): Timestamp when user confirmed age eligibility (18+) via neutral DOB gate.
+- `ageConfirmedPolicyVersion` (`TEXT?`): Privacy policy version under which age was confirmed (e.g. `'1.1'`).
 - `createdAt` (`TIMESTAMP`): Account creation timestamp.
 - `updatedAt` (`TIMESTAMP`): Last modification timestamp.
 
@@ -121,7 +140,7 @@ Quick-commerce and booking-commerce outlets.
 - `id` (`TEXT`, PK): CUID identifier.
 - `name` (`TEXT`), `description` (`TEXT?`), `phone` (`TEXT`), `address` (`TEXT`).
 - `storeType` (`StoreType`): `QUICK_COMMERCE` | `BOOKING_COMMERCE`.
-- `weatherModeDeliveryWindow` (`INT?`): Hill-station weather delay buffer in minutes.
+- `weatherModeDeliveryWindow` (`TEXT?`): Hill-station weather delay buffer in minutes.
 - `bookingLeadDays` (`INT`, default `1`), `isAcceptingBookings` (`BOOLEAN`, default `true`), `isAcceptingOrders` (`BOOLEAN`, default `true`).
 - `riderEarningRatePct` (`DECIMAL(5, 2)?`): Per-store rider payout percentage override.
 - `isActive` (`BOOLEAN`, default `true`), `isDeleted` (`BOOLEAN`, default `false`).
@@ -253,3 +272,4 @@ Rider payout ledger entries.
 | `20260924040500_add_user_nominee_and_deletion_fields` | Added `nomineeName`, `nomineeContact`, `nomineeRelationship`, `deletedAt`, `deletionScheduledFor` to `User` table for DPDP Section 12 & 14 compliance. |
 | `20260925183000_add_rider_order_lifecycle_fields` | Added `riderId` to `Order` model, `RiderStore` junction table, and `RiderEarning` model. |
 | **`20261001200359_replace_consent_purpose_enum_with_config_table`** | **Replaced `ConsentPurpose` PostgreSQL enum with `ConsentPurposeConfig` database table.** Renamed `MARKETING_EMAIL` to `MARKETING_COMMS`. Updated `ConsentLog.purpose` to `TEXT` referencing `ConsentPurposeConfig.key`. Seeded 4 canonical rows (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`). |
+| `add_age_gate_lockout_and_age_confirmation` | Phase 8.8: Added `ageConfirmedAt` (`TIMESTAMP?`) and `ageConfirmedPolicyVersion` (`TEXT?`) to `User`. Added `AgeGateLockout` table (`phoneHash` unique, `lockedUntil`, `strikeCount`, `createdAt`, `updatedAt`). Seeded canonical `AGE_DECLARATION` purpose into `ConsentPurposeConfig`. |

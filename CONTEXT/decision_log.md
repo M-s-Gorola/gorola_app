@@ -1890,7 +1890,7 @@ GoRola runs a split deployment: the Fastify API, PostgreSQL (all personal data),
 ---
 
 **Decision:**  
-Keep the frontend on Vercel. No DPDP exposure exists from this arrangement. No migration to Railway is required or recommended.
+Keep the frontend on Vercel. No DPDP exposure of the kind that needs a Data Processing Agreement exists from this arrangement, and no migration to Railway is required or recommended. **Amended 2026-10-05:** the *DPDP* conclusion stands, but a separate *commercial-terms* problem was found — Vercel's free **Hobby** plan is restricted to personal, non-commercial use, and GoRola is a commercial business. Vercel must be upgraded to **Pro** before real customers or real money are involved. See the "Amendment (2026-10-05)" block at the end of this decision.
 
 ---
 
@@ -1970,6 +1970,69 @@ GoRola's DPDP compliance perimeter is correctly drawn around Railway — where a
 1. **Move frontend to Railway with Nginx static file server:** Rejected — adds ~$5–10/mo in Railway compute cost, eliminates global CDN (degraded performance for Indian mobile users), requires Dockerfile + Nginx config authoring, and provides zero compliance benefit since Vercel holds no personal data.
 2. **Move frontend to Railway with a Node.js `serve` process:** Rejected — same cost/performance problems as Option 1, worse resource efficiency than Nginx.
 3. **Keep Vercel but add Vercel Analytics:** Explicitly prohibited — would introduce Vercel as a personal data sub-processor, requiring consent architecture changes and policy version bump. Vercel Analytics must never be enabled without a full consent pipeline update first.
+
+---
+
+### Amendment (2026-10-05) — The Real Vercel Problem Is the Hobby Plan, Not DPDP
+
+**Why this amendment exists.** While preparing Phase 8.7 (collecting vendor DPAs) the question was asked: *"If Vercel only delivers static files, do we need a DPA from them at all?"* Re-reading this decision against Vercel's published plan terms showed that the original reasoning was right about DPDP but silent about a different issue.
+
+**1. What stays true (DPDP).**
+- Vercel still serves only the compiled Vite bundle. Personal data travels browser → Railway directly and never through Vercel.
+- Vercel Analytics is still disabled and still banned.
+- Therefore Vercel is **not a Data Processor of buyer personal data**, and a DPDP Data Processing Agreement is **not a launch blocker** for Vercel.
+
+**2. A precision fix to wording used earlier ("zero personal data").** Any CDN sees the IP address, user-agent and requested URL of every visitor in its edge/access logs. An IP address can be personal data. Those logs are Vercel's own infrastructure logs; GoRola does not send them, cannot switch them off, and receives no personal data content through them. The correct statement is: *"GoRola intentionally sends **no personal data** to Vercel. Vercel's edge infrastructure inevitably sees visitor IP addresses and request metadata as part of delivering files."* This is recorded in the data inventory (Phase 8.7.4) as "infrastructure provider — IP-level logs only".
+
+**3. The actual problem: Hobby plan = non-commercial use only.**
+- Vercel's **Hobby** plan is limited to **personal, non-commercial** use. GoRola is a commercial quick-commerce business, so running production customer traffic on Hobby breaches the plan terms. Vercel can throttle or suspend a Hobby project used commercially, which would take the whole storefront offline.
+- The plan-eligibility of Vercel's **Data Processing Addendum** is a second, smaller consequence: the DPA is offered under the Pro and Enterprise agreements, so a Hobby account has no DPA to sign. That does **not** matter for DPDP (see point 1), but it means upgrading also resolves the paperwork question automatically.
+- ⚠️ These points were established from Vercel's public plan and legal pages and a research summary. **Re-confirm them on `vercel.com/pricing`, `vercel.com/legal/terms` (Fair Use) and `vercel.com/legal/dpa` on the day of the upgrade.** If Vercel's wording differs, the wording on those pages wins.
+
+**4. Updated decision.**
+- **Before the first real customer or any real payment:** upgrade the Vercel project to **Pro** (about US$20 per month at the time of writing). Until then Vercel use is development/staging only.
+- **At upgrade:** save the then-current Terms, Fair Use policy and DPA PDF into `GoRola Legal/DPDP Compliance/DPAs/Vercel/` (Phase 8.7.2 and 8.7.8).
+- **No DPDP-driven change** to the architecture. The cost row in section 5 above ("₹0") is now "₹0 for development, about US$20 per month for production", which still compares well against moving the frontend to Railway.
+- **Cross-references:** Phase 8.7.2 (provider register and DPA steps), Consent Architecture Guide section 14.6 (compliance perimeter table), `architecture.md` Service Responsibilities.
+
+---
+
+## [DECISION-062] Eligibility Gate — GoRola Is for Adults (18+) Only; No Parental-Consent Flow at Launch
+
+**Date:** 2026-10-05  
+**Status:** Accepted (implementation planned in `phase8_state.md` Section 8.8)  
+
+**Context:**  
+The Privacy Policy (section 7) and Terms of Service state that GoRola is only for people aged 18 or over, but **no code enforced it**: there was no date-of-birth field, no age check and no lockout. The DPDP Act 2023 defines a *child* as anyone under 18 and requires verifiable parental consent before a child's personal data is processed (Section 9), plus a ban on tracking, behavioural monitoring and targeted advertising aimed at children. A policy sentence with no control behind it is itself a compliance weakness.
+
+**Decision:**  
+1. **18 is the single age threshold everywhere.** No tiers (no 13/16), and the user interface never shows any age number other than 18.
+2. **A neutral date-of-birth screen**, not a tick-box, shown **once**, **after the phone OTP is verified** and **before the account is created**, for new phone numbers only.
+3. **The date of birth is never stored.** The server computes "18 or over: yes/no", keeps only `User.ageConfirmedAt` plus a `ConsentLog` row with purpose `AGE_DECLARATION`, and discards the date.
+4. **A refused (under-18) person gets no account.** A one-way keyed hash of their phone number is kept in a new `AgeGateLockout` table for 90 days (configurable) purely to stop immediate retries; a 24-hour device cookie adds a short cooling-off.
+5. **`OTP_AUTH` and `AGE_DECLARATION` consent rows are written by the server**, in the same database transaction that creates the user, replacing the old fire-and-forget browser call that could silently fail.
+6. **We do not build parental consent now.** Under-18s are simply not served; accounts are for adults, and a parent orders for the household using their own account.
+
+**Why no parental approval now (summary — full reasoning in `phase8_state.md` §8.8.0 and Consent Guide §15):**  
+- Doing it properly means verifying that the approver is an adult *and* is the child's lawful guardian, using government-grade tokens (DigiLocker-style) or paid KYC vendors; the operating machinery for this is still being finalised and the rules' main obligations only start on 13 May 2027.
+- Serving children triggers the tracking/monitoring ban, which would force separate code paths for rider live-tracking and analytics.
+- A minor cannot validly enter a contract in India, so orders would legally need to be the parent's anyway.
+- Collecting a parent's identity documents creates *more* personal data to protect, the opposite of data minimisation.
+- Quick commerce is not a child-directed product, so the commercial upside is small against a penalty ceiling of up to ₹200 crore for children's-data failures.
+
+**Why it is still defensible when a minor enters a false age:** the law asks for reasonable, proportionate measures, not impossible certainty. GoRola takes layered measures (notice, neutral DOB entry, confirmation step, one-strike lockout, erase-on-discovery, grievance route, a warranty in the Terms, and an audit trail proving each step) and records the residual risk openly. Counsel review before launch is mandatory (Phase 8.7.8).
+
+**Tradeoffs:**  
+- A determined teenager can still use an adult's phone number or lie about their date of birth; no self-declared gate can stop that.
+- A family sharing one device may see a 24-hour device cooling-off after a refusal.
+- One extra SMS may reach a person who is later refused.
+- Policy version moves from `1.0` to `1.1`, so every existing user sees the re-consent banner once.
+
+**Alternatives Considered:**  
+1. **Tick-box "I am 18+" only:** Rejected — it tells the user the exact answer to give and is the weakest evidence.
+2. **Ask for DOB before the OTP:** Rejected — no verified identity to attach a lockout to, and anyone could lock out another person's number by typing an under-18 date for it.
+3. **Store the date of birth:** Rejected — nothing needs it after the check; storing it adds risk with no benefit.
+4. **Verified parental consent (DigiLocker/KYC):** Deferred, not rejected — revisit triggers are listed in `phase8_state.md` §8.8.0.
 
 
 
