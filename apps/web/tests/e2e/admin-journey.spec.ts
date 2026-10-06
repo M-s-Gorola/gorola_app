@@ -293,14 +293,14 @@ test.describe("Admin Panel E2E Journey", () => {
     });
 
     await buyerPage.goto(`${BASE_URL}/login`);
-    if (await buyerPage.locator('[data-testid="consent-continue-btn"]').isVisible()) {
-      const ackCheckbox = buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]');
-      if (await ackCheckbox.isVisible()) {
-        await ackCheckbox.click();
-      }
+    const consentNotice = buyerPage.locator('[data-testid="consent-notice-step"]');
+    if (await consentNotice.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]').click();
       await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
     }
-    await buyerPage.locator("#buyer-phone").fill("9876543210");
+    const buyerPhoneInput = buyerPage.locator("#buyer-phone");
+    await expect(buyerPhoneInput).toBeVisible({ timeout: 10000 });
+    await buyerPhoneInput.fill("9876543210");
     
     const sendOtpResponse1 = buyerPage.waitForResponse(
       resp => resp.url().includes("/api/v1/auth/buyer/send-otp") && resp.request().method() === "POST",
@@ -337,7 +337,29 @@ test.describe("Admin Panel E2E Journey", () => {
     await expect(page.locator('text=/User successfully unsuspended/i')).toBeVisible({ timeout: 10000 });
     await expect(toggleBtn).toHaveText("Suspend");
 
-    // 4. Retry buyer login and verify it succeeds
+    // 4. Reload login and verify buyer can log in now that they are unsuspended
+    await buyerPage.goto(`${BASE_URL}/login`);
+    const consentNotice2 = buyerPage.locator('[data-testid="consent-notice-step"]');
+    if (await consentNotice2.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]').click();
+      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+    }
+    const phoneInput2 = buyerPage.locator("#buyer-phone");
+    await expect(phoneInput2).toBeVisible({ timeout: 10000 });
+    await phoneInput2.fill("9876543210");
+
+    const sendOtpResponse2 = buyerPage.waitForResponse(
+      resp => resp.url().includes("/api/v1/auth/buyer/send-otp") && resp.request().method() === "POST",
+      { timeout: 15000 }
+    );
+    await buyerPage.locator('button:has-text("Send OTP")').click();
+    await sendOtpResponse2;
+
+    await expect(buyerPage.locator("text=/Enter OTP/i")).toBeVisible({ timeout: 10000 });
+    for (let i = 0; i < 6; i++) {
+      await buyerPage.locator(`[data-testid="otp-digit-${i}"]`).fill((i + 1).toString());
+    }
+
     const verifyOtpResponse2 = buyerPage.waitForResponse(
       resp => resp.url().includes("/api/v1/auth/buyer/verify-otp") && resp.request().method() === "POST",
       { timeout: 15000 }

@@ -4,24 +4,14 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
+import { loginBuyer } from "../../helpers/auth.helper.js";
 
 async function getBuyerAccessToken(
   server: ReturnType<typeof createServer>,
   phone: string
 ): Promise<{ accessToken: string; userId: string }> {
-  await server.inject({
-    method: "POST",
-    payload: { phone },
-    url: "/api/v1/auth/buyer/send-otp"
-  });
-  const verifyRes = await server.inject({
-    method: "POST",
-    payload: { otp: "111222", phone },
-    url: "/api/v1/auth/buyer/verify-otp"
-  });
-  expect(verifyRes.statusCode).toBe(200);
-  const json = verifyRes.json() as { data: { accessToken: string; userId: string } };
-  return { accessToken: json.data.accessToken, userId: json.data.userId };
+  const auth = await loginBuyer(server, phone);
+  return { accessToken: auth.accessToken, userId: auth.userId! };
 }
 
 async function cleanConsentAuditTestGraph(db: PrismaClient): Promise<void> {

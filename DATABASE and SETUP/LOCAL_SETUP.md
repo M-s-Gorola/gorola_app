@@ -71,71 +71,38 @@ pnpm --filter @gorola/api setup:railway:roles \
 
 ## 3. Environment Variables
 
-### Root Environment Variables (`.env`)
-1.  Navigate to the `GoRola_app` directory.
-2.  Copy the root example env file:
-    ```powershell
-    cp .env.example .env
-    ```
-3.  Update the `.env` file with these values (using quotes for safety):
-    ```env
-    DATABASE_URL="postgresql://app_service:postgres_app_123@localhost:5432/gorola_dev"
-    DATABASE_URL_TEST="postgresql://app_service:postgres_app_123@localhost:5432/gorola_test"
-    DIRECT_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
-    MIGRATION_DATABASE_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
-    MIGRATION_DATABASE_URL_TEST="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_test"
-    REDIS_URL="redis://localhost:6379"
-    ```
+All `.env.example` files are pre-configured with the correct default values for local development (database roles, Redis, encryption keys, DPDP age gate settings, and offline Leaflet maps). You can copy the three example files directly into place:
 
+```powershell
+# Copy all 3 environment files from the project root:
+cp .env.example .env
+cp apps/api/.env.example apps/api/.env
+cp apps/web/.env.example apps/web/.env
+```
 
-4.  *(Optional for local dev, Required for production)* **Generate JWT RS256 Keys**:
-    In local dev, the API automatically generates ephemeral RSA keys if they are left blank. However, if you need to test with persistent keys, generate a 2048-bit RSA public/private key pair:
+> [!TIP]
+> **Pre-Configured Defaults**: The default values in `.env.example` match the Docker database role setup in Section 2, so no manual edits to connection strings, encryption keys, or ports are required for local development.
 
-    *   **Option A: Using Node.js (Easiest & cross-platform)**
-        ```powershell
-        node -e "const crypto = require('crypto'); const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, modulusLength: 2048 }); console.log('JWT_PRIVATE_KEY:\n' + privateKey); console.log('JWT_PUBLIC_KEY:\n' + publicKey);"
-        ```
-    *   **Option B: Using OpenSSL**
-        ```bash
-        openssl genrsa -out private.pem 2048
-        openssl rsa -in private.pem -pubout -out public.pem
-        ```
-    
-    Paste the generated multiline PEM strings into `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` respectively in your `.env` file.
+> [!IMPORTANT]
+> **Enable Dummy OTP for Local Development & Testing (`GOROLA_DUMMY_OTP`)**:
+> In the root `.env` (or `apps/api/.env`), make sure `GOROLA_DUMMY_OTP` is **uncommented** for local development and manual testing:
+> ```env
+> GOROLA_DUMMY_OTP=123456
+> ```
+> This allows you to log in as any buyer by typing OTP `123456` without needing a live Fast2SMS/Exotel gateway.
 
-    > [!IMPORTANT]
-    > In production/PaaS environments (like Railway), these variables are **required** in the host configuration. Missing JWT keys in production will prevent the API from starting, resulting in `502 Bad Gateway` and/or CORS errors.
+### Optional Configurations:
 
+#### JWT RS256 Keys *(Optional for local dev, Required for production)*
+In local development, the API automatically generates ephemeral RSA keys if left blank. However, if you want persistent keys, generate a 2048-bit RSA pair:
+```powershell
+node -e "const crypto = require('crypto'); const { privateKey, publicKey } = crypto.generateKeyPairSync('rsa', { publicKeyEncoding: { type: 'spki', format: 'pem' }, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, modulusLength: 2048 }); console.log('JWT_PRIVATE_KEY:\n' + privateKey); console.log('JWT_PUBLIC_KEY:\n' + publicKey);"
+```
+Paste the multiline PEM output into `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` in `.env`.
 
-### API Environment Variables (`apps/api/.env`)
-The Prisma CLI runs with the working directory `apps/api`, so it loads `apps/api/.env` for commands like migrations and seeding.
-1.  Copy the API example env file:
-    ```powershell
-    cp apps/api/.env.example apps/api/.env
-    ```
-2.  Update the `apps/api/.env` file with the least-privilege connection strings:
-    ```env
-    # Runtime DML connection
-    DATABASE_URL="postgresql://app_service:postgres_app_123@localhost:5432/gorola_dev"
+> [!IMPORTANT]
+> In production/PaaS environments (like Railway), `JWT_PRIVATE_KEY` and `JWT_PUBLIC_KEY` are **mandatory**. Missing JWT keys in production will cause the API startup to fail.
 
-    # Migration / DDL connection
-    DIRECT_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
-    MIGRATION_DATABASE_URL="postgresql://db_owner:postgres_owner_123@localhost:5432/gorola_dev"
-    ```
-
-
-### Web Environment Variables (`apps/web/.env`)
-The Vite development server runs in `apps/web`, loading `apps/web/.env` for the frontend.
-1.  Copy the Web example env file:
-    ```powershell
-    cp apps/web/.env.example apps/web/.env
-    ```
-2.  Ensure or update the `apps/web/.env` file with:
-    ```env
-    VITE_API_BASE_URL=http://localhost:3001
-    VITE_MAP_PROVIDER=leaflet
-    VITE_OLA_MAPS_API_KEY=
-    ```
 
 ---
 
