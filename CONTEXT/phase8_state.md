@@ -2946,6 +2946,22 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
   - **Engineering Guide Created:**
     - Authored `ISSUES GUIDE/cross_test_fixture_pollution_and_seed_cascading.md` establishing universal architectural principles for test fixture idempotency, pre-seed security table cleanups, sandboxed identities for destructive test flows, and resilient client-side modal synchronization.
 
+- **Session 21 — 2026-10-07 — Age Gate UX Polish, Statutory Privacy Unification & Anti-Nudging Copy:**
+  - **Companion Native Datepicker & Affirmative Confirmation Checkbox (`AgeStep.tsx`):**
+    - Added companion HTML5 native datepicker button (`native-dob-picker`) alongside fast 3-segment numeric inputs (`day`, `month`, `year`) with two-way synchronization.
+    - Added mandatory affirmative confirmation checkbox (`[data-testid="age-confirm-checkbox"]`) in the DOB confirmation sub-step, requiring active self-declaration before "Yes, continue" (`age-confirm-yes-btn`) is enabled.
+  - **Privacy Policy Statutory Unification (`PrivacyPolicyPage.tsx`):**
+    - Added *Age Eligibility & Verification* to Section 2 (Categories of Personal Data Collected) noting ephemeral in-memory processing and retention of confirmation timestamp only.
+    - Added Purpose B (*Age Verification & Statutory Eligibility*) to Section 3 (Specified Purposes of Data Processing) as an Essential purpose in sequence right below *Authentication & Account Security*.
+  - **Privacy Dashboard Consistency & Consent Modal (`PrivacySettingsSection.tsx` & `ConsentNoticeModal.tsx`):**
+    - Promoted `AGE_DECLARATION` into the 5 canonical purpose cards in `/account/privacy` with an `Essential` badge, confirmed timestamp, and dedicated **Age Declaration Notice** modal trigger.
+    - Added `AGE_DECLARATION` full 5-section statutory notice in `ConsentNoticeModal.tsx` (`CONSENT_NOTICES.AGE_DECLARATION`).
+  - **Anti-Nudging Notice Copy Refinement (`@gorola/shared`):**
+    - Refined canonical `AGE_DECLARATION` 1.1 notice copy in `packages/shared/src/consent-notices.ts` to: `"GoRola is available only to people aged 18 and over. You confirm that the date of birth you enter is correct. We use it once to check eligibility and do not store it; we keep only the date on which you confirmed."` (removing repetitive warnings that prompt minors to fake birth years).
+  - **Test Suite Updates & Quality Gates:**
+    - Updated unit, integration, and E2E test suites (`AgeStep.test.tsx`, `LoginPage.test.tsx`, `PrivacySettingsSection.test.tsx`, `PrivacySettingsPage.test.tsx`, `ConsentNoticeModal.test.tsx`, `age-gate.spec.ts`, `auth.spec.ts`, `checkout.spec.ts`, `booking-journey.spec.ts`).
+    - Verified build passes (`pnpm build` clean, 0 errors).
+
 
 
 

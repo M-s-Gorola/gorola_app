@@ -1,7 +1,10 @@
 import { CONSENT_NOTICES } from "@gorola/shared";
+import { Calendar } from "lucide-react";
 import { type ReactElement, useState } from "react";
 
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 
 export type AgeStepProps = {
@@ -19,6 +22,7 @@ export function AgeStep({
   const [day, setDay] = useState("");
   const [month, setMonth] = useState("");
   const [year, setYear] = useState("");
+  const [confirmChecked, setConfirmChecked] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -46,6 +50,15 @@ export function AgeStep({
 
   const isComplete = day.trim().length > 0 && month.trim().length > 0 && year.trim().length > 0;
 
+  const now = new Date();
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Kolkata",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit"
+  });
+  const todayStr = formatter.format(now);
+
   function validateInputs(): { valid: boolean; iso?: string; formatted?: string } {
     const d = parseInt(day, 10);
     const m = parseInt(month, 10);
@@ -69,14 +82,6 @@ export function AgeStep({
     const paddedM = String(m).padStart(2, "0");
     const iso = `${y}-${paddedM}-${paddedD}`;
 
-    const now = new Date();
-    const formatter = new Intl.DateTimeFormat("en-CA", {
-      timeZone: "Asia/Kolkata",
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit"
-    });
-    const todayStr = formatter.format(now);
     if (iso > todayStr) {
       return { valid: false };
     }
@@ -99,11 +104,12 @@ export function AgeStep({
       setLocalError("Please enter a valid date of birth.");
       return;
     }
+    setConfirmChecked(false);
     setSubStep("confirm");
   }
 
   async function handleConfirmYes(): Promise<void> {
-    if (submitting) return;
+    if (submitting || !confirmChecked) return;
     const result = validateInputs();
     if (!result.valid || !result.iso) {
       setLocalError("Please enter a valid date of birth.");
@@ -121,6 +127,11 @@ export function AgeStep({
 
   const { formatted: confirmedFormattedDate } = validateInputs();
 
+  const currentIsoValue =
+    year.length === 4 && month.trim().length > 0 && day.trim().length > 0
+      ? `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`
+      : "";
+
   if (subStep === "confirm") {
     return (
       <div className="mt-6 flex flex-col gap-5" data-testid="age-confirm-step">
@@ -131,13 +142,31 @@ export function AgeStep({
           <p className="text-xs text-muted-foreground leading-relaxed">
             Please make sure your date of birth is accurate before proceeding.
           </p>
+
+          <div className="pt-2 border-t border-border/50">
+            <label
+              htmlFor="age-confirm-checkbox"
+              className="flex items-start gap-2.5 cursor-pointer select-none text-xs text-gorola-charcoal"
+            >
+              <Checkbox
+                id="age-confirm-checkbox"
+                data-testid="age-confirm-checkbox"
+                checked={confirmChecked}
+                onCheckedChange={(checked) => setConfirmChecked(Boolean(checked))}
+                className="mt-0.5"
+              />
+              <span className="leading-snug">
+                I confirm that my date of birth is <strong className="font-semibold text-gorola-charcoal">{confirmedFormattedDate}</strong> and understand this declaration is final.
+              </span>
+            </label>
+          </div>
         </div>
 
         <div className="flex flex-col gap-3">
           <Button
             className="w-full rounded-full"
             data-testid="age-confirm-yes-btn"
-            disabled={submitting}
+            disabled={!confirmChecked || submitting}
             onClick={handleConfirmYes}
             type="button"
           >
@@ -148,7 +177,10 @@ export function AgeStep({
             className="w-full rounded-full"
             data-testid="age-confirm-edit-btn"
             disabled={submitting}
-            onClick={() => setSubStep("fields")}
+            onClick={() => {
+              setConfirmChecked(false);
+              setSubStep("fields");
+            }}
             type="button"
             variant="outline"
           >
@@ -182,10 +214,71 @@ export function AgeStep({
           {CONSENT_NOTICES.AGE_DECLARATION["1.1"]}
         </p>
 
+        <div className="pt-0.5 text-xs text-muted-foreground">
+          <span>For full details on non-storage of raw DOB and 90-day lockout hashing, read the </span>
+          <ConsentNoticeModal
+            purpose="AGE_DECLARATION"
+            triggerLabel="Age Declaration Notice"
+          />
+          <span> (or view our platform-wide </span>
+          <a
+            href="/privacy"
+            target="_blank"
+            rel="noreferrer"
+            className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
+          >
+            Privacy Policy
+          </a>
+          <span>).</span>
+        </div>
+
         <div className="pt-2">
-          <label className="text-xs font-medium text-gorola-charcoal block mb-2">
-            Date of birth
-          </label>
+          <div className="flex items-center justify-between mb-2">
+            <label className="text-xs font-medium text-gorola-charcoal block">
+              Date of birth
+            </label>
+            <div className="relative flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  try {
+                    (document.getElementById("native-dob-picker") as HTMLInputElement | null)?.showPicker?.();
+                  } catch {
+                    /* fallback for older browsers */
+                  }
+                }}
+                className="inline-flex items-center gap-1.5 text-xs font-medium text-gorola-pine hover:text-emerald-700 cursor-pointer bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200/60 rounded-md px-2 py-0.5 transition-colors"
+                title="Choose date from calendar"
+              >
+                <Calendar className="h-3.5 w-3.5" />
+                <span>Calendar</span>
+              </button>
+              <input
+                id="native-dob-picker"
+                data-testid="native-dob-picker"
+                type="date"
+                max={todayStr}
+                min="1900-01-01"
+                value={currentIsoValue}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  if (val) {
+                    const [y, m, d] = val.split("-");
+                    if (y && m && d) {
+                      setYear(y);
+                      setMonth(m);
+                      setDay(d);
+                      setLocalError(null);
+                    }
+                  }
+                }}
+                className="sr-only"
+                tabIndex={-1}
+                aria-label="Pick date of birth from calendar"
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label htmlFor="age-day-input" className="sr-only">

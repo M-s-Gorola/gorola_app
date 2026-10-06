@@ -40,6 +40,7 @@ test.describe('Authentication', () => {
       await page.locator('[data-testid="age-year"]').fill('1995');
       await page.locator('[data-testid="age-continue-btn"]').click();
       await expect(page.locator('[data-testid="age-confirm-step"]')).toBeVisible({ timeout: 5000 });
+      await page.locator('[data-testid="age-confirm-checkbox"]').click();
       await page.locator('[data-testid="age-confirm-yes-btn"]').click();
     }
 
@@ -77,6 +78,7 @@ test.describe('Authentication', () => {
       await page.locator('[data-testid="age-year"]').fill('1995');
       await page.locator('[data-testid="age-continue-btn"]').click();
       await expect(page.locator('[data-testid="age-confirm-step"]')).toBeVisible({ timeout: 5000 });
+      await page.locator('[data-testid="age-confirm-checkbox"]').click();
       await page.locator('[data-testid="age-confirm-yes-btn"]').click();
     }
     await expect(page).toHaveURL(/\/$/, { timeout: 10000 });

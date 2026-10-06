@@ -70,6 +70,7 @@ export function PrivacyPolicyPage(): ReactElement {
               <p>We collect and process the following categories of personal data based on user interactions:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li><strong>Identity &amp; Contact:</strong> Mobile phone number (encrypted at rest), Display Name (if optionally set).</li>
+                <li><strong>Age Eligibility &amp; Verification:</strong> Date of birth (processed ephemerally in-memory at registration to verify 18+ eligibility and discarded immediately without persistent storage; only the timestamp of your affirmative declaration is retained).</li>
                 <li><strong>Delivery &amp; Location:</strong> Saved delivery addresses, landmark descriptions, GPS pin coordinates, and dynamic order delivery coordinates.</li>
                 <li><strong>Commercial &amp; Financial:</strong> Order histories, item preferences, and payment transaction metadata (excluding raw card numbers or CVVs).</li>
                 <li><strong>Technical &amp; Telemetry:</strong> Anonymized performance metrics, IP addresses (stored with 30-day retention), and temporary session tokens.</li>
@@ -96,7 +97,17 @@ export function PrivacyPolicyPage(): ReactElement {
 
               <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gorola-charcoal">B. Order Fulfillment &amp; Location Services (Essential)</h3>
+                  <h3 className="font-bold text-gorola-charcoal">B. Age Verification &amp; Statutory Eligibility (Essential)</h3>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
+                </div>
+                <p className="text-gorola-slate leading-relaxed">
+                  Under Section 9 of the DPDP Act 2023, we process your date of birth once during sign-up to verify that you meet the 18+ legal age requirement. Raw date of birth is never stored on our servers; we retain only the timestamp of your verified affirmative declaration.
+                </p>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-gorola-charcoal">C. Order Fulfillment &amp; Location Services (Essential)</h3>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">
@@ -106,7 +117,7 @@ export function PrivacyPolicyPage(): ReactElement {
 
               <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gorola-charcoal">C. Promotions &amp; Seasonal Offers (Voluntary)</h3>
+                  <h3 className="font-bold text-gorola-charcoal">D. Promotions &amp; Seasonal Offers (Voluntary)</h3>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Optional</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">
@@ -116,7 +127,7 @@ export function PrivacyPolicyPage(): ReactElement {
 
               <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gorola-charcoal">D. Usage &amp; Performance Analytics (Voluntary)</h3>
+                  <h3 className="font-bold text-gorola-charcoal">E. Usage &amp; Performance Analytics (Voluntary)</h3>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Optional</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">

@@ -37,6 +37,7 @@ test.describe('DPDP Act 2023: Age Gate E2E (Phase 8.8)', () => {
 
     // Confirm step
     await expect(page.locator('[data-testid="age-confirm-step"]')).toBeVisible({ timeout: 5000 });
+    await page.locator('[data-testid="age-confirm-checkbox"]').click();
     await page.locator('[data-testid="age-confirm-yes-btn"]').click();
 
     // Redirected home as logged in
@@ -92,6 +93,7 @@ test.describe('DPDP Act 2023: Age Gate E2E (Phase 8.8)', () => {
     await page.locator('[data-testid="age-continue-btn"]').click();
 
     await expect(page.locator('[data-testid="age-confirm-step"]')).toBeVisible({ timeout: 5000 });
+    await page.locator('[data-testid="age-confirm-checkbox"]').click();
     await page.locator('[data-testid="age-confirm-yes-btn"]').click();
 
     // Refusal / Lockout screen shown
@@ -155,6 +157,7 @@ test.describe('DPDP Act 2023: Age Gate E2E (Phase 8.8)', () => {
     await page.locator('[data-testid="age-continue-btn"]').click();
 
     await expect(page.locator('[data-testid="age-confirm-step"]')).toBeVisible({ timeout: 5000 });
+    await page.locator('[data-testid="age-confirm-checkbox"]').click();
     await page.locator('[data-testid="age-confirm-yes-btn"]').click();
 
     // Successful login

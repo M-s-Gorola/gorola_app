@@ -642,6 +642,7 @@ describe("LoginPage", () => {
 
       // Confirm step
       expect(await screen.findByTestId("age-confirm-text")).toHaveTextContent("You entered 14 May 1990. Is this correct?");
+      await user.click(screen.getByTestId("age-confirm-checkbox"));
       await user.click(screen.getByTestId("age-confirm-yes-btn"));
 
       await waitFor(() => {
@@ -714,6 +715,7 @@ describe("LoginPage", () => {
       await user.type(screen.getByTestId("age-year"), "2012");
       await user.click(screen.getByTestId("age-continue-btn"));
 
+      await user.click(screen.getByTestId("age-confirm-checkbox"));
       await user.click(screen.getByTestId("age-confirm-yes-btn"));
 
       const blockedStep = await screen.findByTestId("age-blocked-step");
@@ -803,6 +805,7 @@ describe("LoginPage", () => {
       await user.type(screen.getByTestId("age-year"), "1990");
       await user.click(screen.getByTestId("age-continue-btn"));
 
+      await user.click(screen.getByTestId("age-confirm-checkbox"));
       await user.click(screen.getByTestId("age-confirm-yes-btn"));
 
       // Returned to phone step with expired notice
@@ -860,6 +863,7 @@ describe("LoginPage", () => {
       await user.type(screen.getByTestId("age-year"), "1990");
       await user.click(screen.getByTestId("age-continue-btn"));
 
+      await user.click(screen.getByTestId("age-confirm-checkbox"));
       await user.click(screen.getByTestId("age-confirm-yes-btn"));
 
       expect(await screen.findByTestId("reactivate-account-step")).toBeInTheDocument();

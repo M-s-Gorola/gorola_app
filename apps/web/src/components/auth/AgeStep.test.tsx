@@ -1,12 +1,12 @@
 import { CONSENT_NOTICES } from "@gorola/shared";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 
 import { AgeStep } from "./AgeStep";
 
 describe("AgeStep Component (8.8.10)", () => {
-  it("renders age-day, age-month, age-year inputs with no type=date and no min/max attributes", () => {
+  it("renders age-day, age-month, age-year inputs and companion native datepicker", () => {
     render(
       <AgeStep
         onConfirm={vi.fn()}
@@ -16,26 +16,34 @@ describe("AgeStep Component (8.8.10)", () => {
     const dayInput = screen.getByTestId("age-day");
     const monthInput = screen.getByTestId("age-month");
     const yearInput = screen.getByTestId("age-year");
+    const datePicker = screen.getByTestId("native-dob-picker");
 
     expect(dayInput).toBeInTheDocument();
     expect(monthInput).toBeInTheDocument();
     expect(yearInput).toBeInTheDocument();
+    expect(datePicker).toBeInTheDocument();
 
     expect(dayInput).not.toHaveAttribute("type", "date");
     expect(monthInput).not.toHaveAttribute("type", "date");
     expect(yearInput).not.toHaveAttribute("type", "date");
-
-    expect(dayInput).not.toHaveAttribute("min");
-    expect(dayInput).not.toHaveAttribute("max");
-    expect(monthInput).not.toHaveAttribute("min");
-    expect(monthInput).not.toHaveAttribute("max");
-    expect(yearInput).not.toHaveAttribute("min");
-    expect(yearInput).not.toHaveAttribute("max");
+    expect(datePicker).toHaveAttribute("type", "date");
 
     // Associated labels / accessibility
     expect(dayInput).toHaveAccessibleName(/day/i);
     expect(monthInput).toHaveAccessibleName(/month/i);
     expect(yearInput).toHaveAccessibleName(/year/i);
+  });
+
+  it("selecting a date in the companion native datepicker populates day, month, and year", () => {
+    render(<AgeStep onConfirm={vi.fn()} />);
+
+    const datePicker = screen.getByTestId("native-dob-picker");
+    fireEvent.change(datePicker, { target: { value: "1995-08-25" } });
+
+    expect(screen.getByTestId("age-day")).toHaveValue("25");
+    expect(screen.getByTestId("age-month")).toHaveValue("08");
+    expect(screen.getByTestId("age-year")).toHaveValue("1995");
+    expect(screen.getByTestId("age-continue-btn")).toBeEnabled();
   });
 
   it("renders canonical AGE_DECLARATION text from @gorola/shared", () => {
@@ -94,7 +102,7 @@ describe("AgeStep Component (8.8.10)", () => {
     }
   });
 
-  it("valid entry 10/03/2012 shows confirmation view with 'You entered 10 March 2012. Is this correct?' and Edit returns to fields with values filled", async () => {
+  it("valid entry 10/03/2012 shows confirmation view with checkbox and 'Yes, continue' disabled until checked", async () => {
     const user = userEvent.setup();
     const onConfirm = vi.fn();
     render(<AgeStep onConfirm={onConfirm} />);
@@ -106,9 +114,18 @@ describe("AgeStep Component (8.8.10)", () => {
 
     // Confirm step
     expect(screen.getByTestId("age-confirm-text")).toHaveTextContent("You entered 10 March 2012. Is this correct?");
-    expect(screen.getByTestId("age-confirm-yes-btn")).toBeInTheDocument();
+    const yesBtn = screen.getByTestId("age-confirm-yes-btn");
     const editBtn = screen.getByTestId("age-confirm-edit-btn");
+    const checkbox = screen.getByTestId("age-confirm-checkbox");
+
+    expect(yesBtn).toBeInTheDocument();
     expect(editBtn).toBeInTheDocument();
+    expect(checkbox).toBeInTheDocument();
+    expect(yesBtn).toBeDisabled();
+
+    // Check the box -> enables yesBtn
+    await user.click(checkbox);
+    expect(yesBtn).toBeEnabled();
 
     // Click edit -> returns to fields
     await user.click(editBtn);
@@ -117,7 +134,7 @@ describe("AgeStep Component (8.8.10)", () => {
     expect(screen.getByTestId("age-year")).toHaveValue("2012");
   });
 
-  it("clicking Yes, continue posts once with formatted YYYY-MM-DD and disables button while in flight", async () => {
+  it("clicking Yes, continue posts once with formatted YYYY-MM-DD after ticking checkbox", async () => {
     const user = userEvent.setup();
     let resolvePromise: () => void;
     const onConfirm = vi.fn().mockImplementation(() => {
@@ -133,7 +150,13 @@ describe("AgeStep Component (8.8.10)", () => {
     await user.type(screen.getByTestId("age-year"), "2012");
     await user.click(screen.getByTestId("age-continue-btn"));
 
+    const checkbox = screen.getByTestId("age-confirm-checkbox");
     const yesBtn = screen.getByTestId("age-confirm-yes-btn");
+
+    expect(yesBtn).toBeDisabled();
+    await user.click(checkbox);
+    expect(yesBtn).toBeEnabled();
+
     await user.click(yesBtn);
     expect(onConfirm).toHaveBeenCalledTimes(1);
     expect(onConfirm).toHaveBeenCalledWith("2012-03-10");
@@ -199,3 +222,4 @@ describe("AgeStep Component (8.8.10)", () => {
     expect(blockedMatches.every((n) => n === "18")).toBe(true);
   });
 });
+

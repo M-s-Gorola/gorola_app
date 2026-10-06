@@ -72,9 +72,10 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(screen.getByText(/Authentication & Account Security/i)).toBeInTheDocument();
     expect(screen.getByText(/Promotions & Seasonal Offers/i)).toBeInTheDocument();
 
-    // Essential consents (OTP_AUTH, ORDER_PROCESSING) should have Essential badge, no Withdraw button
-    expect(screen.getAllByText(/Essential/i)).toHaveLength(2);
+    // Essential consents (OTP_AUTH, AGE_DECLARATION, ORDER_PROCESSING) should have Essential badge, no Withdraw button
+    expect(screen.getAllByText(/Essential/i)).toHaveLength(3);
     expect(screen.queryByTestId("withdraw-btn-OTP_AUTH")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("withdraw-btn-AGE_DECLARATION")).not.toBeInTheDocument();
     expect(screen.queryByTestId("withdraw-btn-ORDER_PROCESSING")).not.toBeInTheDocument();
 
     // Non-essential consent should have Withdraw button
@@ -409,7 +410,7 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(privacyPolicyLinks.length).toBeGreaterThanOrEqual(4);
   });
 
-  it("renders age-confirmation-line with confirmation date when AGE_DECLARATION is present and maintains exactly 4 purpose cards", async () => {
+  it("renders AGE_DECLARATION as an Essential purpose card with confirmation date and notice link", async () => {
     getMock.mockResolvedValueOnce({
       data: {
         success: true,
@@ -440,19 +441,22 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
 
     renderSection();
 
-    const ageLine = await screen.findByTestId("age-confirmation-line");
-    expect(ageLine).toBeInTheDocument();
-    expect(ageLine).toHaveTextContent(/Age confirmed on/i);
-    expect(ageLine).toHaveTextContent(/5/i);
-    expect(ageLine).toHaveTextContent(/2026/i);
+    const ageCard = await screen.findByTestId("consent-card-AGE_DECLARATION");
+    expect(ageCard).toBeInTheDocument();
+    expect(ageCard).toHaveTextContent(/Age Verification & Eligibility/i);
+    expect(within(ageCard).getByText(/Essential/i)).toBeInTheDocument();
+    expect(within(ageCard).queryByRole("button", { name: /withdraw/i })).not.toBeInTheDocument();
 
-    // Ensure NO withdraw button inside age-confirmation-line
-    expect(within(ageLine).queryByRole("button")).not.toBeInTheDocument();
+    // Expand AGE_DECLARATION card
+    const ageTrigger = ageCard.querySelector('[role="button"]') ?? ageCard;
+    fireEvent.click(ageTrigger);
 
-    // Exactly 4 canonical purpose cards rendered, never a 5th card for AGE_DECLARATION
+    expect(ageCard).toHaveTextContent(/Age Declaration Notice/i);
+    expect(ageCard).toHaveTextContent(/Confirmed on/i);
+
+    // Exactly 5 canonical purpose cards rendered
     const cards = screen.getAllByTestId(/^consent-card-/);
-    expect(cards).toHaveLength(4);
-    expect(screen.queryByTestId("consent-card-AGE_DECLARATION")).not.toBeInTheDocument();
+    expect(cards).toHaveLength(5);
   });
 });
 

@@ -21,9 +21,9 @@ type ConsentLogRow = {
   createdAt: string;
 };
 
-type ConsentPurpose = "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
+type ConsentPurpose = "OTP_AUTH" | "AGE_DECLARATION" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
 
-// Canonical 4-card display shape — one entry per purpose
+// Canonical 5-card display shape — one entry per purpose
 type PurposeCard = {
   purpose: ConsentPurpose;
   latestId: string;
@@ -54,6 +54,19 @@ const PURPOSE_META: Record<
       "We collect your phone number and share it with our secure SMS gateway (Exotel) to send one-time passwords (OTP) and securely authenticate your account sessions under India's DPDP Act 2023. We do not sell your personal data.",
     noticeLabel: "Authentication Notice",
     transparencyPrompt: "For full details on retention period, data rights, and erasure policies, read the",
+    essential: true
+  },
+  AGE_DECLARATION: {
+    title: "Age Verification & Eligibility",
+    description: (
+      <span>
+        GoRola is available only to people aged 18 and over. You confirm that the date of birth you enter is correct. We use it once to check eligibility and do not store it; we keep only the date on which you confirmed.
+      </span>
+    ),
+    plainText:
+      "GoRola is available only to people aged 18 and over. You confirm that the date of birth you enter is correct. We use it once to check eligibility and do not store it; we keep only the date on which you confirmed.",
+    noticeLabel: "Age Declaration Notice",
+    transparencyPrompt: "For full details on non-storage of raw DOB, 90-day lockout hashing, and data rights, read the",
     essential: true
   },
   ORDER_PROCESSING: {
@@ -99,19 +112,19 @@ const PURPOSE_META: Record<
 
 const CANONICAL_ORDER: ConsentPurpose[] = [
   "OTP_AUTH",
+  "AGE_DECLARATION",
   "ORDER_PROCESSING",
   "MARKETING_COMMS",
   "ANALYTICS"
 ];
 
 /**
- * Collapses raw ConsentLog rows into exactly 4 canonical purpose cards
+ * Collapses raw ConsentLog rows into exactly 5 canonical purpose cards
  */
 function buildPurposeCards(rows: ConsentLogRow[]): PurposeCard[] {
   const byPurpose = new Map<ConsentPurpose, ConsentLogRow[]>();
 
   for (const row of rows) {
-    if (row.purpose === "AGE_DECLARATION") continue;
     const bucket = byPurpose.get(row.purpose) ?? [];
     bucket.push(row);
     byPurpose.set(row.purpose, bucket);
@@ -144,13 +157,13 @@ function buildPurposeCards(rows: ConsentLogRow[]): PurposeCard[] {
     }
 
     const isAnalyticsAcceptedInStorage = purpose === "ANALYTICS" && analyticsStoredConsent === "accepted";
-    const isOtpAuthDefault = purpose === "OTP_AUTH";
+    const isEssentialDefault = purpose === "OTP_AUTH" || purpose === "AGE_DECLARATION";
 
     return {
       purpose,
       latestId: "",
-      consentVersion: "1.0",
-      isActive: isOtpAuthDefault || isAnalyticsAcceptedInStorage,
+      consentVersion: purpose === "AGE_DECLARATION" ? "1.1" : "1.0",
+      isActive: isEssentialDefault || isAnalyticsAcceptedInStorage,
       grantedAt: ""
     };
   });
@@ -165,7 +178,6 @@ function getInactiveStatusText(purpose: ConsentPurpose): string {
 
 export function PrivacySettingsSection(): ReactElement {
   const [cards, setCards] = useState<PurposeCard[]>([]);
-  const [ageConfirmedDate, setAgeConfirmedDate] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [expandedPurposes, setExpandedPurposes] = useState<Record<string, boolean>>({
     OTP_AUTH: true
@@ -177,18 +189,12 @@ export function PrivacySettingsSection(): ReactElement {
     try {
       const res = await api.get<{ success: boolean; data: { consents: ConsentLogRow[] } }>("/api/v1/consent");
       if (res.data?.success && Array.isArray(res.data.data?.consents)) {
-        const ageConsent = res.data.data.consents.find(
-          (c) => c.purpose === "AGE_DECLARATION" && !c.isWithdrawn
-        );
-        setAgeConfirmedDate(ageConsent ? ageConsent.createdAt : null);
         setCards(buildPurposeCards(res.data.data.consents));
       } else {
-        setAgeConfirmedDate(null);
         setCards(buildPurposeCards([]));
       }
     } catch (err) {
       console.error("Failed to load consents:", err);
-      setAgeConfirmedDate(null);
       setCards(buildPurposeCards([]));
     } finally {
       setLoading(false);
@@ -290,25 +296,6 @@ export function PrivacySettingsSection(): ReactElement {
             </p>
           </div>
         </div>
-
-        {ageConfirmedDate && (
-          <div
-            data-testid="age-confirmation-line"
-            className="flex items-center gap-2.5 rounded-xl border border-gorola-pine/20 bg-gorola-pine/5 px-3.5 py-2.5 text-xs text-gorola-charcoal font-medium shadow-xs"
-          >
-            <ShieldCheck className="h-4 w-4 text-gorola-pine shrink-0" />
-            <span>
-              Age confirmed on{" "}
-              <strong className="font-semibold text-gorola-charcoal">
-                {new Date(ageConfirmedDate).toLocaleDateString("en-IN", {
-                  day: "numeric",
-                  month: "short",
-                  year: "numeric"
-                })}
-              </strong>
-            </span>
-          </div>
-        )}
 
         <div className="space-y-2.5 pt-1">
           {loading ? (
@@ -423,10 +410,14 @@ export function PrivacySettingsSection(): ReactElement {
                         <span className="text-[11px] text-muted-foreground">
                           {card.isActive
                             ? card.grantedAt && !isNaN(new Date(card.grantedAt).getTime())
-                              ? `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
+                              ? card.purpose === "AGE_DECLARATION"
+                                ? `Confirmed on ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
+                                : `Active since ${new Date(card.grantedAt).toLocaleDateString()} (v${card.consentVersion})`
                               : card.purpose === "OTP_AUTH"
                                 ? "Active since account creation"
-                                : `Active (v${card.consentVersion})`
+                                : card.purpose === "AGE_DECLARATION"
+                                  ? `Confirmed (v${card.consentVersion})`
+                                  : `Active (v${card.consentVersion})`
                             : getInactiveStatusText(card.purpose)}
                         </span>
                       </div>
