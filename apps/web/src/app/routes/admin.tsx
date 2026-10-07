@@ -3,6 +3,7 @@ import { Navigate, Route } from "react-router-dom";
 
 import { AdminLayout } from "@/components/admin/AdminLayout";
 import { AdminAdvertisementsPage } from "@/pages/admin/AdminAdvertisementsPage";
+import { AdminAgeGatePage } from "@/pages/admin/AdminAgeGatePage";
 import { AdminAuditLogsPage } from "@/pages/admin/AdminAuditLogsPage";
 import { AdminCategoriesPage } from "@/pages/admin/AdminCategoriesPage";
 import { AdminDashboardPage } from "@/pages/admin/AdminDashboardPage";
@@ -80,6 +81,17 @@ export function AdminRoutes({ prefix = "" }: AdminRoutesProps): ReactElement[] {
         <AdminRoute>
           <AdminLayout>
             <AdminUserDetailPage />
+          </AdminLayout>
+        </AdminRoute>
+      }
+    />,
+    <Route
+      key="admin-age-gate"
+      path={`${prefix}/age-gate`}
+      element={
+        <AdminRoute>
+          <AdminLayout>
+            <AdminAgeGatePage />
           </AdminLayout>
         </AdminRoute>
       }

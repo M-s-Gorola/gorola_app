@@ -15,6 +15,7 @@ import {
 import type { ReactElement } from "react";
 import { Link } from "react-router-dom";
 
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { TopographicBg } from "@/components/shared/TopographicBg";
 
 export function PrivacyPolicyPage(): ReactElement {
@@ -85,7 +86,7 @@ export function PrivacyPolicyPage(): ReactElement {
               3. Specified Purposes of Data Processing
             </h2>
             <div className="space-y-4 text-xs">
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gorola-charcoal">A. Authentication &amp; Account Security (Essential)</h3>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
@@ -93,9 +94,16 @@ export function PrivacyPolicyPage(): ReactElement {
                 <p className="text-gorola-slate leading-relaxed">
                   We process your phone number exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session integrity.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="OTP_AUTH"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gorola-charcoal">B. Age Verification &amp; Statutory Eligibility (Essential)</h3>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
@@ -103,9 +111,16 @@ export function PrivacyPolicyPage(): ReactElement {
                 <p className="text-gorola-slate leading-relaxed">
                   Under Section 9 of the DPDP Act 2023, we process your date of birth once during sign-up to verify that you meet the 18+ legal age requirement. Raw date of birth is never stored on our servers; we retain only the timestamp of your verified affirmative declaration.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="AGE_DECLARATION"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gorola-charcoal">C. Order Fulfillment &amp; Location Services (Essential)</h3>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
@@ -113,9 +128,16 @@ export function PrivacyPolicyPage(): ReactElement {
                 <p className="text-gorola-slate leading-relaxed">
                   We process delivery addresses, landmark notes, GPS pins, and Display Names (if set) to route orders, assign delivery riders, coordinate with hill stores, and facilitate payments.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="ORDER_PROCESSING"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gorola-charcoal">D. Promotions &amp; Seasonal Offers (Voluntary)</h3>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Optional</span>
@@ -123,9 +145,16 @@ export function PrivacyPolicyPage(): ReactElement {
                 <p className="text-gorola-slate leading-relaxed">
                   With your explicit opt-in consent, we send updates on hill weather flash sales, seasonal discounts, and store coupons via SMS and app push notifications. 100% voluntary and withdrawable anytime.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="MARKETING_COMMS"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gorola-charcoal">E. Usage &amp; Performance Analytics (Voluntary)</h3>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Optional</span>
@@ -133,6 +162,13 @@ export function PrivacyPolicyPage(): ReactElement {
                 <p className="text-gorola-slate leading-relaxed">
                   We collect anonymous device telemetry and network latency data to improve hill route calculations and app speed in weak signal areas. Zero PII is tracked.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="ANALYTICS"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -243,12 +279,11 @@ export function PrivacyPolicyPage(): ReactElement {
               <p>
                 <strong>Email:</strong>{" "}
                 <a
-                  href="mailto:dpo@gorola.com"
+                  href="mailto:privacy@gorola.in"
                   className="font-semibold text-gorola-pine underline hover:text-emerald-700"
                 >
-                  dpo@gorola.com
-                </a>{" "}
-                (or <a href="mailto:privacy@gorola.in" className="font-semibold text-gorola-pine underline hover:text-emerald-700">privacy@gorola.in</a>)
+                  privacy@gorola.in
+                </a>
               </p>
               <p>
                 <strong>Statutory Authority:</strong> If you are unsatisfied with our grievance resolution within 30 days, you hold the statutory right under the DPDP Act 2023 to file a complaint with the <strong>Data Protection Board of India (DPBI)</strong>.

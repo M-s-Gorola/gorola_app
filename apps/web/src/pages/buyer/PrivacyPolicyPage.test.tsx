@@ -24,6 +24,11 @@ describe("PrivacyPolicyPage (/privacy)", () => {
 
     // Section 3: Specified Purposes of Processing
     expect(screen.getByRole("heading", { name: /3\. Specified Purposes of Data Processing/i })).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-OTP_AUTH")).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-AGE_DECLARATION")).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-ORDER_PROCESSING")).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-MARKETING_COMMS")).toBeInTheDocument();
+    expect(screen.getByTestId("view-notice-btn-ANALYTICS")).toBeInTheDocument();
 
     // Section 4: Retention Schedules & Auto-Purge Timelines
     expect(screen.getByRole("heading", { name: /4\. Retention Schedules & Auto-Purge Timelines/i })).toBeInTheDocument();
@@ -60,7 +65,7 @@ describe("PrivacyPolicyPage (/privacy)", () => {
 
     // Section 9: DPO and Statutory Grievance Redressal
     expect(screen.getByRole("heading", { name: /9\. Data Protection Officer & Grievance Redressal/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/dpo@gorola.com/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/privacy@gorola\.in/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Data Protection Board of India \(DPBI\)/i).length).toBeGreaterThanOrEqual(1);
 
     // Section 10: Policy Updates & Versioning

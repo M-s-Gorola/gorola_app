@@ -277,8 +277,19 @@ export function registerAdminRoutes(
     };
   });
 
+  const suspendUserSchema = z
+    .object({
+      reason: z.string().min(10, "Reason must be at least 10 characters").max(500).optional()
+    })
+    .optional();
+
   app.put("/api/v1/admin/users/:id/suspend", { preHandler }, async (request, reply) => {
     const { id } = request.params as { id: string };
+    const parsed = suspendUserSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid suspend parameters", parsed.error.flatten());
+    }
+
     const adminId = request.user?.sub;
     if (!adminId) {
       throw new ValidationError("Admin ID missing from auth context");
@@ -287,7 +298,7 @@ export function registerAdminRoutes(
     const ip = request.ip;
     const userAgent = (request.headers["user-agent"] ?? "") as string;
 
-    const result = await adminService.suspendUser(id, adminId, ip, userAgent);
+    const result = await adminService.suspendUser(id, adminId, ip, userAgent, parsed.data?.reason);
     return {
       success: true,
       data: {
@@ -323,6 +334,65 @@ export function registerAdminRoutes(
     };
   });
 
+  const ageGateLookupSchema = z.object({
+    phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number format")
+  });
+
+  app.post("/api/v1/admin/age-gate/lookup", { preHandler }, async (request, reply) => {
+    const parsed = ageGateLookupSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid lookup parameters", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.lookupAgeGate(
+      parsed.data.phone,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const ageGateLockoutListSchema = z.object({
+    page: z.coerce.number().int().positive().default(1),
+    limit: z.coerce.number().int().positive().max(50, "Limit cannot exceed 50").default(20)
+  });
+
+  app.get("/api/v1/admin/age-gate/lockouts", { preHandler }, async (request, reply) => {
+    const parsed = ageGateLockoutListSchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+
+    const result = await adminService.listAgeGateLockouts(
+      parsed.data.page,
+      parsed.data.limit
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
   const unlockAgeGateSchema = z.object({
     phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number format"),
     reason: z.string().min(10, "Reason must be at least 10 characters").max(500)
@@ -343,6 +413,42 @@ export function registerAdminRoutes(
     const userAgent = (request.headers["user-agent"] ?? "") as string;
 
     const result = await adminService.unlockAgeGate(
+      parsed.data.phone,
+      parsed.data.reason,
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  const declineAgeGateSchema = z.object({
+    phone: z.string().regex(/^\+91[6-9]\d{9}$/, "Invalid Indian mobile number format"),
+    reason: z.string().min(10, "Reason must be at least 10 characters").max(500)
+  });
+
+  app.post("/api/v1/admin/age-gate/decline", { preHandler }, async (request, reply) => {
+    const parsed = declineAgeGateSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid decline parameters", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await adminService.declineAgeGateAppeal(
       parsed.data.phone,
       parsed.data.reason,
       adminId,

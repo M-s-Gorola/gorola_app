@@ -134,6 +134,50 @@ describe("createApiClient", () => {
     expect(clearSession).toHaveBeenCalled();
   });
 
+  it("on direct 403 ACCOUNT_SUSPENDED, immediately clears session without refresh attempt", async () => {
+    const clearSession = vi.fn();
+    const client = createApiClient(
+      opts({
+        getAccessToken: () => "suspended-access-token",
+        getRefreshToken: () => "some-refresh-token",
+        clearSession
+      })
+    );
+    mock = new MockAdapter(client);
+    mock.onGet("/api/v1/user/profile").reply(403, {
+      success: false,
+      error: {
+        code: "ACCOUNT_SUSPENDED",
+        message: "Account suspended"
+      }
+    });
+
+    await expect(client.get("/api/v1/user/profile")).rejects.toBeTruthy();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
+  it("on direct 403 USER_SUSPENDED, immediately clears session without refresh attempt", async () => {
+    const clearSession = vi.fn();
+    const client = createApiClient(
+      opts({
+        getAccessToken: () => "suspended-access-token",
+        getRefreshToken: () => "some-refresh-token",
+        clearSession
+      })
+    );
+    mock = new MockAdapter(client);
+    mock.onGet("/api/v1/cart").reply(403, {
+      success: false,
+      error: {
+        code: "USER_SUSPENDED",
+        message: "User is suspended"
+      }
+    });
+
+    await expect(client.get("/api/v1/cart")).rejects.toBeTruthy();
+    expect(clearSession).toHaveBeenCalledTimes(1);
+  });
+
   it("on concurrent 401s, deduplicates refresh and retries both requests successfully", async () => {
     const setTokens = vi.fn();
     const clearSession = vi.fn();

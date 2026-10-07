@@ -53,6 +53,40 @@ export class AgeGateRepository {
     return result.count;
   }
 
+  async findByPhoneHash(phoneHash: string): Promise<AgeGateLockout | null> {
+    return this.db.ageGateLockout.findUnique({
+      where: { phoneHash }
+    });
+  }
+
+  async listLockouts(
+    page = 1,
+    limit = 20
+  ): Promise<{ items: AgeGateLockout[]; total: number }> {
+    const skip = (page - 1) * limit;
+    const [items, total] = await Promise.all([
+      this.db.ageGateLockout.findMany({
+        skip,
+        take: limit,
+        orderBy: { createdAt: "desc" }
+      }),
+      this.db.ageGateLockout.count()
+    ]);
+    return { items, total };
+  }
+
+  async countActive(now: Date = new Date()): Promise<number> {
+    return this.db.ageGateLockout.count({
+      where: { lockedUntil: { gt: now } }
+    });
+  }
+
+  async countCreatedSince(since: Date): Promise<number> {
+    return this.db.ageGateLockout.count({
+      where: { createdAt: { gte: since } }
+    });
+  }
+
   async deleteExpired(now: Date = new Date()): Promise<number> {
     const result = await this.db.ageGateLockout.deleteMany({
       where: {

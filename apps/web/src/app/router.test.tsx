@@ -144,7 +144,7 @@ describe("buyer routes", () => {
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByRole("heading", { name: "About" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /About/i })).toBeInTheDocument();
 
     rerender(
       <MemoryRouter initialEntries={["/"]}>
@@ -157,7 +157,7 @@ describe("buyer routes", () => {
         <App />
       </MemoryRouter>
     );
-    expect(screen.getByRole("heading", { name: "Support" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Support/i })).toBeInTheDocument();
   });
 
   it("shows placeholder route guardrails for in-progress pages", () => {

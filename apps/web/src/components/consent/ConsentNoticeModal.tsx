@@ -216,10 +216,10 @@ export function ConsentNoticeModal({
           <span>
             Grievance Officer:{" "}
             <a
-              href="mailto:dpo@gorola.com"
+              href={`mailto:${GRIEVANCE_EMAIL}`}
               className="font-medium text-gorola-pine underline hover:text-gorola-pine/80"
             >
-              dpo@gorola.com
+              {GRIEVANCE_EMAIL}
             </a>
           </span>
           <span>Data Protection Board of India (DPBI)</span>

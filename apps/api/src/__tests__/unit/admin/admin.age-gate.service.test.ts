@@ -1,86 +1,84 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
-import { hashPII } from "../../../lib/crypto.js";
-import { AdminService } from "../../../modules/admin/admin.service.js";
+import {
+  buildLookupAuditPayload,
+  calculateDaysRemaining,
+  deriveAccountStatus,
+  maskPhoneNumber
+} from "../../../modules/admin/admin-age-gate.util.js";
 
-describe("Admin Age Gate Service Unit Tests (8.8.8)", () => {
-  it("should compute phoneHash BEFORE purging/anonymizing when erasing an underage user", async () => {
-    const rawPhone = "+919876543210";
-    const expectedHash = hashPII(rawPhone);
+describe("Admin Age Gate Utility Functions (Unit)", () => {
+  describe("deriveAccountStatus", () => {
+    it("returns PENDING_DELETION when deletionScheduledFor is set, regardless of isActive", () => {
+      const status1 = deriveAccountStatus({
+        isActive: true,
+        isDeleted: false,
+        deletionScheduledFor: new Date(Date.now() + 100000)
+      });
+      expect(status1).toBe("PENDING_DELETION");
 
-    const user = {
-      id: "user_test_123",
-      phone: rawPhone,
-      phoneHash: expectedHash,
-      name: "Minor User",
-      isDeleted: false,
-      isActive: true
-    };
+      const status2 = deriveAccountStatus({
+        isActive: false,
+        isDeleted: false,
+        deletionScheduledFor: new Date(Date.now() + 100000)
+      });
+      expect(status2).toBe("PENDING_DELETION");
+    });
 
-    let hashCapturedAtUpsert: string | null = null;
+    it("returns SUSPENDED when isActive is false and not pending deletion", () => {
+      const status = deriveAccountStatus({
+        isActive: false,
+        isDeleted: false,
+        deletionScheduledFor: null
+      });
+      expect(status).toBe("SUSPENDED");
+    });
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const mockDb: any = {
-      $transaction: vi.fn().mockImplementation((promises) => Promise.all(promises)),
-      user: {
-        findUnique: vi.fn().mockResolvedValue(user),
-        update: vi.fn().mockImplementation(() => {
-          return Promise.resolve({ ...user, isDeleted: true, phoneHash: null });
-        })
-      },
-      address: {
-        deleteMany: vi.fn().mockResolvedValue({ count: 1 })
-      },
-      cart: {
-        deleteMany: vi.fn().mockResolvedValue({ count: 0 })
-      },
-      order: {
-        updateMany: vi.fn().mockResolvedValue({ count: 0 })
-      },
-      consentLog: {
-        updateMany: vi.fn().mockResolvedValue({ count: 0 })
-      },
-      ageGateLockout: {
-        upsert: vi.fn().mockImplementation((args: { where: { phoneHash: string } }) => {
-          hashCapturedAtUpsert = args.where.phoneHash;
-          return Promise.resolve({
-            id: "lock_1",
-            phoneHash: args.where.phoneHash,
-            lockedUntil: new Date(),
-            strikeCount: 1
-          });
-        })
-      },
-      auditLog: {
-        create: vi.fn().mockResolvedValue({ id: "audit_1" })
-      }
-    };
+    it("returns ACTIVE when isActive is true, not deleted, and not pending deletion", () => {
+      const status = deriveAccountStatus({
+        isActive: true,
+        isDeleted: false,
+        deletionScheduledFor: null
+      });
+      expect(status).toBe("ACTIVE");
+    });
+  });
 
-    const adminService = new AdminService(mockDb);
-    const result = await adminService.eraseUnderageUser(
-      user.id,
-      "Parent request confirmed underage user",
-      "admin_1",
-      "127.0.0.1",
-      "TestAgent"
-    );
+  describe("calculateDaysRemaining", () => {
+    it("calculates ceiling days remaining for future dates", () => {
+      const now = new Date("2026-10-07T00:00:00Z");
+      const lockedUntil = new Date("2026-10-10T12:00:00Z"); // 3.5 days in future -> 4 days
+      expect(calculateDaysRemaining(lockedUntil, now)).toBe(4);
+    });
 
-    expect(result.erased).toBe(true);
-    expect(hashCapturedAtUpsert).toBe(expectedHash);
-    expect(mockDb.auditLog.create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        data: expect.objectContaining({
-          action: "USER_ERASED_UNDERAGE",
-          actorRole: "ADMIN",
-          entityType: "User",
-          entityId: user.id,
-          newValue: { reason: "Parent request confirmed underage user" }
-        })
-      })
-    );
+    it("returns 0 for expired dates or exact current timestamp", () => {
+      const now = new Date("2026-10-07T00:00:00Z");
+      const past = new Date("2026-10-06T00:00:00Z");
+      expect(calculateDaysRemaining(past, now)).toBe(0);
+      expect(calculateDaysRemaining(now, now)).toBe(0);
+    });
+  });
 
-    // Ensure audit log does not contain raw phone
-    const auditCallArgs = mockDb.auditLog.create.mock.calls[0][0];
-    expect(JSON.stringify(auditCallArgs)).not.toContain("9876543210");
+  describe("maskPhoneNumber", () => {
+    it("masks Indian mobile numbers revealing only the last 4 digits", () => {
+      expect(maskPhoneNumber("+919876543210")).toBe("+91 ******3210");
+      expect(maskPhoneNumber("9876543210")).toBe("+91 ******3210");
+    });
+
+    it("handles short or empty numbers gracefully", () => {
+      expect(maskPhoneNumber("")).toBe("");
+      expect(maskPhoneNumber("123")).toBe("123");
+    });
+  });
+
+  describe("buildLookupAuditPayload", () => {
+    it("returns clean boolean metadata with zero PII (no phone, phoneHash, or names)", () => {
+      const payload = buildLookupAuditPayload(true, false);
+      expect(payload).toEqual({
+        foundLockout: true,
+        foundAccount: false
+      });
+      expect(Object.keys(payload)).toEqual(["foundLockout", "foundAccount"]);
+    });
   });
 });

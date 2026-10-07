@@ -1,4 +1,8 @@
 import { AppError, ConflictError, NotFoundError, ValidationError } from "@gorola/shared";
+import {
+  type AgeGateLockoutList,
+  type AgeGateLookupResult
+} from "@gorola/shared";
 import { type ActorRole, type OrderStatus, type PaymentMethod, Prisma, type PrismaClient, StoreType } from "@prisma/client";
 import { hash } from "bcryptjs";
 
@@ -12,6 +16,12 @@ import { SubCategoryRepository } from "../catalog/sub-category.repository.js";
 import { OrderRepository } from "../order/order.repository.js";
 import { OrderService } from "../order/order.service.js";
 import { UserRepository } from "../user/user.repository.js";
+import {
+  buildLookupAuditPayload,
+  calculateDaysRemaining,
+  deriveAccountStatus,
+  maskPhoneNumber
+} from "./admin-age-gate.util.js";
 
 
 
@@ -631,6 +641,7 @@ export class AdminService {
       maskedPhone: maskPhone(user.phone),
       isActive: user.isActive,
       nomineeName: user.nomineeName ?? null,
+      ageConfirmedAt: user.ageConfirmedAt ? user.ageConfirmedAt.toISOString() : null,
       createdAt: user.createdAt.toISOString(),
       orders: user.orders.map((o) => ({
         id: o.id,
@@ -698,7 +709,13 @@ export class AdminService {
     };
   }
 
-  public async suspendUser(userId: string, adminId: string, ip: string, userAgent: string) {
+  public async suspendUser(
+    userId: string,
+    adminId: string,
+    ip: string,
+    userAgent: string,
+    reason?: string
+  ) {
     const user = await this.db.user.findFirst({
       where: { id: userId, isDeleted: false }
     });
@@ -711,6 +728,25 @@ export class AdminService {
       data: { isActive: false }
     });
 
+    // Revoke sessions
+    const redis = this.redisClient;
+    if (redis) {
+      try {
+        const rawSessions = await redis.get(`user_sessions:${userId}`);
+        if (rawSessions) {
+          const sessions = JSON.parse(rawSessions) as Array<{ refreshToken: string }>;
+          for (const s of sessions) {
+            if (s.refreshToken) {
+              await redis.del(`rt:${s.refreshToken}`);
+            }
+          }
+        }
+        await redis.del(`user_sessions:${userId}`);
+      } catch {
+        // Ignore session revocation cleanup errors
+      }
+    }
+
     await this.db.auditLog.create({
       data: {
         actorId: adminId,
@@ -719,7 +755,7 @@ export class AdminService {
         entityType: "User",
         entityId: userId,
         oldValue: { isActive: user.isActive },
-        newValue: { isActive: false },
+        newValue: reason ? { isActive: false, reason } : { isActive: false },
         ip,
         userAgent
       }
@@ -865,6 +901,160 @@ export class AdminService {
     });
 
     return { erased: true };
+  }
+
+  public async lookupAgeGate(
+    phone: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ): Promise<AgeGateLookupResult> {
+    const phoneHash = hashPII(phone);
+    const now = new Date();
+
+    const [lockoutRecord, userRecord] = await Promise.all([
+      this.db.ageGateLockout.findFirst({
+        where: { phoneHash }
+      }),
+      this.db.user.findFirst({
+        where: { phoneHash }
+      })
+    ]);
+
+    let lockout: AgeGateLookupResult["lockout"] = null;
+    if (lockoutRecord) {
+      const isActive = lockoutRecord.lockedUntil > now;
+      const daysRemaining = calculateDaysRemaining(lockoutRecord.lockedUntil, now);
+      lockout = {
+        id: lockoutRecord.id,
+        createdAt: lockoutRecord.createdAt.toISOString(),
+        lockedUntil: lockoutRecord.lockedUntil.toISOString(),
+        strikeCount: lockoutRecord.strikeCount,
+        isActive,
+        daysRemaining
+      };
+    }
+
+    let account: AgeGateLookupResult["account"] = null;
+    if (userRecord && !userRecord.isDeleted && !userRecord.phone.startsWith("DELETED_")) {
+      const ordersCount = await this.db.order.count({
+        where: { userId: userRecord.id }
+      });
+
+      const accountStatus = deriveAccountStatus({
+        isDeleted: userRecord.isDeleted,
+        isActive: userRecord.isActive,
+        deletionScheduledFor: userRecord.deletionScheduledFor
+      });
+
+      let decryptedPhone: string | null = null;
+      try {
+        decryptedPhone = decryptPII(userRecord.phone);
+      } catch {
+        decryptedPhone = null;
+      }
+
+      account = {
+        id: userRecord.id,
+        name: userRecord.name,
+        maskedPhone: maskPhoneNumber(decryptedPhone ?? phone),
+        status: accountStatus,
+        ordersCount,
+        ageConfirmedAt: userRecord.ageConfirmedAt ? userRecord.ageConfirmedAt.toISOString() : null,
+        createdAt: userRecord.createdAt.toISOString()
+      };
+    }
+
+    const auditPayload = buildLookupAuditPayload(Boolean(lockout), Boolean(account));
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "AGE_GATE_LOOKUP",
+        entityType: "AgeGateLockout",
+        entityId: lockout?.id ?? account?.id ?? "none",
+        newValue: auditPayload,
+        ip,
+        userAgent
+      }
+    });
+
+    return {
+      lockout,
+      account
+    };
+  }
+
+  public async listAgeGateLockouts(page = 1, limit = 20): Promise<AgeGateLockoutList> {
+    if (limit > 50) {
+      throw new ValidationError("Limit cannot exceed 50");
+    }
+    const ageGateRepo = new AgeGateRepository(this.db);
+    const now = new Date();
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+    const [result, activeCount, createdLast7Days] = await Promise.all([
+      ageGateRepo.listLockouts(page, limit),
+      ageGateRepo.countActive(now),
+      ageGateRepo.countCreatedSince(sevenDaysAgo)
+    ]);
+
+    const items = result.items.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt.toISOString(),
+      lockedUntil: item.lockedUntil.toISOString(),
+      strikeCount: item.strikeCount,
+      isActive: item.lockedUntil > now
+    }));
+
+    const totalPages = Math.ceil(result.total / limit) || 1;
+
+    return {
+      items,
+      total: result.total,
+      page,
+      limit,
+      totalPages,
+      summary: {
+        activeCount,
+        createdLast7Days
+      }
+    };
+  }
+
+  public async declineAgeGateAppeal(
+    phone: string,
+    reason: string,
+    adminId: string,
+    ip: string,
+    userAgent: string
+  ): Promise<{ declined: true; recorded: true }> {
+    const phoneHash = hashPII(phone);
+    const existingLock = await this.db.ageGateLockout.findFirst({
+      where: { phoneHash }
+    });
+
+    if (!existingLock) {
+      throw new NotFoundError("Active age gate lockout not found for this phone number");
+    }
+
+    await this.db.auditLog.create({
+      data: {
+        actorId: adminId,
+        actorRole: "ADMIN",
+        action: "AGE_GATE_APPEAL_DECLINED",
+        entityType: "AgeGateLockout",
+        entityId: existingLock.id,
+        newValue: {
+          reason,
+          strikeCount: existingLock.strikeCount
+        },
+        ip,
+        userAgent
+      }
+    });
+
+    return { declined: true, recorded: true };
   }
 
   public async getUserConsentLogs(userId: string, page: number, limit: number) {
