@@ -21,13 +21,14 @@ describe("ConsentNoticeModal (DPDP Phase 8.2.9.5)", () => {
     const modal = await screen.findByTestId("consent-notice-modal");
     expect(modal).toBeInTheDocument();
     expect(modal).toHaveTextContent(/Authentication & Account Security/i);
+    expect(modal).toHaveTextContent(/aged 18 and over/i);
     expect(modal).toHaveTextContent(/Purpose of Processing/i);
     expect(modal).toHaveTextContent(/Categories of Personal Data Collected/i);
     expect(modal).toHaveTextContent(/Third-Party Recipients & Processors/i);
     expect(modal).toHaveTextContent(/Retention Period/i);
     expect(modal).toHaveTextContent(/Your Rights & Complaints/i);
     expect(modal).toHaveTextContent(/Exotel/i);
-    expect(screen.getAllByText(/dpo@gorola.com/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/privacy@gorola\.in/i).length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText(/Data Protection Board of India/i).length).toBeGreaterThanOrEqual(1);
   });
 

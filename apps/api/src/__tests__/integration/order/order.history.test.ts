@@ -4,19 +4,7 @@ import { afterAll, beforeEach, describe, expect, it } from "vitest";
 import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
-
-async function getBuyerAccessToken(
-  server: ReturnType<typeof createServer>,
-  phone: string
-): Promise<string> {
-  await server.inject({ method: "POST", payload: { phone }, url: "/api/v1/auth/buyer/send-otp" });
-  const verifyRes = await server.inject({
-    method: "POST",
-    payload: { otp: "111222", phone },
-    url: "/api/v1/auth/buyer/verify-otp"
-  });
-  return (verifyRes.json() as { data: { accessToken: string } }).data.accessToken;
-}
+import { loginBuyer } from "../../helpers/auth.helper.js";
 
 async function cleanOrderHistoryGraph(db: PrismaClient): Promise<void> {
   await db.stockMovement.deleteMany();
@@ -55,7 +43,8 @@ describe("GET /api/v1/orders/history", () => {
     process.env.GOROLA_TEST_OTP = "111222";
     server = createServer({ disableRedis: true, registerRoutes: registerAppRoutes });
     const phone = "+919988776655";
-    token = await getBuyerAccessToken(server, phone);
+    const auth = await loginBuyer(server, phone);
+    token = auth.accessToken;
     user = await db.user.findUniqueOrThrow({ where: { phone } });
     store = await db.store.create({
       data: { address: "Test Addr", description: "Test Desc", name: "Test Store", phone: "123" }

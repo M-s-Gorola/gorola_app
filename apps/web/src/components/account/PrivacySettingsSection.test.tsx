@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -72,9 +72,10 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     expect(screen.getByText(/Authentication & Account Security/i)).toBeInTheDocument();
     expect(screen.getByText(/Promotions & Seasonal Offers/i)).toBeInTheDocument();
 
-    // Essential consents (OTP_AUTH, ORDER_PROCESSING) should have Essential badge, no Withdraw button
-    expect(screen.getAllByText(/Essential/i)).toHaveLength(2);
+    // Essential consents (OTP_AUTH, AGE_DECLARATION, ORDER_PROCESSING) should have Essential badge, no Withdraw button
+    expect(screen.getAllByText(/Essential/i)).toHaveLength(3);
     expect(screen.queryByTestId("withdraw-btn-OTP_AUTH")).not.toBeInTheDocument();
+    expect(screen.queryByTestId("withdraw-btn-AGE_DECLARATION")).not.toBeInTheDocument();
     expect(screen.queryByTestId("withdraw-btn-ORDER_PROCESSING")).not.toBeInTheDocument();
 
     // Non-essential consent should have Withdraw button
@@ -407,6 +408,55 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     // Each card must link to the platform-wide Privacy Policy
     const privacyPolicyLinks = screen.getAllByRole("link", { name: /privacy policy/i });
     expect(privacyPolicyLinks.length).toBeGreaterThanOrEqual(4);
+  });
+
+  it("renders AGE_DECLARATION as an Essential purpose card with confirmation date and notice link", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          consents: [
+            {
+              id: "c-age",
+              purpose: "AGE_DECLARATION",
+              consentVersion: "1.1",
+              noticeText: "Age declaration",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-10-05T12:00:00.000Z"
+            },
+            {
+              id: "c-otp",
+              purpose: "OTP_AUTH",
+              consentVersion: "1.1",
+              noticeText: "OTP auth",
+              isWithdrawn: false,
+              withdrawnAt: null,
+              createdAt: "2026-10-05T12:00:00.000Z"
+            }
+          ]
+        }
+      }
+    });
+
+    renderSection();
+
+    const ageCard = await screen.findByTestId("consent-card-AGE_DECLARATION");
+    expect(ageCard).toBeInTheDocument();
+    expect(ageCard).toHaveTextContent(/Age Verification & Eligibility/i);
+    expect(within(ageCard).getByText(/Essential/i)).toBeInTheDocument();
+    expect(within(ageCard).queryByRole("button", { name: /withdraw/i })).not.toBeInTheDocument();
+
+    // Expand AGE_DECLARATION card
+    const ageTrigger = ageCard.querySelector('[role="button"]') ?? ageCard;
+    fireEvent.click(ageTrigger);
+
+    expect(ageCard).toHaveTextContent(/Age Declaration Notice/i);
+    expect(ageCard).toHaveTextContent(/Confirmed on/i);
+
+    // Exactly 5 canonical purpose cards rendered
+    const cards = screen.getAllByTestId(/^consent-card-/);
+    expect(cards).toHaveLength(5);
   });
 });
 

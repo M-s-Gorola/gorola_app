@@ -14,7 +14,7 @@ describe("Auth runtime route registration", () => {
       method: "POST",
       url: "/api/v1/auth/buyer/send-otp",
       payload: {
-        phone: "+919876543210"
+        phone: "+919888888888"
       }
     });
 

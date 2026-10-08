@@ -20,11 +20,38 @@ async function getBuyerAccessToken(
     url: "/api/v1/auth/buyer/verify-otp"
   });
   expect(verifyRes.statusCode).toBe(200);
-  const json = verifyRes.json() as { data: { accessToken: string; userId: string } };
-  return { accessToken: json.data.accessToken, userId: json.data.userId };
+  const json = verifyRes.json() as {
+    data: {
+      accessToken?: string;
+      userId?: string;
+      ageGateRequired?: boolean;
+      ageTicket?: string;
+    };
+  };
+
+  if (json.data.ageGateRequired && json.data.ageTicket) {
+    const confirmRes = await server.inject({
+      method: "POST",
+      payload: {
+        acknowledgedNotice: true,
+        ageTicket: json.data.ageTicket,
+        consentVersion: "1.1",
+        dateOfBirth: "1990-01-01"
+      },
+      url: "/api/v1/auth/buyer/confirm-age"
+    });
+    expect(confirmRes.statusCode).toBe(200);
+    const confirmJson = confirmRes.json() as {
+      data: { accessToken: string; userId: string };
+    };
+    return { accessToken: confirmJson.data.accessToken, userId: confirmJson.data.userId };
+  }
+
+  return { accessToken: json.data.accessToken!, userId: json.data.userId! };
 }
 
 async function cleanConsentTestGraph(db: PrismaClient): Promise<void> {
+  await db.ageGateLockout.deleteMany();
   await db.$executeRawUnsafe('DELETE FROM "ConsentLog";');
   await db.stockMovement.deleteMany();
   await db.orderStatusHistory.deleteMany();
@@ -185,8 +212,8 @@ describe("Consent API (DPDP 8.2.1)", () => {
       method: "POST",
       payload: {
         consentVersion: "1.0",
-        noticeText: "We collect your phone number to send a one-time password.",
-        purpose: "OTP_AUTH"
+        noticeText: "We collect anonymous telemetry.",
+        purpose: "ANALYTICS"
       },
       url: "/api/v1/consent"
     });
@@ -197,16 +224,16 @@ describe("Consent API (DPDP 8.2.1)", () => {
       success: boolean;
     };
     expect(body.success).toBe(true);
-    expect(body.data.purpose).toBe("OTP_AUTH");
+    expect(body.data.purpose).toBe("ANALYTICS");
     expect(body.data.consentVersion).toBe("1.0");
     expect(body.data.id).toBeDefined();
 
     // Verify DB
     const consents = await db.consentLog.findMany({
-      where: { userId }
+      where: { userId, purpose: "ANALYTICS" }
     });
     expect(consents).toHaveLength(1);
-    expect(consents[0]?.purpose).toBe("OTP_AUTH");
+    expect(consents[0]?.purpose).toBe("ANALYTICS");
     expect(consents[0]?.isWithdrawn).toBe(false);
     expect(consents[0]?.ipAddress).toBeDefined();
   });
@@ -221,14 +248,14 @@ describe("Consent API (DPDP 8.2.1)", () => {
     const phone = "+919876543211";
     const { accessToken } = await getBuyerAccessToken(server, phone);
 
-    // Record two consents
+    // Record additional consents (user already has OTP_AUTH & AGE_DECLARATION from signup)
     await server.inject({
       headers: { authorization: `Bearer ${accessToken}` },
       method: "POST",
       payload: {
         consentVersion: "1.0",
-        noticeText: "We collect phone for OTP",
-        purpose: "OTP_AUTH"
+        noticeText: "We collect anonymous telemetry",
+        purpose: "ANALYTICS"
       },
       url: "/api/v1/consent"
     });
@@ -256,9 +283,11 @@ describe("Consent API (DPDP 8.2.1)", () => {
       success: boolean;
     };
     expect(body.success).toBe(true);
-    expect(body.data.consents).toHaveLength(2);
+    expect(body.data.consents).toHaveLength(4);
     const purposes = body.data.consents.map((c) => c.purpose);
     expect(purposes).toContain("OTP_AUTH");
+    expect(purposes).toContain("AGE_DECLARATION");
+    expect(purposes).toContain("ANALYTICS");
     expect(purposes).toContain("MARKETING_COMMS");
   });
 
@@ -335,6 +364,42 @@ describe("Consent API (DPDP 8.2.1)", () => {
     expect(body.success).toBe(false);
     expect(body.error.code).toBe("CANNOT_WITHDRAW_ESSENTIAL_CONSENT");
   });
+
+  it("DELETE /api/v1/consent/AGE_DECLARATION rejects withdrawing essential age declaration consent with 400", async () => {
+    process.env.GOROLA_TEST_OTP = "111222";
+    const server = createServer({
+      disableRedis: true,
+      registerRoutes: registerAppRoutes
+    });
+
+    const phone = "+919876543214";
+    const { accessToken } = await getBuyerAccessToken(server, phone);
+
+    await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "POST",
+      payload: {
+        consentVersion: "1.1",
+        noticeText: "Age declaration essential notice",
+        purpose: "AGE_DECLARATION"
+      },
+      url: "/api/v1/consent"
+    });
+
+    const deleteRes = await server.inject({
+      headers: { authorization: `Bearer ${accessToken}` },
+      method: "DELETE",
+      url: "/api/v1/consent/AGE_DECLARATION"
+    });
+
+    expect(deleteRes.statusCode).toBe(400);
+    const body = deleteRes.json() as {
+      error: { code: string };
+      success: boolean;
+    };
+    expect(body.success).toBe(false);
+    expect(body.error.code).toBe("CANNOT_WITHDRAW_ESSENTIAL_CONSENT");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -366,8 +431,8 @@ describe("Consent idempotency guard (DPDP Section 10)", () => {
 
       const payload = {
         consentVersion: "1.0",
-        noticeText: "We collect your phone number to send a one-time password.",
-        purpose: "OTP_AUTH"
+        noticeText: "Promotions and discounts.",
+        purpose: "MARKETING_COMMS"
       };
 
       // First POST — should create a new row and return 201
@@ -399,7 +464,7 @@ describe("Consent idempotency guard (DPDP Section 10)", () => {
       expect(thirdRes.statusCode).toBe(200);
 
       // DB must have exactly ONE row for this user + purpose
-      const rows = await db.consentLog.findMany({ where: { purpose: "OTP_AUTH", userId } });
+      const rows = await db.consentLog.findMany({ where: { purpose: "MARKETING_COMMS", userId } });
       expect(rows).toHaveLength(1);
       expect(rows[0]?.isWithdrawn).toBe(false);
 

@@ -10,6 +10,7 @@ import { StoreRepository } from "../../../modules/store/store.repository.js";
 import { UserRepository } from "../../../modules/user/user.repository.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
+import { loginBuyer } from "../../helpers/auth.helper.js";
 
 async function cleanRoutingIntegrationGraph(db: PrismaClient): Promise<void> {
   await db.stockMovement.deleteMany();
@@ -37,23 +38,8 @@ async function getBuyerAccessToken(
   server: ReturnType<typeof createServer>,
   phone: string
 ): Promise<{ accessToken: string; userId: string }> {
-  const sendRes = await server.inject({
-    method: "POST",
-    payload: { phone },
-    url: "/api/v1/auth/buyer/send-otp"
-  });
-  expect(sendRes.statusCode).toBe(200);
-
-  const verifyRes = await server.inject({
-    method: "POST",
-    payload: { otp: "111222", phone },
-    url: "/api/v1/auth/buyer/verify-otp"
-  });
-  expect(verifyRes.statusCode).toBe(200);
-  const body = verifyRes.json() as {
-    data: { accessToken: string; userId: string };
-  };
-  return { accessToken: body.data.accessToken, userId: body.data.userId };
+  const auth = await loginBuyer(server, phone);
+  return { accessToken: auth.accessToken, userId: auth.userId! };
 }
 
 describe("Modular Routing & Geolocation Fix Integration", () => {

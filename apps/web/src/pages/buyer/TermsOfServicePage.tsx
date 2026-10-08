@@ -29,7 +29,7 @@ export function TermsOfServicePage(): ReactElement {
                 GoRola Terms of Service
               </h1>
               <p className="font-dm-sans text-xs text-gorola-slate">
-                User Agreement &bull; Version 1.0 (Effective 29/09/2026) &bull; Mussoorie, Uttarakhand
+                User Agreement &bull; Version 1.1 (Effective 29/09/2026) &bull; Mussoorie, Uttarakhand
               </p>
             </div>
           </div>
@@ -44,7 +44,7 @@ export function TermsOfServicePage(): ReactElement {
             </h2>
             <div className="space-y-2 text-xs text-gorola-slate leading-relaxed">
               <p>
-                To use GoRola, you must be <strong>at least 18 years of age</strong> and legally competent to enter into a binding contract under the Indian Contract Act, 1872 and the Digital Personal Data Protection (DPDP) Act 2023. By creating an account or accessing our services, you expressly represent and warrant that you are 18 years or older.
+                To use GoRola you must be <strong>at least 18 years of age</strong> and legally able to enter into a binding contract under the Indian Contract Act, 1872. When you create an account you confirm that the date of birth you enter is correct. If we find that you are under 18, or that you gave a false date of birth, we may close your account and erase your data.
               </p>
               <p>
                 Accounts are authenticated via mobile One-Time Password (OTP). You are solely responsible for maintaining the confidentiality of your credentials and all activities occurring under your authenticated session.

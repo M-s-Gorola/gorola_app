@@ -49,21 +49,27 @@ _(None currently)_
 
 ## 🔑 Environment & Keys Status
 
-| Variable               | Status           | Notes                                                                                       |
-| ---------------------- | ---------------- | ------------------------------------------------------------------------------------------- |
-| DATABASE_URL           | ✅ Railway       | Railway PostgreSQL service provides this                                                    |
-| REDIS_URL              | ✅ Railway       | Railway Redis service provides this                                                         |
-| JWT_PRIVATE_KEY        | ✅ Set           | RS256 private key configured in Railway                                                     |
-| JWT_PUBLIC_KEY         | ✅ Set           | RS256 public key configured in Railway                                                      |
-| FAST2SMS_API_KEY       | ❌ Not set       | Sign up at fast2sms.com — needed for production OTP                                         |
-| GOROLA_DUMMY_OTP       | ✅ Dev/staging   | 6-digit fixed OTP for manual testing before SMS integration                                 |
-| GOROLA_TEST_OTP        | ✅ CI only       | Deterministic OTP for integration tests in GitHub Actions                                   |
-| RAZORPAY_KEY_ID        | ❌ Not set       | Phase 3+ — not needed yet                                                                   |
-| RAZORPAY_KEY_SECRET    | ❌ Not set       | Phase 3+ — not needed yet                                                                   |
-| CORS_ALLOWED_ORIGINS   | ✅ Railway       | Prod includes Vercel web origin; dev = `http://localhost:5173`                              |
-| OTEL_EXPORTER_ENDPOINT | ❌ Not set       | `http://localhost:4318/v1/traces` for dev; optional                                         |
-| VITE_MAP_PROVIDER      | ✅ Dev/Defaults  | 'leaflet' (default) or 'ola'                                                                |
-| VITE_OLA_MAPS_API_KEY  | ❌ Not set       | Needed for Ola Maps integration                                                             |
+| Variable                       | Status           | Notes                                                                                       |
+| ------------------------------ | ---------------- | ------------------------------------------------------------------------------------------- |
+| DATABASE_URL                   | ✅ Railway       | Railway PostgreSQL service provides this (app_service role)                                 |
+| DIRECT_URL                     | ✅ Railway       | Railway PostgreSQL connection (db_owner DDL role for migrations)                            |
+| MIGRATION_DATABASE_URL         | ✅ Railway       | Railway PostgreSQL connection (db_owner DDL role)                                           |
+| REDIS_URL                      | ✅ Railway       | Railway Redis service provides this                                                         |
+| ENCRYPTION_KEY                 | ✅ Configured    | AES-256-GCM 32-byte key for PII encryption at rest (phone)                                  |
+| HMAC_SECRET                    | ✅ Configured    | HMAC-SHA256 32-byte secret for phoneHash blind indexing                                     |
+| AGE_GATE_LOCKOUT_DAYS          | ✅ Default 90    | Phase 8.8: Duration in days a phone is locked out after failing 18+ age gate                |
+| AGE_GATE_DEVICE_COOLDOWN_HOURS | ✅ Default 24    | Phase 8.8: Lifespan in hours of gorola_ag device cooldown cookie                            |
+| JWT_PRIVATE_KEY                | ✅ Set           | RS256 private key configured in Railway                                                     |
+| JWT_PUBLIC_KEY                 | ✅ Set           | RS256 public key configured in Railway                                                      |
+| FAST2SMS_API_KEY               | ❌ Not set       | Sign up at fast2sms.com — needed for production OTP                                         |
+| GOROLA_DUMMY_OTP               | ✅ Dev/staging   | 6-digit fixed OTP for manual testing before SMS integration                                 |
+| GOROLA_TEST_OTP                | ✅ CI only       | Deterministic OTP for integration tests in GitHub Actions                                   |
+| RAZORPAY_KEY_ID                | ❌ Not set       | Phase 3+ — not needed yet                                                                   |
+| RAZORPAY_KEY_SECRET            | ❌ Not set       | Phase 3+ — not needed yet                                                                   |
+| CORS_ALLOWED_ORIGINS           | ✅ Railway       | Prod includes Vercel web origin; dev = `http://localhost:5173`                              |
+| OTEL_EXPORTER_ENDPOINT         | ❌ Not set       | `http://localhost:4318/v1/traces` for dev; optional                                         |
+| VITE_MAP_PROVIDER              | ✅ Dev/Defaults  | 'leaflet' (default) or 'ola'                                                                |
+| VITE_OLA_MAPS_API_KEY          | ❌ Not set       | Needed for Ola Maps integration                                                             |
 
 ---
 

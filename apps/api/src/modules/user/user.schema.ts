@@ -1,4 +1,4 @@
-import { ValidationError } from "@gorola/shared";
+import { CURRENT_PRIVACY_POLICY_VERSION, ValidationError } from "@gorola/shared";
 import { z } from "zod";
 
 export const updateProfileSchema = z.object({
@@ -32,7 +32,7 @@ export function parseUpdateNomineeInput(body: unknown): UpdateNomineeInput {
 }
 
 export const acceptPolicySchema = z.object({
-  version: z.string().trim().min(1, "Policy version is required").max(20, "Policy version is too long")
+  version: z.literal(CURRENT_PRIVACY_POLICY_VERSION)
 });
 
 export type AcceptPolicyInput = z.infer<typeof acceptPolicySchema>;

@@ -1,10 +1,13 @@
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 
+import { hashPII } from "../../../lib/crypto.js";
 import { disconnectPrisma, getPrismaClient } from "../../../lib/prisma.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
 
 async function cleanBuyerOnly(db: ReturnType<typeof getPrismaClient>): Promise<void> {
+  await db.$executeRawUnsafe('DELETE FROM "ConsentLog";');
+  await db.ageGateLockout.deleteMany();
   await db.orderStatusHistory.deleteMany();
   await db.orderItem.deleteMany();
   await db.order.deleteMany();
@@ -14,7 +17,7 @@ async function cleanBuyerOnly(db: ReturnType<typeof getPrismaClient>): Promise<v
   await db.user.deleteMany();
 }
 
-describe("buyer OTP end-to-end (Phase 2.10.1)", () => {
+describe("buyer OTP end-to-end (Phase 2.10.1 / Phase 8.8 Age Gate)", () => {
   const prisma = getPrismaClient();
 
   beforeAll(() => {
@@ -30,7 +33,7 @@ describe("buyer OTP end-to-end (Phase 2.10.1)", () => {
     await cleanBuyerOnly(prisma);
   });
 
-  it("send-otp + verify persists User; second verify yields same userId; refresh/logout wired", async () => {
+  it("new phone returns ageGateRequired: true; existing adult user logs in, refreshes and logouts", async () => {
     const server = createServer({
       disableRedis: true,
       registerRoutes: registerAppRoutes
@@ -38,6 +41,7 @@ describe("buyer OTP end-to-end (Phase 2.10.1)", () => {
 
     const phone = "+919988776601";
 
+    // 1. New phone sends OTP and verifies -> returns ageGateRequired: true
     const sendRes = await server.inject({
       method: "POST",
       payload: { phone },
@@ -53,18 +57,28 @@ describe("buyer OTP end-to-end (Phase 2.10.1)", () => {
     expect(verify1Res.statusCode).toBe(200);
     const body1 = verify1Res.json() as {
       data: {
-        accessToken: string;
-        refreshToken: string;
-        userId: string;
+        ageGateRequired?: boolean;
+        ageTicket?: string;
       };
       success: boolean;
     };
     expect(body1.success).toBe(true);
+    expect(body1.data.ageGateRequired).toBe(true);
+    expect(body1.data.ageTicket).toBeDefined();
 
-    const row = await prisma.user.findUnique({ where: { phone } });
-    expect(row?.id).toBe(body1.data.userId);
-    expect(row?.isVerified).toBe(true);
+    // 2. Seed adult user with ageConfirmedAt
+    const adultUser = await prisma.user.create({
+      data: {
+        name: "Adult Buyer",
+        phone,
+        phoneHash: hashPII(phone),
+        isVerified: true,
+        ageConfirmedAt: new Date(),
+        ageConfirmedPolicyVersion: "1.1"
+      }
+    });
 
+    // 3. Existing adult user logs in with OTP -> returns tokens directly
     const send2Res = await server.inject({
       method: "POST",
       payload: { phone },
@@ -78,18 +92,27 @@ describe("buyer OTP end-to-end (Phase 2.10.1)", () => {
       url: "/api/v1/auth/buyer/verify-otp"
     });
     expect(verify2Res.statusCode).toBe(200);
-    expect((verify2Res.json() as { data: { userId: string } }).data.userId).toBe(body1.data.userId);
+    const body2 = verify2Res.json() as {
+      data: {
+        accessToken: string;
+        refreshToken: string;
+        userId: string;
+      };
+    };
+    expect(body2.data.userId).toBe(adultUser.id);
+    expect(body2.data.accessToken).toBeDefined();
+    expect(body2.data.refreshToken).toBeDefined();
 
-    expect(await prisma.user.count({ where: { phone } })).toBe(1);
-
+    // 4. Session Refresh
     const refreshRes = await server.inject({
       method: "POST",
-      payload: { refreshToken: body1.data.refreshToken },
+      payload: { refreshToken: body2.data.refreshToken },
       url: "/api/v1/auth/buyer/refresh"
     });
     expect(refreshRes.statusCode).toBe(200);
     const refreshBody = refreshRes.json() as { data: { refreshToken: string } };
 
+    // 5. Session Logout
     const logoutRes = await server.inject({
       method: "POST",
       payload: { refreshToken: refreshBody.data.refreshToken },

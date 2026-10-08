@@ -61,7 +61,8 @@ GoRola uses a decoupled architecture splitting static frontend asset delivery (V
 │  User Browser ◄────────── Static Assets (compiled Vite SPA) ───────── Vercel Edge CDN       │
 │                                                                                             │
 │  * Vercel hosts STATIC ASSETS ONLY. Zero user data, zero SSR, zero API proxying.            │
-│  * Vercel DPDP Classification: "Not a Data Processor" (holds no personal data).             │
+│  * Vercel DPDP Classification: "Not a Data Processor" (no PII sent; edge IP logs only).     │
+│  * Production requires Vercel PRO: Hobby is non-commercial only (DECISION-061 amendment).   │
 │  * Strict Prohibition: Vercel Analytics must NEVER be enabled (DECISION-061).               │
 └─────────────────────────────────────────────────────────────────────────────────────────────┘
 
@@ -323,7 +324,7 @@ Personal Identifiable Information (PII) fields like `phone` on `User` and `Deliv
 - **Centralized Masking**: `maskPhone(phone)` decrypts `enc:...` before returning formatted strings (`*********3210`) for API responses.
 
 ### 3. DPDP Act 2023 Consent & User Rights Architecture
-- **Dynamic Purpose Configuration (`ConsentPurposeConfig`)**: Replaced rigid PostgreSQL enums with a database configuration table containing canonical purposes (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`), essential flags, and retention summaries.
+- **Dynamic Purpose Configuration (`ConsentPurposeConfig`)**: Replaced rigid PostgreSQL enums with a database configuration table containing canonical purposes (`OTP_AUTH`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`, `AGE_DECLARATION`), essential flags, and retention summaries.
 - **Append-Only Immutable Ledger (`ConsentLog`)**: All consent grants and withdrawals are persisted with UTC timestamps, notice text, and IP addresses. Protected against deletions via Prisma extension guards.
 - **Idempotency Guard**: Service-layer checks prevent duplicate consent log records across repeated logins or checkouts.
 - **User Rights Matrix**:
@@ -340,9 +341,10 @@ Personal Identifiable Information (PII) fields like `phone` on `User` and `Deliv
 apps/api/src/modules/
 │
 ├── auth/                    ← ALWAYS LOADED FIRST
-│   ├── buyer OTP flow       ← POST /api/v1/auth/buyer/send-otp
-│   │                           POST /api/v1/auth/buyer/verify-otp
-│   │                           POST /api/v1/auth/buyer/refresh
+│   ├── buyer OTP & age flow ← POST /api/v1/auth/buyer/send-otp (lockout pre-check)
+│   │                           POST /api/v1/auth/buyer/verify-otp (issues ageTicket for new phone)
+│   │                           POST /api/v1/auth/buyer/confirm-age (18+ gate & atomic server-side consent)
+│   │                           POST /api/v1/auth/buyer/refresh (blocks unconfirmed legacy users)
 │   │                           POST /api/v1/auth/buyer/logout
 │   ├── store-owner auth     ← POST /api/v1/auth/store/login
 │   │                           POST /api/v1/auth/store/setup-2fa
@@ -351,6 +353,13 @@ apps/api/src/modules/
 │   └── admin auth           ← POST /api/v1/auth/admin/login
 │                               POST /api/v1/auth/admin/verify-2fa
 │                               POST /api/v1/auth/admin/refresh
+│
+├── age-gate/                ← AGE ELIGIBILITY GATE (18+) & LOCKOUT COOLDOWN
+│   ├── lockout verification ← Pre-OTP and post-OTP phoneHash & device cookie verification
+│   ├── evaluate DOB (memory)← Neutral 3-box DOB input, evaluated in memory, discarded immediately
+│   └── admin age-gate ops   ← POST /api/v1/admin/age-gate/lookup | /unlock | /decline, GET /api/v1/admin/age-gate/lockouts,
+│                               POST /api/v1/admin/users/:id/erase-underage, PUT /api/v1/admin/users/:id/suspend (optional reason, revokes sessions)
+│                               Screen: Admin → Age Gate (/admin/age-gate); complaints arrive by e-mail at privacy@gorola.in (no system e-mail)
 │
 ├── consent/                 ← DPDP ACT 2023 CONSENT PIPELINE
 │   ├── record consent       ← POST   /api/v1/consent
@@ -450,13 +459,15 @@ apps/api/src/modules/
 ## Database Schema (Entity-Relationship Summary)
 
 ```
-ConsentPurposeConfig (canonical DPDP purposes)
+ConsentPurposeConfig (canonical DPDP purposes: OTP_AUTH, ORDER_PROCESSING, MARKETING_COMMS, ANALYTICS, AGE_DECLARATION)
   └── has many → ConsentLog (FK purpose)
 
-User (buyer)
+AgeGateLockout (standalone table — no FK to User; 90-day cooldown lockout for under-18 phone hashes)
+
+User (buyer — phone, phoneHash, ageConfirmedAt, ageConfirmedPolicyVersion, nominee, privacyPolicyVersionAccepted)
   │
   ├── has many → Address
-  ├── has many → ConsentLog (givenAt, purpose, isWithdrawn, withdrawnAt, noticeText, ipAddress)
+  ├── has many → ConsentLog (givenAt, purpose, isWithdrawn, withdrawnAt, noticeText, ipAddress, userAgent)
   ├── has one  → Cart
   │               └── has many → CartItem → ProductVariant
   └── has many → Order (orderType = QUICK | BOOKING)
@@ -541,42 +552,64 @@ DeliveryRider (riderType = DELIVERY | FIELD_TECHNICIAN)
 
 ---
 
-## Data Flow: Buyer Authentication (OTP)
+## Data Flow: Buyer Authentication & Age Eligibility Gate (OTP + 18+ Gate)
 
 ```
 1. POST /api/v1/auth/buyer/send-otp  { phone: '+911234567890' }
    └── AuthController.sendOTP(req, reply)
    └── AuthService.sendOTP(phone)
        ├── Validates phone format (Zod: E.164 format for India)
+       ├── Computes phoneHash = hashPII(phone)
+       ├── Checks AgeGateLockout WHERE phoneHash = ... AND lockedUntil > NOW()
+       │   └── If locked: throw AgeGateLockedError (403 AGE_GATE_LOCKED)
+       ├── Checks cookie: 'gorola_ag' (device 24h lockout)
        ├── Checks Redis: key 'otp_rate:{phone}' — if count >= 5: throw RateLimitError
        ├── Generates 6-digit OTP (crypto.randomInt)
        ├── Hashes OTP: bcrypt(otp, 10)
        ├── Redis SET 'otp:{phone}' { hash, attempts: 0 } EX 300 (5 min)
        ├── Redis INCR 'otp_rate:{phone}' EX 900 (15 min window)
        └── otpQueue.add('send-sms', { phone, otp }) → BullMQ
-           └── Worker calls Fast2SMS API
    └── Reply 200: { message: 'OTP sent' }
 
 2. POST /api/v1/auth/buyer/verify-otp  { phone, otp }
    └── AuthService.verifyOTP(phone, otp)
-       ├── Redis GET 'otp:{phone}' → { hash, attempts }
-       ├── If null: throw NotFoundError ('OTP expired or not requested')
-       ├── If attempts >= 3: throw TooManyAttemptsError
-       ├── bcrypt.compare(otp, hash):
-       │   ├── False: Redis HINCRBY attempts, throw InvalidOTPError
-       │   └── True:
-       │       ├── Redis DEL 'otp:{phone}'
-       │       ├── userRepository.findByPhone or create new User
-       │       ├── Generate access token (RS256 JWT, 15m)
-       │       ├── Generate refresh token (cuid2, store in Redis 'refresh:{token}' = userId, EX 7d)
-       │       └── Return { accessToken, user }
-   └── Set HttpOnly cookie: refresh_token
-   └── Reply 200: { success: true, data: { user, accessToken } }
+       ├── Verifies OTP against Redis 'otp:{phone}'
+       ├── Checks AgeGateLockout for phoneHash
+       ├── userRepository.findByPhone(phone)
+       │   ├── Case A: Existing User WITH ageConfirmedAt:
+       │   │   └── Generates tokens & returns { user, accessToken }
+       │   ├── Case B: Existing User WITHOUT ageConfirmedAt (Legacy User):
+       │   │   └── Returns { requiresAgeConfirmation: true, ageTicket, isLegacy: true }
+       │   └── Case C: New Phone (User does not exist yet):
+       │       └── Does NOT create user! Generates temporary Redis ageTicket:
+       │           Redis SET 'age_ticket:{phoneHash}' = { phone } EX 600
+       │           └── Returns { requiresAgeConfirmation: true, ageTicket }
+   └── Reply 200: { success: true, data: { ... } }
 
-3. POST /api/v1/auth/buyer/refresh  (reads refresh_token cookie)
+3. POST /api/v1/auth/buyer/confirm-age  { ageTicket, dob: 'YYYY-MM-DD' }
+   └── AuthController.confirmAge(req, reply)
+   └── AgeGateService.confirmAge(ageTicket, dob)
+       ├── Validates ageTicket in Redis
+       ├── Evaluates age in memory (Asia/Kolkata date cutoff; MINIMUM_AGE_YEARS = 18)
+       ├── Discards DOB immediately (never logged, never stored in DB)
+       ├── If age < 18:
+       │   ├── Upsert AgeGateLockout(phoneHash, lockedUntil = NOW() + 90 days, strikeCount += 1)
+       │   ├── Set HttpOnly cookie: 'gorola_ag' (24h device lockout)
+       │   └── Reply 403: { code: 'AGE_REQUIREMENT_NOT_MET', message: 'GoRola is available only to people aged 18 and over.' }
+       └── If age >= 18:
+           └── Executed in ONE atomic database transaction:
+               ├── Create User (phone, phoneHash, ageConfirmedAt = NOW(), ageConfirmedPolicyVersion = '1.1')
+               ├── Insert ConsentLog (purpose = 'OTP_AUTH', consentVersion = '1.1', noticeText = ..., server-side)
+               └── Insert ConsentLog (purpose = 'AGE_DECLARATION', consentVersion = '1.1', noticeText = ..., server-side)
+           ├── Generate access token (RS256 JWT, 15m) & refresh token (Redis EX 7d)
+           └── Set HttpOnly cookie: refresh_token
+           └── Reply 200: { success: true, data: { user, accessToken } }
+
+4. POST /api/v1/auth/buyer/refresh  (reads refresh_token cookie)
    └── AuthService.refreshToken(refreshToken)
        ├── Redis GET 'refresh:{token}' → userId (if null: throw UnauthorizedError)
        ├── userRepository.findById(userId) → user
+       ├── Checks user.ageConfirmedAt (if null: refuse token refresh, require age confirmation)
        ├── Redis DEL 'refresh:{token}'  ← rotate: invalidate old
        ├── Generate new refresh token → Redis SET 'refresh:{newToken}' = userId EX 7d
        ├── Generate new access token

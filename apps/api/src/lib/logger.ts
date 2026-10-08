@@ -12,7 +12,15 @@ const REDACT_PATHS = [
   "phone",
   "*.phone",
   "body.phone",
-  "req.body.phone"
+  "req.body.phone",
+  "dateOfBirth",
+  "*.dateOfBirth",
+  "body.dateOfBirth",
+  "req.body.dateOfBirth",
+  "ageTicket",
+  "*.ageTicket",
+  "body.ageTicket",
+  "req.body.ageTicket"
 ];
 
 export type LoggerResetTestOptions = {
@@ -98,7 +106,7 @@ export function resetLoggerForTests(options?: LoggerResetTestOptions): void {
 }
 
 export type SecurityAlertPayload = {
-  alertType: "FAILED_AUTH_BURST" | "RATE_LIMIT_BURST" | "SUSPICIOUS_ACCESS" | "ANOMALOUS_REVOCATION";
+  alertType: "FAILED_AUTH_BURST" | "RATE_LIMIT_BURST" | "SUSPICIOUS_ACCESS" | "ANOMALOUS_REVOCATION" | "AGE_GATE_ABUSE";
   ipAddress?: string | null | undefined;
   userId?: string | null | undefined;
   path?: string | null | undefined;

@@ -6,7 +6,8 @@ import type { ConsentDTO, ConsentLog, ConsentPurpose, RecordConsentInput } from 
 
 const ESSENTIAL_PURPOSES: ReadonlySet<ConsentPurpose> = new Set([
   "OTP_AUTH",
-  "ORDER_PROCESSING"
+  "ORDER_PROCESSING",
+  "AGE_DECLARATION"
 ]);
 
 export function formatConsentDTO(c: ConsentLog): ConsentDTO {

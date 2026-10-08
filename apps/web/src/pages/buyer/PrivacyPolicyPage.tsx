@@ -15,6 +15,7 @@ import {
 import type { ReactElement } from "react";
 import { Link } from "react-router-dom";
 
+import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { TopographicBg } from "@/components/shared/TopographicBg";
 
 export function PrivacyPolicyPage(): ReactElement {
@@ -42,7 +43,7 @@ export function PrivacyPolicyPage(): ReactElement {
                 GoRola Privacy Policy
               </h1>
               <p className="font-dm-sans text-xs text-gorola-slate">
-                Statutory Compliance Notice &bull; Digital Personal Data Protection (DPDP) Act 2023 &bull; Version 1.0 (Effective 29/09/2026)
+                Statutory Compliance Notice &bull; Digital Personal Data Protection (DPDP) Act 2023 &bull; Version 1.1 (Effective 29/09/2026)
               </p>
             </div>
           </div>
@@ -70,6 +71,7 @@ export function PrivacyPolicyPage(): ReactElement {
               <p>We collect and process the following categories of personal data based on user interactions:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li><strong>Identity &amp; Contact:</strong> Mobile phone number (encrypted at rest), Display Name (if optionally set).</li>
+                <li><strong>Age Eligibility &amp; Verification:</strong> Date of birth (processed ephemerally in-memory at registration to verify 18+ eligibility and discarded immediately without persistent storage; only the timestamp of your affirmative declaration is retained).</li>
                 <li><strong>Delivery &amp; Location:</strong> Saved delivery addresses, landmark descriptions, GPS pin coordinates, and dynamic order delivery coordinates.</li>
                 <li><strong>Commercial &amp; Financial:</strong> Order histories, item preferences, and payment transaction metadata (excluding raw card numbers or CVVs).</li>
                 <li><strong>Technical &amp; Telemetry:</strong> Anonymized performance metrics, IP addresses (stored with 30-day retention), and temporary session tokens.</li>
@@ -84,7 +86,7 @@ export function PrivacyPolicyPage(): ReactElement {
               3. Specified Purposes of Data Processing
             </h2>
             <div className="space-y-4 text-xs">
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
                   <h3 className="font-bold text-gorola-charcoal">A. Authentication &amp; Account Security (Essential)</h3>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
@@ -92,36 +94,81 @@ export function PrivacyPolicyPage(): ReactElement {
                 <p className="text-gorola-slate leading-relaxed">
                   We process your phone number exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session integrity.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="OTP_AUTH"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gorola-charcoal">B. Order Fulfillment &amp; Location Services (Essential)</h3>
+                  <h3 className="font-bold text-gorola-charcoal">B. Age Verification &amp; Statutory Eligibility (Essential)</h3>
+                  <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
+                </div>
+                <p className="text-gorola-slate leading-relaxed">
+                  Under Section 9 of the DPDP Act 2023, we process your date of birth once during sign-up to verify that you meet the 18+ legal age requirement. Raw date of birth is never stored on our servers; we retain only the timestamp of your verified affirmative declaration.
+                </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="AGE_DECLARATION"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-bold text-gorola-charcoal">C. Order Fulfillment &amp; Location Services (Essential)</h3>
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">
                   We process delivery addresses, landmark notes, GPS pins, and Display Names (if set) to route orders, assign delivery riders, coordinate with hill stores, and facilitate payments.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="ORDER_PROCESSING"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gorola-charcoal">C. Promotions &amp; Seasonal Offers (Voluntary)</h3>
+                  <h3 className="font-bold text-gorola-charcoal">D. Promotions &amp; Seasonal Offers (Voluntary)</h3>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Optional</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">
                   With your explicit opt-in consent, we send updates on hill weather flash sales, seasonal discounts, and store coupons via SMS and app push notifications. 100% voluntary and withdrawable anytime.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="MARKETING_COMMS"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
 
-              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-1.5">
+              <div className="rounded-xl border border-border/80 bg-white p-4 shadow-xs space-y-2">
                 <div className="flex items-center justify-between">
-                  <h3 className="font-bold text-gorola-charcoal">D. Usage &amp; Performance Analytics (Voluntary)</h3>
+                  <h3 className="font-bold text-gorola-charcoal">E. Usage &amp; Performance Analytics (Voluntary)</h3>
                   <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-semibold text-amber-700">Optional</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">
                   We collect anonymous device telemetry and network latency data to improve hill route calculations and app speed in weak signal areas. Zero PII is tracked.
                 </p>
+                <div className="pt-1">
+                  <ConsentNoticeModal
+                    purpose="ANALYTICS"
+                    triggerLabel="View Complete Notice"
+                    triggerClassName="inline-flex items-center gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -199,7 +246,7 @@ export function PrivacyPolicyPage(): ReactElement {
             </h2>
             <div className="space-y-2 text-xs text-gorola-slate leading-relaxed">
               <p>
-                In compliance with Section 9 of the DPDP Act 2023, GoRola is strictly restricted to individuals who are at least <strong>18 years of age</strong>. We do not knowingly collect, process, or track personal data belonging to minors. If we discover personal data of a minor has been collected without verifiable parental consent, it is immediately deleted.
+                GoRola is for people who are at least <strong>18 years of age</strong>. When you first create an account we ask for your date of birth once, to confirm this. We do not store your date of birth — we keep only the date on which you confirmed you are an adult. We do not knowingly collect or process personal data of anyone under 18. If we learn that someone under 18 has an account, we close it and erase their personal data. If someone is refused at sign-up, we keep a one-way scrambled (hashed) form of their phone number, which cannot be read back, for 90 days only, solely to stop repeated sign-up attempts, and then delete it. If you are a parent or guardian and believe a child is using GoRola, write to <a href="mailto:privacy@gorola.in" className="font-semibold text-gorola-pine underline hover:text-emerald-700">privacy@gorola.in</a>.
               </p>
             </div>
           </div>
@@ -232,12 +279,11 @@ export function PrivacyPolicyPage(): ReactElement {
               <p>
                 <strong>Email:</strong>{" "}
                 <a
-                  href="mailto:dpo@gorola.com"
+                  href="mailto:privacy@gorola.in"
                   className="font-semibold text-gorola-pine underline hover:text-emerald-700"
                 >
-                  dpo@gorola.com
-                </a>{" "}
-                (or <a href="mailto:privacy@gorola.in" className="font-semibold text-gorola-pine underline hover:text-emerald-700">privacy@gorola.in</a>)
+                  privacy@gorola.in
+                </a>
               </p>
               <p>
                 <strong>Statutory Authority:</strong> If you are unsatisfied with our grievance resolution within 30 days, you hold the statutory right under the DPDP Act 2023 to file a complaint with the <strong>Data Protection Board of India (DPBI)</strong>.

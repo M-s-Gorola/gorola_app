@@ -195,7 +195,9 @@ describe("Admin Users Integration Tests", () => {
       data: {
         name: "Suspicious User",
         phone: "+919876543211",
-        isVerified: true
+        isVerified: true,
+        ageConfirmedAt: new Date(),
+        ageConfirmedPolicyVersion: "1.1"
       }
     });
 
@@ -226,13 +228,16 @@ describe("Admin Users Integration Tests", () => {
     const hashedOtp = await hash("123456", 8);
     const userRepo = new UserRepository(db);
     const authService = new AuthService({
-      ensureBuyerUser: async (phone) => {
-        const row = await userRepo.ensureBuyerByPhone(phone);
+      findBuyerByPhone: async (phone: string) => {
+        const row = await userRepo.findByPhoneForAuth(phone);
+        if (!row) return null;
         return {
           id: row.id,
           name: row.name,
           phone: row.phone,
-          isActive: row.isActive
+          isActive: row.isActive,
+          ageConfirmedAt: row.ageConfirmedAt,
+          ageConfirmedPolicyVersion: row.ageConfirmedPolicyVersion
         };
       },
       findUserById: async (id) => {
@@ -242,7 +247,9 @@ describe("Admin Users Integration Tests", () => {
           id: row.id,
           name: row.name,
           phone: row.phone,
-          isActive: row.isActive
+          isActive: row.isActive,
+          ageConfirmedAt: row.ageConfirmedAt,
+          ageConfirmedPolicyVersion: row.ageConfirmedPolicyVersion
         };
       },
       otpProvider: { sendOtp: async () => {} },
@@ -284,7 +291,7 @@ describe("Admin Users Integration Tests", () => {
     expect(dbUserAfter?.isActive).toBe(true);
 
     // Verify OTP verification passes now
-    const verifySuccess = await authService.verifyOtp({ phone: buyer.phone, otp: "123456" });
+    const verifySuccess = (await authService.verifyOtp({ phone: buyer.phone, otp: "123456" })) as { userId: string };
     expect(verifySuccess.userId).toBe(buyer.id);
 
     // Verify token refresh passes now
@@ -375,6 +382,8 @@ describe("Admin Users Integration Tests", () => {
       expect(json.data.logs).toHaveLength(2);
 
       // Check summary
+      expect(json.data.summary).toHaveLength(5);
+
       const otpSummary = json.data.summary.find((s) => s.purpose === "OTP_AUTH");
       expect(otpSummary).toBeDefined();
       expect(otpSummary?.isActive).toBe(true);
@@ -385,6 +394,12 @@ describe("Admin Users Integration Tests", () => {
       expect(mktSummary).toBeDefined();
       expect(mktSummary?.isActive).toBe(false);
       expect(mktSummary?.withdrawnAt).not.toBeNull();
+
+      const ageSummary = json.data.summary.find((s) => s.purpose === "AGE_DECLARATION");
+      expect(ageSummary).toBeDefined();
+      expect(ageSummary?.isEssential).toBe(true);
+      expect(ageSummary?.displayName).toBe("Age Confirmation");
+      expect(ageSummary?.isActive).toBe(false); // not given yet for this test user
     });
 
     it("paginates consent logs with page and limit query params", async () => {

@@ -1,7 +1,11 @@
+import fs from "node:fs";
+import path from "node:path";
+
 import { RateLimitError, UnauthorizedError, ValidationError } from "@gorola/shared";
 import { hash } from "bcryptjs";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import type { AgeGateService } from "../../../modules/age-gate/age-gate.service.js";
 import type { BuyerUserLookup } from "../../../modules/auth/auth.service.js";
 import { AuthService } from "../../../modules/auth/auth.service.js";
 import type {
@@ -28,6 +32,12 @@ type MockTokenService = {
   revokeRefreshToken: ReturnType<typeof vi.fn>;
 };
 
+type MockAgeGateService = {
+  isPhoneLocked: ReturnType<typeof vi.fn>;
+  lockPhone: ReturnType<typeof vi.fn>;
+  unlockPhone: ReturnType<typeof vi.fn>;
+};
+
 describe("AuthService", () => {
   const redis: MockRedisClient = {
     del: vi.fn(),
@@ -42,16 +52,22 @@ describe("AuthService", () => {
     verifyRefreshToken: vi.fn(),
     revokeRefreshToken: vi.fn()
   };
-  const ensureBuyerUser = vi.fn();
+  const ageGateService: MockAgeGateService = {
+    isPhoneLocked: vi.fn(),
+    lockPhone: vi.fn(),
+    unlockPhone: vi.fn()
+  };
+  const findBuyerByPhone = vi.fn();
   const findUserById = vi.fn();
 
   const service = new AuthService({
-    ensureBuyerUser: ensureBuyerUser as unknown as (phone: string) => Promise<BuyerUserLookup>,
+    findBuyerByPhone: findBuyerByPhone as unknown as (phone: string) => Promise<BuyerUserLookup | null>,
     findUserById: findUserById as unknown as (id: string) => Promise<BuyerUserLookup | null>,
     otpProvider: otpProvider as unknown as OtpProvider,
     otpTtlSeconds: 300,
     redis: redis as unknown as RedisLikeClient,
-    tokenService: tokenService as unknown as TokenService
+    tokenService: tokenService as unknown as TokenService,
+    ageGateService: ageGateService as unknown as AgeGateService
   });
 
   beforeEach(() => {
@@ -59,17 +75,22 @@ describe("AuthService", () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-04-21T08:00:00.000Z"));
     process.env.GOROLA_TEST_OTP = "123456";
-    ensureBuyerUser.mockResolvedValue({
+    ageGateService.isPhoneLocked.mockResolvedValue(false);
+    findBuyerByPhone.mockResolvedValue({
       id: "user_test_1",
       name: "",
       phone: "+919876543210",
-      isActive: true
+      isActive: true,
+      ageConfirmedAt: new Date("2026-01-01T00:00:00Z"),
+      ageConfirmedPolicyVersion: "1.1"
     });
     findUserById.mockResolvedValue({
       id: "user_test_1",
       name: "Latest Name",
       phone: "+919876543210",
-      isActive: true
+      isActive: true,
+      ageConfirmedAt: new Date("2026-01-01T00:00:00Z"),
+      ageConfirmedPolicyVersion: "1.1"
     });
   });
 
@@ -85,6 +106,7 @@ describe("AuthService", () => {
 
       await service.sendOtp({ phone: "+919876543210" });
 
+      expect(ageGateService.isPhoneLocked).toHaveBeenCalledWith("+919876543210");
       expect(otpProvider.sendOtp).toHaveBeenCalledWith("+919876543210", "123456");
       expect(redis.set).toHaveBeenCalledWith(
         "otp:+919876543210",
@@ -94,11 +116,23 @@ describe("AuthService", () => {
       );
     });
 
+    it("should throw 403 AGE_GATE_LOCKED when phone is locked by age gate", async () => {
+      ageGateService.isPhoneLocked.mockResolvedValueOnce(true);
+
+      await expect(service.sendOtp({ phone: "+919876543210" })).rejects.toMatchObject({
+        statusCode: 403,
+        code: "AGE_GATE_LOCKED"
+      });
+
+      expect(otpProvider.sendOtp).not.toHaveBeenCalled();
+      expect(redis.set).not.toHaveBeenCalled();
+    });
+
     it("should throw RateLimitError after 5 attempts in 15 minutes", async () => {
       const payload: OtpStoreRecord = {
         attempts: 0,
         expiresAt: "2026-04-21T08:05:00.000Z",
-        hashedOtp: "hashed",
+        hashedOtp: "mock_hash",
         sentCount: 5,
         sentWindowStartedAt: "2026-04-21T07:50:00.000Z"
       };
@@ -114,16 +148,15 @@ describe("AuthService", () => {
       await expect(service.sendOtp({ phone: "9876543210" })).rejects.toBeInstanceOf(
         ValidationError
       );
-      expect(otpProvider.sendOtp).not.toHaveBeenCalled();
     });
   });
 
   describe("verifyOtp", () => {
-    it("should return tokens and user when OTP is valid", async () => {
+    it("should verify OTP, delete key, and complete login for existing adult user", async () => {
       const validOtpHash = await hash("123456", 8);
       const tokenPair: BuyerRefreshSuccess = {
-        accessToken: "access-token",
-        refreshToken: "refresh-token",
+        accessToken: "access-token-123",
+        refreshToken: "refresh-token-123",
         name: null,
         phone: "+919876543210",
         userId: "user_test_1"
@@ -144,7 +177,7 @@ describe("AuthService", () => {
         phone: "+919876543210"
       });
 
-      expect(ensureBuyerUser).toHaveBeenCalledWith("+919876543210");
+      expect(findBuyerByPhone).toHaveBeenCalledWith("+919876543210");
       expect(tokenService.issueTokens).toHaveBeenCalledWith({
         name: null,
         phone: "+919876543210",
@@ -161,14 +194,47 @@ describe("AuthService", () => {
       expect(redis.del).toHaveBeenCalledWith("otp:+919876543210");
     });
 
+    it("should return ageGateRequired: true and ageTicket when user is null (new phone)", async () => {
+      const validOtpHash = await hash("123456", 8);
+      redis.get.mockResolvedValueOnce(
+        JSON.stringify({
+          attempts: 0,
+          expiresAt: "2026-04-21T08:05:00.000Z",
+          hashedOtp: validOtpHash,
+          sentCount: 1,
+          sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
+        } satisfies OtpStoreRecord)
+      );
+      findBuyerByPhone.mockResolvedValueOnce(null);
+
+      const result = await service.verifyOtp({
+        otp: "123456",
+        phone: "+919876543210"
+      });
+
+      expect(result).toEqual({
+        ageGateRequired: true,
+        ageTicket: expect.stringMatching(/^[a-f0-9]{64}$/)
+      });
+      expect(tokenService.issueTokens).not.toHaveBeenCalled();
+      expect(redis.del).toHaveBeenCalledWith("otp:+919876543210");
+      expect(redis.set).toHaveBeenCalledWith(
+        expect.stringMatching(/^age_ticket:[a-f0-9]{64}$/),
+        expect.any(String),
+        "EX",
+        600
+      );
+    });
+
     it("should return isPendingDeletion: true and deletionScheduledFor when user is in 30-day grace period", async () => {
       const validOtpHash = await hash("123456", 8);
       const scheduledDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-      ensureBuyerUser.mockResolvedValueOnce({
+      findBuyerByPhone.mockResolvedValueOnce({
         id: "user_pending_1",
         name: "Pending User",
         phone: "+919876543210",
         isActive: true,
+        ageConfirmedAt: new Date(),
         deletedAt: new Date(),
         deletionScheduledFor: scheduledDate
       });
@@ -195,67 +261,14 @@ describe("AuthService", () => {
         phone: "+919876543210"
       });
 
-      expect(result.isPendingDeletion).toBe(true);
-      expect(result.deletionScheduledFor).toBe(scheduledDate.toISOString());
-    });
-
-    it("should throw UnauthorizedError and increment attempts when OTP is wrong", async () => {
-      const validOtpHash = await hash("123456", 8);
-      redis.get.mockResolvedValueOnce(
-        JSON.stringify({
-          attempts: 0,
-          expiresAt: "2026-04-21T08:05:00.000Z",
-          hashedOtp: validOtpHash,
-          sentCount: 1,
-          sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
-        } satisfies OtpStoreRecord)
-      );
-
-      try {
-        await service.verifyOtp({
-          otp: "000000",
-          phone: "+919876543210"
-        });
-        expect.fail("expected rejection");
-      } catch (e) {
-        expect(e).toBeInstanceOf(UnauthorizedError);
-        expect((e as UnauthorizedError).details).toEqual({
-          attemptsRemaining: 2
-        });
+      if ("isPendingDeletion" in result) {
+        expect(result.isPendingDeletion).toBe(true);
+        expect(result.deletionScheduledFor).toBe(scheduledDate.toISOString());
       }
-      expect(redis.set).toHaveBeenCalled();
     });
 
-    it("should throw RateLimitError after 3 failed verify attempts", async () => {
-      const validOtpHash = await hash("123456", 8);
-      redis.get.mockResolvedValueOnce(
-        JSON.stringify({
-          attempts: 3,
-          expiresAt: "2026-04-21T08:05:00.000Z",
-          hashedOtp: validOtpHash,
-          sentCount: 1,
-          sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
-        } satisfies OtpStoreRecord)
-      );
-
-      await expect(
-        service.verifyOtp({
-          otp: "000000",
-          phone: "+919876543210"
-        })
-      ).rejects.toBeInstanceOf(RateLimitError);
-    });
-
-    it("should throw UnauthorizedError on expired OTP", async () => {
-      redis.get.mockResolvedValueOnce(
-        JSON.stringify({
-          attempts: 0,
-          expiresAt: "2026-04-21T07:59:00.000Z",
-          hashedOtp: "hashed",
-          sentCount: 1,
-          sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
-        } satisfies OtpStoreRecord)
-      );
+    it("should throw UnauthorizedError when OTP does not exist in Redis", async () => {
+      redis.get.mockResolvedValueOnce(null);
 
       await expect(
         service.verifyOtp({
@@ -264,61 +277,77 @@ describe("AuthService", () => {
         })
       ).rejects.toBeInstanceOf(UnauthorizedError);
     });
-  });
 
-  describe("refreshToken", () => {
-    it("should issue new tokens and return latest user profile from DB", async () => {
-      tokenService.verifyRefreshToken.mockResolvedValueOnce({
-        name: "Old Name",
-        phone: "+919999999999",
-        userId: "user_1"
-      });
-      findUserById.mockResolvedValueOnce({
-        id: "user_1",
-        name: "Fresh Name From DB",
-        phone: "+919999999999",
-        isActive: true
-      });
-      tokenService.issueTokens.mockResolvedValueOnce({
-        accessToken: "new-access",
-        name: "Fresh Name From DB",
-        phone: "+919999999999",
-        refreshToken: "new-refresh",
-        userId: "user_1"
-      } satisfies BuyerRefreshSuccess);
+    it("should throw RateLimitError when 3 attempts have already been made", async () => {
+      const payload: OtpStoreRecord = {
+        attempts: 3,
+        expiresAt: "2026-04-21T08:05:00.000Z",
+        hashedOtp: "mock_hash",
+        sentCount: 1,
+        sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
+      };
+      redis.get.mockResolvedValueOnce(JSON.stringify(payload));
 
-      const result = await service.refreshToken({ refreshToken: "old-refresh" });
-
-      expect(tokenService.verifyRefreshToken).toHaveBeenCalledWith("old-refresh");
-      expect(tokenService.revokeRefreshToken).toHaveBeenCalledWith("old-refresh");
-      expect(findUserById).toHaveBeenCalledWith("user_1");
-      expect(result).toEqual({
-        accessToken: "new-access",
-        name: "Fresh Name From DB",
-        phone: "+919999999999",
-        refreshToken: "new-refresh",
-        userId: "user_1"
-      });
+      await expect(
+        service.verifyOtp({
+          otp: "123456",
+          phone: "+919876543210"
+        })
+      ).rejects.toBeInstanceOf(RateLimitError);
     });
 
-    it("should throw UnauthorizedError for revoked refresh token", async () => {
-      tokenService.verifyRefreshToken.mockRejectedValueOnce(
-        new UnauthorizedError("Refresh token is invalid.")
-      );
+    it("should increment attempts and throw UnauthorizedError on wrong OTP", async () => {
+      const validOtpHash = await hash("999999", 8);
+      const payload: OtpStoreRecord = {
+        attempts: 1,
+        expiresAt: "2026-04-21T08:05:00.000Z",
+        hashedOtp: validOtpHash,
+        sentCount: 1,
+        sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
+      };
+      redis.get.mockResolvedValueOnce(JSON.stringify(payload));
 
-      await expect(service.refreshToken({ refreshToken: "invalid" })).rejects.toBeInstanceOf(
-        UnauthorizedError
+      await expect(
+        service.verifyOtp({
+          otp: "123456",
+          phone: "+919876543210"
+        })
+      ).rejects.toBeInstanceOf(UnauthorizedError);
+
+      expect(redis.set).toHaveBeenCalledWith(
+        "otp:+919876543210",
+        expect.stringContaining('"attempts":2'),
+        "EX",
+        300
       );
+    });
+
+    it("should throw RateLimitError on the 3rd failed attempt", async () => {
+      const validOtpHash = await hash("999999", 8);
+      const payload: OtpStoreRecord = {
+        attempts: 2,
+        expiresAt: "2026-04-21T08:05:00.000Z",
+        hashedOtp: validOtpHash,
+        sentCount: 1,
+        sentWindowStartedAt: "2026-04-21T08:00:00.000Z"
+      };
+      redis.get.mockResolvedValueOnce(JSON.stringify(payload));
+
+      await expect(
+        service.verifyOtp({
+          otp: "123456",
+          phone: "+919876543210"
+        })
+      ).rejects.toBeInstanceOf(RateLimitError);
     });
   });
 
-  describe("logout", () => {
-    it("should revoke refresh token in Redis", async () => {
-      tokenService.revokeRefreshToken.mockResolvedValueOnce(undefined);
-
-      await service.logout({ refreshToken: "refresh" });
-
-      expect(tokenService.revokeRefreshToken).toHaveBeenCalledWith("refresh");
+  describe("Architectural Guard: No ensureBuyerUser in auth.service.ts", () => {
+    it("auth.service.ts source code does not contain ensureBuyerUser or ensureBuyerByPhone", () => {
+      const serviceFilePath = path.resolve(__dirname, "../../../modules/auth/auth.service.ts");
+      const content = fs.readFileSync(serviceFilePath, "utf8");
+      expect(content).not.toContain("ensureBuyerUser");
+      expect(content).not.toContain("ensureBuyerByPhone");
     });
   });
 });

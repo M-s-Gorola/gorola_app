@@ -15,8 +15,12 @@ describe("TermsOfServicePage (/terms)", () => {
     expect(screen.getByRole("heading", { level: 1, name: /GoRola Terms of Service/i })).toBeInTheDocument();
 
     // Section: Eligibility (18+)
-    expect(screen.getByRole("heading", { name: /1\. Eligibility & Account Creation/i })).toBeInTheDocument();
-    expect(screen.getAllByText(/at least 18 years of age/i).length).toBeGreaterThanOrEqual(1);
+    const eligibilityHeading = screen.getByRole("heading", { name: /1\. Eligibility & Account Creation/i });
+    expect(eligibilityHeading).toBeInTheDocument();
+    const eligibilitySection = eligibilityHeading.closest("div");
+    expect(eligibilitySection).toHaveTextContent(/at least 18 years of age/i);
+    expect(eligibilitySection).toHaveTextContent(/date of birth (?:you enter )?is correct/i);
+    expect(eligibilitySection).toHaveTextContent(/close your account/i);
 
     // Section: Mussoorie Hill Operations & Weather Mode
     expect(screen.getByRole("heading", { name: /2\. Hill-Station Operations & Weather Delivery Modes/i })).toBeInTheDocument();
