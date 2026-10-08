@@ -1,10 +1,10 @@
 # GoRola DPDP Act 2023 — Comprehensive Consent & Data Processing Architecture Guide
 
-> **Document Version:** 1.7  
+> **Document Version:** 1.8  
 > **Applicable Law:** Digital Personal Data Protection (DPDP) Act, 2023 (India)  
 > **Entity (Data Fiduciary):** GoRola (Mountain Commerce Operations)  
 > **Audience:** Product Engineering, Compliance, Legal & Operations  
-> **Last Updated:** 2026-10-02 — Phase 8.3.4 DPDP Architecture Overhaul (Dynamic `ConsentPurposeConfig` Database Configuration Table, Multi-Channel `MARKETING_COMMS` Standardisation, Precise GPS/Display Name Statutory Notices, and Admin Consent Auditing Panel).
+> **Last Updated:** 2026-10-05 — Age Eligibility Gate (18+ only, `AGE_DECLARATION`, §15), server-side `OTP_AUTH` write at `confirm-age`, Vercel/Ola Maps corrections (§14.6). Previously: 2026-10-02 — Phase 8.3.4 DPDP Architecture Overhaul (Dynamic `ConsentPurposeConfig` Database Configuration Table, Multi-Channel `MARKETING_COMMS` Standardisation, Precise GPS/Display Name Statutory Notices, and Admin Consent Auditing Panel).
 
 ---
 
@@ -20,30 +20,29 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 
 ---
 
-## 2. The 4 Consent Pipelines: Detailed Breakdown
+## 2. The 5 Consent Pipelines: Detailed Breakdown
 
 ```
-+───────────────────────────────────────────────────────────────────────────+
-|                      USER (DATA PRINCIPAL)                                |
-+──────────────┬───────────────────┬───────────────────┬────────────────────+
-               |                   |                   |                    |
-        (Login / OTP)      (Address/Checkout)  (Checkout/Settings)   (First Visit)
-               |                   |                   |                    |
-               v                   v                   v                    v
-     +──────────────────+ +─────────────────+ +─────────────────+ +────────────────+
-     | 1. OTP_AUTH      | | 2. ORDER_       | | 3. MARKETING_   | | 4. ANALYTICS   |
-     |                  | |    PROCESSING   | |    COMMS        | |                |
-     | (Essential)      | | (Essential)     | | (Optional)      | | (Optional)     |
-     +────────┬─────────+ +────────┬────────+ +────────┬────────+ +────────┬───────+
-              |                    |                   |                   |
-              v                    v                   v                   v
-     +──────────────────+ +─────────────────+ +─────────────────+ +────────────────+
-     | SUB-PROCESSOR:   | | SUB-PROCESSORS: | | PROCESSORS:     | | PROCESSOR:     |
-     | • Exotel SMS     | | • Ola Maps      | | • Exotel SMS /  | | • Anonymous    |
-     |   Gateway        | | • Razorpay      | |   DLT Gateways  | |   Route        |
-     |                  | | • Store Partners| | • Internal Comms| |   Telemetry    |
-     |                  | | • Riders        | |   Engine        | |                |
-     +──────────────────+ +─────────────────+ +─────────────────+ +────────────────+
+      +──────────────────────────────────────────────────────────────────────────────────────────────────────+
+      |                                        USER (DATA PRINCIPAL)                                         |
+      +──────────────────────────────────────────────────────────────────────────────────────────────────────+
+          (Login / OTP)     (Address/Checkout)  (Checkout/Settings)     (First Visit)     (Login, after OTP)
+               |                    |                    |                    |                    |
+               v                    v                    v                    v                    v
+      +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+
+      | 1. OTP_AUTH      | | 2. ORDER_        | | 3. MARKETING_    | | 4. ANALYTICS     | | 5. AGE_          |
+      |                  | |    PROCESSING    | |    COMMS         | |                  | |    DECLARATION   |
+      | (Essential)      | | (Essential)      | | (Optional)       | | (Optional)       | | (Essential)      |
+      +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+
+               |                    |                    |                    |                    |
+               v                    v                    v                    v                    v
+      +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+
+      | SUB-PROCESSOR:   | | SUB-PROCESSORS:  | | PROCESSORS:      | | PROCESSOR:       | | INTERNAL ONLY:   |
+      | • Exotel SMS     | | • Ola Maps       | | • Exotel SMS /   | | • Anonymous      | | • No third party |
+      |   Gateway        | | • Razorpay       | |   DLT Gateways   | |   Route          | | • DOB never      |
+      |                  | | • Store Partners | | • Internal Comms | |   Telemetry      | |   stored         |
+      |                  | | • Riders         | |   Engine         | |                  | | • ageConfirmedAt |
+      +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+ +──────────────────+
 ```
 
 ---
@@ -59,7 +58,7 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 | **Third-Party Processors** | **Exotel** (DLT-registered telecommunications SMS gateway for sending 6-digit OTPs) |
 | **Where it Appears in UI** | `/login` (Buyer Login Modal/Page — Step 1 Consent Notice Gate before mobile entry) |
 | **Checkbox & Notice Structure** | **Inside-Card Read Acknowledgement Checkbox:** `[ ] I have read and understood this notice` embedded at the bottom of the white card container. "Continue & Accept" button is strictly disabled until checked. Also includes direct trigger for 5-section `<ConsentNoticeModal purpose="OTP_AUTH" />`. |
-| **Frequency** | Recorded on first successful phone verification (v1.0). Subsequent logins verify against the existing account without repeating blocking notices. |
+| **Frequency** | Recorded **server-side, atomically with account creation** at `POST /auth/confirm-age` (v1.1; replaces the earlier browser-posted write). The v1.1 notice includes the 18+ sentence. Subsequent logins verify against the existing account without repeating blocking notices. See §15. |
 | **Withdrawal / Deletion** | Tied to account existence. Withdrawn when user requests Account Deletion under DPDP Section 12 / 8.3 (`DELETE /api/v1/user/account`). |
 
 ---
@@ -110,6 +109,10 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 | **Actions** | Dual choice: **"Accept Analytics"** (`POST /api/v1/consent`) vs **"Decline / Essential Only"** (stores `declined` in `localStorage` with background `DELETE /api/v1/consent/ANALYTICS`). |
 | **Self-Serve Control** | Can be toggled on/off in `/account/privacy` Privacy Settings. |
 
+### Pipeline 5: `AGE_DECLARATION` (Age Eligibility, 18+ Only)
+
+Written together with `OTP_AUTH` in one server-side transaction at account creation. No date of birth is stored. Full specification, flow, parental-approval reasoning, admin handling and tests are in [Section 15](#15-age-eligibility-gate-age_declaration--18-only).
+
 ---
 
 ## 5. Checkboxes vs Affirmative Action Buttons
@@ -126,6 +129,9 @@ The Digital Personal Data Protection Act (DPDP Act) 2023 establishes strict requ
 ## 6. Profile Privacy Settings UI: Grouping vs Raw Logs
 
 ### The Rule: 4 Clean Purpose Cards with Complete Notice Modals
+
+> `AGE_DECLARATION` is not a fifth card. It appears as one read-only line ("Age confirmed on [date]") because it cannot be withdrawn on its own; leaving means closing the account (Section 15).
+
 The `/account/privacy` (Privacy & Consent Preferences) page renders **one unified card per distinct Purpose**, each equipped with direct `<ConsentNoticeModal />` triggers:
 
 1. **`OTP_AUTH`** → Status: `🟢 Active (Essential)` — Active since account creation.
@@ -767,7 +773,245 @@ Mounted directly inside the Admin Panel Platform Users detail drawer (`apps/web/
 2. **Expandable Audit Log (`data-testid="consent-log-toggle"` & `data-testid="consent-log-table"`):**  
    Clicking "Show full log (N events)" reveals the paginated history of all `ConsentLog` mutations with purpose, event type (Granted / Withdrawn), formatted UTC date, and masked IP address.
 
+---
+
+## 14. Infrastructure Data-Flow Architecture & DPDP Compliance Perimeter
+
+> **Status:** DECIDED & DOCUMENTED — 2026-10-03 (see also DECISION-061 in decision_log.md)  
+> **Trigger:** Explicit DPDP risk review of the split Vercel (frontend) + Railway (backend) deployment architecture.
+
+### 14.1 — The Two-Platform Architecture
+
+GoRola intentionally runs on two deployment platforms with distinct responsibilities:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│                         BROWSER (User's Device)                              │
+│                                                                              │
+│  1. Browser fetches app bundle from Vercel CDN (one-time per deploy)         │
+│  2. For ALL data requests, browser speaks DIRECTLY to Railway API            │
+└──────────────────────────┬──────────────────────┬───────────────────────────┘
+                           │                      │
+          ① Static files   │                      │ ② All authenticated API calls
+          (HTML/JS/CSS)    │                      │   (OTP, login, orders, consents,
+          No personal data │                      │   addresses, profile data, etc.)
+                           │                      │
+                           ▼                      ▼
+          ┌─────────────────────┐    ┌────────────────────────────────────────┐
+          │  VERCEL (CDN)       │    │  RAILWAY                               │
+          │                     │    │                                        │
+          │  • Hosts static     │    │  ┌──────────────┐  ┌───────────────┐  │
+          │    dist/ folder     │    │  │  Fastify API  │  │  PostgreSQL   │  │
+          │  • No server-side   │    │  │  (Node.js)    │  │  (All PII)    │  │
+          │    code             │    │  └──────┬───────┘  └───────────────┘  │
+          │  • No personal data │    │         │                              │
+          │  • No cookies       │    │  ┌──────┴───────┐                     │
+          │  • No DB access     │    │  │   Redis       │                     │
+          │  • No logging of    │    │  │ (OTP cache,   │                     │
+          │    user activity    │    │  │  sessions)    │                     │
+          └─────────────────────┘    │  └──────────────┘                     │
+                                     └────────────────────────────────────────┘
+          NOT a Data Processor               ← DPDP COMPLIANCE PERIMETER →
+          under DPDP Act 2023
+```
+
+### 14.2 — Personal Data Inventory by Vendor
+
+The DPDP Act 2023 imposes obligations at the point where personal data is collected, stored, or processed. The following table maps every category of personal data to its physical location:
+
+| Personal Data Category | DPDP Classification | Physical Location | Does Vercel Touch It? | Does Railway Touch It? |
+|---|---|---|---|---|
+| Mobile phone number (AES-256-GCM encrypted) | Sensitive Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Phone hash (HMAC blind index) | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Display Name | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Delivery address + landmark notes | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| GPS coordinates (lat/lng) | Personal Data / Location Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| OTP codes (bcrypt-hashed, 10-min TTL) | Transient Personal Data | Railway Redis | ❌ Never | ✅ Yes — Data Fiduciary |
+| JWT refresh tokens (hashed) | Transient Personal Data | Railway Redis / PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Access tokens (in-memory Zustand only) | Transient Personal Data | Browser RAM — never persisted | ❌ Never | ❌ Never (in-memory) |
+| ConsentLog records (IP, purpose, timestamp) | Compliance Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Order history, item details, prices | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+| Payment transaction references | Financial Personal Data | Railway PostgreSQL + Razorpay | ❌ Never | ✅ Yes — Data Fiduciary |
+| Nominee contact details | Sensitive Personal Data | Railway PostgreSQL (encrypted) | ❌ Never | ✅ Yes — Data Fiduciary |
+| Grievance submissions | Personal Data | Railway PostgreSQL | ❌ Never | ✅ Yes — Data Fiduciary |
+
+**Conclusion: Vercel's DPDP classification is "Not a Data Processor."** It holds no personal data and performs no processing on GoRola's behalf. The DPDP compliance perimeter is 100% contained within Railway.
+
+---
+
+### 14.3 — Why Vercel Is Not a Data Processor Under DPDP
+
+The DPDP Act 2023 defines a **Data Processor** as an entity that processes personal data on behalf of a Data Fiduciary. The operative word is *processes personal data*.
+
+Vercel's function for GoRola is:
+1. **Build:** Execute `vite build` to compile TypeScript, React, and CSS into static files. This build happens in a sandboxed CI environment — no user data, no DB access, no API calls to Railway.
+2. **Serve:** Deliver the compiled `dist/` folder to browsers over HTTPS from edge CDN nodes.
+
+Neither function involves personal data. A JavaScript bundle is application source code — it contains no information about any Data Principal. Vercel is, from a DPDP perspective, equivalent to a **file hosting service for non-sensitive software artifacts.**
+
+This is categorically different from Railway, Razorpay, Ola Maps, or the SMS gateway — all of which either store or transmit personal data on GoRola's behalf and are therefore properly classified as sub-processors with corresponding disclosure obligations in GoRola's consent notices.
+
+> **Note on SMS Provider Status:** The OTP SMS provider is currently a **noop stub** (`noop-otp-provider.ts`). The planned provider is **Exotel** (a DLT-registered SMS gateway), accessed via the `OtpProvider` interface. Until Exotel (or equivalent) is integrated and live, no OTP SMS leaves GoRola's infrastructure — the current production workaround is `GOROLA_DUMMY_OTP` (DECISION-019). When the provider is activated, it will transmit phone numbers for OTP delivery and must remain disclosed in the `OTP_AUTH` consent notice.
+
+---
+
+### 14.4 — The One Rule That Must Never Be Broken
+
+**Vercel Analytics must never be enabled.**
+
+Vercel offers a proprietary analytics product that, when enabled, would cause Vercel's edge network to collect: page URLs visited, referrer headers, browser/device metadata, and IP-derived country/region data. This data is associated with individual visitor sessions and constitutes personal data under the DPDP Act (location-derived data, behavioural profiling).
+
+Enabling it without updating GoRola's consent architecture would:
+1. Make Vercel a **Data Processor** for GoRola without a Data Processing Agreement (DPA), violating DPDP Section 8(1).
+2. Introduce an undisclosed third-party sub-processor into the `ANALYTICS` consent pipeline, violating the disclosure requirements of Section 5(2).
+3. Require a consent architecture update — adding Vercel to the `ANALYTICS` `ConsentNoticeModal`, bumping the policy version, and triggering re-consent for all existing users.
+
+**If anyone ever considers enabling Vercel Analytics:** Stop. Read this section. Update the consent architecture first, sign a Railway/Vercel DPA equivalent, update the `ANALYTICS` consent notice, bump `CURRENT_POLICY_VERSION`, and only then enable it.
+
+---
+
+### 14.5 — Cross-Border Transfer Assessment (DPDP Section 16)
+
+DPDP Section 16 empowers the central government to restrict transfer of personal data to specified countries. As of the date of this document (October 2026), no negative list has been notified by the Government of India.
+
+**Even if restrictions were notified in the future, they would not affect Vercel's current role** — because no personal data is transferred to Vercel. CDN delivery of a compiled JavaScript bundle to a browser is not a cross-border personal data transfer. The bundle's content is application code, not user data.
+
+Railway's infrastructure region should be confirmed as `ap-south-1` (Mumbai, India) or equivalent India-region where available, to minimise latency for Mussoorie users and provide a defensible data-residency posture for the personal data that *does* sit on Railway.
+
+---
+
+### 14.6 — Compliance Perimeter Summary Table
+
+| Vendor | Role | Holds Personal Data? | DPDP Classification | DPA Required? | Disclosed in Consent Notices? |
+|---|---|---|---|---|---|
+| **Railway** (API, PostgreSQL, Redis) | Core Infrastructure — GoRola is Data Fiduciary here | ✅ Yes — all PII | Data Processor on GoRola's behalf | ✅ Yes (Railway DPA — see Phase 8.7.2) | ✅ Covered — GoRola is the Fiduciary; Railway processes under GoRola's instructions |
+| **Vercel** (Frontend CDN) | Static File Delivery only | ❌ No application personal data (edge request IP logs only) | Not a Data Processor for DPDP purposes | ❌ Not needed for DPDP. ⚠️ **But Pro plan is required before launch**: Hobby is non-commercial only (ToS), and the DPA applies to Pro/Enterprise. Verify on vercel.com/legal | ❌ Not required |
+| **Razorpay** | Payment Gateway (UPI/Card only) | ✅ Yes — payment data | Data Processor (RBI-regulated PA) | ✅ Yes (Razorpay ToS/DPA) | ✅ Yes — `ORDER_PROCESSING` notice (conditional Razorpay clause) |
+| **Ola Maps** | Navigation / Geocoding | ✅ Yes — GPS coordinates | Data Processor (per Krutrim terms) | ⚠️ No separate DPA is published and no plan unlocks one. Accept the terms, confirm free-tier commercial use and quota in writing (maps-support@olakrutrim.com), keep the reply on file | ✅ Yes — `ORDER_PROCESSING` notice |
+| **Exotel / SMS Gateway** (planned — noop stub currently active) | OTP & Marketing SMS | ✅ Yes — phone numbers (when live) | Data Processor (DLT-registered gateway required) | ✅ Yes — required before go-live | ✅ Yes — `OTP_AUTH` notice. When `MARKETING_COMMS` SMS is activated, must also appear in that notice. |
+| **GitHub Actions** | CI/CD Build & Migration Runners | ❌ No personal data — receives DB connection credentials (secrets) only; runs `prisma migrate deploy` (schema DDL, not data queries) | Not a Data Processor | ❌ Not required | ❌ Not required |
 
 
 
 
+
+
+
+---
+
+## 15. Age Eligibility Gate (`AGE_DECLARATION`) — 18+ Only
+
+> Not legal advice. Every legal point below needs counsel review before launch (⚠️ verify). Implementation plan: `CONTEXT/phase8_state.md` §8.8. Decision: DECISION-062.
+
+### 15.1 Pipeline 5 Specification
+
+| Property | Specification |
+|---|---|
+| **Consent Purpose Key** | `AGE_DECLARATION` (row in `ConsentPurposeConfig`) |
+| **Type** | **Essential** (no account without it) |
+| **Data Stored** | **None about age.** The DOB is used in memory to compute age and is discarded. Stored: `User.ageConfirmedAt` and one `ConsentLog` row |
+| **Legal Basis** | Consent / compliance with DPDP s.2(f) (child = under 18) and s.9 |
+| **UI Location** | `/login`, after OTP verification and before account creation, **new phone numbers only** |
+| **Frequency** | Once per account. Legacy users are gated once on next refresh |
+| **Withdrawal** | Account erasure (same as `OTP_AUTH`) |
+
+### 15.2 Flow
+
+```
+Notice (OTP_AUTH v1.1, includes 18+ sentence)
+  -> Phone -> OTP verify -> short-lived ticket (no user created yet)
+  -> DOB screen (3 numeric boxes: DD / MM / YYYY)
+  -> "You entered 14 March 2001. Correct?" confirm step
+       |-- age >= 18 -> POST /auth/confirm-age
+       |                 ONE transaction: create User (ageConfirmedAt)
+       |                 + ConsentLog OTP_AUTH v1.1 + ConsentLog AGE_DECLARATION v1.1
+       |                 -> session issued
+       '-- age < 18  -> refusal screen; AgeGateLockout(phoneHash, 90 days)
+                         + 24h cookie gorola_ag; no User, no ConsentLog, no DOB stored
+```
+
+### 15.3 How it fits with `OTP_AUTH`
+
+- Both consents are written **server-side in the same transaction** as user creation. If any write fails, nothing is created.
+- Both are versioned 1.1 (policy bump from 1.0). The idempotency guard (userId + purpose + version) still applies.
+- The OTP is verified first so the phone is proven, and lockout is keyed to a verified `phoneHash` (HMAC via `hashPII`).
+
+### 15.4 Design Reasoning
+
+| Question | Answer |
+|---|---|
+| Why 18? | DPDP s.2(f) defines a child as under 18. One number, no tiers |
+| Why DOB, not a checkbox? | A checkbox is a one-click lie. A neutral DOB plus a confirm step forces a deliberate false entry, which is stronger evidence of good faith |
+| Why after OTP? | Proves the phone, enables lockout by `phoneHash`, avoids creating minors' records |
+| Why not store the DOB? | Data minimisation (s.6, s.8(7)). `ageConfirmedAt` plus the consent row proves the declaration |
+| Lockout table? | New `AgeGateLockout`. `ConsentLog` is unsuitable: `userId` is mandatory and rows cascade-delete |
+
+### 15.5 Parental Approval — Why Not Now
+
+DPDP Rule 10 verifiable parental consent applies from 13 May 2027 (⚠️ verify). GoRola serves adults only and refuses under-18s, so it does not process a child's data knowingly and Rule 10 is not triggered by design.
+
+| Complication of building it | Impact |
+|---|---|
+| Proving the adult is the parent | Needs held data, DigiLocker-style virtual token, or similar. Heavy integration |
+| Collecting a second person's data | Parent's phone/ID becomes new personal data with its own notice and retention |
+| Verified-guardian register | Ongoing storage and revocation handling |
+| Restrictions on tracking, profiling and targeted ads for children | Would constrain product features |
+| Cost and drop-off | High friction for a quick-commerce flow |
+
+**How it would work if built:** child identifies a parent, who verifies via a token or held-data check, and the consent is logged against the child's account.
+
+**Revisit triggers:** a business need for under-18 users, a legal requirement, or counsel advice.
+
+### 15.6 Why It Is Safe If a Minor Lies
+
+| Layer | Protection |
+|---|---|
+| Neutral DOB plus confirm step | No hint of the threshold; a lie is deliberate |
+| Notice states 18+ only | User is told before entering |
+| `AGE_DECLARATION` row | Auditable evidence of reasonable steps |
+| Lockout (90 days, phone + cookie) | Blocks retry-until-pass |
+| Admin erase-underage | Removes an account once discovered |
+
+**Residual risk:** a determined minor can enter a false adult DOB. This is accepted as a reasonable-steps posture, mitigated by the layers above. Counsel to confirm.
+
+### 15.7 Operations: How an Admin Handles an Age Complaint
+
+A complaint arrives as a normal e-mail at `privacy@gorola.in`. **The system sends and receives no e-mail**; the Grievance Officer reads the mailbox, decides the case, and an admin acts on the **Admin → Age Gate** screen (`/admin/age-gate`). A refused person has no `User` row and the lockout stores only a hash, so the screen looks up by phone number.
+
+```
+E-mail at privacy@gorola.in
+   |
+   v
+Grievance Officer: which case?  (adult locked out: call the number back first)
+   |
+   v
+Admin -> Age Gate -> type phone -> Look up
+   |
+   |-- Lock card ------> [Unlock this number]  (approve)   -> lock deleted, audit AGE_GATE_LOCKOUT_CLEARED
+   |                 `-> [Decline appeal]      (disapprove) -> no change, audit AGE_GATE_APPEAL_DECLINED
+   |
+   |-- Account card ---> [Suspend]  (freeze, signs the person out everywhere, reversible)
+   |                 `-> [Erase underage account] (permanent) -> PII removed, sessions revoked,
+   |                                                  number locked, audit USER_ERASED_UNDERAGE
+   `-- Nothing found --> no action; device cooldown (24 hours) ends by itself
+   |
+   v
+Officer sends the template reply and logs it in Grievance-Log/  (target 7 days, ceiling 30)
+```
+
+| Admin decision | Button | Effect | Reason required | Audit action |
+|---|---|---|---|---|
+| Approve (adult mistyped, call-back confirmed) | Unlock this number | Lock row deleted; the person can sign up again | Yes, 10 characters or more, plus a tick that the call-back was done | `AGE_GATE_LOCKOUT_CLEARED` |
+| Disapprove | Decline appeal | No data change; lock runs to its end date | Yes | `AGE_GATE_APPEAL_DECLINED` |
+| Freeze while checking | Suspend | `isActive=false`, all sessions revoked | Yes (screen), optional (API) | `ADMIN_USER_SUSPEND` |
+| Ban permanently (minor found, or parent's request) | Erase underage account | Anonymised exactly like the purge worker, sessions revoked, number locked for 90 days, order totals kept for tax law | Yes, plus typing `ERASE` | `USER_ERASED_UNDERAGE` |
+
+- Lockout: 90 days, one strike, then it ends. The daily purge worker deletes expired rows. Unlock is the only early exit.
+- The screen also lists recent refusals (reference, dates, refusal count, status; **no phone number**) and two counters, so volume and abuse are visible. Abuse alerts (5 refusals from one IP in 24 hours) go to the log only.
+- No audit row ever contains a phone number, hash or date of birth.
+- Errors: distinct codes for locked-out and underage refusals, with no age leaked beyond "18+".
+- **UI guard:** the only age number shown anywhere in the UI, including the admin screens, is **18**. A test scans the copy for any other age figure.
+
+### 15.8 Test Coverage
+
+See `CONTEXT/phase8_state.md` §8.8.1–8.8.14 for the RED/GREEN test files per tier (schema, age util, lockout, send/verify-otp ticket, confirm-age, minor path, legacy gate, admin endpoints, purge, frontend, copy guard, admin Age Gate screen and Playwright journeys).

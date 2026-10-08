@@ -6,7 +6,8 @@ export type ConsentPurpose =
   | "OTP_AUTH"
   | "ORDER_PROCESSING"
   | "MARKETING_COMMS"
-  | "ANALYTICS";
+  | "ANALYTICS"
+  | "AGE_DECLARATION";
 
 export type RecordConsentInput = {
   userId: string;

@@ -12,13 +12,10 @@ test.describe('Booking Journey Pipeline E2E', () => {
 
   async function loginAsBuyer(page: any, phone: string) {
     await page.goto('http://127.0.0.1:5180/login');
-    const consentBtn = page.locator('[data-testid="consent-continue-btn"]');
-    if (await consentBtn.isVisible()) {
-      const ackCheckbox = page.locator('[data-testid="consent-acknowledge-checkbox"]');
-      if (await ackCheckbox.isVisible()) {
-        await ackCheckbox.click();
-      }
-      await consentBtn.click();
+    const consentNotice = page.locator('[data-testid="consent-notice-step"]');
+    if (await consentNotice.isVisible({ timeout: 5000 }).catch(() => false)) {
+      await page.locator('[data-testid="consent-acknowledge-checkbox"]').click();
+      await page.locator('[data-testid="consent-continue-btn"]').click();
     }
     await page.locator('#buyer-phone').fill(phone);
     await page.locator('button', { hasText: /Send OTP/i }).click();
@@ -31,6 +28,19 @@ test.describe('Booking Journey Pipeline E2E', () => {
       await page.waitForTimeout(100);
     }
     await page.locator('button', { hasText: /Verify/i }).click();
+
+    // If Age Gate step is presented, complete with adult DOB
+    const ageStep = page.locator('[data-testid="age-step"]');
+    if (await ageStep.isVisible({ timeout: 3000 }).catch(() => false)) {
+      await page.locator('[data-testid="age-day"]').fill('15');
+      await page.locator('[data-testid="age-month"]').fill('05');
+      await page.locator('[data-testid="age-year"]').fill('1995');
+      await page.locator('[data-testid="age-continue-btn"]').click();
+      await expect(page.locator('[data-testid="age-confirm-step"]')).toBeVisible({ timeout: 5000 });
+      await page.locator('[data-testid="age-confirm-checkbox"]').click();
+      await page.locator('[data-testid="age-confirm-yes-btn"]').click();
+    }
+
     await expect(page).toHaveURL(/\/$/, { timeout: 15000 });
     
     // Wait for bootstrap/hydration to finish

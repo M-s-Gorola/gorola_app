@@ -16,6 +16,7 @@ export type BuyerSession = AuthTokens & {
   userId: string;
   name: string | null;
   phone: string;
+  privacyPolicyVersionAccepted?: string | null;
 };
 
 export type StoreOwnerSession = AuthTokens & {
@@ -43,6 +44,7 @@ type AuthState = {
   userId: string | null;
   name: string | null;
   phone: string | null;
+  privacyPolicyVersionAccepted: string | null;
   storeId: string | null;
   twoFactorVerified: boolean | null;
   twoFactorEnabled: boolean | null;
@@ -53,6 +55,7 @@ type AuthState = {
   setRiderSession: (session: RiderSession) => void;
   setRole: (role: UserRole | null) => void;
   setBootstrapPending: (pending: boolean) => void;
+  setPrivacyPolicyVersionAccepted: (version: string) => void;
   clearSession: () => void;
 };
 
@@ -61,6 +64,7 @@ export const useAuthStore = create<AuthState>((set) => ({
   isBootstrapPending: true,
   name: null,
   phone: null,
+  privacyPolicyVersionAccepted: null,
   refreshToken: null,
   role: null,
   userId: null,
@@ -77,6 +81,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: null,
       name: null,
       phone: null,
+      privacyPolicyVersionAccepted: null,
       refreshToken: null,
       role: null,
       userId: null,
@@ -90,6 +95,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: session.accessToken,
       name: session.name,
       phone: session.phone,
+      privacyPolicyVersionAccepted: session.privacyPolicyVersionAccepted ?? "1.0",
       refreshToken: session.refreshToken,
       role: "BUYER",
       userId: session.userId,
@@ -102,6 +108,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: session.accessToken,
       name: null,
       phone: null,
+      privacyPolicyVersionAccepted: null,
       refreshToken: session.refreshToken,
       role: "STORE_OWNER",
       userId: session.userId,
@@ -114,6 +121,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: session.accessToken,
       name: null,
       phone: null,
+      privacyPolicyVersionAccepted: null,
       refreshToken: session.refreshToken,
       role: "ADMIN",
       userId: session.userId,
@@ -126,6 +134,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       accessToken: session.accessToken,
       name: null,
       phone: null,
+      privacyPolicyVersionAccepted: null,
       refreshToken: session.refreshToken,
       role: "RIDER",
       userId: session.userId,
@@ -135,6 +144,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     }),
   setRole: (role) => set({ role }),
   setBootstrapPending: (pending) => set({ isBootstrapPending: pending }),
+  setPrivacyPolicyVersionAccepted: (version) => set({ privacyPolicyVersionAccepted: version }),
   /** Refresh flow only — leaves profile untouched */
   setTokens: (tokens) =>
     set((state) => ({

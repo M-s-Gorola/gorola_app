@@ -188,7 +188,7 @@
     "EarningType (PER_ORDER | PER_KM) — PLANNED Phase 5.7"
   ],
   "database_schema_entities": [
-    "User — id, phone (unique, AES-256-GCM encrypted), phoneHash (unique HMAC-SHA256 blind index), name, isVerified, isActive, isDeleted, createdAt, updatedAt",
+    "User — id, phone (unique, AES-256-GCM encrypted), phoneHash (unique HMAC-SHA256 blind index), name, isVerified, isActive, isDeleted, deletedAt?, deletionScheduledFor?, nomineeName?, nomineeContact?, nomineeRelationship?, privacyPolicyVersionAccepted (default '1.0'), ageConfirmedAt?, ageConfirmedPolicyVersion?, createdAt, updatedAt",
 
     "Store — id, name, description, phone, address, isActive, weatherModeDeliveryWindow, storeType, bookingLeadDays, isAcceptingBookings, isAcceptingOrders, isDeleted, riderEarningRatePct (Decimal? — PLANNED Phase 5.7: % of deliveryFee paid to rider; null = use global SystemSetting)",
     "StoreOwner — id, email (unique), passwordHash, storeId (FK Store), totpSecret, totpEnabled, isDeleted",
@@ -216,8 +216,9 @@
     "RiderLocation — id, riderId (FK DeliveryRider), lat (Decimal 10,7), lng (Decimal 10,7), updatedAt — upserted on each GPS push",
     "BookingOrder — id, orderId (unique FK Order), scheduledDate, timeslot, requiresFasting, approvalStatus (BookingApprovalStatus), approvedAt?, approvedByOwnerId?, rejectionReason?, assignedTechnicianId?",
     "RiderEarning — id, riderId (FK DeliveryRider), orderId (unique FK Order), amount (Decimal 10,2), earningType (EarningType default PER_ORDER), distanceKm (Decimal 8,3 — null for PER_ORDER; km for future PER_KM), createdAt — PLANNED Phase 5.7; see DECISION-056",
-    "ConsentPurposeConfig — key (PK String), displayName (String), description (String), isEssential (Boolean), retentionSummary (String), createdAt, updatedAt",
-    "ConsentLog — id (PK String), userId (FK User), purpose (FK ConsentPurposeConfig.key String), consentVersion (String), noticeText (String), ipAddress (String), isWithdrawn (Boolean), withdrawnAt (DateTime?), createdAt (DateTime)"
+    "ConsentPurposeConfig — key (PK String: OTP_AUTH, ORDER_PROCESSING, MARKETING_COMMS, ANALYTICS, AGE_DECLARATION), displayName, description, isEssential (Boolean), retentionSummary, createdAt, updatedAt",
+    "ConsentLog — id (PK String), userId (FK User), purpose (FK ConsentPurposeConfig.key String), consentVersion (String), noticeText (String), ipAddress (String?), userAgent (String?), isWithdrawn (Boolean), withdrawnAt (DateTime?), createdAt, updatedAt",
+    "AgeGateLockout — id (PK String), phoneHash (unique HMAC-SHA256 blind index), lockedUntil (DateTime), strikeCount (Int default 1), createdAt, updatedAt — 90-day cooldown lockout for under-18 registration attempts; standalone table without User FK"
   ],
   "api_versioning": "URL prefix — /api/v1/...",
   "test_strategy": {

@@ -1,4 +1,4 @@
-import { ValidationError } from "@gorola/shared";
+import { CURRENT_PRIVACY_POLICY_VERSION, ValidationError } from "@gorola/shared";
 import { z } from "zod";
 
 export const updateProfileSchema = z.object({
@@ -31,3 +31,16 @@ export function parseUpdateNomineeInput(body: unknown): UpdateNomineeInput {
   return result.data;
 }
 
+export const acceptPolicySchema = z.object({
+  version: z.literal(CURRENT_PRIVACY_POLICY_VERSION)
+});
+
+export type AcceptPolicyInput = z.infer<typeof acceptPolicySchema>;
+
+export function parseAcceptPolicyInput(body: unknown): AcceptPolicyInput {
+  const result = acceptPolicySchema.safeParse(body);
+  if (!result.success) {
+    throw new ValidationError("Invalid policy acceptance payload", result.error.flatten());
+  }
+  return result.data;
+}

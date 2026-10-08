@@ -1,3 +1,4 @@
+import { CURRENT_PRIVACY_POLICY_VERSION, GRIEVANCE_EMAIL } from "@gorola/shared";
 import { FileText, ShieldCheck } from "lucide-react";
 import { ReactElement, ReactNode } from "react";
 
@@ -11,7 +12,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-export type ConsentPurpose = "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
+export type ConsentPurpose = "OTP_AUTH" | "AGE_DECLARATION" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
 
 interface NoticeContent {
   title: string;
@@ -27,10 +28,10 @@ interface NoticeContent {
 export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
   OTP_AUTH: {
     title: "Authentication & Account Security",
-    version: "1.0",
+    version: CURRENT_PRIVACY_POLICY_VERSION,
     effectiveDate: "29/09/2026",
     purpose:
-      "We process your personal data exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session security.",
+      "GoRola is for people aged 18 and over. We process your personal data exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session security.",
     dataCollected: ["Phone Number"],
     thirdParties: (
       <span>
@@ -39,8 +40,23 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
     ),
     retention:
       "Retained for the lifetime of your active account. If you delete your account, this data is permanently erased within 30 days.",
-    rights:
-      "You have the right to access, rectify, or erase your data. Contact dpo@gorola.com. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI)."
+    rights: `You have the right to access, rectify, or erase your data. Contact ${GRIEVANCE_EMAIL}. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
+  },
+  AGE_DECLARATION: {
+    title: "Age Verification & Eligibility",
+    version: "1.1",
+    effectiveDate: "29/09/2026",
+    purpose:
+      "Under Section 9 of the DPDP Act 2023, we verify that you are at least 18 years of age before creating an account on our marketplace.",
+    dataCollected: [
+      "Date of Birth — processed ephemerally in-memory during sign-up to verify 18+ eligibility and discarded immediately (zero persistent storage of raw DOB)",
+      "Age Confirmation Date — retained as an immutable statutory audit log of your affirmative declaration"
+    ],
+    thirdParties:
+      "None. Age verification is performed strictly in-memory on our secure servers. Your date of birth is never shared with third parties, SMS gateways, or external advertising networks.",
+    retention:
+      "Raw date of birth is not stored. The timestamp of your age confirmation is retained for the lifetime of your active account.",
+    rights: `Contact ${GRIEVANCE_EMAIL} for any data questions. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
   },
   ORDER_PROCESSING: {
     title: "Order Fulfillment & Location Services",
@@ -64,8 +80,7 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
         Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> and discarded.
       </span>
     ),
-    rights:
-      "You may update your saved addresses at any time. Contact dpo@gorola.com. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI)."
+    rights: `You may update your saved addresses at any time. Contact ${GRIEVANCE_EMAIL}. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
   },
   MARKETING_COMMS: {
     title: "Promotions & Seasonal Offers",
@@ -201,10 +216,10 @@ export function ConsentNoticeModal({
           <span>
             Grievance Officer:{" "}
             <a
-              href="mailto:dpo@gorola.com"
+              href={`mailto:${GRIEVANCE_EMAIL}`}
               className="font-medium text-gorola-pine underline hover:text-gorola-pine/80"
             >
-              dpo@gorola.com
+              {GRIEVANCE_EMAIL}
             </a>
           </span>
           <span>Data Protection Board of India (DPBI)</span>

@@ -15,6 +15,13 @@ export type LogoutInput = {
   refreshToken: string;
 };
 
+export type ConfirmAgeInput = {
+  ageTicket: string;
+  dateOfBirth: string;
+  acknowledgedNotice: boolean;
+  consentVersion: string;
+};
+
 export type AuthTokenPair = {
   accessToken: string;
   refreshToken: string;
@@ -31,11 +38,27 @@ export type BuyerRefreshSuccess = AuthTokenPair & {
   name: string | null;
   phone: string;
   userId: string;
+  privacyPolicyVersionAccepted?: string | undefined;
 };
 
 export type BuyerVerifySuccess = BuyerRefreshSuccess & {
-  isPendingDeletion?: boolean;
-  deletionScheduledFor?: string | null;
+  isPendingDeletion?: boolean | undefined;
+  deletionScheduledFor?: string | null | undefined;
+  ageGateRequired?: false | undefined;
+};
+
+export type BuyerVerifyAgeGateRequired = {
+  ageGateRequired: true;
+  ageTicket: string;
+};
+
+export type BuyerVerifyResult = BuyerVerifySuccess | BuyerVerifyAgeGateRequired;
+
+export type AgeTicketRecord = {
+  phone: string;
+  existingUserId: string | null;
+  ip: string | null;
+  createdAt: string;
 };
 
 export type OtpStoreRecord = {

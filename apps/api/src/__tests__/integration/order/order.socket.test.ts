@@ -12,6 +12,7 @@ import { OrderService } from "../../../modules/order/order.service.js";
 import { StoreRepository } from "../../../modules/store/store.repository.js";
 import { registerAppRoutes } from "../../../routes.js";
 import { createServer } from "../../../server.js";
+import { loginBuyer } from "../../helpers/auth.helper.js";
 
 describe("Socket.IO Order Status Integration", () => {
   const db = getPrismaClient();
@@ -31,21 +32,11 @@ describe("Socket.IO Order Status Integration", () => {
     await app.ready();
     port = (app.server.address() as { port: number }).port;
 
-    // Get access token
+    // Get access token & user via canonical loginBuyer helper
     const phone = "+919900000001";
-    await app.inject({
-      method: "POST",
-      payload: { phone },
-      url: "/api/v1/auth/buyer/send-otp"
-    });
-    const verifyRes = await app.inject({
-      method: "POST",
-      payload: { otp: "111222", phone },
-      url: "/api/v1/auth/buyer/verify-otp"
-    });
-    const body = verifyRes.json() as { data: { accessToken: string; userId: string } };
-    accessToken = body.data.accessToken;
-    userId = body.data.userId;
+    const auth = await loginBuyer(app, phone);
+    accessToken = auth.accessToken;
+    userId = auth.userId!;
   });
 
   afterAll(async () => {

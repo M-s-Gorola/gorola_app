@@ -85,12 +85,13 @@ describe("PrivacySettingsPage (DPDP 8.2 & Account Settings)", () => {
     ).toBeInTheDocument();
 
     expect(await screen.findByTestId("consent-card-OTP_AUTH")).toBeInTheDocument();
+    expect(screen.getByTestId("consent-card-AGE_DECLARATION")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-ORDER_PROCESSING")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-MARKETING_COMMS")).toBeInTheDocument();
     expect(screen.getByTestId("consent-card-ANALYTICS")).toBeInTheDocument();
 
-    // Verify Essential badges on mandatory cards
-    expect(screen.getAllByText(/Essential/i)).toHaveLength(2);
+    // Verify Essential badges on mandatory cards (OTP_AUTH, AGE_DECLARATION, ORDER_PROCESSING)
+    expect(screen.getAllByText(/Essential/i)).toHaveLength(3);
   });
 
   it("allows withdrawing MARKETING_COMMS consent from the privacy page", async () => {

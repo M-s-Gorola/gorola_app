@@ -4,7 +4,8 @@ export const consentPurposeEnum = z.enum([
   "OTP_AUTH",
   "ORDER_PROCESSING",
   "MARKETING_COMMS",
-  "ANALYTICS"
+  "ANALYTICS",
+  "AGE_DECLARATION"
 ]);
 
 export const recordConsentBodySchema = z.object({

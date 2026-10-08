@@ -27,6 +27,7 @@ type RefreshResponseBody = {
     userId?: string;
     phone?: string;
     name?: string | null;
+    privacyPolicyVersionAccepted?: string | null;
   };
 };
 
@@ -34,6 +35,7 @@ export type FullBuyerSession = AuthTokens & {
   userId: string;
   phone: string;
   name: string | null;
+  privacyPolicyVersionAccepted?: string | null;
 };
 
 function parseRefreshEnvelope(body: unknown): FullBuyerSession {
@@ -52,6 +54,7 @@ function parseRefreshEnvelope(body: unknown): FullBuyerSession {
     accessToken: data.accessToken,
     name: data.name ?? null,
     phone: data.phone,
+    privacyPolicyVersionAccepted: data.privacyPolicyVersionAccepted ?? "1.0",
     refreshToken: data.refreshToken,
     userId: data.userId
   };
@@ -212,7 +215,28 @@ export function createApiClient(options: CreateApiClientOptions) {
       if (!isAxiosError(err)) {
         return Promise.reject(err);
       }
-      return handle401(err);
+
+      const status = err.response?.status;
+      const responseData = err.response?.data as { error?: { code?: string }; code?: string } | undefined;
+      const errorCode = responseData?.error?.code ?? responseData?.code;
+
+      if (
+        status === 403 &&
+        (errorCode === "ACCOUNT_SUSPENDED" ||
+          errorCode === "USER_SUSPENDED" ||
+          errorCode === "AGE_CONFIRMATION_REQUIRED" ||
+          errorCode === "SESSION_REVOKED" ||
+          errorCode === "USER_DELETED")
+      ) {
+        options.clearSession();
+        return Promise.reject(err);
+      }
+
+      if (status === 401) {
+        return handle401(err);
+      }
+
+      return Promise.reject(err);
     }
   );
 

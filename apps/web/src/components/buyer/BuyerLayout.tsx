@@ -1,3 +1,4 @@
+import { CURRENT_PRIVACY_POLICY_VERSION } from "@gorola/shared";
 import { ClipboardList, Home, ShoppingCart, UserRound } from "lucide-react";
 import type { ReactElement, ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
@@ -6,6 +7,7 @@ import { BuyerCartHydration } from "@/components/buyer/BuyerCartHydration";
 import { BuyerFooter } from "@/components/buyer/BuyerFooter";
 import { BuyerNav } from "@/components/buyer/BuyerNav";
 import { CartDrawer } from "@/components/buyer/CartDrawer";
+import { PrivacyPolicyUpdateBanner } from "@/components/consent/PrivacyPolicyUpdateBanner";
 import { cn } from "@/lib/utils";
 import { useCartStore } from "@/store/cart.store";
 import { useWeatherStore } from "@/store/weather.store";
@@ -27,6 +29,7 @@ export function BuyerLayout({ children }: BuyerLayoutProps): ReactElement {
 
   return (
     <div className="flex min-h-screen flex-col bg-transparent transition-colors duration-500 ease-in-out">
+      <PrivacyPolicyUpdateBanner currentVersion={CURRENT_PRIVACY_POLICY_VERSION} />
       <BuyerCartHydration />
       <BuyerNav />
       <CartDrawer />

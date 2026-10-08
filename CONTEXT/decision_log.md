@@ -1874,6 +1874,166 @@ Future builds and deploys pick up these dashboard settings automatically without
 1. **Declare all environment variables with `preserve()` in `railway.ts`:** Rejected — requires constantly synchronizing TypeScript stubs whenever new environment variables are introduced, creating high maintenance friction.
 2. **Maintain legacy `railway.toml`:** Rejected — deprecated by Railway with end-of-life cutoff.
 
+---
+
+## [DECISION-061] Frontend Hosting on Vercel — DPDP Act 2023 Risk Assessment & Confirmed Compliance
+
+**Date:** 2026-10-03  
+**Status:** Accepted  
+
+**Context:**  
+GoRola runs a split deployment: the Fastify API, PostgreSQL (all personal data), and Redis (session data, OTP cache) live entirely on Railway. The Vite SPA (`@gorola/web`) is served from Vercel's free Hobby tier on a global CDN. A compliance review was triggered to determine whether this arrangement creates any exposure under the Digital Personal Data Protection (DPDP) Act 2023, and whether the frontend should be consolidated onto Railway alongside the backend.
+
+**The Exact Question Asked:**  
+*"We are using Vercel for free and are already paying for Railway. Does the DPDP Act require us to move the frontend to Railway? Does Vercel's role as a host create a data-processing obligation?"*
+
+---
+
+**Decision:**  
+Keep the frontend on Vercel. No DPDP exposure of the kind that needs a Data Processing Agreement exists from this arrangement, and no migration to Railway is required or recommended. **Amended 2026-10-05:** the *DPDP* conclusion stands, but a separate *commercial-terms* problem was found — Vercel's free **Hobby** plan is restricted to personal, non-commercial use, and GoRola is a commercial business. Vercel must be upgraded to **Pro** before real customers or real money are involved. See the "Amendment (2026-10-05)" block at the end of this decision.
+
+---
+
+**Detailed Rationale:**
+
+### 1. What Vercel Actually Receives — Nothing Personal
+
+The GoRola frontend is a **pure static Vite SPA**. `pnpm --filter @gorola/web build` produces a `dist/` folder containing:
+- `index.html`
+- Pre-compiled JavaScript bundles (`.js`)
+- CSS stylesheets (`.css`)
+- Static image/font assets
+
+Vercel's role is exclusively **content delivery** — it serves these static files to the user's browser over HTTPS from the nearest CDN edge node. At no point does any personal data flow through or touch Vercel's servers.
+
+| Data type | Where it lives | Does Vercel touch it? |
+|---|---|---|
+| Phone numbers (AES-256-GCM encrypted, blind-indexed) | Railway PostgreSQL | ❌ Never |
+| Delivery addresses, GPS coordinates | Railway PostgreSQL | ❌ Never |
+| Refresh token cookies (HttpOnly, Secure, SameSite=None, Partitioned) | Browser ↔ Railway API | ❌ Never |
+| Access tokens (in-memory Zustand store only) | Browser memory | ❌ Never |
+| ConsentLog records | Railway PostgreSQL | ❌ Never |
+| OTP codes (Redis, bcrypt-hashed) | Railway Redis | ❌ Never |
+| Order history, payment references | Railway PostgreSQL | ❌ Never |
+
+**The browser communicates directly with the Railway API for every authenticated and data-bearing request.** Vercel is out of the request path entirely after the initial HTML+JS bundle is delivered.
+
+### 2. DPDP Act Scope: Obligations Attach to Personal Data Processing
+
+The DPDP Act 2023 imposes obligations on **Data Fiduciaries** (GoRola) and **Data Processors** (third-party vendors that process personal data *on GoRola's behalf*). The statutory trigger is processing of **personal data** — collection, storage, use, sharing, disclosure, or transfer.
+
+Vercel serving a static JavaScript bundle to a browser is categorically not personal data processing under the Act. Vercel is not a Data Processor for GoRola — it has no access to, visibility into, or control over any personal data belonging to GoRola's Data Principals (buyers).
+
+### 3. Cross-Border Transfer Analysis (DPDP Section 16)
+
+Section 16 grants the central government the power to restrict transfer of personal data to specific countries or territories via notification. **As of October 2026, no negative list has been notified.** Even if restrictions were announced, they would apply to transfers of personal data — not to CDN delivery of static JS/HTML files.
+
+Vercel's CDN infrastructure (primarily US/EU edge nodes, with a Mumbai PoP for Indian users) is not processing personal data; it is caching and serving compiled application code. This is legally equivalent to a developer's laptop serving `npm run dev` output — the file content carries no personal information.
+
+### 4. The Only Theoretical Risk: Vercel Analytics — Deliberately Disabled
+
+If Vercel Analytics (Vercel's proprietary web analytics product) were enabled, Vercel would receive URL paths, visitor browser metadata, and potentially IP-derived location data. This **could** constitute personal data processing and would require disclosure in GoRola's sub-processor list and consent architecture.
+
+**Vercel Analytics is disabled.** GoRola's Analytics pipeline (Pipeline 4: `ANALYTICS`) uses anonymous route telemetry stored exclusively in GoRola's own Railway PostgreSQL — it does not use Vercel's analytics product, pixel, or SDK. This is explicitly documented in the consent architecture (DPDP_CONSENT_ARCHITECTURE_GUIDE.md, Section 2, Pipeline 4).
+
+This must remain disabled. Enabling Vercel Analytics in the future would require:
+- Adding Vercel as a named sub-processor in the `ANALYTICS` consent notice
+- Updating `ConsentNoticeModal` for the `ANALYTICS` purpose
+- Potentially a policy version bump triggering re-consent
+
+### 5. Cost & Performance Analysis (Why Railway Would Be Worse)
+
+| Dimension | Vercel (current) | Railway (alternative) |
+|---|---|---|
+| **Monthly cost** | ₹0 (Hobby free tier — 100GB bandwidth, 6,000 build-minutes) | +$5–10/mo (additional Railway service with compute time billed per vCPU-second) |
+| **CDN coverage** | Global edge CDN with Mumbai PoP — assets served ~20–50ms from Indian users | Single Railway datacenter region — no CDN; every asset round-trips to the server |
+| **SPA routing** | Native `vercel.json` rewrite (`/(.*)` → `/index.html`) | Requires custom Nginx config or Express static server with `try_files` equivalent |
+| **Build-time env vars** | `VITE_*` values set in Vercel Dashboard, baked at build time | Same requirement — must be set in Railway service Variables before build starts |
+| **Setup effort** | Already complete and working | Medium — Dockerfile/Nginx config + new Railway service + new CI reusable workflow |
+
+### 6. The Vite Build-Time Variable Constraint
+
+`VITE_API_BASE_URL` (the Railway API URL) is baked into the JavaScript bundle at `vite build` time via `import.meta.env.VITE_API_BASE_URL` (see `apps/web/src/lib/api.ts`). This is not a runtime server-side substitution — it is a compile-time substitution by Vite. Whichever platform hosts the frontend, this env var must be correctly set before the build runs, and the bundle cannot be re-configured after deployment without rebuilding. This constraint is identical on both Vercel and Railway.
+
+---
+
+**Summary Principle:**  
+GoRola's DPDP compliance perimeter is correctly drawn around Railway — where all personal data is collected, stored, processed, and protected. Vercel is infrastructure for delivering application source code to browsers, not a data processor. This boundary is architecturally correct and should not be collapsed for cost or administrative simplicity reasons, because doing so would deliver worse performance at additional cost with no compliance benefit.
+
+---
+
+**Tradeoffs:**  
+- Retains two separate deployment platforms (Vercel + Railway), meaning two sets of environment secrets in GitHub Actions (`VERCEL_TOKEN`, `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` in addition to `RAILWAY_TOKEN`, `RAILWAY_SERVICE_ID`). This is a minor operational overhead vs. the significant performance and cost benefits of keeping Vercel.
+- Future developers unfamiliar with this decision may question the split. This entry and the DPDP guide update serve as the authoritative record.
+
+**Alternatives Considered:**  
+1. **Move frontend to Railway with Nginx static file server:** Rejected — adds ~$5–10/mo in Railway compute cost, eliminates global CDN (degraded performance for Indian mobile users), requires Dockerfile + Nginx config authoring, and provides zero compliance benefit since Vercel holds no personal data.
+2. **Move frontend to Railway with a Node.js `serve` process:** Rejected — same cost/performance problems as Option 1, worse resource efficiency than Nginx.
+3. **Keep Vercel but add Vercel Analytics:** Explicitly prohibited — would introduce Vercel as a personal data sub-processor, requiring consent architecture changes and policy version bump. Vercel Analytics must never be enabled without a full consent pipeline update first.
+
+---
+
+### Amendment (2026-10-05) — The Real Vercel Problem Is the Hobby Plan, Not DPDP
+
+**Why this amendment exists.** While preparing Phase 8.7 (collecting vendor DPAs) the question was asked: *"If Vercel only delivers static files, do we need a DPA from them at all?"* Re-reading this decision against Vercel's published plan terms showed that the original reasoning was right about DPDP but silent about a different issue.
+
+**1. What stays true (DPDP).**
+- Vercel still serves only the compiled Vite bundle. Personal data travels browser → Railway directly and never through Vercel.
+- Vercel Analytics is still disabled and still banned.
+- Therefore Vercel is **not a Data Processor of buyer personal data**, and a DPDP Data Processing Agreement is **not a launch blocker** for Vercel.
+
+**2. A precision fix to wording used earlier ("zero personal data").** Any CDN sees the IP address, user-agent and requested URL of every visitor in its edge/access logs. An IP address can be personal data. Those logs are Vercel's own infrastructure logs; GoRola does not send them, cannot switch them off, and receives no personal data content through them. The correct statement is: *"GoRola intentionally sends **no personal data** to Vercel. Vercel's edge infrastructure inevitably sees visitor IP addresses and request metadata as part of delivering files."* This is recorded in the data inventory (Phase 8.7.4) as "infrastructure provider — IP-level logs only".
+
+**3. The actual problem: Hobby plan = non-commercial use only.**
+- Vercel's **Hobby** plan is limited to **personal, non-commercial** use. GoRola is a commercial quick-commerce business, so running production customer traffic on Hobby breaches the plan terms. Vercel can throttle or suspend a Hobby project used commercially, which would take the whole storefront offline.
+- The plan-eligibility of Vercel's **Data Processing Addendum** is a second, smaller consequence: the DPA is offered under the Pro and Enterprise agreements, so a Hobby account has no DPA to sign. That does **not** matter for DPDP (see point 1), but it means upgrading also resolves the paperwork question automatically.
+- ⚠️ These points were established from Vercel's public plan and legal pages and a research summary. **Re-confirm them on `vercel.com/pricing`, `vercel.com/legal/terms` (Fair Use) and `vercel.com/legal/dpa` on the day of the upgrade.** If Vercel's wording differs, the wording on those pages wins.
+
+**4. Updated decision.**
+- **Before the first real customer or any real payment:** upgrade the Vercel project to **Pro** (about US$20 per month at the time of writing). Until then Vercel use is development/staging only.
+- **At upgrade:** save the then-current Terms, Fair Use policy and DPA PDF into `GoRola Legal/DPDP Compliance/DPAs/Vercel/` (Phase 8.7.2 and 8.7.8).
+- **No DPDP-driven change** to the architecture. The cost row in section 5 above ("₹0") is now "₹0 for development, about US$20 per month for production", which still compares well against moving the frontend to Railway.
+- **Cross-references:** Phase 8.7.2 (provider register and DPA steps), Consent Architecture Guide section 14.6 (compliance perimeter table), `architecture.md` Service Responsibilities.
+
+---
+
+## [DECISION-062] Eligibility Gate — GoRola Is for Adults (18+) Only; No Parental-Consent Flow at Launch
+
+**Date:** 2026-10-05  
+**Status:** Accepted (implementation planned in `phase8_state.md` Section 8.8)  
+
+**Context:**  
+The Privacy Policy (section 7) and Terms of Service state that GoRola is only for people aged 18 or over, but **no code enforced it**: there was no date-of-birth field, no age check and no lockout. The DPDP Act 2023 defines a *child* as anyone under 18 and requires verifiable parental consent before a child's personal data is processed (Section 9), plus a ban on tracking, behavioural monitoring and targeted advertising aimed at children. A policy sentence with no control behind it is itself a compliance weakness.
+
+**Decision:**  
+1. **18 is the single age threshold everywhere.** No tiers (no 13/16), and the user interface never shows any age number other than 18.
+2. **A neutral date-of-birth screen**, not a tick-box, shown **once**, **after the phone OTP is verified** and **before the account is created**, for new phone numbers only.
+3. **The date of birth is never stored.** The server computes "18 or over: yes/no", keeps only `User.ageConfirmedAt` plus a `ConsentLog` row with purpose `AGE_DECLARATION`, and discards the date.
+4. **A refused (under-18) person gets no account.** A one-way keyed hash of their phone number is kept in a new `AgeGateLockout` table for 90 days (configurable) purely to stop immediate retries; a 24-hour device cookie adds a short cooling-off.
+5. **`OTP_AUTH` and `AGE_DECLARATION` consent rows are written by the server**, in the same database transaction that creates the user, replacing the old fire-and-forget browser call that could silently fail.
+6. **We do not build parental consent now.** Under-18s are simply not served; accounts are for adults, and a parent orders for the household using their own account.
+
+**Why no parental approval now (summary — full reasoning in `phase8_state.md` §8.8.0 and Consent Guide §15):**  
+- Doing it properly means verifying that the approver is an adult *and* is the child's lawful guardian, using government-grade tokens (DigiLocker-style) or paid KYC vendors; the operating machinery for this is still being finalised and the rules' main obligations only start on 13 May 2027.
+- Serving children triggers the tracking/monitoring ban, which would force separate code paths for rider live-tracking and analytics.
+- A minor cannot validly enter a contract in India, so orders would legally need to be the parent's anyway.
+- Collecting a parent's identity documents creates *more* personal data to protect, the opposite of data minimisation.
+- Quick commerce is not a child-directed product, so the commercial upside is small against a penalty ceiling of up to ₹200 crore for children's-data failures.
+
+**Why it is still defensible when a minor enters a false age:** the law asks for reasonable, proportionate measures, not impossible certainty. GoRola takes layered measures (notice, neutral DOB entry, confirmation step, one-strike lockout, erase-on-discovery, grievance route, a warranty in the Terms, and an audit trail proving each step) and records the residual risk openly. Counsel review before launch is mandatory (Phase 8.7.8).
+
+**Tradeoffs:**  
+- A determined teenager can still use an adult's phone number or lie about their date of birth; no self-declared gate can stop that.
+- A family sharing one device may see a 24-hour device cooling-off after a refusal.
+- One extra SMS may reach a person who is later refused.
+- Policy version moves from `1.0` to `1.1`, so every existing user sees the re-consent banner once.
+
+**Alternatives Considered:**  
+1. **Tick-box "I am 18+" only:** Rejected — it tells the user the exact answer to give and is the weakest evidence.
+2. **Ask for DOB before the OTP:** Rejected — no verified identity to attach a lockout to, and anyone could lock out another person's number by typing an under-18 date for it.
+3. **Store the date of birth:** Rejected — nothing needs it after the check; storing it adds risk with no benefit.
+4. **Verified parental consent (DigiLocker/KYC):** Deferred, not rejected — revisit triggers are listed in `phase8_state.md` §8.8.0.
+
 
 
 

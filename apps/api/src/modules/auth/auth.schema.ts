@@ -1,7 +1,8 @@
-import { ValidationError } from "@gorola/shared";
+import { CURRENT_PRIVACY_POLICY_VERSION, ValidationError } from "@gorola/shared";
 import { z } from "zod";
 
 import type {
+  ConfirmAgeInput,
   LogoutInput,
   RefreshTokenInput,
   SendOtpInput,
@@ -15,6 +16,17 @@ const sendOtpSchema = z.object({
 const verifyOtpSchema = z.object({
   phone: z.string().regex(/^\+91\d{10}$/, "Invalid phone format"),
   otp: z.string().regex(/^\d{6}$/, "OTP must be 6 digits")
+});
+
+const confirmAgeSchema = z.object({
+  ageTicket: z.string().regex(/^[a-f0-9]{64}$/, "Invalid age ticket format"),
+  dateOfBirth: z.string().min(1, "Date of birth is required"),
+  acknowledgedNotice: z.literal(true, {
+    errorMap: () => ({ message: "You must acknowledge the age declaration notice" })
+  }),
+  consentVersion: z.literal(CURRENT_PRIVACY_POLICY_VERSION, {
+    errorMap: () => ({ message: `Consent version must be ${CURRENT_PRIVACY_POLICY_VERSION}` })
+  })
 });
 
 const refreshTokenSchema = z.object({
@@ -58,6 +70,14 @@ export function parseVerifyOtpInput(input: VerifyOtpInput): VerifyOtpInput {
   const parsed = verifyOtpSchema.safeParse(input);
   if (!parsed.success) {
     throw new ValidationError("Invalid verify OTP payload", parsed.error.flatten());
+  }
+  return parsed.data;
+}
+
+export function parseConfirmAgeInput(input: ConfirmAgeInput): ConfirmAgeInput {
+  const parsed = confirmAgeSchema.safeParse(input);
+  if (!parsed.success) {
+    throw new ValidationError("Invalid confirm age payload", parsed.error.flatten());
   }
   return parsed.data;
 }

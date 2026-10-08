@@ -7,7 +7,53 @@ This document explains the technical configuration of the GoRola deployment pipe
 
 ---
 
-## 1. Disabling Platform Git Autodeploy
+## 1. Service Responsibilities & Platform Boundaries (Vercel vs. Railway)
+
+GoRola separates static frontend delivery from backend computation and data persistence across two dedicated platforms:
+
+### A. Vercel — Static Frontend Edge CDN (Buyer Web)
+- **Role:** Global CDN distribution of the pre-compiled Single-Page Application (SPA) static files (`apps/web/dist`).
+- **What Vercel Does:**
+  - Compiles the Vite SPA via `pnpm --filter @gorola/shared build && pnpm --filter @gorola/web build` in an isolated CI runner.
+  - Serves static assets (`index.html`, JavaScript bundles, CSS stylesheets, images/fonts) to user browsers via edge CDN nodes.
+  - Bakes public build-time configuration (such as `VITE_API_BASE_URL`) directly into the compiled JavaScript chunks.
+- **What Vercel Does NOT Do:**
+  - ❌ **No Server-Side Rendering (SSR) or Serverless Functions:** No backend API routes exist on Vercel.
+  - ❌ **No Database or Redis Access:** Vercel has zero connections to PostgreSQL or Redis.
+  - ❌ **No Request Proxying:** Vercel never acts as a backend-for-frontend (BFF) proxy; user requests are not routed through Vercel.
+  - ❌ **Zero Personal Data / DPDP Exposure:** Vercel never receives, stores, or processes any user PII. Under the DPDP Act 2023, Vercel is classified as **"Not a Data Processor"**.
+  - ⚠️ **Strict Prohibition:** Vercel Analytics is permanently disabled to prevent third-party profiling data collection (DECISION-061).
+
+### B. Railway — Backend API & Data Persistence Infrastructure
+- **Role:** Central application server, business domain execution, transaction processing, and data persistence.
+- **What Railway Does:**
+  - **Fastify Node.js 22 LTS API Service:** Runs all HTTP REST endpoints and real-time WebSocket / Socket.IO connections (rider tracking, store notifications).
+  - **PostgreSQL 15 Database Service:** Managed transactional database running with least-privilege roles (`db_owner` for schema migrations, `app_service` for runtime DML) and column-level AES-256-GCM encryption + HMAC blind indexing for DPDP Act compliance.
+  - **Redis 7 Cache & Queue:** Manages token revocation allowlists (`jti`), API rate limiting, session cache, and BullMQ worker queues.
+  - **Security & Auth:** RS256 JWT validation, `HttpOnly; SameSite=None; Secure; Partitioned` cookie management, and 2FA TOTP verification.
+  - **External Integrations:** Communicates with Razorpay (payments), Ola Maps (navigation), and Exotel / SMS Gateway (OTP).
+- **DPDP Act Perimeter:** 100% of the DPDP compliance perimeter and Data Fiduciary obligations are contained within Railway.
+
+### C. Client-to-Backend Traffic Topology
+```
+                  ┌────────────────────────┐
+                  │      User Browser      │
+                  └───────┬────────┬───────┘
+     1. Initial Asset Load│        │2. All API & WebSocket Traffic
+       (Static HTML/JS/CSS)│        │   (Direct HTTPS via VITE_API_BASE_URL)
+                          ▼        ▼
+           ┌────────────────┐    ┌──────────────────────────┐
+           │   Vercel CDN   │    │   Railway Fastify API    │
+           │ (Static Files) │    │  - Node.js 22 + Fastify  │
+           └────────────────┘    │  - PostgreSQL 15         │
+                                 │  - Redis 7 Cache         │
+                                 └──────────────────────────┘
+```
+Once the browser downloads the static bundle from Vercel, **all subsequent user interactions, authentication requests, order submissions, and WebSocket feeds bypass Vercel entirely and communicate directly with Railway.**
+
+---
+
+## 2. Disabling Platform Git Autodeploy
 
 To ensure that only our GitHub Actions CI/CD pipeline triggers deployments, we intentionally disable the native "push-to-deploy" features of Vercel and Railway.
 
@@ -18,7 +64,7 @@ To ensure that only our GitHub Actions CI/CD pipeline triggers deployments, we i
 
 ---
 
-## 2. Monorepo Root Directory
+## 3. Monorepo Root Directory
 
 **CRITICAL:** Both Vercel and Railway must have their **Root Directory** set to the repository root (`GoRola_app`), NOT a sub-folder like `apps/api`.
 - This allows `pnpm` to resolve the workspace-wide lockfile and shared packages (`@gorola/shared`, etc.).
@@ -26,7 +72,7 @@ To ensure that only our GitHub Actions CI/CD pipeline triggers deployments, we i
 
 ---
 
-## 3. Configuration Files Breakdown
+## 4. Configuration Files Breakdown
 
 ### Vercel (`vercel.json`)
 Controls the deployment of the buyer web app.
@@ -65,7 +111,7 @@ Navigate to Railway Project → Select your **API Service (`web`)** → **Settin
 
 ---
 
-## 4. Production Runtime Behavior
+## 5. Production Runtime Behavior
 
 ### Prisma Migrations
 The API's start command (in `apps/api/package.json`) is:
@@ -82,7 +128,7 @@ This prevents the browser from blocking requests from the frontend to the backen
 
 ---
 
-## 5. Deployment CLI Logic
+## 6. Deployment CLI Logic
 
 Our GitHub Actions use CLI tools rather than raw API calls for better reliability:
 - **Vercel**: Uses `npx vercel deploy --prod`. This uploads the monorepo and triggers the build on Vercel using the local `vercel.json`.
@@ -91,7 +137,7 @@ Our GitHub Actions use CLI tools rather than raw API calls for better reliabilit
 
 ---
 
-## 6. CI/CD Filtering Logic (`paths-filter`)
+## 7. CI/CD Filtering Logic (`paths-filter`)
 
 To optimize build times and prevent unnecessary deployments, our GitHub Actions use `dorny/paths-filter`. This ensures that:
 - **Vercel** only redeploys when `apps/web` or shared dependencies change.
@@ -102,7 +148,7 @@ This logic is defined in `.github/workflows/paths.yml` and utilized by the `stag
 
 ---
 
-## 7. App Scripts Reference (`apps/api`)
+## 8. App Scripts Reference (`apps/api`)
 
 The following scripts are used by the deployment pipeline:
 - `build`: `prisma generate && tsc -p tsconfig.json`
@@ -112,7 +158,7 @@ The following scripts are used by the deployment pipeline:
 
 ---
 
-## 8. Railway Least-Privilege Database Role Setup (DPDP Act Compliance)
+## 9. Railway Least-Privilege Database Role Setup (DPDP Act Compliance)
 
 To satisfy DPDP Act 2023 Sec 8(5) least-privilege security requirements, the production Railway PostgreSQL instance must use two distinct database roles:
 

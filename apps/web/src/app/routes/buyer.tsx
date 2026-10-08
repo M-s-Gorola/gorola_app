@@ -2,6 +2,7 @@ import type { ReactElement } from "react";
 import { Link, Route, useLocation } from "react-router-dom";
 
 import { BuyerLayout } from "@/components/buyer/BuyerLayout";
+import { AboutPage } from "@/pages/buyer/AboutPage";
 import { BookingConfirmationPage } from "@/pages/buyer/BookingConfirmationPage";
 import { BookingTimeslotPage } from "@/pages/buyer/BookingTimeslotPage";
 import { CategoryPage } from "@/pages/buyer/CategoryPage";
@@ -18,6 +19,8 @@ import { SavedAddressesPage } from "@/pages/buyer/SavedAddressesPage";
 import { SearchResultsPage } from "@/pages/buyer/SearchResultsPage";
 import { StoreDetailPage } from "@/pages/buyer/StoreDetailPage";
 import { SubCategoryPage } from "@/pages/buyer/SubCategoryPage";
+import { SupportPage } from "@/pages/buyer/SupportPage";
+import { TermsOfServicePage } from "@/pages/buyer/TermsOfServicePage";
 
 import { ProtectedRoute } from "./guards";
 
@@ -109,7 +112,7 @@ export function BuyerRoutes(): ReactElement[] {
       path="/about"
       element={
         <BuyerLayout>
-          <PlaceholderPage title="About" />
+          <AboutPage />
         </BuyerLayout>
       }
     />,
@@ -118,7 +121,7 @@ export function BuyerRoutes(): ReactElement[] {
       path="/support"
       element={
         <BuyerLayout>
-          <PlaceholderPage title="Support" />
+          <SupportPage />
         </BuyerLayout>
       }
     />,
@@ -162,6 +165,15 @@ export function BuyerRoutes(): ReactElement[] {
       element={
         <BuyerLayout>
           <PrivacyPolicyPage />
+        </BuyerLayout>
+      }
+    />,
+    <Route
+      key="buyer-terms"
+      path="/terms"
+      element={
+        <BuyerLayout>
+          <TermsOfServicePage />
         </BuyerLayout>
       }
     />,

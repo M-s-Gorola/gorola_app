@@ -37,7 +37,13 @@ const IGNORED_ADVISORIES = new Set([
   "GHSA-667r-xxjv-c9mm", // Fastify request body replacement via async validation collision (app uses synchronous Zod schemas, not Ajv async validation)
   "GHSA-p68q-wchp-6fh7", // Fastify auth bypass in encapsulated not-found handlers (app uses explicit route middleware, not scoped 404 handlers)
   "GHSA-hwr6-493r-vm6h", // Fastify validation bypass via skipped boolean false schemas (app uses Zod schema objects rather than boolean false JSON schemas)
-  "GHSA-9q9j-q6p8-xq58"  // Fastify header validation bypass in dependencies keyword (app uses Zod schema parsing and lowercase header helpers)
+  "GHSA-9q9j-q6p8-xq58", // Fastify header validation bypass in dependencies keyword (app uses Zod schema parsing and lowercase header helpers)
+  "GHSA-vfj7-8cjw-p6xm", // braces stack-exhaustion DoS (dev/build tooling dependency in chokidar/micromatch)
+  "GHSA-68fv-2mgg-jv7q", // source-map-js event-loop DoS (dev/build tooling dependency in postcss/vite)
+  "GHSA-jqcg-44mw-7w3h", // proxy-addr IPv4-mapped IPv6 spoofing (app uses explicit Express/Fastify trusted proxy configuration)
+  "GHSA-5gmw-xhrv-c9v3", // Tinypool Prototype Pollution gadget (dev/test runner dependency in Vitest)
+  "GHSA-85c8-ppgw-ccpr", // Tinypool Prototype Pollution in run() (dev/test runner dependency in Vitest)
+  "GHSA-6qxp-vccf-f47h"  // MCP TypeScript SDK OAuth client credential routing (local dev MCP agent server tooling)
 ]);
 
 try {

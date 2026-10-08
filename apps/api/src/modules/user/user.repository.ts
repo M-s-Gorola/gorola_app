@@ -2,6 +2,7 @@ import { ConflictError, NotFoundError } from "@gorola/shared";
 import type { PrismaClient, User } from "@prisma/client";
 
 import { decryptPII, encryptPII, hashPII } from "../../lib/crypto.js";
+import { getPrismaClient } from "../../lib/prisma.js";
 
 export type CreateUserInput = {
   phone: string;
@@ -29,7 +30,11 @@ function toDomainUser(user: User | null): User | null {
 }
 
 export class UserRepository {
-  public constructor(private readonly db: PrismaClient) {}
+  public constructor(private readonly customDb?: PrismaClient) {}
+
+  private get db(): PrismaClient {
+    return this.customDb ?? getPrismaClient();
+  }
 
   public async findById(
     id: string,
@@ -62,7 +67,12 @@ export class UserRepository {
     return toDomainUser(user);
   }
 
+  public async findByPhoneForAuth(phone: string): Promise<User | null> {
+    return this.findByPhone(phone, { includeDeleted: true });
+  }
+
   /**
+   * Seeds and test helpers only — never call from an authentication path.
    * Buyer OTP onboarding: reuse row by active phone or create verified buyer (`name` empty until profile step).
    */
   public async ensureBuyerByPhone(phone: string): Promise<User> {
@@ -87,7 +97,9 @@ export class UserRepository {
         name: "",
         phone: encryptedPhone,
         phoneHash: piiHash,
-        isVerified: true
+        isVerified: true,
+        ageConfirmedAt: new Date(),
+        ageConfirmedPolicyVersion: "1.1"
       }
     });
     return toDomainUser(created)!;
@@ -161,6 +173,7 @@ export class UserRepository {
       id: string;
       name: string;
       phone: string;
+      ageConfirmedAt: string | null;
       createdAt: string;
       updatedAt: string;
     };
@@ -232,6 +245,7 @@ export class UserRepository {
         id: user.id,
         name: user.name,
         phone: decryptedPhone,
+        ageConfirmedAt: user.ageConfirmedAt ? user.ageConfirmedAt.toISOString() : null,
         createdAt: user.createdAt.toISOString(),
         updatedAt: user.updatedAt.toISOString()
       },
@@ -362,6 +376,24 @@ export class UserRepository {
     return toDomainUser(updated)!;
   }
 
+  public async acceptPolicyVersion(
+    userId: string,
+    version: string
+  ): Promise<{ id: string; privacyPolicyVersionAccepted: string }> {
+    const updated = await this.db.user.update({
+      where: { id: userId },
+      data: {
+        privacyPolicyVersionAccepted: version
+      },
+      select: {
+        id: true,
+        privacyPolicyVersionAccepted: true
+      }
+    });
+
+    return updated;
+  }
+
   public async permanentPurgeAndAnonymize(userId: string): Promise<void> {
     await this.db.$transaction([
       // 1. Irreversibly anonymize user profile
@@ -410,5 +442,4 @@ export class UserRepository {
   }
 }
 
-
-
+export const userRepository = new UserRepository();

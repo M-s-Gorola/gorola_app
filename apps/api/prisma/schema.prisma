@@ -80,6 +80,9 @@ model User {
   nomineeName String?
   nomineeContact String?
   nomineeRelationship String?
+  privacyPolicyVersionAccepted String @default("1.0")
+  ageConfirmedAt DateTime?
+  ageConfirmedPolicyVersion String?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
   carts      Cart[]
@@ -578,4 +581,17 @@ model ConsentLog {
   @@index([userId, purpose])
   @@index([userId, isWithdrawn])
   @@index([createdAt])
+}
+
+
+
+model AgeGateLockout {
+  id          String   @id @default(cuid())
+  phoneHash   String   @unique
+  lockedUntil DateTime
+  strikeCount Int      @default(1)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([lockedUntil])
 }

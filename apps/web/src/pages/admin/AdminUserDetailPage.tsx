@@ -20,6 +20,7 @@ import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { EraseUnderageModal } from "@/components/admin/AgeGateActionModals";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
 
@@ -37,6 +38,7 @@ type UserDetail = {
   createdAt: string;
   addresses: AddressItem[];
   nomineeName?: string | null;
+  ageConfirmedAt?: string | null;
 };
 
 type UserDetailResponse = {
@@ -161,6 +163,7 @@ export function AdminUserDetailPage(): ReactElement {
 
   // Status suspension dialog
   const [confirmStatusModalOpen, setConfirmStatusModalOpen] = useState(false);
+  const [eraseModalOpen, setEraseModalOpen] = useState(false);
 
   // Order Details Modal
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -345,11 +348,19 @@ export function AdminUserDetailPage(): ReactElement {
             >
               {user.isActive ? "Suspend User" : "Unsuspend User"}
             </button>
+            <button
+              onClick={() => setEraseModalOpen(true)}
+              data-testid="erase-underage-user-button"
+              title="Minor Data Purge + 90-Day Block. After 90 days, a fresh account can be created."
+              className="px-4 py-2 text-xs font-bold rounded-xl transition-all shadow-sm bg-red-600 text-white hover:bg-red-700"
+            >
+              Erase Underage (Minor Purge + 90d Block)
+            </button>
           </div>
         </div>
 
         {/* Profile Info Attributes Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
           <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
             <Phone className="h-5 w-5 text-gorola-slate" />
             <div>
@@ -388,6 +399,18 @@ export function AdminUserDetailPage(): ReactElement {
               <p className="text-[10px] uppercase font-black text-gorola-slate/70">Nominee Info</p>
               <p className="text-sm font-black text-gorola-charcoal" data-testid="user-nominee-info">
                 {user.nomineeName ? user.nomineeName : "Not Configured"}
+              </p>
+            </div>
+          </div>
+
+          <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex items-center gap-3">
+            <ShieldCheck className="h-5 w-5 text-gorola-slate" />
+            <div>
+              <p className="text-[10px] uppercase font-black text-gorola-slate/70">Age Confirmed (18+)</p>
+              <p className="text-sm font-black text-gorola-charcoal" data-testid="user-age-confirmation">
+                {user.ageConfirmedAt
+                  ? new Date(user.ageConfirmedAt).toLocaleDateString("en-IN")
+                  : "Not confirmed"}
               </p>
             </div>
           </div>
@@ -942,6 +965,19 @@ export function AdminUserDetailPage(): ReactElement {
             )}
           </div>
         </div>
+      )}
+
+      {user && (
+        <EraseUnderageModal
+          isOpen={eraseModalOpen}
+          userId={user.id}
+          userName={user.name}
+          onClose={() => setEraseModalOpen(false)}
+          onSuccess={() => {
+            void refetchUser();
+            void queryClient.invalidateQueries({ queryKey: ["admin", "users"] });
+          }}
+        />
       )}
     </div>
   );
