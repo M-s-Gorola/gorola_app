@@ -26,7 +26,8 @@
 | Phase 6.14 | UPI & Card Payment Integration (Razorpay) | COMPLETE | Wire UPI and Card payment methods end-to-end using a swappable Razorpay adapter. Admin toggles activate the payment gateway. Full TDD with mocked adapter — real Razorpay keys plug in without changing tests. |
 | Phase 6.15 | Analytics Volume Graphs, Settings Manager & Auto-Suggestions | COMPLETE | Adding number of orders/bookings graphs with store multi-select, platform settings manager for fees, and buyer global autocomplete search suggestions. |
 | Phase 6.16 | Watermark Restore & Live Location Popup | COMPLETE | Restore map watermark (Phase 6.16.1), live buyer location bouncing icon and transparent popup (Phase 6.16.2), and map Use My Location button (Phase 6.16.3). |
-| Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | 🟡 IN PROGRESS | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
+| Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | COMPLETE | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
+| Phase 6.18 | Financial Infrastructure: GST Foundation & Invoice Generator | 🟡 IN PROGRESS | Order snapshot columns, promo title persistence, dynamic settings, frontend discount cleanup, and invoice script. |
 
 ---
 

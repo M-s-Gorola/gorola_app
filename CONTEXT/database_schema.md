@@ -2,7 +2,7 @@
 
 > **Database Engine:** PostgreSQL 15 (Railway / Local Dev & Test)  
 > **ORM:** Prisma ORM  
-> **Last Updated:** 2026-10-05 (Phase 8.8 — Age Gate Lockout & DPDP Architecture Alignment)
+> **Last Updated:** 2026-10-08 (Phase 6.18 — Financial Infrastructure: GST Foundation, Financial Data Integrity & Invoice Generator)
 
 ---
 
@@ -192,12 +192,17 @@ Central commercial contract for deliveries and bookings.
 - `status` (`OrderStatus`): `PLACED` | `PREPARING` | `OUT_FOR_DELIVERY` | `DELIVERED` | `CANCELLED` | `PENDING_APPROVAL` | `APPROVED`.
 - `orderType` (`OrderType`): `QUICK` | `BOOKING`.
 - `subtotal`, `deliveryFee`, `total` (`DECIMAL(10, 2)`).
+  - **Note:** For `BOOKING` orders, `deliveryFee` stores the **service charge** (there is no physical delivery). All UIs must conditionally label this column as "Service Fee" when `orderType === "BOOKING"`.
 - `paymentMethod` (`PaymentMethod`): `COD` | `UPI` | `CARD`.
 - `paymentStatus` (`PaymentStatus`): `PENDING` | `CAPTURED` | `FAILED`.
 - `razorpayOrderId` (`TEXT?`), `razorpayPaymentId` (`TEXT?`).
 - `landmarkDescription` (`TEXT`), `addressLabel` (`TEXT?`), `flatRoom` (`TEXT?`), `deliveryNote` (`TEXT?`).
 - `deliveryLat` (`DECIMAL(10, 7)?`), `deliveryLng` (`DECIMAL(10, 7)?`).
 - `scheduledFor` (`TIMESTAMP?`), `rating` (`DECIMAL(2, 1)?`), `ratingComment` (`TEXT?`), `appliedDiscountCode` (`TEXT?`).
+- `discountSavingAmount` (`DECIMAL(10, 2)?`): Rupee amount saved via coupon/discount code at checkout. Persisted at order creation. Null for orders placed before Phase 6.18.
+- `offerSavingAmount` (`DECIMAL(10, 2)?`): Rupee amount saved via store-level offers at checkout. Persisted at order creation. Null for orders placed before Phase 6.18.
+- `appliedOfferTitle` (`TEXT?`): Exact title snapshot of the store-level offer applied at checkout (e.g. `'Summer Hilltop Special 15% OFF'`). Null if no store offer was applied.
+- `taxRate` (`DECIMAL(5, 2)?`): Snapshot of the GST percentage rate that applied at the time of order (e.g. `18.00`). Null until Phase 6.19 activates tax computation. Stored as a snapshot so historic invoices always reflect the rate that was in effect at order time.
 
 #### `OrderItem`
 Snapshot of products at the time of purchase.

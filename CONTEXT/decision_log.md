@@ -1994,7 +1994,6 @@ GoRola's DPDP compliance perimeter is correctly drawn around Railway — where a
 - **At upgrade:** save the then-current Terms, Fair Use policy and DPA PDF into `GoRola Legal/DPDP Compliance/DPAs/Vercel/` (Phase 8.7.2 and 8.7.8).
 - **No DPDP-driven change** to the architecture. The cost row in section 5 above ("₹0") is now "₹0 for development, about US$20 per month for production", which still compares well against moving the frontend to Railway.
 - **Cross-references:** Phase 8.7.2 (provider register and DPA steps), Consent Architecture Guide section 14.6 (compliance perimeter table), `architecture.md` Service Responsibilities.
-
 ---
 
 ## [DECISION-062] Eligibility Gate — GoRola Is for Adults (18+) Only; No Parental-Consent Flow at Launch
@@ -2033,6 +2032,42 @@ The Privacy Policy (section 7) and Terms of Service state that GoRola is only fo
 2. **Ask for DOB before the OTP:** Rejected — no verified identity to attach a lockout to, and anyone could lock out another person's number by typing an under-18 date for it.
 3. **Store the date of birth:** Rejected — nothing needs it after the check; storing it adds risk with no benefit.
 4. **Verified parental consent (DigiLocker/KYC):** Deferred, not rejected — revisit triggers are listed in `phase8_state.md` §8.8.0.
+
+---
+
+## [DECISION-063] Financial Snapshot Immutability, GST Foundation & Dynamic System Settings
+
+**Date:** 2026-10-08  
+**Status:** Accepted (Implemented in Phase 6.18)
+
+**Context:**  
+During the architectural audit of the Order and Delivery modules, several financial data integrity gaps and rigidity issues were identified:
+1. **Financial Snapshot Gaps:** Orders only stored `subtotal`, `deliveryFee`, and `total`. Any discounts (coupon codes or store offers) applied during checkout were not recorded as explicit rupee amounts on the `Order` record, making financial auditing, tax recalculation, and accurate historic invoice generation impossible once offers changed or expired.
+2. **Hardcoded Commission & Rates:** `rider-earnings.repository.ts` used hardcoded constants (`0.20` platform fee, `0.80` rider cut) for `BOOKING` commerce orders, and hardcoded `25` for quick delivery payouts, bypassing admin configurability.
+3. **GST Preparation & Immutability:** Preparation for GST compliance required a rock-solid foundation. Storing both calculated tax amount and tax rate creates data synchronization hazards; however, calculating tax on the fly from current tax rates breaks historic invoices when tax rates change.
+4. **Booking vs Quick Delivery Fee Semantics:** `BOOKING` orders have no physical delivery, yet need platform service fees recorded.
+
+**Decision:**  
+1. **Four Nullable Financial & Promotional Snapshot Columns on `Order`:**
+   - `discountSavingAmount` (`DECIMAL(10, 2)?`): Rupee discount from applied coupon/promo code at checkout.
+   - `offerSavingAmount` (`DECIMAL(10, 2)?`): Rupee savings from store-level promotions.
+   - `appliedOfferTitle` (`TEXT?`): Exact title snapshot of the store-level offer applied at checkout (e.g. `'Summer Hilltop Special 15% OFF'`), guaranteeing full promotional auditability even if the promotion is later modified or deleted by the store owner.
+   - `taxRate` (`DECIMAL(5, 2)?`): Snapshot of the GST percentage rate in effect at order creation (e.g. `18.00`).
+2. **Derived Tax Amount Calculation:** `taxAmount` is derived deterministically from `(subtotal - discountSavingAmount - offerSavingAmount) * (taxRate / 100)` rather than stored as a redundant column. Storing the `taxRate` snapshot guarantees 100% historic reproducibility while eliminating data drift.
+3. **Dual-Semantic `deliveryFee` Field:** `deliveryFee` stores the delivery charge for `QUICK` orders and the platform service fee for `BOOKING` orders. All client interfaces must conditionally display "Delivery Fee" vs "Service Fee" based on `order.orderType`.
+4. **Dynamic System Settings:** Added `SERVICE_FEE_BOOKING` (default `199.00`), `RIDER_SERVICE_FEE_CUT_PCT` (default `80.00`), and `TECHNICIAN_EARNING_RATE_PCT` (default `100.00`) to `SystemSetting`, managed via Admin Panel with full `AuditLog` tracking, eliminating all hardcoded financial magic numbers.
+5. **Phase Separation (Phase 6.18 vs Phase 6.19):**
+   - **Phase 6.18 (Infrastructure & Data Integrity):** Schema migration, repository methods, checkout saving persistence, frontend hack cleanup, dynamic admin settings, and decoupled CLI/service invoice generator (`scripts/generate-invoice.ts` & `InvoiceService`).
+   - **Phase 6.19 (Live Tax Calculation & Advanced Invoicing):** Implementation of finalized GST computation rules (pre vs post discount, MRP tax extraction, CGST/SGST line items), live checkout tax application, and client-facing downloadable/printable PDF tax invoice views.
+
+**Tradeoffs:**  
+- Nullable columns for historic orders before Phase 6.18 (handled gracefully with `0.00` fallbacks).
+- Overloading `deliveryFee` avoids a schema breaking migration or redundant column, but requires frontend and invoice templates to respect `orderType`.
+
+**Alternatives Considered:**  
+- *Separate `serviceFee` column on `Order`:* Rejected — increases schema bloat when `orderType` mutually excludes physical delivery fee and service fee.
+- *Store `taxAmount` alongside `taxRate`:* Rejected — redundant storage risks divergence if rounding rules or discounts are adjusted. Snapshotting `taxRate` is the standard accounting pattern for immutable line-item ledgers.
+
 
 
 

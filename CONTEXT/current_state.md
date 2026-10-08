@@ -19,7 +19,7 @@
 | Phase 1 & 2 | [`phase1_2_state.md`](./phase1_2_state.md) | ✅ COMPLETE    | 2.1–2.23 complete. **File locked.** |
 | Phase 3 & 4 | [`phase3_4_state.md`](./phase3_4_state.md) | ✅ COMPLETE    | Phase 3 and Phase 4 fully complete. All E2E runs passing cleanly. |
 | Phase 5 | [`phase5_state.md`](./phase5_state.md) | ✅ COMPLETE    | Phase 5.1 to 5.8 complete. Playwright E2E multi-actor tests passing 100% green. |
-| Phase 6 | [`phase6_state.md`](./phase6_state.md) | ✅ COMPLETE    | Subdomain Routing & UX Refinement (6.1–6.17 complete). |
+| Phase 6 | [`phase6_state.md`](./phase6_state.md) | 🟡 IN PROGRESS | Financial Infrastructure, GST Foundation, & System Settings (6.1–6.17 complete; 6.18 planned/in-progress). |
 | Phase 7 | [`phase7_state.md`](./phase7_state.md) | ✅ COMPLETE    | Independent — Booking Commerce |
 | Phase 8 | [`phase8_state.md`](./phase8_state.md) | 🟡 IN PROGRESS | DPDP Act 2023 Compliance (8.1, 8.2, 8.3, 8.4, 8.5, and 8.6 complete; 8.7 next) |
  
@@ -34,7 +34,7 @@
  | Phase 3 | Store Owner Panel    | ✅ COMPLETE    | Phase 3.1–3.10.1 complete. All E2E tests passing. |
  | Phase 4 | Admin Panel          | ✅ COMPLETE    | All Phase 4.1–4.10 items complete. |
  | Phase 5 | Rider Interface      | ✅ COMPLETE    | All Phase 5.1–5.8 items complete. |
- | Phase 6 | Subdomain Routing & UX | ✅ COMPLETE    | All Phase 6.1–6.17 items complete (Subdomains, UX, 360° Admin Detail Pages, & Paginated Orders). |
+ | Phase 6 | Subdomain Routing & UX | 🟡 IN PROGRESS | Phase 6.1–6.17 complete; Phase 6.18 (Financial Infrastructure & Dynamic Settings) planned. |
  | Phase 7 | Booking Commerce     | ✅ COMPLETE    | Independent — can start any time after Phase 2 |
  | Phase 8 | DPDP Act Compliance  | 🟡 IN PROGRESS | Sections 8.1–8.6 complete (DB Security, Consent Management, User Rights, Active Sessions & Security Alerting, Data Retention Workers, Privacy Policy, Terms of Service & Versioning); Phase 8.7 (Non-Code Documentation & DPAs) next. |
 
@@ -161,6 +161,12 @@ gorola/
 > **ONLY record decisions here that affect multiple phases simultaneously** (e.g. switching a shared library, changing the API envelope format, restructuring the monorepo). Phase-specific session notes belong in the phase file's own Session Notes section.
 
 _(Append new entries here — never delete old entries.)_
+
+**2026-10-08 — DECISION-063 (Financial Snapshot Immutability, GST Foundation & Dynamic System Settings):**
+- Added nullable financial and promotional snapshot columns to `Order`: `discountSavingAmount`, `offerSavingAmount`, `appliedOfferTitle`, and `taxRate`.
+- Formalized dual-semantic `deliveryFee` column (delivery charge for `QUICK` orders, platform service fee for `BOOKING` orders).
+- Introduced dynamic `SystemSetting` keys (`SERVICE_FEE_BOOKING`, `RIDER_SERVICE_FEE_CUT_PCT`, `TECHNICIAN_EARNING_RATE_PCT`, `GST_RATE`, `GST_NUMBER`).
+- Two-phase execution: Phase 6.18 establishes plumbing, persistence, cleanup, and decoupled invoice generation; Phase 6.19 activates live GST computation and PDF/HTML customer invoice downloads.
 
 **2026-10-02 — DECISION-059 (DPDP Consent Architecture Overhaul & Dynamic Purpose Table):**
 - Replaced PostgreSQL `ConsentPurpose` enum with `ConsentPurposeConfig` relational table.

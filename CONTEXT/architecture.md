@@ -801,6 +801,8 @@ promotion       |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 feature-flag    |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 audit           |     ✓     |   ✗   |    ✗    |    ✗    |     ✗
 delivery        |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
+system-setting  |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
+invoice         |     ✓     |   ✗   |    ✗    |    ✗    |     ✗
 health          |     ✓     |   ✓   |    ✗    |    ✗    |     ✗
 
 * = flag-gated, not active in v1
