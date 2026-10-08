@@ -3033,8 +3033,12 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - Configured `scripts/security-audit.mjs` `IGNORED_ADVISORIES` to handle non-runtime / dev-tooling advisories (`braces`, `source-map-js`, `proxy-addr`, `Tinypool`, `MCP TypeScript SDK`).
     - Fixed ESLint `simple-import-sort` type-import formatting in `SupportPage.tsx`.
     - Resolved duplicate element matchers in `AboutPage.test.tsx` and updated router heading assertions in `router.test.tsx`.
+  - **Mobile / iPhone SE E2E Flakiness Elimination (`cart.spec.ts`, `admin-journey.spec.ts`):**
+    - `cart.spec.ts`: Removed `{ force: true }` and added explicit `scrollIntoViewIfNeeded()` before product add clicks to prevent coordinate interception by the fixed bottom navigation bar on mobile viewports. Added explicit cart badge item count assertions prior to opening the cart drawer.
+    - `admin-journey.spec.ts`: Isolated buyer session contexts in `E2E-038` by closing the stale/suspended buyer context and opening a fresh browser context upon unsuspension, eliminating form lifecycle flakiness and disabled button states during buyer re-login.
   - **Quality Gates Verification:**
-    - `pnpm --filter @gorola/web test:e2e tests/e2e/admin-age-gate.spec.ts`: **8/8 tests 100% PASSING across Chromium & iPhone SE**.
+    - `pnpm --filter @gorola/web test:e2e tests/e2e/admin-age-gate.spec.ts`: **8/8 tests 100% PASSING**.
+    - `pnpm --filter @gorola/web test:e2e tests/e2e/cart.spec.ts tests/e2e/admin-journey.spec.ts --project=iphone-se`: **8/8 tests 100% PASSING**.
     - `pnpm test`: **139 test files, 834 tests 100% PASSING**.
     - `pnpm typecheck`: **0 errors**.
     - `pnpm lint`: **0 errors, 0 warnings**.

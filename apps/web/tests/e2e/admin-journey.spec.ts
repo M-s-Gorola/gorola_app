@@ -337,40 +337,47 @@ test.describe("Admin Panel E2E Journey", () => {
     await expect(page.locator('text=/User successfully unsuspended/i')).toBeVisible({ timeout: 10000 });
     await expect(toggleBtn).toHaveText("Suspend");
 
-    // 4. Reload login and verify buyer can log in now that they are unsuspended
-    await buyerPage.goto(`${BASE_URL}/login`);
-    const consentNotice2 = buyerPage.locator('[data-testid="consent-notice-step"]');
+    // 4. Open fresh buyer context and verify buyer can log in now that they are unsuspended
+    await buyerContext.close();
+    const buyerContext2 = await browser.newContext();
+    const buyerPage2 = await buyerContext2.newPage();
+    await buyerPage2.addInitScript(() => {
+      (window as Window & { isE2E?: boolean }).isE2E = true;
+    });
+
+    await buyerPage2.goto(`${BASE_URL}/login`);
+    const consentNotice2 = buyerPage2.locator('[data-testid="consent-notice-step"]');
     if (await consentNotice2.isVisible({ timeout: 5000 }).catch(() => false)) {
-      await buyerPage.locator('[data-testid="consent-acknowledge-checkbox"]').click();
-      await buyerPage.locator('[data-testid="consent-continue-btn"]').click();
+      await buyerPage2.locator('[data-testid="consent-acknowledge-checkbox"]').click();
+      await buyerPage2.locator('[data-testid="consent-continue-btn"]').click();
     }
-    const phoneInput2 = buyerPage.locator("#buyer-phone");
+    const phoneInput2 = buyerPage2.locator("#buyer-phone");
     await expect(phoneInput2).toBeVisible({ timeout: 10000 });
     await phoneInput2.fill("9876543210");
 
-    const sendOtpResponse2 = buyerPage.waitForResponse(
+    const sendOtpResponse2 = buyerPage2.waitForResponse(
       resp => resp.url().includes("/api/v1/auth/buyer/send-otp") && resp.request().method() === "POST",
       { timeout: 15000 }
     );
-    await buyerPage.locator('button:has-text("Send OTP")').click();
+    await buyerPage2.locator('button:has-text("Send OTP")').click();
     await sendOtpResponse2;
 
-    await expect(buyerPage.locator("text=/Enter OTP/i")).toBeVisible({ timeout: 10000 });
+    await expect(buyerPage2.locator("text=/Enter OTP/i")).toBeVisible({ timeout: 10000 });
     for (let i = 0; i < 6; i++) {
-      await buyerPage.locator(`[data-testid="otp-digit-${i}"]`).fill((i + 1).toString());
+      await buyerPage2.locator(`[data-testid="otp-digit-${i}"]`).fill((i + 1).toString());
     }
 
-    const verifyOtpResponse2 = buyerPage.waitForResponse(
+    const verifyOtpResponse2 = buyerPage2.waitForResponse(
       resp => resp.url().includes("/api/v1/auth/buyer/verify-otp") && resp.request().method() === "POST",
       { timeout: 15000 }
     );
-    await buyerPage.locator('button:has-text("Verify")').click();
+    await buyerPage2.locator('button:has-text("Verify")').click();
     await verifyOtpResponse2;
     
-    await expect(buyerPage).toHaveURL(/\/$/, { timeout: 15000 });
-    await expect(buyerPage.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
+    await expect(buyerPage2).toHaveURL(/\/$/, { timeout: 15000 });
+    await expect(buyerPage2.locator('[aria-label="Profile"]:visible')).toBeVisible({ timeout: 15000 });
 
-    await buyerContext.close();
+    await buyerContext2.close();
   });
 
   // E2E-039: Audit Log Verification

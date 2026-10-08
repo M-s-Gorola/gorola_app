@@ -8,11 +8,12 @@ test.describe('Cart & Discounts', () => {
     const firstProduct = page.locator('[data-testid="product-card"]').first();
     const addBtn = firstProduct.getByRole('button', { name: /Add/i });
     await expect(addBtn).toBeVisible({ timeout: 10000 });
-    await addBtn.click({ force: true });
+    await addBtn.scrollIntoViewIfNeeded();
+    await addBtn.click();
 
     // Assert nav cart badge shows 1
     const cartBadge = page.locator('[data-testid$="cart-badge"]:visible');
-    await expect(cartBadge).toHaveText('1');
+    await expect(cartBadge).toHaveText('1', { timeout: 10000 });
 
     // Click cart button
     await page.locator('[data-testid$="cart-button"]:visible').click();
@@ -44,9 +45,15 @@ test.describe('Cart & Discounts', () => {
   test('E2E-013: Discount Code Apply in Cart', async ({ page }) => {
     // Prerequisite: Add product to cart
     await page.goto('/categories/groceries/rice-atta');
-    const addBtn = page.locator('[data-testid="product-card"]').first().getByRole('button', { name: /Add/i });
+    const firstProduct = page.locator('[data-testid="product-card"]').first();
+    const addBtn = firstProduct.getByRole('button', { name: /Add/i });
     await expect(addBtn).toBeVisible({ timeout: 10000 });
-    await addBtn.click({ force: true });
+    await addBtn.scrollIntoViewIfNeeded();
+    await addBtn.click();
+
+    // Assert nav cart badge shows 1 before opening drawer
+    const cartBadge = page.locator('[data-testid$="cart-badge"]:visible');
+    await expect(cartBadge).toHaveText('1', { timeout: 10000 });
 
     // Open cart drawer
     await page.locator('[data-testid$="cart-button"]:visible').click();
