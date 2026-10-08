@@ -95,7 +95,10 @@ export class RiderEarningsRepository {
         where: filterWhere,
         take: limit + 1,
         ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-        orderBy: { createdAt: "desc" }
+        orderBy: [
+          { createdAt: "desc" },
+          { id: "desc" }
+        ]
       }),
       this.db.riderEarning.aggregate({
         _sum: { amount: true },
