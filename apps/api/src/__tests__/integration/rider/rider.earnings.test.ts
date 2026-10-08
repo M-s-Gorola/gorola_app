@@ -224,14 +224,17 @@ describe("Rider Earnings Integration Tests", () => {
       const dbWithEarning = db as ReturnType<typeof getPrismaClient> & {
         riderEarning: { create: (args: unknown) => Promise<unknown> };
       };
-      for (const order of ordersData) {
+      const now = Date.now();
+      for (let i = 0; i < ordersData.length; i++) {
+        const order = ordersData[i]!;
         await dbWithEarning.riderEarning.create({
           data: {
             riderId,
             orderId: order.id,
             amount: 40.0,
             earningType: "PER_ORDER",
-            distanceKm: null
+            distanceKm: null,
+            createdAt: new Date(now - (ordersData.length - 1 - i) * 1000)
           }
         });
       }
