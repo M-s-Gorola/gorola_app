@@ -169,6 +169,7 @@ export class BuyerCheckoutService {
     });
 
     let appliedOfferAmount = new Prisma.Decimal(0);
+    let appliedOfferTitle: string | null = null;
     for (const offer of activeOffers) {
       const minOrderAmount =
         offer.minOrderAmount === null ? null : new Prisma.Decimal(offer.minOrderAmount.toString());
@@ -187,9 +188,14 @@ export class BuyerCheckoutService {
         currentOfferAmount = Prisma.Decimal.min(subtotal.sub(appliedOfferAmount), currentOfferAmount);
         if (currentOfferAmount.greaterThan(0)) {
           appliedOfferAmount = appliedOfferAmount.add(currentOfferAmount);
+          if (!appliedOfferTitle) {
+            appliedOfferTitle = offer.title;
+          }
         }
       }
     }
+
+    const gstRateVal = await this.systemSettingService.getSettingValue("GST_RATE", "18.00");
 
     const total = Prisma.Decimal.max(
       subtotal.add(deliveryFee).sub(appliedDiscountAmount).sub(appliedOfferAmount),
@@ -213,6 +219,10 @@ export class BuyerCheckoutService {
       addressLabel,
       flatRoom,
       appliedDiscountCode,
+      discountSavingAmount: appliedDiscountAmount.greaterThan(0) ? appliedDiscountAmount.toString() : null,
+      offerSavingAmount: appliedOfferAmount.greaterThan(0) ? appliedOfferAmount.toString() : null,
+      appliedOfferTitle,
+      taxRate: gstRateVal,
       paymentMethod: body.paymentMethod,
       scheduledFor: null,
       storeId,

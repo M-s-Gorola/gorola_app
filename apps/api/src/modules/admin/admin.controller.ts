@@ -1294,7 +1294,35 @@ export function registerAdminRoutes(
     // eslint-disable-next-line security/detect-unsafe-regex
     deliveryCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal amount"),
     // eslint-disable-next-line security/detect-unsafe-regex
-    serviceCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal amount")
+    serviceCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal amount"),
+    gstRate: z
+      .string()
+      // eslint-disable-next-line security/detect-unsafe-regex
+      .regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal percentage")
+      .refine((val) => {
+        const num = Number(val);
+        return !isNaN(num) && num >= 0 && num <= 100;
+      }, "GST rate must be between 0 and 100")
+      .optional(),
+    gstNumber: z.string().optional(),
+    technicianEarningRate: z
+      .string()
+      // eslint-disable-next-line security/detect-unsafe-regex
+      .regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal percentage")
+      .refine((val) => {
+        const num = Number(val);
+        return !isNaN(num) && num >= 0 && num <= 100;
+      }, "Technician earning rate must be between 0 and 100")
+      .optional(),
+    riderEarningRate: z
+      .string()
+      // eslint-disable-next-line security/detect-unsafe-regex
+      .regex(/^\d+(\.\d{1,2})?$/, "Must be a valid decimal percentage")
+      .refine((val) => {
+        const num = Number(val);
+        return !isNaN(num) && num >= 0 && num <= 100;
+      }, "Rider earning rate must be between 0 and 100")
+      .optional()
   });
 
   app.put("/api/v1/admin/settings", { preHandler }, async (request, reply) => {
@@ -1314,11 +1342,26 @@ export function registerAdminRoutes(
     const ip = request.ip;
     const userAgent = (request.headers["user-agent"] ?? "") as string;
 
+    const updates: Array<{ key: string; value: string }> = [
+      { key: "DELIVERY_CHARGE", value: parsed.data.deliveryCharge },
+      { key: "SERVICE_CHARGE", value: parsed.data.serviceCharge }
+    ];
+
+    if (parsed.data.gstRate !== undefined) {
+      updates.push({ key: "GST_RATE", value: parsed.data.gstRate });
+    }
+    if (parsed.data.gstNumber !== undefined) {
+      updates.push({ key: "GST_NUMBER", value: parsed.data.gstNumber });
+    }
+    if (parsed.data.technicianEarningRate !== undefined) {
+      updates.push({ key: "TECHNICIAN_EARNING_RATE_PCT", value: parsed.data.technicianEarningRate });
+    }
+    if (parsed.data.riderEarningRate !== undefined) {
+      updates.push({ key: "RIDER_EARNING_RATE_PCT", value: parsed.data.riderEarningRate });
+    }
+
     const result = await deps.systemSettingService.updateSettings(
-      [
-        { key: "DELIVERY_CHARGE", value: parsed.data.deliveryCharge },
-        { key: "SERVICE_CHARGE", value: parsed.data.serviceCharge }
-      ],
+      updates,
       adminId,
       ip,
       userAgent
@@ -1327,7 +1370,11 @@ export function registerAdminRoutes(
     // Emit live WebSocket update to all connected clients
     app.io.emit("system_settings_updated", {
       DELIVERY_CHARGE: parsed.data.deliveryCharge,
-      SERVICE_CHARGE: parsed.data.serviceCharge
+      SERVICE_CHARGE: parsed.data.serviceCharge,
+      ...(parsed.data.gstRate !== undefined ? { GST_RATE: parsed.data.gstRate } : {}),
+      ...(parsed.data.gstNumber !== undefined ? { GST_NUMBER: parsed.data.gstNumber } : {}),
+      ...(parsed.data.technicianEarningRate !== undefined ? { TECHNICIAN_EARNING_RATE_PCT: parsed.data.technicianEarningRate } : {}),
+      ...(parsed.data.riderEarningRate !== undefined ? { RIDER_EARNING_RATE_PCT: parsed.data.riderEarningRate } : {})
     });
 
     return {
@@ -1346,11 +1393,19 @@ export function registerAdminRoutes(
     }
     const deliveryCharge = await deps.systemSettingService.getSettingValue("DELIVERY_CHARGE", "30");
     const serviceCharge = await deps.systemSettingService.getSettingValue("SERVICE_CHARGE", "0");
+    const gstRate = await deps.systemSettingService.getSettingValue("GST_RATE", "18.00");
+    const gstNumber = await deps.systemSettingService.getSettingValue("GST_NUMBER", "");
+    const riderEarningRate = await deps.systemSettingService.getSettingValue("RIDER_EARNING_RATE_PCT", "100");
+    const technicianEarningRate = await deps.systemSettingService.getSettingValue("TECHNICIAN_EARNING_RATE_PCT", "100");
     return {
       success: true,
       data: {
         DELIVERY_CHARGE: deliveryCharge,
-        SERVICE_CHARGE: serviceCharge
+        SERVICE_CHARGE: serviceCharge,
+        GST_RATE: gstRate,
+        GST_NUMBER: gstNumber,
+        RIDER_EARNING_RATE_PCT: riderEarningRate,
+        TECHNICIAN_EARNING_RATE_PCT: technicianEarningRate
       },
       meta: {
         requestId: getRequestId(request, reply)
@@ -1385,6 +1440,41 @@ export function registerAdminRoutes(
     const result = await deps.systemSettingService.updateSettings(
       [
         { key: "RIDER_EARNING_RATE_PCT", value: parsed.data.value }
+      ],
+      adminId,
+      ip,
+      userAgent
+    );
+
+    return {
+      success: true,
+      data: result,
+      meta: {
+        requestId: getRequestId(request, reply)
+      }
+    };
+  });
+
+  app.put("/api/v1/admin/system-settings/TECHNICIAN_EARNING_RATE_PCT", { preHandler }, async (request, reply) => {
+    if (!deps.systemSettingService) {
+      throw new ValidationError("SystemSettingService not registered");
+    }
+    const parsed = updateRiderEarningSettingSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid rate value", parsed.error.flatten());
+    }
+
+    const adminId = request.user?.sub;
+    if (!adminId) {
+      throw new ValidationError("Admin ID missing from auth context");
+    }
+
+    const ip = request.ip;
+    const userAgent = (request.headers["user-agent"] ?? "") as string;
+
+    const result = await deps.systemSettingService.updateSettings(
+      [
+        { key: "TECHNICIAN_EARNING_RATE_PCT", value: parsed.data.value }
       ],
       adminId,
       ip,

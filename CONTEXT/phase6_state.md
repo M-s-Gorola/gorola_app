@@ -1034,30 +1034,30 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Backend Integration (`apps/api/src/__tests__/integration/order/order.repository.test.ts`):**
-  - [ ] Test: `OrderRepository.create()` accepts input containing `discountSavingAmount: new Decimal("50.00")`, `offerSavingAmount: new Decimal("25.00")`, `appliedOfferTitle: "Summer Special 10% OFF"`, `taxRate: new Decimal("18.00")` and persists them accurately.
-  - [ ] Test: `OrderRepository.create()` with those fields omitted stores `null` for all four columns (backward compatibility).
-  - [ ] **Run — confirm RED (columns do not exist on Prisma Order model).**
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/order/order.repository.test.ts`):**
+  - [x] Test: `OrderRepository.create()` accepts input containing `discountSavingAmount: new Decimal("50.00")`, `offerSavingAmount: new Decimal("25.00")`, `appliedOfferTitle: "Summer Special 10% OFF"`, `taxRate: new Decimal("18.00")` and persists them accurately.
+  - [x] Test: `OrderRepository.create()` with those fields omitted stores `null` for all four columns (backward compatibility).
+  - [x] **Run — confirm RED (columns do not exist on Prisma Order model).**
 
-- [ ] **GREEN — Backend (Schema → Migration → Seed → Repository):**
-  - [ ] [Schema] In `apps/api/prisma/schema.prisma`, add to `Order` model after `appliedDiscountCode`:
+- [x] **GREEN — Backend (Schema → Migration → Seed → Repository):**
+  - [x] [Schema] In `apps/api/prisma/schema.prisma`, add to `Order` model after `appliedDiscountCode`:
     ```prisma
     discountSavingAmount  Decimal?  @db.Decimal(10, 2)
     offerSavingAmount     Decimal?  @db.Decimal(10, 2)
     appliedOfferTitle     String?   @db.Text
     taxRate               Decimal?  @db.Decimal(5, 2)
     ```
-  - [ ] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_order_financial_snapshot_columns`. Apply migration to test database.
-  - [ ] [Seed] In `apps/api/prisma/seed.ts`, add to `systemSetting.createMany`:
+  - [x] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_order_financial_snapshot_columns`. Apply migration to test database.
+  - [x] [Seed] In `apps/api/prisma/seed.ts`, add to `systemSetting.createMany`:
     ```typescript
     { key: "GST_RATE", value: "0", description: "GST percentage applied to orders. Set to 0 to disable tax.", updatedBy: "system" },
     { key: "GST_NUMBER", value: "", description: "Business GSTIN for tax invoice generation (e.g. 05AAAAA0000A1Z5).", updatedBy: "system" }
     ```
-  - [ ] [Repository] In `apps/api/src/modules/order/order.repository.ts`, update `CreateOrderInput` interface and pass through the four snapshot fields in `create()`.
-  - [ ] Run integration test — **confirm GREEN.**
+  - [x] [Repository] In `apps/api/src/modules/order/order.repository.ts`, update `CreateOrderInput` interface and pass through the four snapshot fields in `create()`.
+  - [x] Run integration test — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Migration applied → `Order` rows support snapshot columns → existing rows retain `null` safely → tests pass → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Migration applied → `Order` rows support snapshot columns → existing rows retain `null` safely → tests pass → ✅ Done.
 
 ---
 
@@ -1069,23 +1069,23 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Frontend Unit (5 test files):**
-  - [ ] **`StoreOrdersPage.test.tsx`:** Assert breakdown renders `"Service Fee"` when `orderType === "BOOKING"` and `"Delivery Fee"` when `orderType === "QUICK"`.
-  - [ ] **`AdminOrdersPage.test.tsx`:** Assert breakdown renders `"Service Fee"` for booking orders.
-  - [ ] **`AdminStoreDetailPage.test.tsx`:** Assert breakdown modal renders `"Service Fee"` for booking rows.
-  - [ ] **`AdminUserDetailPage.test.tsx`:** Assert user orders modal renders `"Service Fee"` for booking rows.
-  - [ ] **`StoreBookingsPage.test.tsx`:** Assert fee row is labeled `"Service Fee"`.
-  - [ ] **Run all 5 tests — confirm RED.**
+- [x] **RED — Frontend Unit (5 test files):**
+  - [x] **`StoreOrdersPage.test.tsx`:** Assert breakdown renders `"Service Fee"` when `orderType === "BOOKING"` and `"Delivery Fee"` when `orderType === "QUICK"`.
+  - [x] **`AdminOrdersPage.test.tsx`:** Assert breakdown renders `"Service Fee"` for booking orders.
+  - [x] **`AdminStoreDetailPage.test.tsx`:** Assert breakdown modal renders `"Service Fee"` for booking rows.
+  - [x] **`AdminUserDetailPage.test.tsx`:** Assert user orders modal renders `"Service Fee"` for booking rows.
+  - [x] **`StoreBookingsPage.test.tsx`:** Assert fee row is labeled `"Service Fee"`.
+  - [x] **Run all 5 tests — confirm RED.**
 
-- [ ] **GREEN — Frontend Component Updates:**
-  - [ ] In all 6 files, replace hardcoded `"Delivery Fee"` text with:
+- [x] **GREEN — Frontend Component Updates:**
+  - [x] In all 6 files, replace hardcoded `"Delivery Fee"` text with:
     ```tsx
     {order.orderType === "BOOKING" ? "Service Fee" : "Delivery Fee"}
     ```
-  - [ ] Run unit tests — **confirm GREEN.**
+  - [x] Run unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Store/Admin viewing booking order sees "Service Fee: ₹199" → quick order sees "Delivery Fee: ₹30" → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Store/Admin viewing booking order sees "Service Fee: ₹199" → quick order sees "Delivery Fee: ₹30" → ✅ Done.
 
 ---
 
@@ -1097,30 +1097,30 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.settings.test.ts`):**
-  - [ ] Test: `PUT /api/v1/admin/settings` accepts `gstRate: "18"` and `gstNumber: "05AAAAA0000A1Z5"` and updates `SystemSetting`.
-  - [ ] Test: `gstRate` validation rejects negative numbers or numbers > 100.
-  - [ ] Test: `GET /api/v1/settings` public endpoint returns `GST_RATE: "18.00"`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.settings.test.ts`):**
+  - [x] Test: `PUT /api/v1/admin/settings` accepts `gstRate: "18"` and `gstNumber: "05AAAAA0000A1Z5"` and updates `SystemSetting`.
+  - [x] Test: `gstRate` validation rejects negative numbers or numbers > 100.
+  - [x] Test: `GET /api/v1/settings` public endpoint returns `GST_RATE: "18.00"`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Controller & Route):**
-  - [ ] In `apps/api/src/modules/admin/admin.controller.ts`, add `gstRate` and `gstNumber` to the settings Zod schema.
-  - [ ] Persist keys `GST_RATE` and `GST_NUMBER` with `AuditLog` entry.
-  - [ ] Include `GST_RATE` in public `GET /api/v1/settings` response.
-  - [ ] Run backend tests — **confirm GREEN.**
+- [x] **GREEN — Backend (Controller & Route):**
+  - [x] In `apps/api/src/modules/admin/admin.controller.ts`, add `gstRate` and `gstNumber` to the settings Zod schema.
+  - [x] Persist keys `GST_RATE` and `GST_NUMBER` with `AuditLog` entry.
+  - [x] Include `GST_RATE` in public `GET /api/v1/settings` response.
+  - [x] Run backend tests — **confirm GREEN.**
 
-- [ ] **RED — Frontend Unit (`AdminDashboardPage.test.tsx`):**
-  - [ ] Test: Form renders `id="gst-rate-input"` and `id="gst-number-input"`.
-  - [ ] Test: Submitting form passes `gstRate` and `gstNumber` in payload.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Frontend Unit (`AdminDashboardPage.test.tsx`):**
+  - [x] Test: Form renders `id="gst-rate-input"` and `id="gst-number-input"`.
+  - [x] Test: Submitting form passes `gstRate` and `gstNumber` in payload.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Frontend (Hook & Admin Form):**
-  - [ ] [Hook] In `apps/web/src/lib/useSystemSettings.ts`, add `GST_RATE: string` to settings interface.
-  - [ ] [Page] In `AdminDashboardPage.tsx`, add form state, inputs with IDs, and save handler.
-  - [ ] Run frontend unit tests — **confirm GREEN.**
+- [x] **GREEN — Frontend (Hook & Admin Form):**
+  - [x] [Hook] In `apps/web/src/hooks/useSystemSettings.ts`, add `GST_RATE: string` to settings interface.
+  - [x] [Page] In `AdminDashboardPage.tsx`, add form state, inputs with IDs, and save handler.
+  - [x] Run frontend unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Admin enters GST Rate `18` and GSTIN → clicks Save → values persisted in DB with audit trail → `useSystemSettings` receives updated values → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Admin enters GST Rate `18` and GSTIN → clicks Save → values persisted in DB with audit trail → `useSystemSettings` receives updated values → ✅ Done.
 
 ---
 
@@ -1132,20 +1132,20 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Backend Integration (`apps/api/src/__tests__/integration/order/order.controller.test.ts`):**
-  - [ ] Test: Quick order with coupon saving ₹50 stores `discountSavingAmount = 50.00` and `appliedDiscountCode = "COUPON50"`.
-  - [ ] Test: Quick order with store offer saving ₹25 stores `offerSavingAmount = 25.00` and `appliedOfferTitle = "Festive 10% OFF"`.
-  - [ ] Test: Order with no promotions stores `discountSavingAmount = 0.00`, `offerSavingAmount = 0.00`, `appliedOfferTitle = null`.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/order/order.controller.test.ts`):**
+  - [x] Test: Quick order with coupon saving ₹50 stores `discountSavingAmount = 50.00` and `appliedDiscountCode = "COUPON50"`.
+  - [x] Test: Quick order with store offer saving ₹25 stores `offerSavingAmount = 25.00` and `appliedOfferTitle = "Festive 10% OFF"`.
+  - [x] Test: Order with no promotions stores `discountSavingAmount = 0.00`, `offerSavingAmount = 0.00`, `appliedOfferTitle = null`.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Service Updates):**
-  - [ ] In `BuyerCheckoutService.ts`, pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` to `placeOrderWithStock()`.
-  - [ ] In `booking-order.service.ts`, pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` to `tx.order.create()`.
-  - [ ] In `order.controller.ts`, serialize these three fields in order responses.
-  - [ ] Run integration tests — **confirm GREEN.**
+- [x] **GREEN — Backend (Service Updates):**
+  - [x] In `BuyerCheckoutService.ts`, pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` to `placeOrderWithStock()`.
+  - [x] In `booking-order.service.ts`, pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` to `tx.order.create()`.
+  - [x] In `order.controller.ts`, serialize these three fields in order responses.
+  - [x] Run integration tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Buyer places order with coupon & store offer → DB row records exact rupee savings and promotion title → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Buyer places order with coupon & store offer → DB row records exact rupee savings and promotion title → ✅ Done.
 
 ---
 
@@ -1157,25 +1157,25 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Frontend Unit (Buyer, Store, Admin test files):**
-  - [ ] **`OrderConfirmationPage.test.tsx`:** Assert summary renders coupon savings and offer title badge (`🎉 Offer: Festive 10% OFF (-₹25.00)`).
-  - [ ] **`BookingConfirmationPage.test.tsx`:** Assert booking summary displays stored savings and offer name.
-  - [ ] **`AccountOrdersPage.test.tsx`:** Assert order cards display savings chips and promo title.
-  - [ ] **`StoreOrdersPage.test.tsx` / `StoreBookingsPage.test.tsx`:** Assert order details drawer displays `appliedOfferTitle`.
-  - [ ] **`AdminOrdersPage.test.tsx` / `AdminStoreDetailPage.test.tsx` / `AdminUserDetailPage.test.tsx`:** Assert admin order breakdown modals display stored discount amounts and offer title.
-  - [ ] **Run all frontend tests — confirm RED.**
+- [x] **RED — Frontend Unit (Buyer, Store, Admin test files):**
+  - [x] **`OrderConfirmationPage.test.tsx`:** Assert summary renders coupon savings and offer title badge (`🎉 Offer: Festive 10% OFF (-₹25.00)`).
+  - [x] **`BookingConfirmationPage.test.tsx`:** Assert booking summary displays stored savings and offer name.
+  - [x] **`AccountOrdersPage.test.tsx`:** Assert order cards display savings chips and promo title.
+  - [x] **`StoreOrdersPage.test.tsx` / `StoreBookingsPage.test.tsx`:** Assert order details drawer displays `appliedOfferTitle`.
+  - [x] **`AdminOrdersPage.test.tsx` / `AdminStoreDetailPage.test.tsx` / `AdminUserDetailPage.test.tsx`:** Assert admin order breakdown modals display stored discount amounts and offer title.
+  - [x] **Run all frontend tests — confirm RED.**
 
-- [ ] **GREEN — Frontend Component Updates:**
-  - [ ] In `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, `AccountOrdersPage.tsx`, `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `AdminOrdersPage.tsx`, `AdminStoreDetailPage.tsx`, and `AdminUserDetailPage.tsx`:
+- [x] **GREEN — Frontend Component Updates:**
+  - [x] In `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, `AccountOrdersPage.tsx`, `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `AdminOrdersPage.tsx`, `AdminStoreDetailPage.tsx`, and `AdminUserDetailPage.tsx`:
     - Replace arithmetic inference with stored values:
       ```typescript
       const discountAmount = Number(order.discountSavingAmount ?? 0) + Number(order.offerSavingAmount ?? 0);
       ```
     - Display promo chips for `appliedDiscountCode` and `appliedOfferTitle` when present.
-  - [ ] Run all frontend tests — **confirm GREEN.**
+  - [x] Run all frontend tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Order with coupon & offer renders exact savings and promo titles across all Buyer, Store, and Admin views without deriving from total → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Order with coupon & offer renders exact savings and promo titles across all Buyer, Store, and Admin views without deriving from total → ✅ Done.
 
 ---
 
@@ -1187,20 +1187,20 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Backend Integration (`apps/api/src/__tests__/integration/rider/rider.earnings.trigger.test.ts`):**
-  - [ ] Test: Seed `TECHNICIAN_EARNING_RATE_PCT = "50"` and `RIDER_EARNING_RATE_PCT = "80"`. Marking `BOOKING` order delivered creates `RiderEarning` at 50% of service fee.
-  - [ ] Test: Marking `QUICK` order delivered creates `RiderEarning` at 80% of delivery fee.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/rider/rider.earnings.trigger.test.ts`):**
+  - [x] Test: Seed `TECHNICIAN_EARNING_RATE_PCT = "50"` and `RIDER_EARNING_RATE_PCT = "80"`. Marking `BOOKING` order delivered creates `RiderEarning` at 50% of service fee.
+  - [x] Test: Marking `QUICK` order delivered creates `RiderEarning` at 80% of delivery fee.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Backend (Seed → Service → Controller):**
-  - [ ] In `apps/api/prisma/seed.ts`, seed `TECHNICIAN_EARNING_RATE_PCT = "100"`.
-  - [ ] In `rider-earnings.service.ts`, accept `orderType` and use `TECHNICIAN_EARNING_RATE_PCT` for `BOOKING` orders.
-  - [ ] In `admin.controller.ts`, allow updating `technicianEarningRate` in `PUT /api/v1/admin/settings`.
-  - [ ] In `AdminDashboardPage.tsx`, add input `id="technician-earning-rate-input"`.
-  - [ ] Run integration and unit tests — **confirm GREEN.**
+- [x] **GREEN — Backend (Seed → Service → Controller):**
+  - [x] In `apps/api/prisma/seed.ts`, seed `TECHNICIAN_EARNING_RATE_PCT = "100"`.
+  - [x] In `rider-earnings.service.ts`, accept `orderType` and use `TECHNICIAN_EARNING_RATE_PCT` for `BOOKING` orders.
+  - [x] In `admin.controller.ts`, allow updating `technicianEarningRate` in `PUT /api/v1/admin/settings`.
+  - [x] In `AdminDashboardPage.tsx`, add input `id="technician-earning-rate-input"`.
+  - [x] Run integration and unit tests — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Booking completed → technician credited according to technician earning rate → delivery completed → rider credited according to rider earning rate → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Booking completed → technician credited according to technician earning rate → delivery completed → rider credited according to rider earning rate → ✅ Done.
 
 ---
 
@@ -1212,32 +1212,32 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-- [ ] **RED — Unit (`apps/api/src/__tests__/unit/invoice/invoice-formatter.test.ts`):**
-  - [ ] Test: `formatInvoice()` includes business GSTIN, customer details, itemized table, subtotal, delivery/service fee, coupon code, and offer title.
-  - [ ] Test: `formatInvoice()` omits GST section when `taxRate` is null or 0.
-  - [ ] Test: `formatInvoice()` renders "Service Fee" for `BOOKING` orders.
-  - [ ] **Run — confirm RED.**
+- [x] **RED — Unit (`apps/api/src/__tests__/unit/invoice/invoice-formatter.test.ts`):**
+  - [x] Test: `formatInvoice()` includes business GSTIN, customer details, itemized table, subtotal, delivery/service fee, coupon code, and offer title.
+  - [x] Test: `formatInvoice()` omits GST section when `taxRate` is null or 0.
+  - [x] Test: `formatInvoice()` renders "Service Fee" for `BOOKING` orders.
+  - [x] **Run — confirm RED.**
 
-- [ ] **GREEN — Script (Types → Formatter → Fetcher → CLI):**
-  - [ ] [Types] Create `apps/api/src/modules/invoice/invoice.types.ts` defining `InvoiceData`.
-  - [ ] [Formatter] Create `apps/api/src/modules/invoice/invoice-formatter.ts` exporting `formatInvoice(data: InvoiceData): string`.
-  - [ ] [Fetcher] Create `apps/api/src/modules/invoice/invoice-data-fetcher.ts` exporting `fetchInvoiceData(orderId, db)`.
-  - [ ] [CLI] Create `scripts/generate-invoice.ts` accepting `--orderId` argument and printing formatted invoice.
-  - [ ] Run unit test — **confirm GREEN.**
+- [x] **GREEN — Script (Types → Formatter → Fetcher → CLI):**
+  - [x] [Types] Create `apps/api/src/modules/invoice/invoice.types.ts` defining `InvoiceData`.
+  - [x] [Formatter] Create `apps/api/src/modules/invoice/invoice-formatter.ts` exporting `formatInvoice(data: InvoiceData): string`.
+  - [x] [Fetcher] Create `apps/api/src/modules/invoice/invoice-data-fetcher.ts` exporting `fetchInvoiceData(orderId, db)`.
+  - [x] [CLI] Create `scripts/generate-invoice.ts` accepting `--orderId` argument and printing formatted invoice.
+  - [x] Run unit test — **confirm GREEN.**
 
-- [ ] **Verification chain:**
-  - [ ] Running `ts-node scripts/generate-invoice.ts --orderId <id>` fetches order, decrypts phone, formats items and promotions, and prints clean tax invoice to stdout → ✅ Done.
+- [x] **Verification chain:**
+  - [x] Running `ts-node scripts/generate-invoice.ts --orderId <id>` fetches order, decrypts phone, formats items and promotions, and prints clean tax invoice to stdout → ✅ Done.
 
 ---
 
 ### Phase 6.18.8: Full Regression & Quality Gates
 
-- [ ] **API Tests:** `pnpm --filter @gorola/api test -- --run` (100% green). ✅
-- [ ] **Web Tests:** `pnpm --filter @gorola/web test -- --run` (100% green). ✅
-- [ ] **Typecheck:** `pnpm typecheck` (0 errors across monorepo). ✅
-- [ ] **Lint:** `pnpm lint` (0 errors, 0 warnings). ✅
-- [ ] **Manual Smoke:** Create quick order with coupon + store offer → verify DB snapshot columns → verify UI chips → test invoice script output. ✅
-- [ ] **Update Documentation:** Mark Phase 6.18 as COMPLETE in `CONTEXT/phase6_state.md` and queue Phase 6.19 in `CONTEXT/current_state.md`. ✅
+- [x] **API Tests:** `pnpm --filter @gorola/api test -- --run` (100% green: 141 files, 844 tests passed). ✅
+- [x] **Web Tests:** `pnpm --filter @gorola/web test -- --run` (100% green: 105 files, 594 tests passed). ✅
+- [x] **Typecheck:** `pnpm typecheck` (0 errors across packages/shared, packages/ui, apps/api, apps/web). ✅
+- [x] **Lint:** `pnpm lint` (0 errors, 0 warnings). ✅
+- [x] **Manual Smoke:** Create quick order with coupon + store offer → verify DB snapshot columns → verify UI chips → test invoice script output. ✅
+- [x] **Update Documentation:** Mark Phase 6.18 as COMPLETE in `CONTEXT/phase6_state.md` and queue Phase 6.19 in `CONTEXT/current_state.md`. ✅
 
 ---
 
@@ -1264,6 +1264,25 @@ Several interrelated financial data integrity and configuration issues exist in 
 ---
 
 ## Session Notes (Phase 6)
+
+### 2026-10-08: Phase 6.18 — Financial Infrastructure: GST Foundation, Financial Data Integrity & Invoice Generator
+- **Problem:**
+  1. No promo/discount savings persisted on `Order` table; UIs used arithmetic subtraction hacks (`subtotal + fee - total`).
+  2. Promotion titles and coupon codes lacked persistent audit snapshots (`appliedOfferTitle`).
+  3. No historical `taxRate` snapshot column existed.
+  4. Booking orders labeled platform fees as "Delivery Fee" instead of "Service Fee".
+  5. GST settings (`GST_RATE`, `GST_NUMBER`) missing from settings schema and UI.
+  6. Shared rider/technician payout rates prevented independent technician commission configuration.
+  7. No invoice generation script or pure formatting engine existed.
+- **Solution & TDD Execution:**
+  - **Phase 6.18.1:** Single migration `20261008174857_add_order_financial_snapshot_columns` added `discountSavingAmount`, `offerSavingAmount`, `appliedOfferTitle`, and `taxRate` to `Order`.
+  - **Phase 6.18.2:** Semantic "Service Fee" vs "Delivery Fee" labels dynamically resolved based on `orderType` across 5 order view components.
+  - **Phase 6.18.3:** Added `GST_RATE` and `GST_NUMBER` to system settings, admin settings API endpoints, and admin dashboard form.
+  - **Phase 6.18.4:** Persisted promotional savings snapshots in `BuyerCheckoutService` and `booking-order.service.ts`.
+  - **Phase 6.18.5:** Replaced frontend discount inference with snapshot values and rendered promo chips across Buyer, Store, and Admin views.
+  - **Phase 6.18.6:** Seeded and integrated `TECHNICIAN_EARNING_RATE_PCT` for booking orders.
+  - **Phase 6.18.7:** Created decoupled `invoice-data-fetcher.ts`, `invoice-formatter.ts`, and CLI script `generate-invoice.ts`.
+  - **Phase 6.18.8:** Full regression passed: 141 API test files (844 tests), 105 Web test files (594 tests), 0 typecheck errors, 0 lint errors.
 
 ### 2026-10-02: Phase 6.17 — Admin 360° Visibility, Dedicated Detail Pages & Order Pagination
 - **Problem:**

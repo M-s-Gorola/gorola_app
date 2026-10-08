@@ -77,6 +77,9 @@ export function AdminDashboardPage(): ReactElement {
   const [deliveryCharge, setDeliveryCharge] = useState("");
   const [serviceCharge, setServiceCharge] = useState("");
   const [riderEarningRateGlobal, setRiderEarningRateGlobal] = useState("");
+  const [technicianEarningRateGlobal, setTechnicianEarningRateGlobal] = useState("");
+  const [gstRate, setGstRate] = useState("");
+  const [gstNumber, setGstNumber] = useState("");
   const [hasSetDefaults, setHasSetDefaults] = useState(false);
 
   const { data: settings } = useQuery<Array<{ key: string; value: string }>>({
@@ -93,15 +96,28 @@ export function AdminDashboardPage(): ReactElement {
       const delivery = settings.find(s => s.key === "DELIVERY_CHARGE")?.value || "";
       const service = settings.find(s => s.key === "SERVICE_CHARGE")?.value || "";
       const rate = settings.find(s => s.key === "RIDER_EARNING_RATE_PCT")?.value || "";
+      const techRate = settings.find(s => s.key === "TECHNICIAN_EARNING_RATE_PCT")?.value || "";
+      const gst = settings.find(s => s.key === "GST_RATE")?.value || "";
+      const gstin = settings.find(s => s.key === "GST_NUMBER")?.value || "";
       setDeliveryCharge(delivery);
       setServiceCharge(service);
       setRiderEarningRateGlobal(rate);
+      setTechnicianEarningRateGlobal(techRate);
+      setGstRate(gst);
+      setGstNumber(gstin);
       setHasSetDefaults(true);
     }
   }, [settings, hasSetDefaults]);
 
   const updateSettingsMutation = useMutation({
-    mutationFn: async (payload: { deliveryCharge: string; serviceCharge: string }) => {
+    mutationFn: async (payload: {
+      deliveryCharge: string;
+      serviceCharge: string;
+      gstRate?: string;
+      gstNumber?: string;
+      riderEarningRate?: string;
+      technicianEarningRate?: string;
+    }) => {
       if (!api) throw new Error("API helper not initialized");
       const res = await api.put<{ success: boolean; data: Array<{ key: string; value: string }> }>("/api/v1/admin/settings", payload);
       return res.data;
@@ -876,19 +892,31 @@ export function AdminDashboardPage(): ReactElement {
       {/* Platform Fees Settings Card */}
       <div className="bg-white rounded-2xl border border-gorola-charcoal/10 p-6 shadow-sm">
         <h2 className="font-heading text-lg font-bold text-gorola-charcoal mb-2">
-          Platform Fees Settings
+          Platform Fees & Financial Settings
         </h2>
         <p className="text-xs text-gorola-slate mb-6 font-dm-sans">
-          Configure the delivery fees for quick commerce and service charges for bookings.
+          Configure the delivery fees for quick commerce, service charges for bookings, and business GST parameters.
         </p>
 
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            updateSettingsMutation.mutate({
+            const payload: {
+              deliveryCharge: string;
+              serviceCharge: string;
+              gstRate?: string;
+              gstNumber?: string;
+              riderEarningRate?: string;
+              technicianEarningRate?: string;
+            } = {
               deliveryCharge,
-              serviceCharge
-            });
+              serviceCharge,
+              ...(gstRate ? { gstRate } : {}),
+              ...(gstNumber ? { gstNumber } : {}),
+              ...(riderEarningRateGlobal ? { riderEarningRate: riderEarningRateGlobal } : {}),
+              ...(technicianEarningRateGlobal ? { technicianEarningRate: technicianEarningRateGlobal } : {})
+            };
+            updateSettingsMutation.mutate(payload);
             updateGlobalRiderEarningRateMutation.mutate(riderEarningRateGlobal);
           }}
           className="space-y-4 max-w-sm font-dm-sans"
@@ -920,6 +948,35 @@ export function AdminDashboardPage(): ReactElement {
           </div>
 
           <div className="space-y-1.5">
+            <label htmlFor="gst-rate-input" className="text-xs font-bold text-gorola-charcoal block">
+              GST Rate (%)
+            </label>
+            <input
+              id="gst-rate-input"
+              data-testid="gst-rate-input"
+              type="text"
+              value={gstRate}
+              onChange={(e) => setGstRate(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="gst-number-input" className="text-xs font-bold text-gorola-charcoal block">
+              GSTIN / Tax Number
+            </label>
+            <input
+              id="gst-number-input"
+              data-testid="gst-number-input"
+              type="text"
+              value={gstNumber}
+              onChange={(e) => setGstNumber(e.target.value)}
+              placeholder="e.g. 05AAAAA0000A1Z5"
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <div className="space-y-1.5">
             <label htmlFor="rider-earning-rate-global" className="text-xs font-bold text-gorola-charcoal block">
               Default Rider Earning Rate (%)
             </label>
@@ -929,6 +986,20 @@ export function AdminDashboardPage(): ReactElement {
               type="text"
               value={riderEarningRateGlobal}
               onChange={(e) => setRiderEarningRateGlobal(e.target.value)}
+              className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="technician-earning-rate-input" className="text-xs font-bold text-gorola-charcoal block">
+              Default Technician Earning Rate (%)
+            </label>
+            <input
+              id="technician-earning-rate-input"
+              data-testid="technician-earning-rate-input"
+              type="text"
+              value={technicianEarningRateGlobal}
+              onChange={(e) => setTechnicianEarningRateGlobal(e.target.value)}
               className="w-full bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl px-4 py-2 text-sm text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20 focus:border-gorola-pine transition-all duration-300"
             />
           </div>

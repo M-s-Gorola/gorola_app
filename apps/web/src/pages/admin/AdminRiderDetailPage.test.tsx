@@ -215,5 +215,47 @@ describe("AdminRiderDetailPage", () => {
     const modal = await screen.findByTestId("rider-order-details-modal");
     expect(await within(modal).findByText("Farm Apples")).toBeInTheDocument();
     expect(within(modal).getByText(/By Rider \(Hillside Rider\)/)).toBeInTheDocument();
+    expect(within(modal).getByText("Delivery Fee")).toBeInTheDocument();
+  });
+
+  it("renders 'Service Fee' for BOOKING orders in rider order details modal", async () => {
+    const mockOrderDetailData = {
+      success: true,
+      data: {
+        id: "ord-901",
+        status: "DELIVERED",
+        orderType: "BOOKING",
+        subtotal: 400.0,
+        deliveryFee: 40.0,
+        total: 440.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near Mall Road Clock",
+        flatRoom: "Suite 101",
+        createdAt: "2026-06-02T14:00:00.000Z",
+        buyerMaskedPhone: "*********3210",
+        store: { name: "GoRola Repairs", phone: "+919999999011" },
+        items: [
+          { id: "item-1", productName: "Device Repair", variantLabel: "Standard", price: 400.0, quantity: 1 }
+        ],
+        statusHistory: [],
+        riderName: "Tech Bob"
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/admin/orders/ord-901") return Promise.resolve({ data: mockOrderDetailData });
+      if (url.includes("/orders")) return Promise.resolve({ data: mockRiderOrdersData });
+      return Promise.resolve({ data: mockRiderData });
+    });
+
+    renderAdminRiderDetail();
+
+    const viewBtn = await screen.findByTestId("view-rider-order-ord-901");
+    fireEvent.click(viewBtn);
+
+    const modal = await screen.findByTestId("rider-order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
   });
 });

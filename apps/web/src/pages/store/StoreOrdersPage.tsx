@@ -60,6 +60,7 @@ type Order = {
   id: string;
   userId: string;
   storeId: string;
+  orderType?: string | null;
   status: OrderStatus;
   subtotal: number;
   deliveryFee: number;
@@ -73,6 +74,10 @@ type Order = {
   items: OrderItem[];
   statusHistory: OrderStatusHistory[];
   appliedDiscountCode?: string | null;
+  discountSavingAmount?: number | string | null;
+  offerSavingAmount?: number | string | null;
+  appliedOfferTitle?: string | null;
+  taxRate?: number | string | null;
   riderId?: string | null;
   deliveryLat?: number | null;
   deliveryLng?: number | null;
@@ -263,6 +268,32 @@ export function StoreOrdersPage(): ReactElement {
   });
 
   const getAppliedDiscounts = (order: Order) => {
+    // 1. Direct Stored Snapshots (Preferred)
+    const hasStoredPromo =
+      (order.discountSavingAmount !== undefined && order.discountSavingAmount !== null) ||
+      (order.offerSavingAmount !== undefined && order.offerSavingAmount !== null);
+
+    if (hasStoredPromo) {
+      const result: { label: string; amount: number }[] = [];
+      const offerAmt = Number(order.offerSavingAmount || 0);
+      const discountAmt = Number(order.discountSavingAmount || 0);
+
+      if (offerAmt > 0) {
+        result.push({
+          label: order.appliedOfferTitle ? `Offer (${order.appliedOfferTitle})` : "Store Offer",
+          amount: offerAmt
+        });
+      }
+      if (discountAmt > 0) {
+        result.push({
+          label: order.appliedDiscountCode ? `Discount (${order.appliedDiscountCode})` : "Discount",
+          amount: discountAmt
+        });
+      }
+      return result;
+    }
+
+    // 2. Legacy / Fallback inference for old orders
     const subtotal = Number(order.subtotal);
     const deliveryFee = Number(order.deliveryFee);
     const total = Number(order.total);
@@ -951,7 +982,7 @@ export function StoreOrdersPage(): ReactElement {
                     <span className="font-semibold">{formatCurrency(subtotal)}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs text-gorola-slate">
-                    <span>Delivery Fee</span>
+                    <span>{selectedOrder.orderType === "BOOKING" ? "Service Fee" : "Delivery Fee"}</span>
                     <span className="font-semibold">{formatCurrency(deliveryFee)}</span>
                   </div>
                   {(() => {

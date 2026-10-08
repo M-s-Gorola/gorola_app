@@ -656,4 +656,92 @@ describe("StoreOrdersPage", () => {
     // It should format "rider:rider-123" using the rider's name "Hillside Rider"
     expect(screen.getByText(/By Hillside Rider at/i)).toBeInTheDocument();
   });
+
+  it("renders 'Service Fee' for BOOKING orders and 'Delivery Fee' for QUICK orders in detail modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-booking-1",
+          userId: "buyer-123",
+          storeId: "store-456",
+          orderType: "BOOKING",
+          status: "PLACED",
+          subtotal: 500.0,
+          deliveryFee: 50.0,
+          total: 550.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "AC Repair", price: 500.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockResolvedValue({ data: mockOrdersData });
+
+    renderStoreOrders();
+
+    const card = await screen.findByTestId("order-card-order-booking-1");
+    fireEvent.click(card);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders stored offer and discount snapshot titles in order breakdown modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-promo-snapshot-1",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PLACED",
+          subtotal: 300.0,
+          deliveryFee: 30.0,
+          total: 260.0,
+          discountSavingAmount: 15.0,
+          offerSavingAmount: 25.0,
+          appliedOfferTitle: "Festive 25 OFF",
+          appliedDiscountCode: "SAVE15",
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Item A", price: 300.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) {
+        // Return empty offers list to prove it renders from stored snapshot, not active offers
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    const card = await screen.findByTestId("order-card-order-promo-snapshot-1");
+    fireEvent.click(card);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    const discountToggle = await screen.findByTestId("store-order-discount-toggle");
+    fireEvent.click(discountToggle);
+
+    expect(within(modal).getByText(/Offer \(Festive 25 OFF\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/Discount \(SAVE15\)/)).toBeInTheDocument();
+  });
 });
+

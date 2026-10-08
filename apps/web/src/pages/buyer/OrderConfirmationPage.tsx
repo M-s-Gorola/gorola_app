@@ -42,10 +42,6 @@ export type StatusHistoryItem = {
 export type BuyerOrderDetail = {
   createdAt?: string;
   deliveryFee: string;
-  discount?: {
-    amount: string;
-    code: string | null;
-  };
   id: string;
   orderType?: string;
   items: BuyerOrderConfirmationItem[];
@@ -62,6 +58,17 @@ export type BuyerOrderDetail = {
   scheduledFor?: string | null;
   status: string;
   statusHistory?: StatusHistoryItem[];
+  discountSavingAmount?: number | string | null;
+  offerSavingAmount?: number | string | null;
+  appliedOfferTitle?: string | null;
+  appliedDiscountCode?: string | null;
+  taxRate?: number | string | null;
+  discount?: {
+    amount: string;
+    code: string | null;
+    appliedDiscountAmount?: string;
+    appliedOfferAmount?: string;
+  } | null;
   store: {
     id: string;
     name: string;
@@ -404,6 +411,32 @@ interface StoreOffer {
   });
 
   const getAppliedDiscounts = (order: BuyerOrderDetail) => {
+    // 1. Direct Stored Snapshots (Preferred)
+    const hasStoredPromo =
+      (order.discountSavingAmount !== undefined && order.discountSavingAmount !== null) ||
+      (order.offerSavingAmount !== undefined && order.offerSavingAmount !== null);
+
+    if (hasStoredPromo) {
+      const result: { label: string; amount: number }[] = [];
+      const offerAmt = Number(order.offerSavingAmount || 0);
+      const discountAmt = Number(order.discountSavingAmount || 0);
+
+      if (offerAmt > 0) {
+        result.push({
+          label: order.appliedOfferTitle ? `Offer (${order.appliedOfferTitle})` : "Store Offer",
+          amount: offerAmt
+        });
+      }
+      if (discountAmt > 0) {
+        result.push({
+          label: order.appliedDiscountCode || order.discount?.code ? `Discount (${order.appliedDiscountCode || order.discount?.code})` : "Discount",
+          amount: discountAmt
+        });
+      }
+      return result;
+    }
+
+    // 2. Fallback
     const subtotal = Number(order.subtotal);
     const deliveryFee = Number(order.deliveryFee);
     const total = Number(order.total);

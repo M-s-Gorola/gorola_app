@@ -274,5 +274,127 @@ describe("AdminOrdersPage", () => {
     expect(within(modal).getByText(/By Buyer \(Registered User\)/)).toBeInTheDocument();
     expect(within(modal).getByText(/By Store Owner \(Dairy Plaza\)/)).toBeInTheDocument();
   });
+
+  it("renders 'Service Fee' for BOOKING orders and 'Delivery Fee' for QUICK orders in detail modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-booking-admin",
+            buyerMaskedPhone: "******9001",
+            storeName: "GoRola Repairs",
+            itemsCount: 1,
+            total: 350.0,
+            status: "PLACED",
+            orderType: "BOOKING",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-repair", name: "GoRola Repairs" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-booking-admin",
+        status: "PLACED",
+        orderType: "BOOKING",
+        subtotal: 300.0,
+        deliveryFee: 50.0,
+        total: 350.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Clock Tower",
+        flatRoom: "Flat 101",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "Alice", phone: "+919999999001" },
+        store: { name: "GoRola Repairs", phone: "+91000" },
+        items: [
+          { id: "item-1", productName: "Plumbing Service", variantLabel: "Standard", price: 300.0, quantity: 1 }
+        ],
+        statusHistory: []
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-booking-admin")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-booking-admin"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders promotional offer and discount breakdown lines in admin order details modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-promo-admin",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 1,
+            total: 200.0,
+            status: "PLACED",
+            orderType: "QUICK",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-1", name: "Dairy Plaza" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-promo-admin",
+        status: "PLACED",
+        orderType: "QUICK",
+        subtotal: 220.0,
+        deliveryFee: 30.0,
+        total: 200.0,
+        discountSavingAmount: 20.0,
+        offerSavingAmount: 30.0,
+        appliedOfferTitle: "Mega Summer Deal",
+        appliedDiscountCode: "PROMO20",
+        paymentMethod: "COD",
+        landmarkDescription: "Clock Tower",
+        flatRoom: "Flat 101",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "Alice", phone: "+919999999001" },
+        store: { name: "Dairy Plaza", phone: "+91000" },
+        items: [{ id: "item-1", productName: "Milk", variantLabel: "1L", price: 220.0, quantity: 1 }],
+        statusHistory: []
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-promo-admin")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-promo-admin"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    expect(await within(modal).findByText(/Offer \(Mega Summer Deal\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/Discount \(PROMO20\)/)).toBeInTheDocument();
+  });
 });
+
 

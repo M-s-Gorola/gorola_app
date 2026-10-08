@@ -282,6 +282,53 @@ describe("Rider Earnings Status Trigger Integration Tests", () => {
     expect(earning!.amount.toNumber()).toBe(54.00); // 60 * 90%
   });
 
+  it("should calculate technician earning using TECHNICIAN_EARNING_RATE_PCT for BOOKING order", async () => {
+    // Seed TECHNICIAN_EARNING_RATE_PCT to 50
+    await db.systemSetting.deleteMany({ where: { key: "TECHNICIAN_EARNING_RATE_PCT" } });
+    await db.systemSetting.create({
+      data: { key: "TECHNICIAN_EARNING_RATE_PCT", value: "50", updatedBy: "system" }
+    });
+
+    const order = await db.order.create({
+      data: {
+        userId: user.id,
+        storeId,
+        status: "OUT_FOR_DELIVERY",
+        orderType: "BOOKING",
+        subtotal: 500,
+        deliveryFee: 100.00,
+        total: 600.00,
+        landmarkDescription: "Booking Address",
+        bookingOrder: {
+          create: {
+            assignedTechnicianId: riderId,
+            scheduledDate: new Date(),
+            timeslot: "08:00 - 09:00"
+          }
+        }
+      }
+    });
+
+    const res = await server.inject({
+      method: "PUT",
+      url: `/api/v1/rider/orders/${order.id}/status`,
+      headers: { authorization: `Bearer ${riderToken}` },
+      payload: { status: "DELIVERED" }
+    });
+
+    expect(res.statusCode).toBe(200);
+
+    const dbWithEarning = db as ReturnType<typeof getPrismaClient> & {
+      riderEarning: { findUnique: (args: unknown) => Promise<{ amount: { toNumber: () => number }; riderId: string; earningType: string } | null> };
+    };
+    const earning = await dbWithEarning.riderEarning.findUnique({
+      where: { orderId: order.id }
+    });
+    expect(earning).toBeDefined();
+    expect(earning!.amount.toNumber()).toBe(50.00); // 100 * 50%
+    expect(earning!.riderId).toBe(riderId);
+  });
+
   it("should successfully update status to DELIVERED even if RiderEarning creation throws (non-fatal)", async () => {
     // Spy and mock RiderEarningsRepository.prototype.createEarning to throw
     vi.spyOn(RiderEarningsRepository.prototype, "createEarning").mockRejectedValueOnce(new Error("Test DB Write Error"));

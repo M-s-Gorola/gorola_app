@@ -126,7 +126,9 @@ describe("Admin Settings Integration Tests", () => {
         headers: { authorization: `Bearer ${token}` },
         payload: {
           deliveryCharge: "45.00",
-          serviceCharge: "25.00"
+          serviceCharge: "25.00",
+          gstRate: "18.00",
+          gstNumber: "05AAAAA0000A1Z5"
         }
       });
 
@@ -137,6 +139,8 @@ describe("Admin Settings Integration Tests", () => {
       const keys = body.data.map((s: { key: string }) => s.key);
       expect(keys).toContain("DELIVERY_CHARGE");
       expect(keys).toContain("SERVICE_CHARGE");
+      expect(keys).toContain("GST_RATE");
+      expect(keys).toContain("GST_NUMBER");
 
       const delivery = body.data.find((s: { key: string }) => s.key === "DELIVERY_CHARGE");
       expect(delivery.value).toBe("45.00");
@@ -146,9 +150,17 @@ describe("Admin Settings Integration Tests", () => {
       expect(service.value).toBe("25.00");
       expect(service.updatedBy).toBe("admin-123");
 
+      const gstRate = body.data.find((s: { key: string }) => s.key === "GST_RATE");
+      expect(gstRate.value).toBe("18.00");
+
+      const gstNum = body.data.find((s: { key: string }) => s.key === "GST_NUMBER");
+      expect(gstNum.value).toBe("05AAAAA0000A1Z5");
+
       // Verify DB change
       const dbDelivery = await db.systemSetting.findUnique({ where: { key: "DELIVERY_CHARGE" } });
       expect(dbDelivery?.value).toBe("45.00");
+      const dbGstRate = await db.systemSetting.findUnique({ where: { key: "GST_RATE" } });
+      expect(dbGstRate?.value).toBe("18.00");
 
       // Verify Audit Log
       const auditLog = await db.auditLog.findFirst({
@@ -161,6 +173,22 @@ describe("Admin Settings Integration Tests", () => {
       expect(auditLog?.actorId).toBe("admin-123");
       expect((auditLog?.newValue as Record<string, unknown>)?.DELIVERY_CHARGE).toBe("45.00");
       expect((auditLog?.newValue as Record<string, unknown>)?.SERVICE_CHARGE).toBe("25.00");
+    });
+
+    it("should reject gstRate greater than 100 or invalid decimal format", async () => {
+      const token = await generateAccessToken("admin-123", "ADMIN");
+      const response = await server.inject({
+        method: "PUT",
+        url: "/api/v1/admin/settings",
+        headers: { authorization: `Bearer ${token}` },
+        payload: {
+          deliveryCharge: "45.00",
+          serviceCharge: "25.00",
+          gstRate: "150.00"
+        }
+      });
+
+      expect(response.statusCode).toBe(400);
     });
   });
 
@@ -175,6 +203,8 @@ describe("Admin Settings Integration Tests", () => {
       expect(body.success).toBe(true);
       expect(body.data.DELIVERY_CHARGE).toBe("30");
       expect(body.data.SERVICE_CHARGE).toBe("0");
+      expect(body.data.GST_RATE).toBeDefined();
+      expect(body.data.GST_NUMBER).toBeDefined();
     });
   });
 

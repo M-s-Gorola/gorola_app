@@ -71,6 +71,10 @@ function serializeOrderResponse(
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
 
     status: order.status,
+    discountSavingAmount: order.discountSavingAmount ? order.discountSavingAmount.toString() : null,
+    offerSavingAmount: order.offerSavingAmount ? order.offerSavingAmount.toString() : null,
+    appliedOfferTitle: order.appliedOfferTitle ?? null,
+    taxRate: order.taxRate ? order.taxRate.toString() : null,
     discount: {
       amount: discount.amount,
       code: discount.code,
@@ -112,6 +116,11 @@ function serializeOrderResponse(
 }
 
 function inferDiscountAmount(order: OrderWithRelations): string {
+  if (order.discountSavingAmount !== null || order.offerSavingAmount !== null) {
+    const d = Number(order.discountSavingAmount?.toString() ?? "0");
+    const o = Number(order.offerSavingAmount?.toString() ?? "0");
+    return (d + o).toFixed(2);
+  }
   const subtotalPlusDelivery = Number(order.subtotal.toString()) + Number(order.deliveryFee.toString());
   const total = Number(order.total.toString());
   return Math.max(subtotalPlusDelivery - total, 0).toFixed(2);

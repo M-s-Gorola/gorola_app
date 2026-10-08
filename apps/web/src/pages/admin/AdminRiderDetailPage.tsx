@@ -87,6 +87,16 @@ type OrderDetailResponse = {
   buyerMaskedPhone: string;
   user?: { name?: string | null; phone?: string | null };
   store: { name: string; phone?: string };
+  discountSavingAmount?: string | number | null;
+  offerSavingAmount?: string | number | null;
+  appliedDiscountCode?: string | null;
+  appliedOfferTitle?: string | null;
+  discount?: {
+    amount: string;
+    code: string | null;
+    appliedDiscountAmount?: string;
+    appliedOfferAmount?: string;
+  } | null;
   items: {
     id: string;
     productName: string;
@@ -723,9 +733,50 @@ export function AdminRiderDetailPage(): ReactElement {
                     <span className="font-semibold">{formatCurrency(orderDetail.subtotal)}</span>
                   </div>
                   <div className="flex justify-between items-center text-xs text-gorola-slate">
-                    <span>Delivery Fee</span>
+                    <span>{orderDetail.orderType === "BOOKING" ? "Service Fee" : "Delivery Fee"}</span>
                     <span className="font-semibold">{formatCurrency(orderDetail.deliveryFee)}</span>
                   </div>
+                  {(() => {
+                    const discountSaving = Number(orderDetail.discountSavingAmount || 0);
+                    const offerSaving = Number(orderDetail.offerSavingAmount || 0);
+                    const fallbackDiscount = Number(orderDetail.discount?.amount || 0);
+                    const hasStored =
+                      (orderDetail.discountSavingAmount !== undefined && orderDetail.discountSavingAmount !== null) ||
+                      (orderDetail.offerSavingAmount !== undefined && orderDetail.offerSavingAmount !== null);
+
+                    if (hasStored) {
+                      if (discountSaving <= 0 && offerSaving <= 0) return null;
+                      return (
+                        <div className="space-y-1" data-testid="rider-order-discount">
+                          {offerSaving > 0 && (
+                            <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                              <span>Offer {orderDetail.appliedOfferTitle ? `(${orderDetail.appliedOfferTitle})` : ""}</span>
+                              <span>-{formatCurrency(offerSaving)}</span>
+                            </div>
+                          )}
+                          {discountSaving > 0 && (
+                            <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                              <span>Discount {orderDetail.appliedDiscountCode ? `(${orderDetail.appliedDiscountCode})` : ""}</span>
+                              <span>-{formatCurrency(discountSaving)}</span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    }
+
+                    if (fallbackDiscount > 0) {
+                      return (
+                        <div className="space-y-1" data-testid="rider-order-discount">
+                          <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                            <span>Discount {orderDetail.discount?.code ? `(${orderDetail.discount.code})` : ""}</span>
+                            <span>-{formatCurrency(fallbackDiscount)}</span>
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return null;
+                  })()}
                   <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal border-t border-gorola-charcoal/5 pt-2">
                     <span>Grand Total</span>
                     <span>{formatCurrency(orderDetail.total)}</span>

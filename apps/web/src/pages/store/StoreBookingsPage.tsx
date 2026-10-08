@@ -70,6 +70,10 @@ type Booking = {
   paymentMethod?: string;
   discountAmount?: string;
   discountCode?: string | null;
+  discountSavingAmount?: number | string | null;
+  offerSavingAmount?: number | string | null;
+  appliedOfferTitle?: string | null;
+  taxRate?: number | string | null;
   createdAt: string;
   customerPhone?: string;
   buyerMaskedPhone?: string;
@@ -184,6 +188,32 @@ export function StoreBookingsPage(): ReactElement {
   });
 
   const getAppliedDiscounts = (booking: Booking) => {
+    // 1. Direct Stored Snapshots (Preferred)
+    const hasStoredPromo =
+      (booking.discountSavingAmount !== undefined && booking.discountSavingAmount !== null) ||
+      (booking.offerSavingAmount !== undefined && booking.offerSavingAmount !== null);
+
+    if (hasStoredPromo) {
+      const result: { label: string; amount: number }[] = [];
+      const offerAmt = Number(booking.offerSavingAmount || 0);
+      const discountAmt = Number(booking.discountSavingAmount || 0);
+
+      if (offerAmt > 0) {
+        result.push({
+          label: booking.appliedOfferTitle ? `Offer (${booking.appliedOfferTitle})` : "Store Offer",
+          amount: offerAmt
+        });
+      }
+      if (discountAmt > 0) {
+        result.push({
+          label: booking.discountCode ? `Discount (${booking.discountCode})` : "Discount",
+          amount: discountAmt
+        });
+      }
+      return result;
+    }
+
+    // 2. Fallback
     const subtotal = Number(booking.subtotal || 0);
     const deliveryFee = Number(booking.deliveryFee || 0);
     const total = Number(booking.total || 0);

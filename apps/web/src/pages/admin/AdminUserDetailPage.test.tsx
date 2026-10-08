@@ -297,5 +297,56 @@ describe("AdminUserDetailPage", () => {
     const modal = await screen.findByTestId("user-order-details-modal");
     expect(await within(modal).findByText("Basmati Rice")).toBeInTheDocument();
     expect(within(modal).getByText(/By Buyer \(Alice Walker\)/)).toBeInTheDocument();
+    expect(within(modal).getByText("Delivery Fee")).toBeInTheDocument();
+  });
+
+  it("renders 'Service Fee' for BOOKING orders in user order details modal", async () => {
+    const mockOrderDetailData = {
+      success: true,
+      data: {
+        id: "order-booking-user-1",
+        status: "DELIVERED",
+        orderType: "BOOKING",
+        subtotal: 600.0,
+        deliveryFee: 60.0,
+        total: 660.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near Mall",
+        flatRoom: "Flat 402",
+        createdAt: "2026-06-02T14:00:00.000Z",
+        buyerMaskedPhone: "*********3210",
+        store: { name: "GoRola Repairs", phone: "+919999999011" },
+        items: [
+          { id: "item-1", productName: "Wiring Repair", variantLabel: "Standard", price: 600.0, quantity: 1 }
+        ],
+        statusHistory: [],
+        riderName: "Tech Bob"
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/admin/orders/order-booking-user-1") return Promise.resolve({ data: mockOrderDetailData });
+      if (url.includes("/orders")) return Promise.resolve({ data: mockUserOrdersData });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({ data: mockUserData });
+    });
+
+    renderAdminUserDetail();
+
+    const viewBtn = await screen.findByTestId("view-user-order-order-101");
+    // We mock that order-101 details route returns BOOKING order details for order-booking-user-1
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/admin/orders/order-101") return Promise.resolve({ data: mockOrderDetailData });
+      if (url.includes("/orders")) return Promise.resolve({ data: mockUserOrdersData });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({ data: mockUserData });
+    });
+
+    fireEvent.click(viewBtn);
+
+    const modal = await screen.findByTestId("user-order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
   });
 });

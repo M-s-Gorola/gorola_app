@@ -266,6 +266,30 @@ async function main(): Promise<void> {
         value: "0",
         description: "Booking commerce service charge",
         updatedBy: "system"
+      },
+      {
+        key: "GST_RATE",
+        value: "0",
+        description: "GST percentage applied to orders. Set to 0 to disable tax.",
+        updatedBy: "system"
+      },
+      {
+        key: "GST_NUMBER",
+        value: "",
+        description: "Business GSTIN for tax invoice generation (e.g. 05AAAAA0000A1Z5).",
+        updatedBy: "system"
+      },
+      {
+        key: "RIDER_EARNING_RATE_PCT",
+        value: "100",
+        description: "Default payout percentage for delivery riders on quick commerce orders.",
+        updatedBy: "system"
+      },
+      {
+        key: "TECHNICIAN_EARNING_RATE_PCT",
+        value: "100",
+        description: "Default payout percentage for field technicians on booking commerce services.",
+        updatedBy: "system"
       }
     ],
     skipDuplicates: true
