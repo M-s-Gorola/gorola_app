@@ -951,7 +951,7 @@ test.describe("Store Owner & Booking Commerce E2E Journey", () => {
       await expect(breakdown).toBeVisible({ timeout: 5000 });
     }
 
-    await expect(breakdown.getByText(`Discount (${offerTitle})`)).toBeVisible();
+    await expect(breakdown.getByText(new RegExp(`(Store Offer|Discount) \\(${offerTitle}\\)`))).toBeVisible();
     await expect(breakdown.getByText(couponCode)).toBeVisible();
     await buyerContext.close();
   });

@@ -306,7 +306,7 @@ async function main(): Promise<void> {
     {
       key: "ORDER_PROCESSING",
       displayName: "Order Fulfillment & Location Services",
-      description: "Processes your location and order details for delivery.",
+      description: "Processes your location and order details for quick commerce delivery and scheduled on-site service appointments. Data is shared with verified store partners, delivery riders, and field service technicians.",
       isEssential: true,
       retentionSummary: "Addresses deleted on erasure. Order GPS nulled on erasure; financials kept 7 years (GST)."
     },

@@ -392,8 +392,70 @@ describe("AdminOrdersPage", () => {
     const modal = await screen.findByTestId("order-details-modal");
     expect(modal).toBeInTheDocument();
 
-    expect(await within(modal).findByText(/Offer \(Mega Summer Deal\)/)).toBeInTheDocument();
-    expect(within(modal).getByText(/Discount \(PROMO20\)/)).toBeInTheDocument();
+    expect(await within(modal).findByText(/Store Offer \(Mega Summer Deal\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/Discount Code \(PROMO20\)/)).toBeInTheDocument();
+  });
+
+  it("displays delivery note callout badge in order details modal when deliveryNote is present", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-note-admin",
+            userId: "u1",
+            storeId: "store-1",
+            storeName: "Dairy Plaza",
+            buyerMaskedPhone: "******9001",
+            buyerName: "Alice",
+            status: "PLACED",
+            total: 200.0,
+            itemCount: 1,
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-1", name: "Dairy Plaza" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-note-admin",
+        status: "PLACED",
+        orderType: "QUICK",
+        subtotal: 200.0,
+        deliveryFee: 30.0,
+        total: 230.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Clock Tower",
+        flatRoom: "Flat 101",
+        deliveryNote: "Call before delivering",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "Alice", phone: "+919999999001" },
+        store: { name: "Dairy Plaza", phone: "+91000" },
+        items: [{ id: "item-1", productName: "Milk", variantLabel: "1L", price: 200.0, quantity: 1 }],
+        statusHistory: []
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-note-admin")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-note-admin"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    const noteBadge = await screen.findByTestId("admin-order-delivery-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Delivery Note: Call before delivering");
   });
 });
 

@@ -126,7 +126,7 @@ export function PrivacyPolicyPage(): ReactElement {
                   <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">Essential</span>
                 </div>
                 <p className="text-gorola-slate leading-relaxed">
-                  We process delivery addresses, landmark notes, GPS pins, and Display Names (if set) to route orders, assign delivery riders, coordinate with hill stores, and facilitate payments.
+                  We process delivery and service addresses, landmark notes, GPS pins, and Display Names (if set) to route orders, assign delivery riders and field service technicians, coordinate with hill stores, fulfill physical deliveries, and conduct scheduled on-site service appointments.
                 </p>
                 <div className="pt-1">
                   <ConsentNoticeModal
@@ -205,7 +205,7 @@ export function PrivacyPolicyPage(): ReactElement {
                 <li><strong className="font-semibold text-gorola-charcoal">Razorpay:</strong> RBI-authorized payment aggregator for processing card and UPI payments securely.</li>
                 <li><strong className="font-semibold text-gorola-charcoal">Railway:</strong> Cloud infrastructure host for API services and encrypted PostgreSQL databases (operating under DPAs with 30-day log limits).</li>
                 <li><strong className="font-semibold text-gorola-charcoal">Vercel:</strong> Static edge hosting for front-end web client distribution.</li>
-                <li><strong>Assigned Local Store Partners &amp; Delivery Riders:</strong> Assigned merchant and rider receive display name, landmark notes, and address pin solely for order packing and physical delivery.</li>
+                <li><strong>Assigned Local Store Partners, Delivery Riders &amp; Field Service Technicians:</strong> Assigned merchant, courier rider, and field technician receive display name, landmark notes, and address pin solely for order packing, physical delivery, and scheduled on-site service appointments.</li>
               </ul>
             </div>
           </div>

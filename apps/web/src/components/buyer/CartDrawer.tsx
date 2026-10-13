@@ -4,6 +4,7 @@ import type { ChangeEvent, ReactElement } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { DeliveryNoteInput } from "@/components/buyer/DeliveryNoteInput";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api, getFeatureFlag } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
@@ -31,6 +32,8 @@ export function CartDrawer(): ReactElement | null {
 
   const selectedPaymentMethod = useCartStore((s) => s.selectedPaymentMethod);
   const setSelectedPaymentMethod = useCartStore((s) => s.setSelectedPaymentMethod);
+  const deliveryNote = useCartStore((s) => s.deliveryNote);
+  const setDeliveryNote = useCartStore((s) => s.setDeliveryNote);
   const [isDiscountOpen, setIsDiscountOpen] = useState(false);
   const upiEnabled = useFeatureFlagsStore((s) => s.flags["PAYMENT_UPI_ENABLED"] ?? false);
   const cardEnabled = useFeatureFlagsStore((s) => s.flags["PAYMENT_CARD_ENABLED"] ?? false);
@@ -375,7 +378,7 @@ export function CartDrawer(): ReactElement | null {
                           data-testid="cart-discount-breakdown-item"
                           className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
                         >
-                          <span className="break-words text-left flex-1">{o.title}</span>
+                          <span className="break-words text-left flex-1">Store Offer ({o.title})</span>
                           <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
                         </div>
                       ))}
@@ -384,7 +387,7 @@ export function CartDrawer(): ReactElement | null {
                           data-testid="cart-discount-breakdown-item"
                           className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full"
                         >
-                          <span className="break-words text-left flex-1">{discountCode || "Coupon"}</span>
+                          <span className="break-words text-left flex-1">Discount Code ({discountCode || "Coupon"})</span>
                           <span className="text-right whitespace-nowrap shrink-0">-Rs {savedAmount.toFixed(2)}</span>
                         </div>
                       )}
@@ -453,6 +456,18 @@ export function CartDrawer(): ReactElement | null {
               </button>
             </div>
             {discountError && <p className="text-[10px] font-bold text-red-500 ml-1">{discountError}</p>}
+
+            {lines.length > 0 && (
+              <div className="pt-2">
+                <DeliveryNoteInput
+                  id="cart-delivery-note"
+                  value={deliveryNote}
+                  onChange={setDeliveryNote}
+                  label="Delivery Instructions for Rider"
+                  placeholder="E.g. gate code, leave with guard, don't ring bell"
+                />
+              </div>
+            )}
 
             <fieldset className="space-y-3 pt-2">
               <legend className="font-dm-sans text-sm font-bold text-gorola-charcoal mb-2">Payment method</legend>

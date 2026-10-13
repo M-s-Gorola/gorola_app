@@ -6,6 +6,7 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { DeliveryNoteInput } from "@/components/buyer/DeliveryNoteInput";
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
 import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
 import { Button } from "@/components/ui/button";
@@ -61,6 +62,7 @@ export function BookingTimeslotPage(): ReactElement {
   const [selectedDate, setSelectedDate] = useState("");
   const [selectedTimeslot, setSelectedTimeslot] = useState("");
   const [selectedAddressId, setSelectedAddressId] = useState("");
+  const [serviceNote, setServiceNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Address creation form state
@@ -344,6 +346,7 @@ export function BookingTimeslotPage(): ReactElement {
           timeslot: selectedTimeslot,
           addressId: selectedAddressId,
           discountCode: appliedCouponCode || undefined,
+          deliveryNote: serviceNote.trim() || undefined,
         }
       );
       // DPDP 2023: Log ORDER_PROCESSING consent only if not already active
@@ -684,6 +687,17 @@ export function BookingTimeslotPage(): ReactElement {
           )}
         </div>
 
+        {/* Section 4B: Instructions for Field Technician */}
+        <div className="border-t border-gorola-pine/10 pt-6">
+          <DeliveryNoteInput
+            id="technician-instructions-input"
+            label="Instructions for Field Technician"
+            placeholder="e.g. Patient is elderly, please ring bell twice, needle sensitivity, bring wheelchair"
+            value={serviceNote}
+            onChange={setServiceNote}
+          />
+        </div>
+
         {/* Section 5: Marketing Consent & Action Button */}
         <div className="border-t border-gorola-pine/10 pt-6 space-y-4">
           <div
@@ -839,7 +853,7 @@ export function BookingTimeslotPage(): ReactElement {
                 <ConsentNoticeModal purpose="ORDER_PROCESSING" />
               </div>
               <p className="text-muted-foreground leading-relaxed">
-                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners and delivery riders for order fulfillment. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
+                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners, delivery riders, and field service technicians for order fulfillment and scheduled on-site service appointments. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
               </p>
 
               {!hasOrderProcessingConsent ? (

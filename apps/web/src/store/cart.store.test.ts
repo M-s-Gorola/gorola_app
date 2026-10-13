@@ -88,4 +88,17 @@ describe("useCartStore", () => {
     expect(result.current.lines).toHaveLength(1);
     expect(result.current.lines[0]?.productVariantId).toBe("v2");
   });
+
+  it("updates deliveryNote and clear resets it", () => {
+    const { result } = renderHook(() => useCartStore());
+    expect(result.current.deliveryNote).toBe("");
+    act(() => {
+      result.current.setDeliveryNote("Leave at reception");
+    });
+    expect(result.current.deliveryNote).toBe("Leave at reception");
+    act(() => {
+      result.current.clear();
+    });
+    expect(result.current.deliveryNote).toBe("");
+  });
 });

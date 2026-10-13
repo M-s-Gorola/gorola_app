@@ -423,13 +423,13 @@ interface StoreOffer {
 
       if (offerAmt > 0) {
         result.push({
-          label: order.appliedOfferTitle ? `Offer (${order.appliedOfferTitle})` : "Store Offer",
+          label: order.appliedOfferTitle ? `Store Offer (${order.appliedOfferTitle})` : "Store Offer",
           amount: offerAmt
         });
       }
       if (discountAmt > 0) {
         result.push({
-          label: order.appliedDiscountCode || order.discount?.code ? `Discount (${order.appliedDiscountCode || order.discount?.code})` : "Discount",
+          label: order.appliedDiscountCode || order.discount?.code ? `Discount Code (${order.appliedDiscountCode || order.discount?.code})` : "Discount Code",
           amount: discountAmt
         });
       }
@@ -475,7 +475,7 @@ interface StoreOffer {
         const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
         if (appliedAmt > 0.05) {
           result.push({
-            label: `Discount (${offer.title})`,
+            label: `Store Offer (${offer.title})`,
             amount: appliedAmt
           });
           remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
@@ -485,7 +485,7 @@ interface StoreOffer {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: order.discount?.code ? `Discount (${order.discount.code})` : "Discount",
+        label: order.discount?.code ? `Discount Code (${order.discount.code})` : "Discount Code",
         amount: remainingDiscount
       });
     }
@@ -823,7 +823,7 @@ interface StoreOffer {
                             aria-expanded={isDiscountExpanded}
                             className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
                           >
-                            <span>Discount:</span>
+                            <span>Total Discount:</span>
                             <span className="text-[10px] transform transition-transform duration-200">
                               {isDiscountExpanded ? "▼" : "▶"}
                             </span>

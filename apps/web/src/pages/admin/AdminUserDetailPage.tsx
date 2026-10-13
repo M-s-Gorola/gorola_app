@@ -6,6 +6,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  FileText,
   Lock,
   MapPin,
   Phone,
@@ -133,6 +134,7 @@ type OrderDetail = {
   paymentMethod: string;
   landmarkDescription: string;
   flatRoom?: string | null;
+  deliveryNote?: string | null;
   createdAt: string;
   buyerMaskedPhone: string;
   user?: { name: string; phone: string } | null;
@@ -868,12 +870,30 @@ export function AdminUserDetailPage(): ReactElement {
 
                       <div className="flex items-start gap-3">
                         <MapPin className="h-4 w-4 text-gorola-slate mt-0.5" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Delivery Address</p>
+                        <div className="w-full">
+                          <p className="text-[10px] text-gorola-slate font-bold">
+                            {orderDetail.orderType === "BOOKING" ? "Appointment Address" : "Delivery Address"}
+                          </p>
                           <p className="text-xs font-black text-gorola-charcoal">
                             {orderDetail.flatRoom ? `${orderDetail.flatRoom}, ` : ""}
                             {orderDetail.landmarkDescription}
                           </p>
+                          {orderDetail.deliveryNote && (
+                            <div
+                              data-testid="admin-order-delivery-note"
+                              className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+                            >
+                              <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                              <div>
+                                <span className="font-bold block text-[10px] uppercase text-amber-700">
+                                  {orderDetail.orderType === "BOOKING" ? "Service Note" : "Delivery Note"}
+                                </span>
+                                <span className="font-medium whitespace-pre-line">
+                                  Delivery Note: {orderDetail.deliveryNote}
+                                </span>
+                              </div>
+                            </div>
+                          )}
                         </div>
                       </div>
 
@@ -979,13 +999,13 @@ export function AdminUserDetailPage(): ReactElement {
                         <div className="space-y-1" data-testid="user-order-discount">
                           {offerSaving > 0 && (
                             <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                              <span>Offer {orderDetail.appliedOfferTitle ? `(${orderDetail.appliedOfferTitle})` : ""}</span>
+                              <span>Store Offer {orderDetail.appliedOfferTitle ? `(${orderDetail.appliedOfferTitle})` : ""}</span>
                               <span>-{formatCurrency(offerSaving)}</span>
                             </div>
                           )}
                           {discountSaving > 0 && (
                             <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                              <span>Discount {orderDetail.appliedDiscountCode ? `(${orderDetail.appliedDiscountCode})` : ""}</span>
+                              <span>Discount Code {orderDetail.appliedDiscountCode ? `(${orderDetail.appliedDiscountCode})` : ""}</span>
                               <span>-{formatCurrency(discountSaving)}</span>
                             </div>
                           )}
@@ -997,7 +1017,7 @@ export function AdminUserDetailPage(): ReactElement {
                       return (
                         <div className="space-y-1" data-testid="user-order-discount">
                           <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                            <span>Discount {orderDetail.discount?.code ? `(${orderDetail.discount.code})` : ""}</span>
+                            <span>Discount Code {orderDetail.discount?.code ? `(${orderDetail.discount.code})` : ""}</span>
                             <span>-{formatCurrency(fallbackDiscount)}</span>
                           </div>
                         </div>

@@ -384,7 +384,7 @@ export function SavedAddressesPage(): ReactElement {
                 </span>
               </div>
               <p className="text-muted-foreground leading-relaxed">
-                We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
+                We collect your address, GPS coordinates, Display Name (if set), and contact details to route orders, fulfill deliveries, and coordinate scheduled on-site service appointments. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and verified store partners, delivery riders, and field service technicians for order fulfillment and scheduled service appointments. Governed by India&apos;s DPDP Act 2023.
               </p>
 
               <div className="pt-0.5 text-[11px] text-muted-foreground">

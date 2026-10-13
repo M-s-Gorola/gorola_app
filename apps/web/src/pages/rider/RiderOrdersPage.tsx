@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Clock, MapPin, Phone, RefreshCw, ShoppingBag, User } from "lucide-react";
+import { Clock, FileText, MapPin, Phone, RefreshCw, ShoppingBag, User } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useRef, useState } from "react";
 import { io } from "socket.io-client";
@@ -306,11 +306,22 @@ export function RiderOrdersPage(): ReactElement {
           <div className="flex items-start gap-2">
             <MapPin className="mt-0.5 h-3.5 w-3.5 text-gorola-pine shrink-0" />
             <div className="flex flex-col">
-              <span className="text-[10px] text-muted-foreground font-medium">Address</span>
+              <span className="text-[10px] text-muted-foreground font-medium">
+                {isBooking ? "Appointment Address" : "Address"}
+              </span>
               <span className="text-xs text-gorola-charcoal font-semibold">
                 {order.deliveryAddress.flatRoom ? `${order.deliveryAddress.flatRoom}, ` : ""}
                 {order.deliveryAddress.landmark || "No address specified"}
               </span>
+              {order.deliveryAddress.deliveryNote && (
+                <div data-testid="rider-compact-delivery-note" className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200/60 rounded-lg px-2.5 py-1">
+                  <FileText className="h-3 w-3 text-amber-700 shrink-0" />
+                  <span className="truncate">
+                    {isFieldTechnician ? "Service Note: " : "Note: "}
+                    {order.deliveryAddress.deliveryNote}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
 
@@ -510,16 +521,37 @@ export function RiderOrdersPage(): ReactElement {
               <div className="flex items-start gap-2.5">
                 <MapPin className="mt-0.5 h-4 w-4 text-gorola-pine shrink-0" />
                 <div className="flex flex-col">
-                  <span className="text-xs text-muted-foreground font-medium">Delivery Address</span>
-                  <span className="text-sm text-gorola-charcoal font-semibold">
-                    {selectedOrder.deliveryAddress.flatRoom ? `${selectedOrder.deliveryAddress.flatRoom}, ` : ""}
-                    {selectedOrder.deliveryAddress.landmark || "No address specified"}
-                  </span>
-                  {selectedOrder.deliveryAddress.deliveryNote && (
-                    <span className="text-xs text-muted-foreground italic mt-0.5">
-                      Note: {selectedOrder.deliveryAddress.deliveryNote}
-                    </span>
-                  )}
+                  {(() => {
+                    const isBookingModal = selectedOrder.orderType === "BOOKING" || isFieldTechnician;
+                    return (
+                      <>
+                        <span className="text-xs text-muted-foreground font-medium">
+                          {isBookingModal ? "Appointment Address" : "Delivery Address"}
+                        </span>
+                        <span className="text-sm text-gorola-charcoal font-semibold">
+                          {selectedOrder.deliveryAddress.flatRoom ? `${selectedOrder.deliveryAddress.flatRoom}, ` : ""}
+                          {selectedOrder.deliveryAddress.landmark || "No address specified"}
+                        </span>
+                        {selectedOrder.deliveryAddress.deliveryNote && (
+                          <div
+                            data-testid="rider-service-instructions-badge"
+                            className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+                          >
+                            <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                            <div>
+                              <span className="font-bold block text-[10px] uppercase text-amber-700">
+                                {isBookingModal ? "Service Instructions" : "Delivery Instructions"}
+                              </span>
+                              <span className="font-medium whitespace-pre-line">
+                                {isBookingModal ? "Service Instructions: " : "Note: "}
+                                {selectedOrder.deliveryAddress.deliveryNote}
+                              </span>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
 

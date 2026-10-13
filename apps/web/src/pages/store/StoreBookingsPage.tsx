@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  FileText,
   MapPin,
   Phone,
   RefreshCw,
@@ -73,6 +74,8 @@ type Booking = {
   discountSavingAmount?: number | string | null;
   offerSavingAmount?: number | string | null;
   appliedOfferTitle?: string | null;
+  appliedDiscountCode?: string | null;
+  deliveryNote?: string | null;
   taxRate?: number | string | null;
   createdAt: string;
   customerPhone?: string;
@@ -200,13 +203,13 @@ export function StoreBookingsPage(): ReactElement {
 
       if (offerAmt > 0) {
         result.push({
-          label: booking.appliedOfferTitle ? `Offer (${booking.appliedOfferTitle})` : "Store Offer",
+          label: booking.appliedOfferTitle ? `Store Offer (${booking.appliedOfferTitle})` : "Store Offer",
           amount: offerAmt
         });
       }
       if (discountAmt > 0) {
         result.push({
-          label: booking.discountCode ? `Discount (${booking.discountCode})` : "Discount",
+          label: booking.appliedDiscountCode || booking.discountCode ? `Discount Code (${booking.appliedDiscountCode || booking.discountCode})` : "Discount Code",
           amount: discountAmt
         });
       }
@@ -253,7 +256,7 @@ export function StoreBookingsPage(): ReactElement {
         const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
         if (appliedAmt > 0.05) {
           result.push({
-            label: `Discount (${offer.title})`,
+            label: `Store Offer (${offer.title})`,
             amount: appliedAmt
           });
           remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
@@ -263,7 +266,7 @@ export function StoreBookingsPage(): ReactElement {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: booking.discountCode || "Discount",
+        label: booking.discountCode ? `Discount Code (${booking.discountCode})` : "Discount Code",
         amount: remainingDiscount
       });
     }
@@ -886,12 +889,28 @@ export function StoreBookingsPage(): ReactElement {
                     <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0">
                       <MapPin className="h-4 w-4" />
                     </div>
-                    <div>
+                    <div className="w-full">
                       <p className="text-[10px] text-gorola-slate font-bold">Appointment Address</p>
                       <p className="text-xs font-black text-gorola-charcoal">
                         {selectedBooking.flatRoom ? `${selectedBooking.flatRoom}, ` : ""}
                         {selectedBooking.landmarkDescription || "No address provided"}
                       </p>
+                      {selectedBooking.deliveryNote && (
+                        <div
+                          data-testid="store-booking-service-note"
+                          className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+                        >
+                          <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="font-bold block text-[10px] uppercase text-amber-700">
+                              Service Instructions
+                            </span>
+                            <span className="font-medium whitespace-pre-line">
+                              Service Note: {selectedBooking.deliveryNote}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1008,7 +1027,7 @@ export function StoreBookingsPage(): ReactElement {
                       aria-expanded={isDiscountExpanded}
                       className="flex items-center gap-1 text-rose-600 hover:text-rose-700 transition-colors font-bold focus:outline-none"
                     >
-                      <span>Discount:</span>
+                      <span>Total Discount:</span>
                       <span className="text-[10px] transform transition-transform duration-200">
                         {isDiscountExpanded ? "▼" : "▶"}
                       </span>

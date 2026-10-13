@@ -30,7 +30,8 @@ export class BookingOrderService {
     bookingDetails: { scheduledDate: Date; timeslot: string; addressId: string },
     ip?: string,
     userAgent?: string,
-    discountCode?: string
+    discountCode?: string,
+    deliveryNote?: string | null
   ): Promise<Order> {
     if (!items || items.length === 0) {
       throw new ValidationError("Booking order must contain at least one item.");
@@ -259,6 +260,7 @@ export class BookingOrderService {
           landmarkDescription: address.landmarkDescription,
           addressLabel: address.label,
           flatRoom: address.flatRoom,
+          deliveryNote: deliveryNote?.trim() ? deliveryNote.trim() : null,
           deliveryLat: address.lat,
           deliveryLng: address.lng,
           appliedDiscountCode: discountIdToIncrement ? normalizedCode : null,

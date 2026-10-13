@@ -63,6 +63,8 @@ type BookingEnvelope = {
   discountSavingAmount?: number | string | null;
   offerSavingAmount?: number | string | null;
   appliedOfferTitle?: string | null;
+  appliedDiscountCode?: string | null;
+  deliveryNote?: string | null;
   taxRate?: number | string | null;
   rating?: number | null;
   ratingComment?: string | null;
@@ -205,13 +207,13 @@ export function BookingConfirmationPage(): ReactElement {
 
       if (offerAmt > 0) {
         result.push({
-          label: booking.appliedOfferTitle ? `Offer (${booking.appliedOfferTitle})` : "Store Offer",
+          label: booking.appliedOfferTitle ? `Store Offer (${booking.appliedOfferTitle})` : "Store Offer",
           amount: offerAmt
         });
       }
       if (discountAmt > 0) {
         result.push({
-          label: booking.discountCode ? `Discount (${booking.discountCode})` : "Discount",
+          label: booking.appliedDiscountCode || booking.discountCode ? `Discount Code (${booking.appliedDiscountCode || booking.discountCode})` : "Discount Code",
           amount: discountAmt
         });
       }
@@ -258,7 +260,7 @@ export function BookingConfirmationPage(): ReactElement {
         const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
         if (appliedAmt > 0.05) {
           result.push({
-            label: `Discount (${offer.title})`,
+            label: `Store Offer (${offer.title})`,
             amount: appliedAmt
           });
           remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
@@ -268,7 +270,7 @@ export function BookingConfirmationPage(): ReactElement {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: booking.discountCode || "Discount",
+        label: booking.discountCode ? `Discount Code (${booking.discountCode})` : "Discount Code",
         amount: remainingDiscount
       });
     }

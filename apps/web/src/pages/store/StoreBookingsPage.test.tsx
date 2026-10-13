@@ -753,7 +753,7 @@ describe("StoreBookingsPage TDD", () => {
     // Verify discount list detail is now visible and contains promo info
     const discountList = screen.getByTestId("store-booking-discount-list");
     expect(discountList).toBeInTheDocument();
-    expect(within(discountList).getByText(/• WELCOME200/)).toBeInTheDocument();
+    expect(within(discountList).getByText(/• Discount Code \(WELCOME200\)/)).toBeInTheDocument();
     expect(within(discountList).getByText("-Rs 200.00")).toBeInTheDocument();
 
     // Click toggle again to collapse
@@ -948,7 +948,7 @@ describe("StoreBookingsPage TDD", () => {
     // Verify discount list detail is now visible and contains promo info
     const discountList = screen.getByTestId("store-booking-discount-list");
     expect(discountList).toBeInTheDocument();
-    expect(within(discountList).getByText(/• WELCOME200/)).toBeInTheDocument();
+    expect(within(discountList).getByText(/• Discount Code \(WELCOME200\)/)).toBeInTheDocument();
     expect(within(discountList).getByText("-Rs 200.00")).toBeInTheDocument();
 
     // Click toggle again to collapse
@@ -1181,4 +1181,127 @@ describe("StoreBookingsPage TDD", () => {
 
     expect(await screen.findByText("Search Param Test")).toBeInTheDocument();
   });
+
+  it("renders standardized Store Offer and Discount Code labels in booking details modal", async () => {
+    const user = userEvent.setup();
+    const mockBookings = [
+      {
+        id: "booking-promo-test",
+        orderId: "order-promo-test",
+        status: "APPROVED",
+        createdAt: new Date().toISOString(),
+        customerPhone: "+919876543210",
+        discountAmount: "110.00",
+        appliedOfferTitle: "Diagnostics 20%",
+        offerSavingAmount: 60,
+        discountCode: "DIAG50",
+        appliedDiscountCode: "DIAG50",
+        discountSavingAmount: 50,
+        subtotal: 500,
+        deliveryFee: 0,
+        total: 390,
+        items: [
+          {
+            id: "item-promo",
+            productName: "Diagnostic Blood Test",
+            variantLabel: "Comprehensive"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: new Date().toISOString(),
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/store/bookings?tab=APPROVED"]}>
+        <QueryClientProvider client={queryClient}>
+          <StoreBookingsPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const card = await screen.findByTestId("booking-card-booking-promo-test");
+    await user.click(card);
+
+    // Modal is opened
+    expect(await screen.findByText(/Buyer & Appointment/i)).toBeInTheDocument();
+
+    const toggle = screen.getByTestId("store-booking-discount-toggle");
+    await user.click(toggle);
+
+    // Assert standardized labels
+    expect(screen.getByText(/Store Offer \(Diagnostics 20%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Discount Code \(DIAG50\)/)).toBeInTheDocument();
+    expect(screen.getByText("Total Discount:")).toBeInTheDocument();
+  });
+
+  it("displays service instructions badge in booking details modal when deliveryNote is present", async () => {
+    const user = userEvent.setup();
+    const mockBookings = [
+      {
+        id: "booking-note-test",
+        orderId: "order-note-test",
+        status: "APPROVED",
+        createdAt: new Date().toISOString(),
+        customerPhone: "+919876543210",
+        landmarkDescription: "Mall Road",
+        deliveryNote: "Patient needs early sample collection",
+        items: [
+          {
+            id: "item-note",
+            productName: "Diagnostic Blood Test",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: new Date().toISOString(),
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/store/bookings?tab=APPROVED"]}>
+        <QueryClientProvider client={queryClient}>
+          <StoreBookingsPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const card = await screen.findByTestId("booking-card-booking-note-test");
+    await user.click(card);
+
+    const noteBadge = await screen.findByTestId("store-booking-service-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Service Note: Patient needs early sample collection");
+  });
 });
+

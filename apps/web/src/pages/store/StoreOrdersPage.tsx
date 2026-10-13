@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle,
   Clock,
+  FileText,
   MapPin,
   Phone,
   ShoppingBag,
@@ -69,6 +70,7 @@ type Order = {
   landmarkDescription: string;
   flatRoom?: string | null;
   addressLabel?: string | null;
+  deliveryNote?: string | null;
   createdAt: string;
   buyerMaskedPhone: string;
   items: OrderItem[];
@@ -280,13 +282,13 @@ export function StoreOrdersPage(): ReactElement {
 
       if (offerAmt > 0) {
         result.push({
-          label: order.appliedOfferTitle ? `Offer (${order.appliedOfferTitle})` : "Store Offer",
+          label: order.appliedOfferTitle ? `Store Offer (${order.appliedOfferTitle})` : "Store Offer",
           amount: offerAmt
         });
       }
       if (discountAmt > 0) {
         result.push({
-          label: order.appliedDiscountCode ? `Discount (${order.appliedDiscountCode})` : "Discount",
+          label: order.appliedDiscountCode ? `Discount Code (${order.appliedDiscountCode})` : "Discount Code",
           amount: discountAmt
         });
       }
@@ -332,7 +334,7 @@ export function StoreOrdersPage(): ReactElement {
         const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
         if (appliedAmt > 0.05) {
           result.push({
-            label: `Discount (${offer.title})`,
+            label: `Store Offer (${offer.title})`,
             amount: appliedAmt
           });
           remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
@@ -342,7 +344,7 @@ export function StoreOrdersPage(): ReactElement {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: order.appliedDiscountCode ? `Discount (${order.appliedDiscountCode})` : "Discount",
+        label: order.appliedDiscountCode ? `Discount Code (${order.appliedDiscountCode})` : "Discount Code",
         amount: remainingDiscount
       });
     }
@@ -873,12 +875,28 @@ export function StoreOrdersPage(): ReactElement {
                     <div className="h-8 w-8 bg-amber-50 text-amber-700 rounded-lg flex items-center justify-center mt-0.5 flex-shrink-0">
                       <MapPin className="h-4 w-4" />
                     </div>
-                    <div>
+                    <div className="w-full">
                       <p className="text-[10px] text-gorola-slate font-bold">Delivery Address</p>
                       <p className="text-xs font-black text-gorola-charcoal">
                         {selectedOrder.flatRoom ? `${selectedOrder.flatRoom}, ` : ""}
                         {selectedOrder.landmarkDescription || "No address provided"}
                       </p>
+                      {selectedOrder.deliveryNote && (
+                        <div
+                          data-testid="store-order-delivery-note"
+                          className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+                        >
+                          <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                          <div>
+                            <span className="font-bold block text-[10px] uppercase text-amber-700">
+                              Delivery Note
+                            </span>
+                            <span className="font-medium whitespace-pre-line">
+                              Note: {selectedOrder.deliveryNote}
+                            </span>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -999,7 +1017,7 @@ export function StoreOrdersPage(): ReactElement {
                             aria-expanded={isDiscountExpanded}
                             className="flex items-center gap-1 text-rose-600 hover:text-rose-700 transition-colors font-bold focus:outline-none"
                           >
-                            <span>Discount:</span>
+                            <span>Total Discount:</span>
                             <span className="text-[10px] transform transition-transform duration-200">
                               {isDiscountExpanded ? "▼" : "▶"}
                             </span>
