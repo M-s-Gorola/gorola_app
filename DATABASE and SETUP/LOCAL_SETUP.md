@@ -40,9 +40,6 @@ Run these `docker exec` commands to set up the roles on both `gorola_dev` and `g
 ```powershell
 # 1. Set up roles on development database (gorola_dev)
 docker exec -i gorola-postgres psql -U postgres -d gorola_dev -c "CREATE ROLE db_owner WITH LOGIN CREATEDB PASSWORD 'postgres_owner_123'; GRANT ALL PRIVILEGES ON DATABASE gorola_dev TO db_owner; GRANT ALL ON SCHEMA public TO db_owner; ALTER SCHEMA public OWNER TO db_owner; CREATE ROLE app_service WITH LOGIN PASSWORD 'postgres_app_123'; GRANT CONNECT ON DATABASE gorola_dev TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service; ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;"
-
-# 2. Set up permissions on test database (gorola_test)
-docker exec -i gorola-postgres psql -U postgres -d gorola_test -c "GRANT ALL PRIVILEGES ON DATABASE gorola_test TO db_owner; GRANT ALL ON SCHEMA public TO db_owner; ALTER SCHEMA public OWNER TO db_owner; GRANT CONNECT ON DATABASE gorola_test TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service; ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;"
 ```
 
 > [!IMPORTANT]
@@ -120,8 +117,9 @@ Run these commands from the `GoRola_app` root:
     ```
 3.  **Apply migrations**:
     ```powershell
-    pnpm --filter @gorola/api prisma:migrate:dev --name init
+    pnpm --filter @gorola/api prisma:migrate:deploy
     ```
+    *(Alternatively, run `pnpm --filter @gorola/api prisma:bootstrap:local` to migrate and seed in one step)*
 4.  **Seed data**:
     ```powershell
     pnpm --filter @gorola/api prisma:seed
@@ -144,7 +142,7 @@ The Quality Gate (`pnpm ci:quality`) and E2E tests run against a separate isolat
 1b. **Grant Least-Privilege Roles on Test DB** (DPDP Compliance):
     ```powershell
     docker exec -i gorola-postgres psql -U postgres -d gorola_test -c "GRANT ALL PRIVILEGES ON DATABASE gorola_test TO db_owner; GRANT ALL ON SCHEMA public TO db_owner; ALTER SCHEMA public OWNER TO db_owner; GRANT CONNECT ON DATABASE gorola_test TO app_service; GRANT USAGE ON SCHEMA public TO app_service; GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO app_service; GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO app_service; ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO app_service; ALTER DEFAULT PRIVILEGES FOR ROLE db_owner IN SCHEMA public GRANT ALL ON SEQUENCES TO app_service;"
-    ```
+
 
     > [!IMPORTANT]
     > **PostgreSQL 15+ Requirement**: PostgreSQL 15 removed the default `CREATE` privilege on the `public` schema. The `GRANT ALL ON SCHEMA public TO db_owner` and `ALTER SCHEMA public OWNER TO db_owner` commands above are required so `db_owner` can create and alter tables during `prisma migrate dev` (shadow database creation). Without these, migrations fail with `permission denied for schema public`.

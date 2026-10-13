@@ -27,20 +27,25 @@
 | Phase 6.15 | Analytics Volume Graphs, Settings Manager & Auto-Suggestions | COMPLETE | Adding number of orders/bookings graphs with store multi-select, platform settings manager for fees, and buyer global autocomplete search suggestions. |
 | Phase 6.16 | Watermark Restore & Live Location Popup | COMPLETE | Restore map watermark (Phase 6.16.1), live buyer location bouncing icon and transparent popup (Phase 6.16.2), and map Use My Location button (Phase 6.16.3). |
 | Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | COMPLETE | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
-| Phase 6.18 | Financial Infrastructure: GST Foundation & Invoice Generator | 🟡 IN PROGRESS | Order snapshot columns, promo title persistence, dynamic settings, frontend discount cleanup, and invoice script. |
+| Phase 6.18 | Financial Infrastructure: GST Foundation & Invoice Generator | COMPLETE | Order snapshot columns, promo title persistence, dynamic settings, frontend discount cleanup, and invoice script. |
+| Phase 6.19 | Promotional Transparency, Breakdown Standardization, DPDP Harmonization & Order Instructions | QUEUED | Fix booking promo snapshots, standardize discount dropdowns across all 6 views, harmonize DPDP notices for riders and technicians, and enable buyer-to-fulfillment instructions with full visibility for riders, technicians, stores, and admins. |
+| Phase 6.20 | Tax Calculation Logic, GST Rules & Advanced Invoice Formatting | QUEUED | Pending client approval on tax and invoice settings. Live GST calculation engine, tax breakdown UI row, and invoice download endpoints. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-10-02
-- **Session Summary:** Prepared comprehensive TDD plan for Phase 6.17: Admin 360° Visibility, Dedicated Detail Pages & Order Pagination.
-  - Phase 6.17.1: Order Detail Name Fallback (`Registered User`) and Audit Timeline Actor Resolution.
-  - Phase 6.17.2: Dedicated Full Admin User Detail Page (`/admin/users/:id`) with Paginated User Orders and DPDP Consent sections.
-  - Phase 6.17.3: Dedicated Full Admin Rider Detail Page (`/admin/riders/:id`) with Paginated Rider Deliveries and Earnings.
-  - Phase 6.17.4: Store Detail Page (`/admin/stores/:id`) Paginated Orders Section.
-- **Next Session Must Start With:** Phase 6.17.1 (TDD RED: Order detail name resolution and timeline tests).
-- **In Progress Right Now:** Phase 6.17 (Admin 360° Visibility & Order Pagination).
+- **Date:** 2026-10-13
+- **Session Summary:** Prepared comprehensive TDD plan for Phase 6.19: Promotional Transparency, Universal Breakdown Standardization, DPDP Service Harmonization & Order Instructions.
+  - Phase 6.19.1: Booking Promotional Snapshot & Delivery Note Backend Serialization (`booking.controller.ts` & `booking-order.service.ts`).
+  - Phase 6.19.2: Universal Promotional Breakdown Standardization across 6 UI Views (`PromotionalBreakdown.tsx` with `Total Discount`, `Store Offer`, `Discount Code`).
+  - Phase 6.19.3: Statutory DPDP Notice & Privacy Policy Harmonization (Delivery Riders & Field Service Technicians).
+  - Phase 6.19.4: Buyer Delivery Note & Service Instructions Input (`CartDrawer.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`).
+  - Phase 6.19.5: End-to-End Delivery Note & Service Instructions Visibility (Rider, Field Technician, Store & Admin views).
+  - Phase 6.19.6: Full Regression & Quality Gates.
+  - Renumbered previous tax phase from Phase 6.19 to Phase 6.20 (queued awaiting client sign-off).
+- **Next Session Must Start With:** Phase 6.19.1 (RED — Integration: `booking.promotions-and-notes.test.ts`).
+- **In Progress Right Now:** Phase 6.19 (Promotional Transparency, DPDP Harmonization & Order Instructions).
 - **Current Blocker:** None.
 
 ---
@@ -1241,13 +1246,333 @@ Several interrelated financial data integrity and configuration issues exist in 
 
 ---
 
-## 🔮 Phase 6.19 Roadmap: Tax Calculation Logic, GST Rules & Advanced Invoice Formatting
+## 🎯 Phase 6.19 Roadmap: Promotional Transparency, Universal Breakdown Standardization, DPDP Service Harmonization & Order Instructions
 
 > **Phase:** 6.19  
-> **Status:** QUEUED (Follows Phase 6.18 completion)  
+> **Status:** QUEUED  
+> **Primary Goal:** Eliminate promotional data discrepancies across Quick Commerce and Booking Commerce, standardize financial discount dropdowns across all 6 UI touchpoints, harmonize DPDP statutory notices for field technicians and delivery riders, and enable end-to-end buyer delivery and service instructions with full visibility for riders, technicians, store owners, and admins.
+
+---
+
+### Phase 6.19.1: Booking Promotional Snapshot & Delivery Note Backend Serialization
+
+**Root cause / Goal:**
+- **Current State:** In `apps/api/src/modules/booking/booking.controller.ts`, `serializeBookingOrder` omits `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle`. Instead, it calculates `discountAmount` via arithmetic inference `(subtotal + deliveryFee - total)`, which merges coupons and store offers into a single number. This strips the coupon code and forces frontend booking views into legacy fallback logic, displaying store offers incorrectly as `Discount (<TITLE>)`. Furthermore, `placeBookingBodySchema` does not accept `deliveryNote`, `booking-order.service.ts` does not pass `deliveryNote` to `tx.order.create`, and `serializeBookingOrder` does not serialize `deliveryNote`, causing booking customer instructions to be dropped completely.
+- **Desired State:**
+  1. `serializeBookingOrder` explicitly serializes `discountSavingAmount` (number), `offerSavingAmount` (number), `appliedOfferTitle` (string or null), `appliedDiscountCode` (string or null), and `deliveryNote` (string or null).
+  2. `placeBookingBodySchema` accepts optional `deliveryNote: z.string().max(500).optional().nullable()`.
+  3. `booking-order.service.ts` accepts `deliveryNote?: string | null` in `placeBookingRequest` and persists it to `tx.order.create({ data: { deliveryNote: input.deliveryNote ?? null } })`.
+
+**Fix / Approach:**
+Update `booking.controller.ts` serializer and validation schema. Update `booking-order.service.ts` parameter interface and transaction creation payload to persist and return `deliveryNote` and promotional snapshot columns.
+
+---
+
+- [ ] **RED — Integration (`apps/api/src/__tests__/integration/booking/booking.promotions-and-notes.test.ts`):**
+  - [ ] Test (Stacked Promotions & Note): `POST /api/v1/bookings` with valid coupon `WELCOME50`, store offer `10% OFF`, and `deliveryNote: "Please bring 22-gauge needle and ring bell twice"`. Response `201 Created` returns `orderId`. `GET /api/v1/bookings/:orderId` returns `appliedDiscountCode: "WELCOME50"`, `appliedOfferTitle: "10% OFF"`, `discountSavingAmount: 50`, `offerSavingAmount: 30`, and `deliveryNote: "Please bring 22-gauge needle and ring bell twice"`.
+  - [ ] Test (Coupon Only): `POST /api/v1/bookings` with coupon only returns `appliedOfferTitle: null`, `offerSavingAmount: 0`, and positive `discountSavingAmount`.
+  - [ ] Test (Offer Only): `POST /api/v1/bookings` with store offer only returns `appliedDiscountCode: null`, `discountSavingAmount: 0`, and positive `offerSavingAmount`.
+  - [ ] Test (No Promo): `POST /api/v1/bookings` at full retail returns `discountSavingAmount: 0`, `offerSavingAmount: 0`, `appliedOfferTitle: null`, `appliedDiscountCode: null`.
+  - [ ] Test (Delivery Note Boundary): `deliveryNote` with exactly 500 characters succeeds and stores without truncation. `deliveryNote` exceeding 500 characters returns `400 Bad Request` with Zod validation error.
+  - [ ] Test (Delivery Note Whitespace/Null): Empty string `""` or whitespace-only delivery note is normalized to `null` in DB. Omitted delivery note stores `null` without error.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [ ] [Schema] No migration required (`Order.deliveryNote`, `Order.discountSavingAmount`, `Order.offerSavingAmount`, `Order.appliedOfferTitle`, and `Order.appliedDiscountCode` exist in `schema.prisma`).
+  - [ ] [Service] In `apps/api/src/modules/booking/booking-order.service.ts`, expand `placeBookingRequest` options to accept `deliveryNote?: string | null`. In `tx.order.create`, pass `deliveryNote: deliveryNote?.trim() ? deliveryNote.trim() : null`.
+  - [ ] [Controller] In `apps/api/src/modules/booking/booking.controller.ts`:
+    - Add `deliveryNote: z.string().max(500).optional().nullable()` to `placeBookingBodySchema`.
+    - Pass `body.deliveryNote` to `deps.bookingService.placeBookingRequest`.
+    - In `serializeBookingOrder`, add:
+      ```typescript
+      discountSavingAmount: order.discountSavingAmount ? Number(order.discountSavingAmount) : 0,
+      offerSavingAmount: order.offerSavingAmount ? Number(order.offerSavingAmount) : 0,
+      appliedOfferTitle: order.appliedOfferTitle ?? null,
+      appliedDiscountCode: order.appliedDiscountCode ?? null,
+      deliveryNote: order.deliveryNote ?? null,
+      ```
+  - [ ] Run integration test — **confirm GREEN.**
+
+- [ ] **RED — Unit (`apps/api/src/__tests__/unit/booking/booking-serializer.unit.test.ts`):**
+  - [ ] Test: `serializeBookingOrder` maps Decimal `discountSavingAmount: new Prisma.Decimal("45.50")` to number `45.50`.
+  - [ ] Test: `serializeBookingOrder` maps null `deliveryNote` to `null` and non-null string to exact string.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Types):**
+  - [ ] [Types] Update `BookingOrder` type in `apps/web/src/pages/buyer/BookingConfirmationPage.tsx` and `apps/web/src/pages/store/StoreBookingsPage.tsx` to include `discountSavingAmount?: number | null; offerSavingAmount?: number | null; appliedOfferTitle?: string | null; appliedDiscountCode?: string | null; deliveryNote?: string | null;`.
+  - [ ] Run unit test — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Buyer books service with coupon + offer + instructions → API validates and persists note and promo snapshot → `GET /api/v1/bookings/:id` returns dedicated promo fields and note without mathematical inference → ✅ Done.
+
+---
+
+### Phase 6.19.2: Universal Promotional Breakdown Standardization Across All 6 Views
+
+**Root cause / Goal:**
+- **Current State:** Across all order and checkout interfaces, promo labeling is inconsistent:
+  1. `CartDrawer.tsx` uses a flat "Discount" row without expandable breakdown.
+  2. `CheckoutPage.tsx` uses header "Total Discount" but labels coupon items as "Discount (<CODE>)" instead of "Discount Code (<CODE>)".
+  3. `OrderConfirmationPage.tsx` lacks standardized "Discount Code (<CODE>)" and "Store Offer (<TITLE>)" itemized labels.
+  4. `BookingConfirmationPage.tsx` relies on arithmetic fallback that mislabels store offers as "Discount (<TITLE>)" and does not render "Discount Code" distinctly.
+  5. `StoreOrdersPage.tsx` labels dropdown rows as "Discount" rather than "Discount Code".
+  6. `StoreBookingsPage.tsx` labels rows as "Discount (<TITLE>)" instead of "Store Offer (<TITLE>)".
+  7. `AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx` display separate flat rows without a unified collapsible "Total Discount" dropdown.
+- **Desired State:**
+  Enforce a strict, universal promotional component pattern across ALL 6 views (`CartDrawer`, `CheckoutPage`, `OrderConfirmationPage`, `BookingConfirmationPage`, `StoreOrdersPage`, `StoreBookingsPage`, `AdminOrdersPage`):
+  - **Summary Row:** Collapsible header labeled `Total Discount: -₹{totalSavings}` with chevron toggle (`aria-expanded`).
+  - **Child Row 1 (Store Offer):** `Store Offer ({appliedOfferTitle}): -₹{offerSavingAmount}` (rendered only if offer savings > 0).
+  - **Child Row 2 (Discount Code):** `Discount Code ({appliedDiscountCode}): -₹{discountSavingAmount}` (rendered only if coupon savings > 0).
+  - **Single Promo Fallback:** If only a discount code is active, dropdown/line reads `Discount Code ({code}): -₹{amount}`. If only a store offer is active, dropdown/line reads `Store Offer ({title}): -₹{amount}`.
+  - **Zero Promo State:** When total discount is 0 or null, the entire "Total Discount" row is completely hidden from the DOM.
+
+**Fix / Approach:**
+Create a reusable, highly accessible UI component `packages/ui/src/components/PromotionalBreakdown.tsx` (or shared helper in `apps/web/src/components/shared/PromotionalBreakdown.tsx`) and wire it into all 6 target pages/drawers.
+
+---
+
+- [ ] **RED — Unit / Component (`apps/web/src/components/shared/PromotionalBreakdown.test.tsx`):**
+  - [ ] Test (Both Applied): Renders button labeled "Total Discount" with amount "-₹150.00". When clicked, expands to reveal "Store Offer (Diwali Special): -₹100.00" and "Discount Code (FESTIVE50): -₹50.00".
+  - [ ] Test (Coupon Only): When `offerSavingAmount` is 0 or null, expands to show only "Discount Code (WELCOME10): -₹25.00".
+  - [ ] Test (Offer Only): When `discountSavingAmount` is 0 or null, expands to show only "Store Offer (Summer Sale): -₹30.00".
+  - [ ] Test (Zero Savings): When both savings are 0, null, or undefined, renders `null` (zero DOM nodes).
+  - [ ] Test (Accessibility): Collapsible button has `aria-expanded="false"` by default, flips to `aria-expanded="true"` upon click, and controls an element with matching `id`.
+  - [ ] Test (Edge Case - Long Text): Offer title of 60 characters and coupon code of 30 characters render cleanly with truncation/wrapping without breaking parent container width.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Component & View Wiring):**
+  - [ ] [Component] Implement `apps/web/src/components/shared/PromotionalBreakdown.tsx`:
+    ```tsx
+    interface PromotionalBreakdownProps {
+      discountSavingAmount?: number | string | null;
+      offerSavingAmount?: number | string | null;
+      appliedDiscountCode?: string | null;
+      appliedOfferTitle?: string | null;
+      totalDiscountAmount?: number | string | null;
+      className?: string;
+    }
+    ```
+  - [ ] [Wiring 1 - Cart Drawer] In `apps/web/src/components/buyer/CartDrawer.tsx`, replace static discount line with `PromotionalBreakdown`.
+  - [ ] [Wiring 2 - Quick Checkout] In `apps/web/src/pages/buyer/CheckoutPage.tsx`, update receipt section to use `PromotionalBreakdown`, ensuring coupon row renders `Discount Code (<CODE>)`.
+  - [ ] [Wiring 3 - Order Confirmation] In `apps/web/src/pages/buyer/OrderConfirmationPage.tsx`, update receipt section to use `PromotionalBreakdown`.
+  - [ ] [Wiring 4 - Booking Confirmation] In `apps/web/src/pages/buyer/BookingConfirmationPage.tsx`, replace legacy arithmetic discount display with `PromotionalBreakdown`, reading snapshot values `discountSavingAmount` and `offerSavingAmount`.
+  - [ ] [Wiring 5 - Store Orders & Bookings] In `apps/web/src/pages/store/StoreOrdersPage.tsx` and `apps/web/src/pages/store/StoreBookingsPage.tsx`, wire `PromotionalBreakdown` into the itemized receipt inside the order details modal.
+  - [ ] [Wiring 6 - Admin Orders] In `apps/web/src/pages/admin/AdminOrdersPage.tsx` and `apps/web/src/pages/admin/AdminUserDetailPage.tsx`, replace flat discount rows with `PromotionalBreakdown`.
+  - [ ] Run unit tests — **confirm GREEN.**
+
+- [ ] **RED — Integration / Page Tests (`apps/web/src/pages/buyer/BookingConfirmationPage.test.tsx` & `apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [ ] Test (`BookingConfirmationPage`): Mock booking order with `appliedOfferTitle: "Diagnostics 20%"` and `offerSavingAmount: 60`. Assert page displays "Store Offer (Diagnostics 20%)" instead of "Discount (Diagnostics 20%)".
+  - [ ] Test (`StoreBookingsPage`): Mock booking with coupon `DIAG50`. Open detail modal. Assert modal displays "Discount Code (DIAG50)".
+  - [ ] **Run — confirm RED.**
+
+- [ ] Run all frontend tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Buyer and Merchant open order across Cart, Checkout, Order Confirmation, Booking Confirmation, Store Orders/Bookings, and Admin views → All 6 screens display identical, standardized `Total Discount` collapsible row with `Store Offer (<TITLE>)` and `Discount Code (<CODE>)` → ✅ Done.
+
+---
+
+### Phase 6.19.3: Statutory DPDP Notice & Privacy Policy Harmonization
+
+**Root cause / Goal:**
+- **Current State:** Across 7 touchpoints (`ConsentNoticeModal.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `SavedAddressesPage.tsx`, `PrivacyPolicyPage.tsx`, `PrivacySettingsSection.tsx`, `apps/api/prisma/seed.ts`), statutory consent and privacy notices exclusively refer to quick commerce: "delivery riders", "delivering physical goods", and "order delivery fulfillment". Booking Commerce users scheduling lab tests, healthcare checkups, and diagnostic home visits are presented with non-compliant statutory disclosures that omit field technicians and on-site service appointments.
+- **Desired State:**
+  Harmonize all statutory disclosures and privacy policy copy to cover both commerce pipelines under the Digital Personal Data Protection (DPDP) Act:
+  - Replace "delivery riders for physical order fulfillment" with: "shared with verified store partners, delivery riders, and field service technicians solely for order fulfillment and scheduled on-site service appointments".
+  - Update `seed.ts` system settings and DPDP purpose descriptions.
+  - Update `PrivacyPolicyPage.tsx` Section 3 (Third-Party Sharing & On-Ground Personnel).
+
+**Fix / Approach:**
+Update shared statutory notice constants in `apps/web/src/components/buyer/ConsentNoticeModal.tsx` and all downstream touchpoints. Update seed defaults in `apps/api/prisma/seed.ts`.
+
+---
+
+- [ ] **RED — Unit (`apps/web/src/components/buyer/ConsentNoticeModal.test.tsx` & `apps/web/src/pages/buyer/PrivacyPolicyPage.test.tsx`):**
+  - [ ] Test (`ConsentNoticeModal`): Renders statutory disclosure mentioning BOTH "delivery riders" AND "field service technicians" for "physical order fulfillment and scheduled on-site service appointments".
+  - [ ] Test (`BookingTimeslotPage`): DPDP consent checkbox disclaimer explicitly states customer address and phone will be shared with "field technicians for on-site service appointments".
+  - [ ] Test (`PrivacyPolicyPage`): Section 3 includes clauses covering both quick-commerce courier fulfillment and booking-commerce field service personnel.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Copy & Components):**
+  - [ ] In `apps/web/src/components/buyer/ConsentNoticeModal.tsx`, update notice text to:
+    `"Your delivery address and masked contact details are shared with verified store partners, delivery riders, and field service technicians solely for physical order fulfillment and scheduled on-site service appointments in compliance with the DPDP Act 2023."`
+  - [ ] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`, update the appointment address disclaimer to reference "field service technicians".
+  - [ ] In `apps/web/src/pages/buyer/CheckoutPage.tsx`, update the order delivery disclaimer to reference "delivery riders and fulfillment personnel".
+  - [ ] In `apps/web/src/pages/buyer/SavedAddressesPage.tsx`, update the address storage statutory notice to reference "deliveries and service appointments".
+  - [ ] In `apps/web/src/pages/buyer/PrivacyPolicyPage.tsx`, update Section 3 (Service Providers & Personnel) to detail roles of both delivery riders and field technicians.
+  - [ ] In `apps/web/src/components/buyer/PrivacySettingsSection.tsx`, harmonize telemetry and location notice text.
+  - [ ] Run unit tests — **confirm GREEN.**
+
+- [ ] **RED — Integration (`apps/api/src/__tests__/integration/system/seed-dpdp-notices.test.ts`):**
+  - [ ] Test: Database seeded system setting `DPDP_CONSENT_NOTICE_TEXT` contains "delivery riders" AND "field service technicians".
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Backend (Seed):**
+  - [ ] In `apps/api/prisma/seed.ts`, update default DPDP system setting strings and audit notice templates to harmonize service technicians and delivery riders.
+  - [ ] Run integration test — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] User books diagnostic blood test appointment or orders groceries → Statutory DPDP modal and checkout notices accurately state data is shared with delivery riders and field service technicians for fulfillment → ✅ Done.
+
+---
+
+### Phase 6.19.4: Buyer Delivery Note & Service Instructions Input (Cart, Checkout & Booking)
+
+**Root cause / Goal:**
+- **Current State:** The database `Order` model contains `deliveryNote String?`, and the delivery rider app already displays it. However, the buyer has NO input field to enter delivery notes or technician service instructions in `CartDrawer.tsx`, `CheckoutPage.tsx`, or `BookingTimeslotPage.tsx`. Buyers cannot leave instructions such as gate codes, elderly patient care notes, or "don't ring bell".
+- **Desired State:**
+  1. `CartDrawer.tsx`: Add optional textarea "Delivery Note / Instructions for Rider" (max 500 chars) with live character counter. Synchronize note with active cart state.
+  2. `CheckoutPage.tsx`: Add optional textarea "Delivery Instructions for Rider" (max 500 chars, e.g. "Gate code, leave with guard, don't ring bell") in the Address / Delivery Details card. Pass `deliveryNote` in `POST /api/v1/orders`.
+  3. `BookingTimeslotPage.tsx`: Add optional textarea "Service Instructions for Technician" (max 500 chars, e.g. "Patient is elderly, please bring wheelchair access/needle") in the Appointment Review card. Pass `deliveryNote` in `POST /api/v1/bookings`.
+
+**Fix / Approach:**
+Create a reusable `DeliveryNoteInput.tsx` component with character counter and sanitization. Embed in `CartDrawer`, `CheckoutPage`, and `BookingTimeslotPage`. Wire into order placement payloads.
+
+---
+
+- [ ] **RED — Unit (`apps/web/src/components/buyer/DeliveryNoteInput.test.tsx`):**
+  - [ ] Test: Renders textarea with customizable label and placeholder.
+  - [ ] Test: Enforces `maxLength={500}` and displays live character counter (e.g. `"45 / 500 characters"`).
+  - [ ] Test: Trims excess whitespace on blur.
+  - [ ] Test (Special Characters): Accepts multiline input (newlines, commas, hyphens) and special characters safely without HTML injection.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Component):**
+  - [ ] [Component] Implement `apps/web/src/components/buyer/DeliveryNoteInput.tsx`:
+    ```tsx
+    interface DeliveryNoteInputProps {
+      value: string;
+      onChange: (val: string) => void;
+      label?: string;
+      placeholder?: string;
+      id?: string;
+    }
+    ```
+  - [ ] Run unit test — **confirm GREEN.**
+
+- [ ] **RED — Page Unit Tests (`CheckoutPage.test.tsx` & `BookingTimeslotPage.test.tsx`):**
+  - [ ] Test (`CheckoutPage`): User types "Leave at front door" into delivery note input. Clicking "Place Order" sends `deliveryNote: "Leave at front door"` in `POST /api/v1/orders` request body.
+  - [ ] Test (`BookingTimeslotPage`): User types "Patient requires gentle care" into service note input. Clicking "Confirm Booking" sends `deliveryNote: "Patient requires gentle care"` in `POST /api/v1/bookings` request body.
+  - [ ] Test (Omitted Note): Placing order without entering a note sends `deliveryNote: null` or omits the key.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Page Wiring):**
+  - [ ] [CheckoutPage] In `apps/web/src/pages/buyer/CheckoutPage.tsx`, add state `deliveryNote`, render `DeliveryNoteInput` under Address selection, and include `deliveryNote: deliveryNote.trim() || null` in the `placeOrder` payload.
+  - [ ] [BookingTimeslotPage] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`, add state `serviceNote`, render `DeliveryNoteInput` (label: "Instructions for Field Technician"), and include `deliveryNote: serviceNote.trim() || null` in the booking mutation payload.
+  - [ ] [CartDrawer] In `apps/web/src/components/buyer/CartDrawer.tsx`, render `DeliveryNoteInput` and forward value to checkout navigation.
+  - [ ] Run page tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Buyer enters instructions at checkout or booking → Form validates character count → Payload includes `deliveryNote` → Order created with note saved to database → ✅ Done.
+
+---
+
+### Phase 6.19.5: End-to-End Delivery Note & Service Instructions Visibility (Rider, Field Technician, Store & Admin)
+
+**Root cause / Goal:**
+- **Current State:** 
+  1. In `RiderOrdersPage.tsx`, the compact order feed card (`renderCompactOrderCard`) does NOT render `deliveryNote` at all. A rider on the road or a technician in the field has to tap into the overlay modal just to discover if the customer left vital instructions. Furthermore, inside the modal, the note is rendered in faint italic text with generic label `Note:`, and the address block is hardcoded as `Delivery Address` even for field technicians performing on-site diagnostic visits.
+  2. In store owner panels (`StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`), neither the order cards nor the details modals display `deliveryNote`. Store owners cannot see special packaging instructions, and booking partners cannot verify technician requirements.
+  3. In admin panels (`AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx`), `deliveryNote` is absent from order detail modals, hindering customer dispute resolution.
+- **Desired State:**
+  1. `RiderOrdersPage.tsx` (Rider & Field Technician Feed):
+     - **Compact Card Feed:** Render an amber instruction pill directly on the active order card when `deliveryNote` is present:
+       - For Field Technicians (`isFieldTechnician` / `BOOKING`): `Service Note: "<deliveryNote>"`
+       - For Delivery Riders (`QUICK`): `Delivery Note: "<deliveryNote>"`
+     - **Detailed Overlay Modal:** Upgrade the faint text to a prominent amber callout badge styled identically across panels, with semantic labeling:
+       - For Field Technicians: `Service Instructions: "<deliveryNote>"` (and header `Appointment Address`)
+       - For Delivery Riders: `Delivery Instructions: "<deliveryNote>"` (and header `Delivery Address`)
+  2. `StoreOrdersPage.tsx`: In Order Details modal under Delivery Address, display distinct amber callout badge: `Delivery Note: "<deliveryNote>"` (rendered only when present).
+  3. `StoreBookingsPage.tsx`: In Appointment Details modal under Appointment Address, display distinct amber callout badge: `Service Instructions: "<deliveryNote>"` (rendered only when present).
+  4. `AdminOrdersPage.tsx` & `AdminUserDetailPage.tsx`: In Order Details modals, display distinct callout badge: `Delivery / Service Note: "<deliveryNote>"`.
+
+**Fix / Approach:**
+Update TypeScript interfaces and JSX in `RiderOrdersPage.tsx`, `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `AdminOrdersPage.tsx`, and `AdminUserDetailPage.tsx`.
+
+---
+
+- [ ] **RED — Unit / Page Tests (`RiderOrdersPage.test.tsx`, `StoreOrdersPage.test.tsx`, `StoreBookingsPage.test.tsx`, `AdminOrdersPage.test.tsx`):**
+  - [ ] Test (`RiderOrdersPage` - Compact Card Feed): Mock order with `deliveryNote: "Ring bell twice, baby sleeping"`. Assert compact order card in feed renders `data-testid="rider-compact-delivery-note"` containing `"Delivery Note: Ring bell twice, baby sleeping"`.
+  - [ ] Test (`RiderOrdersPage` - Technician Modal): Mock booking order with `isFieldTechnician: true` and `deliveryNote: "Patient fasting required"`. Open modal. Assert element `data-testid="rider-service-instructions-badge"` renders `"Service Instructions: Patient fasting required"`.
+  - [ ] Test (`StoreOrdersPage`): Mock order with `deliveryNote: "Fragile items, handle with care"`. Open order details modal. Assert element `data-testid="store-order-delivery-note"` contains `"Note: Fragile items, handle with care"`.
+  - [ ] Test (`StoreOrdersPage` - No Note): Mock order with `deliveryNote: null`. Open modal. Assert `data-testid="store-order-delivery-note"` is NOT in the document.
+  - [ ] Test (`StoreBookingsPage`): Mock booking with `deliveryNote: "Patient needs early sample collection"`. Open modal. Assert element `data-testid="store-booking-service-note"` contains `"Service Note: Patient needs early sample collection"`.
+  - [ ] Test (`AdminOrdersPage`): Mock order with `deliveryNote: "Call before delivering"`. Open details modal. Assert element `data-testid="admin-order-delivery-note"` renders `"Delivery Note: Call before delivering"`.
+  - [ ] **Run — confirm RED.**
+
+- [ ] **GREEN — Frontend (Modals & Types):**
+  - [ ] [RiderOrdersPage] In `apps/web/src/pages/rider/RiderOrdersPage.tsx`:
+    - In `renderCompactOrderCard`, add:
+      ```tsx
+      {order.deliveryAddress.deliveryNote && (
+        <div data-testid="rider-compact-delivery-note" className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200/60 rounded-lg px-2.5 py-1">
+          <FileText className="h-3 w-3 text-amber-700 shrink-0" />
+          <span className="truncate">
+            {isFieldTechnician ? "Service Note: " : "Note: "}
+            {order.deliveryAddress.deliveryNote}
+          </span>
+        </div>
+      )}
+      ```
+    - In Detailed Overlay Modal, replace subtle text with prominent styled badge:
+      ```tsx
+      {selectedOrder.deliveryAddress.deliveryNote && (
+        <div data-testid="rider-service-instructions-badge" className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2">
+          <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-bold block text-[10px] uppercase text-amber-700">
+              {isFieldTechnician ? "Service Instructions" : "Delivery Instructions"}
+            </span>
+            <span className="font-medium whitespace-pre-line">{selectedOrder.deliveryAddress.deliveryNote}</span>
+          </div>
+        </div>
+      )}
+      ```
+  - [ ] [StoreOrdersPage] In `apps/web/src/pages/store/StoreOrdersPage.tsx`:
+    - Add `deliveryNote?: string | null;` to `Order` type.
+    - Inside Order Details Modal under Delivery Address, add `data-testid="store-order-delivery-note"` callout badge.
+  - [ ] [StoreBookingsPage] In `apps/web/src/pages/store/StoreBookingsPage.tsx`:
+    - Add `deliveryNote?: string | null;` to `Booking` type.
+    - Inside Appointment Details Modal under Appointment Address, add `data-testid="store-booking-service-note"` callout badge.
+  - [ ] [AdminOrdersPage & AdminUserDetailPage] In `AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx`:
+    - Add `deliveryNote?: string | null;` to `OrderDetail` type.
+    - Inside Details Modal, render `data-testid="admin-order-delivery-note"` callout displaying the buyer note.
+  - [ ] Run page tests — **confirm GREEN.**
+
+- [ ] **Verification chain:**
+  - [ ] Buyer enters delivery note or technician service instruction at checkout → Note is visible immediately on Rider/Technician compact feed card and modal, visible to Store Owner in Order/Booking detail modal, and visible to Admin in Audit detail modal → ✅ Done.
+
+---
+
+### Phase 6.19.6: Full Regression & Quality Gates
+
+- [ ] **API Tests:** `pnpm --filter @gorola/api test -- --run` (100% green).
+- [ ] **Web Tests:** `pnpm --filter @gorola/web test -- --run` (100% green).
+- [ ] **Typecheck:** `pnpm typecheck` (0 errors across packages/shared, packages/ui, apps/api, apps/web).
+- [ ] **Lint:** `pnpm lint` (0 errors, 0 warnings).
+- [ ] **Manual Smoke Checklist:**
+  1. Create quick commerce order with coupon + store offer + delivery note:
+     - Verify DB snapshot columns on `Order`.
+     - Verify `Total Discount` dropdown renders on Cart, Checkout, Order Confirmation.
+     - Verify Store Orders modal displays delivery note callout.
+     - Verify Admin Orders modal displays delivery note callout.
+     - Verify Rider Orders screen displays delivery note callout.
+  2. Create booking commerce appointment with coupon + store offer + technician instructions:
+     - Verify DB snapshot columns on `Order`.
+     - Verify `Total Discount` dropdown renders on Booking Confirmation with `Store Offer (<TITLE>)` and `Discount Code (<CODE>)`.
+     - Verify Store Bookings modal displays service instructions callout.
+     - Verify Technician (Rider) active bookings card displays service instructions callout.
+     - Verify DPDP consent notices on Booking Timeslot and Checkout mention both delivery riders and field service technicians.
+
+---
+
+## 🔮 Phase 6.20 Roadmap: Tax Calculation Logic, GST Rules & Advanced Invoice Formatting
+
+> **Phase:** 6.20  
+> **Status:** QUEUED (Pending client approval on tax and invoice settings)  
 > **Primary Goal:** Activate live GST taxation at checkout and deliver client-facing PDF/printable invoice downloads.
 
-### Core Objectives of Phase 6.19:
+### Core Objectives of Phase 6.20:
 
 1. **GST Calculation Engine (`BuyerCheckoutService` & `booking-order.service.ts`):**
    - Read `GST_RATE` from `SystemSetting`.
