@@ -255,12 +255,15 @@ export function BuyerNav(): ReactElement {
           </form>
 
           {showSuggestions && search.trim().length > 0 && suggestions.length > 0 && (
-            <div className={cn(
-              "absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl border shadow-xl max-h-80 overflow-y-auto backdrop-blur-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
-              isWeatherMode
-                ? "bg-gorola-slate/95 border-white/10 text-gorola-fog"
-                : "bg-white/95 border-gorola-charcoal/10 text-gorola-charcoal"
-            )}>
+            <div
+              data-lenis-prevent
+              className={cn(
+                "absolute top-full left-0 right-0 mt-2 z-50 rounded-2xl border shadow-xl max-h-80 overflow-y-auto overscroll-contain backdrop-blur-md transition-all duration-200 animate-in fade-in slide-in-from-top-2",
+                isWeatherMode
+                  ? "bg-gorola-slate/95 border-white/10 text-gorola-fog"
+                  : "bg-white/95 border-gorola-charcoal/10 text-gorola-charcoal"
+              )}
+            >
               <div className="p-2 space-y-1">
                 {suggestions.map((item) => (
                   <button

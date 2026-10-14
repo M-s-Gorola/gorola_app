@@ -367,6 +367,7 @@ export class AdminService {
         itemsCount,
         total: Number(o.total),
         status: o.status,
+        orderType: o.orderType,
         createdAt: o.createdAt.toISOString(),
         paymentMethod: o.paymentMethod,
         riderName: o.rider?.name ?? null
@@ -450,7 +451,8 @@ export class AdminService {
         user: { select: { phone: true, name: true } },
         items: true,
         statusHistory: { orderBy: { changedAt: "asc" } },
-        rider: { select: { name: true } }
+        rider: { select: { name: true } },
+        bookingOrder: true
       }
     });
     if (!order) {
@@ -517,6 +519,16 @@ export class AdminService {
 
     return {
       ...order,
+      bookingOrder: order.bookingOrder,
+      booking: order.bookingOrder
+        ? {
+            timeslot: order.bookingOrder.timeslot,
+            scheduledDate: order.bookingOrder.scheduledDate,
+            appointmentAddress: order.landmarkDescription,
+            serviceInstructions: order.deliveryNote,
+            requiresFasting: order.bookingOrder.requiresFasting
+          }
+        : null,
       statusHistory: resolvedStatusHistory,
       buyerMaskedPhone: maskPhone(order.user?.phone ?? ""),
       total: Number(order.total),

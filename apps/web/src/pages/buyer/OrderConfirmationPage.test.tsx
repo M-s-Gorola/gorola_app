@@ -425,5 +425,50 @@ describe("OrderConfirmationPage", () => {
     await screen.findByRole("heading", { name: "Thank you" });
     expect(screen.getByText("Pay on delivery")).toBeInTheDocument();
   });
+
+  it("renders delivery instructions callout badge under delivery address when deliveryNote is present", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            deliveryNote: "Leave at front porch, don't ring doorbell",
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Thank you" });
+    const noteBadge = screen.getByTestId("order-delivery-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Delivery Instructions");
+    expect(noteBadge).toHaveTextContent("Leave at front porch, don't ring doorbell");
+  });
+
+  it("does not render delivery instructions badge when deliveryNote is null", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/promotions/")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            ...baseEnvelope().data,
+            deliveryNote: null,
+          },
+        },
+      });
+    });
+
+    renderPage();
+    await screen.findByRole("heading", { name: "Thank you" });
+    expect(screen.queryByTestId("order-delivery-note")).not.toBeInTheDocument();
+  });
 });
 

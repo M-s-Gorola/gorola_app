@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { CheckCircle2, Home, MessageSquare } from "lucide-react";
+import { CheckCircle2, FileText, Home, MessageSquare } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -613,6 +613,20 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.flatRoom ? `${booking.flatRoom}, ` : ""}
               {booking.landmarkDescription}
             </p>
+            {booking.deliveryNote && (
+              <div
+                data-testid="booking-service-note"
+                className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+              >
+                <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-bold block text-[10px] uppercase text-amber-700">
+                    Service Instructions
+                  </span>
+                  <span className="font-medium whitespace-pre-line">{booking.deliveryNote}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section 4: Live Tracking Map */}

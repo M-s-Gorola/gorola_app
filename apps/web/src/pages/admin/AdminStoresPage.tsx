@@ -481,11 +481,13 @@ export function AdminStoresPage(): ReactElement {
       {/* Suspend / Unsuspend Confirmation Modal */}
       {confirmStatusChangeStoreId && confirmStore && (
         <div
-          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          data-lenis-prevent
+          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain animate-in fade-in duration-200"
           onClick={() => setConfirmStatusChangeStoreId(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
+            data-lenis-prevent
+            className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 md:p-8 space-y-6 overscroll-contain animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-start gap-4">

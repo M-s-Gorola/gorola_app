@@ -244,8 +244,8 @@ export function AdminUsersPage(): ReactElement {
 
       {/* Confirmation Modal for Suspending/Unsuspending */}
       {confirmStatusChangeUserId && (
-        <div className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+        <div data-lenis-prevent className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain">
+          <div data-lenis-prevent className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 overscroll-contain animate-in zoom-in-95 duration-200">
             {(() => {
               const targetUser = items.find((u) => u.id === confirmStatusChangeUserId);
               if (!targetUser) return null;

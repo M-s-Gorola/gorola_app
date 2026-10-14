@@ -2,18 +2,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   Download,
-  FileText,
-  MapPin,
-  Phone,
-  RefreshCw,
-  User
+  RefreshCw
 } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { AdminOrderDetailModal } from "@/components/admin/AdminOrderDetailModal";
 import { api } from "@/lib/api";
+import { formatStatusLabel, getStatusBadgeClasses } from "@/lib/utils";
 
 type OrderStatus =
   | "PLACED"
@@ -47,6 +45,7 @@ type OrderListItem = {
   itemsCount: number;
   total: number;
   status: OrderStatus;
+  orderType?: "REGULAR" | "BOOKING" | "QUICK";
   createdAt: string;
   paymentMethod: string;
   riderName?: string | null;
@@ -63,44 +62,6 @@ type OrdersResponse = {
     items: OrderListItem[];
     nextCursor: string | null;
     stores: StoreOption[];
-  };
-};
-
-type OrderDetailResponse = {
-  success: boolean;
-  data: {
-    id: string;
-    userId: string;
-    storeId: string;
-    status: OrderStatus;
-    subtotal: number;
-    deliveryFee: number;
-    total: number;
-    paymentMethod: string;
-    landmarkDescription: string;
-    flatRoom?: string | null;
-    deliveryNote?: string | null;
-    createdAt: string;
-    buyerMaskedPhone: string;
-    store: {
-      id: string;
-      name: string;
-      phone: string;
-    };
-    user: {
-      name: string;
-      phone: string;
-    };
-    items: OrderItem[];
-    statusHistory: OrderStatusHistory[];
-    riderName?: string | null;
-    orderType?: string | null;
-    discountSavingAmount?: number | string | null;
-    offerSavingAmount?: number | string | null;
-    appliedOfferTitle?: string | null;
-    appliedDiscountCode?: string | null;
-    taxRate?: number | string | null;
-    discount?: { amount: string; code: string | null } | null;
   };
 };
 
@@ -159,19 +120,9 @@ export function AdminOrdersPage(): ReactElement {
       const res = await api.get<OrdersResponse>(`/api/v1/admin/orders?${params.toString()}`);
       return res.data.data;
     },
-    staleTime: 10000,
+    staleTime: 5000,
+    refetchInterval: 5000,
     placeholderData: (prev) => prev
-  });
-
-  // Fetch single order detail query
-  const { data: orderDetail, isLoading: isDetailLoading } = useQuery<OrderDetailResponse["data"]>({
-    queryKey: ["admin", "order-detail", selectedOrderDetailsId],
-    queryFn: async () => {
-      if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<OrderDetailResponse>(`/api/v1/admin/orders/${selectedOrderDetailsId}`);
-      return res.data.data;
-    },
-    enabled: !!selectedOrderDetailsId
   });
 
   // Force update status mutation
@@ -229,20 +180,7 @@ export function AdminOrdersPage(): ReactElement {
   };
 
   const getStatusBadgeClass = (status: OrderStatus) => {
-    switch (status) {
-      case "PLACED":
-      case "PENDING_APPROVAL":
-        return "bg-amber-100 text-amber-800 border-amber-200/50";
-      case "PREPARING":
-      case "APPROVED":
-        return "bg-sky-100 text-sky-800 border-sky-200/50";
-      case "OUT_FOR_DELIVERY":
-        return "bg-gorola-saffron/10 text-gorola-saffron border-gorola-saffron/20";
-      case "DELIVERED":
-        return "bg-emerald-100 text-emerald-800 border-emerald-200/50";
-      case "CANCELLED":
-        return "bg-rose-100 text-rose-800 border-rose-200/50";
-    }
+    return getStatusBadgeClasses(status);
   };
 
   const formatCurrency = (val: number): string => {
@@ -433,7 +371,7 @@ export function AdminOrdersPage(): ReactElement {
                         order.status
                       )}`}
                     >
-                      {order.status}
+                      {formatStatusLabel(order.status, order.orderType)}
                     </span>
                   </td>
                   <td className="p-4 text-right space-x-2 whitespace-nowrap">
@@ -499,250 +437,20 @@ export function AdminOrdersPage(): ReactElement {
       </div>
 
       {/* Details Modal */}
-      {selectedOrderDetailsId && (
-        <div
-          data-testid="order-details-modal"
-          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
-          onClick={() => setSelectedOrderDetailsId(null)}
-        >
-          <div
-            className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {isDetailLoading ? (
-              <div className="h-64 flex flex-col items-center justify-center space-y-4">
-                <RefreshCw className="h-8 w-8 text-gorola-pine animate-spin" />
-                <span className="text-sm text-gorola-slate">Retrieving detailed records...</span>
-              </div>
-            ) : (
-              orderDetail && (
-                <>
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <span
-                        className={`inline-flex px-3 py-1 rounded-full text-xs font-black uppercase border mb-3 ${getStatusBadgeClass(
-                          orderDetail.status
-                        )}`}
-                      >
-                        {orderDetail.status}
-                      </span>
-                      <h2 className="font-mono text-xl md:text-2xl font-black text-gorola-charcoal">
-                        #{orderDetail.id.toUpperCase()}
-                      </h2>
-                      <p className="text-xs text-gorola-slate mt-1 font-medium">
-                        Placed on: {new Date(orderDetail.createdAt).toLocaleString("en-IN")}
-                      </p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedOrderDetailsId(null)}
-                      className="h-8 w-8 rounded-full border border-gorola-charcoal/10 hover:border-gorola-pine/20 flex items-center justify-center font-bold text-gorola-slate transition-all"
-                      aria-label="Close modal"
-                    >
-                      ✕
-                    </button>
-                  </div>
-
-                  <div className="grid gap-6 md:grid-cols-2">
-                    {/* Buyer info */}
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                        Information
-                      </h3>
-                      <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 space-y-3">
-                        <div className="flex items-center gap-3">
-                          <User className="h-4 w-4 text-gorola-slate" />
-                          <div>
-                            <p className="text-[10px] text-gorola-slate font-bold">Buyer Profile</p>
-                            <p className="text-xs font-black text-gorola-charcoal">{orderDetail.user?.name || "Registered User"}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-3">
-                          <Phone className="h-4 w-4 text-gorola-slate" />
-                          <div>
-                            <p className="text-[10px] text-gorola-slate font-bold">Contact Number</p>
-                            <p className="text-xs font-black text-gorola-charcoal">{orderDetail.buyerMaskedPhone}</p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-start gap-3">
-                          <MapPin className="h-4 w-4 text-gorola-slate mt-0.5" />
-                          <div className="w-full">
-                            <p className="text-[10px] text-gorola-slate font-bold">
-                              {orderDetail.orderType === "BOOKING" ? "Appointment Address" : "Delivery Address"}
-                            </p>
-                            <p className="text-xs font-black text-gorola-charcoal">
-                              {orderDetail.flatRoom ? `${orderDetail.flatRoom}, ` : ""}
-                              {orderDetail.landmarkDescription}
-                            </p>
-                            {orderDetail.deliveryNote && (
-                              <div
-                                data-testid="admin-order-delivery-note"
-                                className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
-                              >
-                                <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
-                                <div>
-                                  <span className="font-bold block text-[10px] uppercase text-amber-700">
-                                    {orderDetail.orderType === "BOOKING" ? "Service Note" : "Delivery Note"}
-                                  </span>
-                                  <span className="font-medium whitespace-pre-line">
-                                    Delivery Note: {orderDetail.deliveryNote}
-                                  </span>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        </div>
-
-                        {orderDetail.riderName && (
-                          <div className="flex items-center gap-3">
-                            <User className="h-4 w-4 text-gorola-slate" />
-                            <div>
-                              <p className="text-[10px] text-gorola-slate font-bold">Assigned Rider</p>
-                              <p className="text-xs font-black text-gorola-charcoal">{orderDetail.riderName}</p>
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Timeline */}
-                    <div className="space-y-4">
-                      <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                        Audit Timeline
-                      </h3>
-                      <div className="relative pl-6 space-y-4 border-l border-gorola-mint/15">
-                        {orderDetail.statusHistory?.map((hist, idx) => (
-                          <div key={hist.id} className="relative">
-                            <span
-                              className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full ${
-                                idx === orderDetail.statusHistory.length - 1
-                                  ? "bg-gorola-pine scale-125"
-                                  : "bg-gorola-mint"
-                              }`}
-                            />
-                            <p className="text-xs font-black text-gorola-charcoal">
-                              {hist.note?.toLowerCase().includes("accepted by")
-                                ? (orderDetail.orderType === "BOOKING" ? "Booking Accepted" : "Order Accepted")
-                                : hist.status}
-                            </p>
-                            <p className="text-[10px] text-gorola-slate mt-0.5">
-                              By {hist.changedBy} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
-                              {hist.note && !hist.note.toLowerCase().includes("accepted by") && !hist.note.toLowerCase().startsWith("order placed") && ` - ${hist.note}`}
-                            </p>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Items */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                      Items Breakdown
-                    </h3>
-                    <div className="border border-gorola-charcoal/10 rounded-2xl overflow-hidden bg-white">
-                      <table className="w-full text-left border-collapse">
-                        <thead>
-                          <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15">
-                            <th className="p-3 text-xs font-black text-gorola-charcoal uppercase">Product</th>
-                            <th className="p-3 text-xs font-black text-gorola-charcoal uppercase text-center">Qty</th>
-                            <th className="p-3 text-xs font-black text-gorola-charcoal uppercase text-right">Price</th>
-                            <th className="p-3 text-xs font-black text-gorola-charcoal uppercase text-right">Total</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {orderDetail.items.map((item) => (
-                            <tr key={item.id} className="border-b border-gorola-charcoal/5 last:border-0">
-                              <td className="p-3">
-                                <p className="text-xs font-black text-gorola-charcoal">{item.productName}</p>
-                                <p className="text-[10px] text-gorola-slate">{item.variantLabel}</p>
-                              </td>
-                              <td className="p-3 text-xs font-bold text-center text-gorola-charcoal">{item.quantity}</td>
-                              <td className="p-3 text-xs text-right font-medium text-gorola-slate">
-                                {formatCurrency(Number(item.price))}
-                              </td>
-                              <td className="p-3 text-xs text-right font-black text-gorola-charcoal">
-                                {formatCurrency(Number(item.price) * item.quantity)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  {/* Calculations */}
-                  <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex flex-col gap-2">
-                    <div className="flex justify-between items-center text-xs text-gorola-slate">
-                      <span>Subtotal</span>
-                      <span className="font-semibold">{formatCurrency(orderDetail.subtotal)}</span>
-                    </div>
-                    <div className="flex justify-between items-center text-xs text-gorola-slate">
-                      <span>{orderDetail.orderType === "BOOKING" ? "Service Fee" : "Delivery Fee"}</span>
-                      <span className="font-semibold">{formatCurrency(orderDetail.deliveryFee)}</span>
-                    </div>
-                    {(() => {
-                      const discountSaving = Number(orderDetail.discountSavingAmount || 0);
-                      const offerSaving = Number(orderDetail.offerSavingAmount || 0);
-                      const fallbackDiscount = Number(orderDetail.discount?.amount || 0);
-                      const hasStored =
-                        (orderDetail.discountSavingAmount !== undefined && orderDetail.discountSavingAmount !== null) ||
-                        (orderDetail.offerSavingAmount !== undefined && orderDetail.offerSavingAmount !== null);
-
-                      if (hasStored) {
-                        if (discountSaving <= 0 && offerSaving <= 0) return null;
-                        return (
-                          <div className="space-y-1" data-testid="admin-order-discount">
-                            {offerSaving > 0 && (
-                              <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                                <span>Store Offer {orderDetail.appliedOfferTitle ? `(${orderDetail.appliedOfferTitle})` : ""}</span>
-                                <span>-{formatCurrency(offerSaving)}</span>
-                              </div>
-                            )}
-                            {discountSaving > 0 && (
-                              <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                                <span>Discount Code {orderDetail.appliedDiscountCode ? `(${orderDetail.appliedDiscountCode})` : ""}</span>
-                                <span>-{formatCurrency(discountSaving)}</span>
-                              </div>
-                            )}
-                          </div>
-                        );
-                      }
-
-                      if (fallbackDiscount > 0) {
-                        return (
-                          <div className="space-y-1" data-testid="admin-order-discount">
-                            <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                              <span>Discount Code {orderDetail.discount?.code ? `(${orderDetail.discount.code})` : ""}</span>
-                              <span>-{formatCurrency(fallbackDiscount)}</span>
-                            </div>
-                          </div>
-                        );
-                      }
-
-                      return null;
-                    })()}
-                    <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal border-t border-gorola-charcoal/5 pt-2">
-                      <span>Grand Total</span>
-                      <span>{formatCurrency(orderDetail.total)}</span>
-                    </div>
-                  </div>
-                </>
-              )
-            )}
-          </div>
-        </div>
-      )}
+      <AdminOrderDetailModal
+        orderId={selectedOrderDetailsId}
+        onClose={() => setSelectedOrderDetailsId(null)}
+      />
 
       {/* Force Status Update Modal */}
       {forceUpdateOrderId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
+        <div data-lenis-prevent className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm overscroll-contain animate-in fade-in duration-200">
           <form
             onSubmit={handleForceUpdateSubmit}
             role="dialog"
             aria-modal="true"
-            className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform animate-in zoom-in-95 duration-200 space-y-4"
+            data-lenis-prevent
+            className="bg-white rounded-2xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-charcoal/10 transform overscroll-contain animate-in zoom-in-95 duration-200 space-y-4"
           >
             <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-red-500" />

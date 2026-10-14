@@ -107,7 +107,7 @@ describe("AdminOrdersPage", () => {
     expect(screen.getByText("Rider Bob")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("₹250.00")).toBeInTheDocument();
-    expect(screen.getByText("PLACED")).toBeInTheDocument();
+    expect(screen.getAllByText("Placed")).toHaveLength(2);
 
     // Mock detail route response when clicking row
     const mockDetailData = {
@@ -392,8 +392,26 @@ describe("AdminOrdersPage", () => {
     const modal = await screen.findByTestId("order-details-modal");
     expect(modal).toBeInTheDocument();
 
-    expect(await within(modal).findByText(/Store Offer \(Mega Summer Deal\)/)).toBeInTheDocument();
-    expect(within(modal).getByText(/Discount Code \(PROMO20\)/)).toBeInTheDocument();
+    const discountSummary = await within(modal).findByTestId("admin-order-discount");
+    expect(discountSummary).toBeInTheDocument();
+    expect(within(discountSummary).getByText("Total Discount:")).toBeInTheDocument();
+    expect(within(discountSummary).getByText("-Rs 50.00")).toBeInTheDocument();
+
+    // Breakdown list is initially hidden
+    expect(within(modal).queryByTestId("admin-order-discount-list")).not.toBeInTheDocument();
+
+    // Click toggle button to expand dropdown
+    const toggle = within(modal).getByTestId("admin-order-discount-toggle");
+    fireEvent.click(toggle);
+
+    // Now breakdown items are visible
+    expect(within(modal).getByTestId("admin-order-discount-list")).toBeInTheDocument();
+    expect(within(modal).getByText(/• Store Offer \(Mega Summer Deal\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/• Discount Code \(PROMO20\)/)).toBeInTheDocument();
+
+    // Click again to collapse
+    fireEvent.click(toggle);
+    expect(within(modal).queryByTestId("admin-order-discount-list")).not.toBeInTheDocument();
   });
 
   it("displays delivery note callout badge in order details modal when deliveryNote is present", async () => {
@@ -457,6 +475,39 @@ describe("AdminOrdersPage", () => {
     expect(noteBadge).toBeInTheDocument();
     expect(noteBadge).toHaveTextContent("Delivery Note: Call before delivering");
   });
+
+  it("renders booking status terminology 'On The Way' and consistent pill classes in table", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-booking-ontheway",
+            buyerMaskedPhone: "******9001",
+            storeName: "Clean Pro",
+            itemsCount: 1,
+            total: 500.0,
+            status: "OUT_FOR_DELIVERY",
+            orderType: "BOOKING",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-clean", name: "Clean Pro" }]
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+
+    renderAdminOrders();
+
+    expect(await screen.findAllByText("Clean Pro")).toHaveLength(2);
+    const statusPill = screen.getByText("On The Way");
+    expect(statusPill).toBeInTheDocument();
+    expect(statusPill.className).toContain("bg-blue-50 text-blue-800");
+  });
 });
+
 
 

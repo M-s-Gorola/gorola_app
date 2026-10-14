@@ -175,6 +175,11 @@ export function registerAppRoutes(app: FastifyInstance): void {
         }
       }).then((o) => {
         if (o) {
+          app.io.to(`order:${orderId}`).emit("order_status_changed", {
+            orderId,
+            status,
+            statusHistory: o.statusHistory
+          });
           app.io.to(`store:${o.storeId}`).emit("store:order_updated", {
             orderId,
             status,
@@ -183,7 +188,7 @@ export function registerAppRoutes(app: FastifyInstance): void {
           });
         }
       }).catch((err) => {
-        app.log.error(err, "Failed to broadcast order status change to store room");
+        app.log.error(err, "Failed to broadcast order status change");
       });
     }
   };

@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/dialog";
 import { useRiderLocation } from "@/hooks/useRiderLocation";
 import { api } from "@/lib/api";
+import { lenis } from "@/lib/lenis";
 import { useAuthStore } from "@/store/auth.store";
 
 type OrderItem = {
@@ -102,11 +103,14 @@ export function RiderOrdersPage(): ReactElement {
   useEffect(() => {
     if (selectedOrder) {
       document.body.style.overflow = "hidden";
+      lenis?.stop();
     } else {
       document.body.style.overflow = "";
+      lenis?.start();
     }
     return () => {
       document.body.style.overflow = "";
+      lenis?.start();
     };
   }, [selectedOrder]);
 
@@ -451,12 +455,14 @@ export function RiderOrdersPage(): ReactElement {
       {selectedOrder && (
         <div
           data-testid="rider-order-modal"
-          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          data-lenis-prevent
+          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain animate-in fade-in duration-200"
           onClick={() => setSelectedOrder(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full sm:max-w-xl max-w-md max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6 animate-in zoom-in-95 duration-200"
+            className="bg-white rounded-3xl w-full sm:max-w-xl max-w-md max-h-[85vh] overflow-y-auto shadow-2xl p-6 space-y-6 overscroll-contain animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
+            data-lenis-prevent
           >
             {/* Modal Header */}
             <div className="flex justify-between items-start gap-4 border-b border-gorola-fog pb-4">

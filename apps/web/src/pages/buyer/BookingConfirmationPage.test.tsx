@@ -325,4 +325,38 @@ describe("BookingConfirmationPage", () => {
     expect(screen.getByText(/"It was too late"/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
+
+  it("renders service instructions callout badge under appointment address when deliveryNote is present", async () => {
+    const envelope = mockBookingEnvelope("APPROVED");
+    envelope.data = {
+      ...envelope.data,
+      deliveryNote: "Patient requires gentle vein puncture, please bring 22G needle",
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+
+    const noteBadge = screen.getByTestId("booking-service-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Service Instructions");
+    expect(noteBadge).toHaveTextContent("Patient requires gentle vein puncture, please bring 22G needle");
+  });
+
+  it("does not render service instructions badge when deliveryNote is null", async () => {
+    const envelope = mockBookingEnvelope("APPROVED");
+    envelope.data = {
+      ...envelope.data,
+      deliveryNote: null,
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    expect(screen.queryByTestId("booking-service-note")).not.toBeInTheDocument();
+  });
 });

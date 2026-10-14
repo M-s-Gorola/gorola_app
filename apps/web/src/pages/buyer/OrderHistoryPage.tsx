@@ -9,7 +9,7 @@ import { toast } from "sonner";
 import { StarRating } from "@/components/shared/StarRating";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
-import { formatStatusLabel } from "@/lib/utils";
+import { formatStatusLabel, getStatusBadgeClasses } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
 
@@ -67,31 +67,41 @@ export function OrderHistoryPage() {
 
   const getBadgeDetails = (order: Order) => {
     const isBooking = order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE";
-    if (isBooking && order.bookingOrder) {
-      const status = order.bookingOrder.approvalStatus;
-      switch (status) {
-        case "PENDING_APPROVAL":
-          return { label: "Pending Approval", classes: "bg-amber-100 text-amber-700 border border-amber-200" };
-        case "APPROVED":
-          return { label: "Approved", classes: "bg-indigo-100 text-indigo-700 border border-indigo-200" };
-        case "REJECTED":
-          return { label: "Rejected", classes: "bg-red-100 text-red-700 border border-red-200" };
-        case "COMPLETED":
-          return { label: "Completed", classes: "bg-green-100 text-green-700 border border-green-200" };
-        case "CANCELLED":
-          return { label: "Cancelled", classes: "bg-red-100 text-red-700 border border-red-200" };
-        default:
-          return { label: formatStatusLabel(status), classes: "bg-blue-100 text-blue-700 border border-blue-200" };
+    if (isBooking) {
+      if (order.bookingOrder?.approvalStatus === "REJECTED") {
+        return { label: "Rejected", classes: getStatusBadgeClasses("REJECTED") };
       }
+      if (order.bookingOrder?.approvalStatus === "PENDING_APPROVAL") {
+        return { label: "Pending Approval", classes: getStatusBadgeClasses("PENDING_APPROVAL") };
+      }
+      if (order.status === "OUT_FOR_DELIVERY") {
+        return { label: "On The Way", classes: getStatusBadgeClasses("OUT_FOR_DELIVERY") };
+      }
+      if (order.status === "DELIVERED") {
+        return { label: "Completed", classes: getStatusBadgeClasses("DELIVERED") };
+      }
+      if (order.status === "CANCELLED") {
+        return { label: "Cancelled", classes: getStatusBadgeClasses("CANCELLED") };
+      }
+      if (order.bookingOrder?.approvalStatus === "APPROVED") {
+        return { label: "Approved", classes: getStatusBadgeClasses("APPROVED") };
+      }
+      return {
+        label: formatStatusLabel(order.status, "BOOKING"),
+        classes: getStatusBadgeClasses(order.status)
+      };
     }
 
     if (order.status === "DELIVERED") {
-      return { label: "Delivered", classes: "bg-green-100 text-green-700" };
+      return { label: "Delivered", classes: getStatusBadgeClasses("DELIVERED") };
     }
     if (order.status === "CANCELLED") {
-      return { label: "Cancelled", classes: "bg-red-100 text-red-700" };
+      return { label: "Cancelled", classes: getStatusBadgeClasses("CANCELLED") };
     }
-    return { label: formatStatusLabel(order.status), classes: "bg-blue-100 text-blue-700" };
+    return {
+      label: formatStatusLabel(order.status),
+      classes: getStatusBadgeClasses(order.status)
+    };
   };
 
   const accessToken = useAuthStore((s) => s.accessToken);

@@ -345,8 +345,8 @@ export function AdminAdvertisementsPage(): ReactElement {
 
       {/* Rejection Modal Dialog */}
       {rejectingAdId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-3xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-mint/15 transform animate-in zoom-in-95 duration-200">
+        <div data-lenis-prevent className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm overscroll-contain animate-in fade-in duration-200">
+          <div data-lenis-prevent role="dialog" aria-modal="true" className="bg-white rounded-3xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-mint/15 transform overscroll-contain animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2 font-heading">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               Reject Advertisement

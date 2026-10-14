@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { Bike, CheckCircle2, Home, MessageSquare, Package } from "lucide-react";
+import { Bike, CheckCircle2, FileText, Home, MessageSquare, Package } from "lucide-react";
 import {
   type ReactElement,
   useCallback,
@@ -62,6 +62,7 @@ export type BuyerOrderDetail = {
   offerSavingAmount?: number | string | null;
   appliedOfferTitle?: string | null;
   appliedDiscountCode?: string | null;
+  deliveryNote?: string | null;
   taxRate?: number | string | null;
   discount?: {
     amount: string;
@@ -131,6 +132,20 @@ function AddressBlock({ order }: { order: BuyerOrderDetail }): ReactElement {
         {order.flatRoom ? `${order.flatRoom}, ` : ""}
         {order.landmarkDescription}
       </p>
+      {order.deliveryNote && (
+        <div
+          data-testid="order-delivery-note"
+          className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+        >
+          <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-bold block text-[10px] uppercase text-amber-700">
+              Delivery Instructions
+            </span>
+            <span className="font-medium whitespace-pre-line">{order.deliveryNote}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

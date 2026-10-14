@@ -471,4 +471,188 @@ describe("OrderHistoryPage", () => {
 
     expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
+
+  describe("Booking Commerce Order Status Badge Edge and Special Cases", () => {
+    it("renders 'On The Way' badge when booking order is OUT_FOR_DELIVERY even if approvalStatus is APPROVED", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-dispatched",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "OUT_FOR_DELIVERY",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [
+                  { id: "i1", productId: "p1", productVariantId: "v1", productName: "Blood Sugar Test", quantity: 1, variantLabel: "Fasting" }
+                ],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-dispatched",
+                  scheduledDate: "2026-10-15T00:00:00.000Z",
+                  timeslot: "09:00 - 11:00",
+                  requiresFasting: true,
+                  approvalStatus: "APPROVED",
+                  rejectionReason: null
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+
+      // Crucial assertion: Must render "On The Way", NOT "Approved"
+      expect(screen.getByText("On The Way")).toBeInTheDocument();
+      expect(screen.queryByText("Approved")).not.toBeInTheDocument();
+    });
+
+    it("renders 'Completed' badge when booking order is DELIVERED even if approvalStatus is APPROVED", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-delivered",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "DELIVERED",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [
+                  { id: "i1", productId: "p1", productVariantId: "v1", productName: "Blood Sugar Test", quantity: 1, variantLabel: "Fasting" }
+                ],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-delivered",
+                  scheduledDate: "2026-10-15T00:00:00.000Z",
+                  timeslot: "09:00 - 11:00",
+                  requiresFasting: true,
+                  approvalStatus: "APPROVED",
+                  rejectionReason: null
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+
+      // Must render "Completed", NOT "Approved" or "Delivered"
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+      expect(screen.queryByText("Approved")).not.toBeInTheDocument();
+    });
+
+    it("renders 'Pending Approval' when bookingOrder approvalStatus is PENDING_APPROVAL", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-pending",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "CONFIRMED",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-pending",
+                  scheduledDate: "2026-10-16T00:00:00.000Z",
+                  timeslot: "14:00 - 16:00",
+                  requiresFasting: false,
+                  approvalStatus: "PENDING_APPROVAL",
+                  rejectionReason: null
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+      expect(screen.getByText("Pending Approval")).toBeInTheDocument();
+    });
+
+    it("renders 'Rejected' when bookingOrder approvalStatus is REJECTED", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-rejected",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "CANCELLED",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-rejected",
+                  scheduledDate: "2026-10-16T00:00:00.000Z",
+                  timeslot: "14:00 - 16:00",
+                  requiresFasting: false,
+                  approvalStatus: "REJECTED",
+                  rejectionReason: "No technician available"
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+      expect(screen.getByText("Rejected")).toBeInTheDocument();
+    });
+
+    it("renders 'Out For Delivery' for standard regular commerce orders", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "regular-out-for-delivery",
+                store: { name: "Quick Grocery Store", storeType: "GROCERY" },
+                total: "350.00",
+                status: "OUT_FOR_DELIVERY",
+                orderType: "REGULAR",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [],
+                rating: null,
+                ratingComment: null
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Quick Grocery Store")).toBeInTheDocument();
+      expect(screen.getByText("Out For Delivery")).toBeInTheDocument();
+    });
+  });
 });

@@ -27,6 +27,7 @@ import {
   DialogTitle
 } from "@/components/ui/dialog";
 import { api } from "@/lib/api";
+import { lenis } from "@/lib/lenis";
 import { formatStatusLabel } from "@/lib/utils";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -275,15 +276,18 @@ export function StoreBookingsPage(): ReactElement {
   };
 
   useEffect(() => {
-    if (selectedBooking) {
+    if (selectedBooking || rejectingBooking) {
       document.body.style.overflow = "hidden";
+      lenis?.stop();
     } else {
       document.body.style.overflow = "";
+      lenis?.start();
     }
     return () => {
       document.body.style.overflow = "";
+      lenis?.start();
     };
-  }, [selectedBooking]);
+  }, [selectedBooking, rejectingBooking]);
 
   useEffect(() => {
     setIsDiscountExpanded(false);
@@ -793,12 +797,14 @@ export function StoreBookingsPage(): ReactElement {
       {selectedBooking && (
         <div
           data-testid="booking-details-modal"
-          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
+          data-lenis-prevent
+          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain animate-in fade-in duration-200"
           onClick={() => setSelectedBooking(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
+            className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 overscroll-contain animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
+            data-lenis-prevent
           >
             {/* Modal Header */}
             <div className="flex justify-between items-start gap-4">
@@ -1135,12 +1141,14 @@ export function StoreBookingsPage(): ReactElement {
       {/* Modern High-End Rejection Modal Overlay Dialog */}
       {rejectingBooking && (
         <div
-          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 animate-in fade-in duration-200"
+          data-lenis-prevent
+          className="fixed inset-0 bg-gorola-charcoal/60 backdrop-blur-sm z-[60] flex items-center justify-center p-4 overscroll-contain animate-in fade-in duration-200"
           onClick={() => setRejectingBooking(null)}
         >
           <div
-            className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200"
+            className="bg-white rounded-3xl w-full max-w-md shadow-2xl p-6 md:p-8 space-y-6 overscroll-contain animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
+            data-lenis-prevent
           >
             {/* Modal Head */}
             <div className="flex justify-between items-start">

@@ -131,6 +131,7 @@ export function AdminStoreDetailPage(): ReactElement {
 
   // Modal State
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
+  const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
 
   const { data: store, isLoading, isError, isFetching, refetch } = useQuery<StoreDetail>({
     queryKey: ["admin", "store-detail", id],
@@ -798,38 +799,60 @@ export function AdminStoreDetailPage(): ReactElement {
                       (orderDetail.discountSavingAmount !== undefined && orderDetail.discountSavingAmount !== null) ||
                       (orderDetail.offerSavingAmount !== undefined && orderDetail.offerSavingAmount !== null);
 
+                    const applied: Array<{ label: string; amount: number }> = [];
+
                     if (hasStored) {
-                      if (discountSaving <= 0 && offerSaving <= 0) return null;
-                      return (
-                        <div className="space-y-1" data-testid="store-order-discount">
-                          {offerSaving > 0 && (
-                            <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                              <span>Offer {orderDetail.appliedOfferTitle ? `(${orderDetail.appliedOfferTitle})` : ""}</span>
-                              <span>-{formatCurrency(offerSaving)}</span>
-                            </div>
-                          )}
-                          {discountSaving > 0 && (
-                            <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                              <span>Discount {orderDetail.appliedDiscountCode ? `(${orderDetail.appliedDiscountCode})` : ""}</span>
-                              <span>-{formatCurrency(discountSaving)}</span>
-                            </div>
-                          )}
-                        </div>
-                      );
+                      if (offerSaving > 0) {
+                        applied.push({
+                          label: orderDetail.appliedOfferTitle ? `Store Offer (${orderDetail.appliedOfferTitle})` : "Store Offer",
+                          amount: offerSaving
+                        });
+                      }
+                      if (discountSaving > 0) {
+                        applied.push({
+                          label: orderDetail.appliedDiscountCode || orderDetail.discount?.code ? `Discount Code (${orderDetail.appliedDiscountCode || orderDetail.discount?.code})` : "Discount Code",
+                          amount: discountSaving
+                        });
+                      }
+                    } else if (fallbackDiscount > 0) {
+                      applied.push({
+                        label: orderDetail.discount?.code ? `Discount Code (${orderDetail.discount.code})` : "Total Discount",
+                        amount: fallbackDiscount
+                      });
                     }
 
-                    if (fallbackDiscount > 0) {
-                      return (
-                        <div className="space-y-1" data-testid="store-order-discount">
-                          <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
-                            <span>Discount {orderDetail.discount?.code ? `(${orderDetail.discount.code})` : ""}</span>
-                            <span>-{formatCurrency(fallbackDiscount)}</span>
+                    const totalAmt = applied.reduce((sum, d) => sum + d.amount, 0);
+                    if (totalAmt <= 0) return null;
+
+                    return (
+                      <div className="space-y-1" data-testid="store-order-discount">
+                        <div className="flex justify-between items-center text-xs text-rose-600 font-bold">
+                          <button
+                            type="button"
+                            onClick={() => setIsDiscountExpanded(!isDiscountExpanded)}
+                            data-testid="store-order-discount-toggle"
+                            aria-expanded={isDiscountExpanded}
+                            className="flex items-center gap-1 text-rose-600 hover:text-rose-700 transition-colors font-bold focus:outline-none"
+                          >
+                            <span>Total Discount:</span>
+                            <span className="text-[10px] transform transition-transform duration-200">
+                              {isDiscountExpanded ? "▼" : "▶"}
+                            </span>
+                          </button>
+                          <span className="font-semibold">-{formatCurrency(totalAmt)}</span>
+                        </div>
+                        {isDiscountExpanded && (
+                          <div className="space-y-1 pl-3 border-l border-rose-200" data-testid="store-order-discount-list">
+                            {applied.map((d, idx) => (
+                              <div key={idx} className="flex justify-between items-start gap-4 text-[11px] text-rose-500 font-dm-sans italic font-medium w-full">
+                                <span className="break-words text-left flex-1">• {d.label}</span>
+                                <span className="text-right whitespace-nowrap shrink-0">-{formatCurrency(d.amount)}</span>
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      );
-                    }
-
-                    return null;
+                        )}
+                      </div>
+                    );
                   })()}
                   <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal border-t border-gorola-charcoal/5 pt-2">
                     <span>Grand Total</span>

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { Home } from "lucide-react";
+import { FileText, Home } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -720,6 +720,20 @@ export function CheckoutPage(): ReactElement {
                   {selectedFlatRoom ? `${selectedFlatRoom}, ` : ""}
                   {selectedLandmark}
                 </p>
+                {deliveryNote.trim().length > 0 && (
+                  <div
+                    data-testid="review-delivery-note"
+                    className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+                  >
+                    <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-bold block text-[10px] uppercase text-amber-700">
+                        Delivery Instructions
+                      </span>
+                      <span className="font-medium whitespace-pre-line">{deliveryNote.trim()}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

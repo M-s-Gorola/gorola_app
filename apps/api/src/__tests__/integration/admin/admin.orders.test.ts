@@ -492,5 +492,73 @@ describe("Admin Orders Integration Tests", () => {
     expect(history[2].changedBy).toBe("Rider (Hillside Express Rider)");
     expect(history[3].changedBy).toBe("Rider (Hillside Express Rider)");
   });
+
+  it("returns bookingOrder and booking details when getting detail for a booking order", async () => {
+    const store = await db.store.create({
+      data: {
+        name: "BioCare Pathology",
+        description: "Diagnostic Pathology Lab",
+        storeType: "BOOKING_COMMERCE",
+        phone: "+919876543299",
+        address: "7th Avenue, Mussoorie"
+      }
+    });
+
+    const buyer = await db.user.create({
+      data: {
+        name: "Aditi Rao",
+        phone: "+919876543298",
+        isVerified: true
+      }
+    });
+
+    const order = await db.order.create({
+      data: {
+        userId: buyer.id,
+        storeId: store.id,
+        orderType: "BOOKING",
+        status: "OUT_FOR_DELIVERY",
+        subtotal: 800.0,
+        deliveryFee: 0.0,
+        total: 800.0,
+        paymentMethod: "COD",
+        deliveryNote: "Patient will be fasting for 12 hours",
+        landmarkDescription: "Villa 12, Pine Forest"
+      }
+    });
+
+    const bookingOrder = await db.bookingOrder.create({
+      data: {
+        orderId: order.id,
+        scheduledDate: new Date("2026-10-20T00:00:00.000Z"),
+        timeslot: "08:00 AM - 10:00 AM",
+        requiresFasting: true,
+        approvalStatus: "APPROVED"
+      }
+    });
+
+    const token = await generateAccessToken("admin-456", "ADMIN");
+
+    const response = await server.inject({
+      method: "GET",
+      url: `/api/v1/admin/orders/${order.id}`,
+      headers: { authorization: `Bearer ${token}` }
+    });
+
+    expect(response.statusCode).toBe(200);
+    const body = JSON.parse(response.body);
+    expect(body.success).toBe(true);
+
+    // Verify bookingOrder relation and booking object mapping
+    expect(body.data.bookingOrder).toBeDefined();
+    expect(body.data.bookingOrder.id).toBe(bookingOrder.id);
+    expect(body.data.bookingOrder.timeslot).toBe("08:00 AM - 10:00 AM");
+    expect(body.data.bookingOrder.requiresFasting).toBe(true);
+
+    expect(body.data.booking).toBeDefined();
+    expect(body.data.booking.timeslot).toBe("08:00 AM - 10:00 AM");
+    expect(body.data.booking.serviceInstructions).toBe("Patient will be fasting for 12 hours");
+    expect(body.data.booking.requiresFasting).toBe(true);
+  });
 });
 

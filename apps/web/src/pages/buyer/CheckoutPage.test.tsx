@@ -662,6 +662,12 @@ describe("CheckoutPage", () => {
     await user.type(noteInput, "Gate code 5566, leave at guard");
 
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    const reviewNote = screen.getByTestId("review-delivery-note");
+    expect(reviewNote).toBeInTheDocument();
+    expect(reviewNote).toHaveTextContent("Gate code 5566, leave at guard");
+    expect(reviewNote).toHaveTextContent("Delivery Instructions");
+
     await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
 
     await waitFor(() => {
