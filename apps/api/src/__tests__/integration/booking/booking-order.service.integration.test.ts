@@ -414,4 +414,57 @@ describe("BookingOrderService Integration", () => {
       })
     );
   });
+
+  it("should persist discountSavingAmount, offerSavingAmount, appliedOfferTitle, and taxRate when placing booking with discounts and offers", async () => {
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+
+    // Create discount
+    await db.discount.create({
+      data: {
+        code: "BOOKSAVE20",
+        discountType: "FLAT",
+        discountValue: new Decimal(20.00),
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        storeId: bookingStore.id,
+        isActive: true
+      }
+    });
+
+    // Create offer
+    await db.offer.create({
+      data: {
+        storeId: bookingStore.id,
+        title: "HEALTH CARE 15 OFF",
+        description: "Flat 15 off on healthcare",
+        discountType: "FLAT",
+        discountValue: "15",
+        minOrderAmount: null,
+        startsAt: new Date(Date.now() - 60_000),
+        endsAt: new Date(Date.now() + 60_000),
+        isActive: true
+      }
+    });
+
+    const placedOrder = await service.placeBookingRequest(
+      buyerUser.id,
+      bookingStore.id,
+      [{ productId: product.id, variantId: fastingVariant.id }], // price 200
+      { scheduledDate: tomorrow, timeslot: "06:00-09:00", addressId: savedAddress.id },
+      "127.0.0.1",
+      "test-agent",
+      "BOOKSAVE20"
+    );
+
+    const persisted = await db.order.findUniqueOrThrow({
+      where: { id: placedOrder.id }
+    });
+
+    expect(persisted.discountSavingAmount?.toFixed(2)).toBe("20.00");
+    expect(persisted.offerSavingAmount?.toFixed(2)).toBe("15.00");
+    expect(persisted.appliedOfferTitle).toBe("HEALTH CARE 15 OFF");
+    expect(persisted.appliedDiscountCode).toBe("BOOKSAVE20");
+    expect(persisted.taxRate?.toFixed(2)).toBe("18.00");
+  });
 });

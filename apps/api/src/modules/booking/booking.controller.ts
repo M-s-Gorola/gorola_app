@@ -40,7 +40,7 @@ function parseSafe<T>(schema: z.Schema<T>, data: unknown): T {
   return result.data;
 }
 
-interface BookingOrderWithRelations {
+export interface BookingOrderWithRelations {
   scheduledDate: Date;
   timeslot: string;
   requiresFasting: boolean;
@@ -57,6 +57,10 @@ interface BookingOrderWithRelations {
     deliveryFee: { toString: () => string };
     total: { toString: () => string };
     appliedDiscountCode: string | null;
+    discountSavingAmount?: Prisma.Decimal | { toString: () => string } | null;
+    offerSavingAmount?: Prisma.Decimal | { toString: () => string } | null;
+    appliedOfferTitle?: string | null;
+    deliveryNote?: string | null;
     createdAt: Date;
     updatedAt: Date;
     landmarkDescription: string;
@@ -99,7 +103,7 @@ interface BookingOrderWithRelations {
 
 
 
-function serializeBookingOrder(booking: BookingOrderWithRelations): Record<string, unknown> {
+export function serializeBookingOrder(booking: BookingOrderWithRelations): Record<string, unknown> {
   const order = booking.order;
 
   // Dynamically map status based on underlying order status
@@ -121,6 +125,11 @@ function serializeBookingOrder(booking: BookingOrderWithRelations): Record<strin
     deliveryFee: order.deliveryFee.toString(),
     total: order.total.toString(),
     discountAmount: (Number(order.subtotal) + Number(order.deliveryFee) - Number(order.total)).toFixed(2),
+    discountSavingAmount: order.discountSavingAmount ? Number(order.discountSavingAmount) : 0,
+    offerSavingAmount: order.offerSavingAmount ? Number(order.offerSavingAmount) : 0,
+    appliedOfferTitle: order.appliedOfferTitle ?? null,
+    appliedDiscountCode: order.appliedDiscountCode ?? null,
+    deliveryNote: order.deliveryNote ?? null,
     // appliedDiscountCode is the coupon code the buyer used at checkout.
     // Serialized here so both the buyer receipt and store booking dashboard
     // can display itemized coupon breakdowns instead of falling back to "Discount".
@@ -195,7 +204,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
     scheduledDate: z.string().datetime(),
     timeslot: z.string().min(1),
     addressId: z.string().min(1),
-    discountCode: z.string().optional()
+    discountCode: z.string().optional(),
+    deliveryNote: z.string().max(500).optional().nullable()
   });
 
   const queryBookingsSchema = z.object({
@@ -240,7 +250,8 @@ export function registerBookingRoutes(app: FastifyInstance, deps: RegisterBookin
         },
         request.ip,
         (request.headers["user-agent"] ?? "") as string,
-        body.discountCode
+        body.discountCode,
+        body.deliveryNote
       );
 
       const bookingOrderRecord = await deps.bookingService.repository.findById(placedOrder.id);

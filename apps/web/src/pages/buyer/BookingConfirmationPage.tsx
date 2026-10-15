@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { CheckCircle2, Home, MessageSquare } from "lucide-react";
+import { CheckCircle2, FileText, Home, MessageSquare } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useParams } from "react-router-dom";
@@ -60,6 +60,12 @@ type BookingEnvelope = {
   bookingOrder: BookingOrderDetails;
   discountAmount?: string;
   discountCode?: string | null;
+  discountSavingAmount?: number | string | null;
+  offerSavingAmount?: number | string | null;
+  appliedOfferTitle?: string | null;
+  appliedDiscountCode?: string | null;
+  deliveryNote?: string | null;
+  taxRate?: number | string | null;
   rating?: number | null;
   ratingComment?: string | null;
   deliveryLat?: number | null;
@@ -189,6 +195,32 @@ export function BookingConfirmationPage(): ReactElement {
   });
 
   const getAppliedDiscounts = (booking: BookingEnvelope) => {
+    // 1. Direct Stored Snapshots (Preferred)
+    const hasStoredPromo =
+      (booking.discountSavingAmount !== undefined && booking.discountSavingAmount !== null) ||
+      (booking.offerSavingAmount !== undefined && booking.offerSavingAmount !== null);
+
+    if (hasStoredPromo) {
+      const result: { label: string; amount: number }[] = [];
+      const offerAmt = Number(booking.offerSavingAmount || 0);
+      const discountAmt = Number(booking.discountSavingAmount || 0);
+
+      if (offerAmt > 0) {
+        result.push({
+          label: booking.appliedOfferTitle ? `Store Offer (${booking.appliedOfferTitle})` : "Store Offer",
+          amount: offerAmt
+        });
+      }
+      if (discountAmt > 0) {
+        result.push({
+          label: booking.appliedDiscountCode || booking.discountCode ? `Discount Code (${booking.appliedDiscountCode || booking.discountCode})` : "Discount Code",
+          amount: discountAmt
+        });
+      }
+      return result;
+    }
+
+    // 2. Fallback
     const subtotal = Number(booking.subtotal || 0);
     const deliveryFee = Number(booking.deliveryFee || 0);
     const total = Number(booking.total || 0);
@@ -228,7 +260,7 @@ export function BookingConfirmationPage(): ReactElement {
         const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
         if (appliedAmt > 0.05) {
           result.push({
-            label: `Discount (${offer.title})`,
+            label: `Store Offer (${offer.title})`,
             amount: appliedAmt
           });
           remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
@@ -238,7 +270,7 @@ export function BookingConfirmationPage(): ReactElement {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: booking.discountCode || "Discount",
+        label: booking.discountCode ? `Discount Code (${booking.discountCode})` : "Discount Code",
         amount: remainingDiscount
       });
     }
@@ -581,6 +613,20 @@ export function BookingConfirmationPage(): ReactElement {
               {booking.flatRoom ? `${booking.flatRoom}, ` : ""}
               {booking.landmarkDescription}
             </p>
+            {booking.deliveryNote && (
+              <div
+                data-testid="booking-service-note"
+                className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+              >
+                <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                <div>
+                  <span className="font-bold block text-[10px] uppercase text-amber-700">
+                    Service Instructions
+                  </span>
+                  <span className="font-medium whitespace-pre-line">{booking.deliveryNote}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Section 4: Live Tracking Map */}

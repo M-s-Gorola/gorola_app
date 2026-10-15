@@ -565,5 +565,29 @@ describe("CartDrawer", () => {
       expect(screen.queryByText(/Active offers and discounts may apply/i)).not.toBeInTheDocument();
       expect(screen.queryByText(/Add Rs/i)).not.toBeInTheDocument();
     });
+
+    it("renders delivery note input when cart has items and updates cart store", () => {
+      useCartStore.setState({
+        lines: [
+          {
+            productVariantId: "v1",
+            quantity: 1,
+            productName: "Apple",
+            variantLabel: "1kg",
+            unitPrice: 100
+          }
+        ],
+        isOpen: true,
+        deliveryNote: ""
+      });
+
+      renderShell();
+
+      const noteInput = screen.getByLabelText(/Delivery Instructions for Rider/i);
+      expect(noteInput).toBeInTheDocument();
+
+      fireEvent.change(noteInput, { target: { value: "Please leave package at guard room" } });
+      expect(useCartStore.getState().deliveryNote).toBe("Please leave package at guard room");
+    });
   });
 });

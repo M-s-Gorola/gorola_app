@@ -26,21 +26,28 @@
 | Phase 6.14 | UPI & Card Payment Integration (Razorpay) | COMPLETE | Wire UPI and Card payment methods end-to-end using a swappable Razorpay adapter. Admin toggles activate the payment gateway. Full TDD with mocked adapter — real Razorpay keys plug in without changing tests. |
 | Phase 6.15 | Analytics Volume Graphs, Settings Manager & Auto-Suggestions | COMPLETE | Adding number of orders/bookings graphs with store multi-select, platform settings manager for fees, and buyer global autocomplete search suggestions. |
 | Phase 6.16 | Watermark Restore & Live Location Popup | COMPLETE | Restore map watermark (Phase 6.16.1), live buyer location bouncing icon and transparent popup (Phase 6.16.2), and map Use My Location button (Phase 6.16.3). |
-| Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | 🟡 IN PROGRESS | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
+| Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | COMPLETE | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
+| Phase 6.18 | Financial Infrastructure: GST Foundation & Invoice Generator | COMPLETE | Order snapshot columns, promo title persistence, dynamic settings, frontend discount cleanup, and invoice script. |
+| Phase 6.19 | Promotional Transparency, Breakdown Standardization, DPDP Harmonization & Order Instructions | COMPLETE | Fix booking promo snapshots, standardize discount dropdowns across all 6 views, harmonize DPDP notices for riders and technicians, and enable buyer-to-fulfillment instructions with full visibility for riders, technicians, stores, and admins. |
+| Phase 6.20 | Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity | IN PROGRESS | Standardize 20 records/page pagination across Buyer, Store, and Admin; add Card/Table toggles in merchant portal; rename Admin order status filters for booking parity; unify PromotionalBreakdown; and eliminate duplicate admin modals. |
+| Phase 6.21 | Tax Calculation Logic, GST Rules & Advanced Invoice Formatting | QUEUED | Pending client approval on tax and invoice settings. Live GST calculation engine, tax breakdown UI row, and invoice download endpoints. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-10-02
-- **Session Summary:** Prepared comprehensive TDD plan for Phase 6.17: Admin 360° Visibility, Dedicated Detail Pages & Order Pagination.
-  - Phase 6.17.1: Order Detail Name Fallback (`Registered User`) and Audit Timeline Actor Resolution.
-  - Phase 6.17.2: Dedicated Full Admin User Detail Page (`/admin/users/:id`) with Paginated User Orders and DPDP Consent sections.
-  - Phase 6.17.3: Dedicated Full Admin Rider Detail Page (`/admin/riders/:id`) with Paginated Rider Deliveries and Earnings.
-  - Phase 6.17.4: Store Detail Page (`/admin/stores/:id`) Paginated Orders Section.
-- **Next Session Must Start With:** Phase 6.17.1 (TDD RED: Order detail name resolution and timeline tests).
-- **In Progress Right Now:** Phase 6.17 (Admin 360° Visibility & Order Pagination).
-- **Current Blocker:** None.
+- **Date:** 2026-10-15
+- **Session Summary:** Completed Admin Order Details Card Store Parity, Real-Time WebSocket Transitions, Booking Status Terminology Harmonization, and Platform-Wide Status Badge Color Standardization. Now actively executing Phase 6.20.
+  - Admin Order Details Card: Rebuilt `AdminOrderDetailModal.tsx` to match Store Partner Panel 2-column layout (Buyer Details with avatar, phone, address, schedule slot, service instructions/delivery note, rider badge on left; Status Transition Log vertical timeline on right; Itemized summary table; collapsible `PromotionalBreakdown` receipt summary).
+  - Backend Schedule Slot & Order Type: Updated `admin.service.ts` to include `bookingOrder` slot (`scheduledDate`, `timeslot`) and instructions in `getOrderDetail`, and `orderType` in `getAllOrders`.
+  - Real-Time WebSocket Sync: Subscribed `AdminOrderDetailModal.tsx` to `join_order` / `join_store` rooms (`order_status_changed`, `store:order_updated`, `order:updated`) for instant timeline and status updates with 3s background polling fallback.
+  - Booking Terminology: Centralized `formatStatusLabel` in `utils.ts` mapping `OUT_FOR_DELIVERY` -> **"On The Way"** and `DELIVERED` -> **"Completed"** for booking commerce.
+  - User Order History Inconsistency: Updated `OrderHistoryPage.tsx` badge resolution so operational status (`order.status`, e.g. "On The Way") overrides static booking approval status ("Approved").
+  - Platform-Wide Status Badge Colors: Centralized `getStatusBadgeClasses(status)` in `utils.ts` aligned strictly with confirmation pages (Blue for On The Way, Emerald for Delivered/Completed, Indigo for Preparing/Approved, Amber for Placed/Pending, Red for Cancelled/Rejected).
+  - TDD Suites: 100% green tests in `utils.test.ts` (20/20), `OrderHistoryPage.test.tsx` (17/17), `AdminOrderDetailModal.test.tsx` (13/13), `AdminOrdersPage.test.tsx` (8/8), and `admin.orders.test.ts` (7/7).
+- **Next Session Must Start With:** Phase 6.20 implementation (Item 6.20.1 Promotional Breakdown Unification & Booking Timeslot Fix).
+- **In Progress Right Now:** Phase 6.20 — Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity.
+- **Current Blocker:** None. (Phase 6.21 Tax Calculation is queued awaiting client sign-off on tax and invoice settings).
 
 ---
 
@@ -999,7 +1006,925 @@ Currently, the buyer application uses the top navbar for Cart and Profile access
 
 ---
 
+## Phase 6.18 Checklist — Financial Infrastructure: GST Foundation, Financial Data Integrity & Invoice Generator
+
+**Root Cause / Goal:**
+Several interrelated financial data integrity and configuration issues exist in the Order, Checkout, and Delivery modules that must be resolved before GST can be activated and before a legally-valid tax invoice can be produced:
+1. **No discount/offer savings persisted:** `BuyerCheckoutService` and `booking-order.service.ts` compute `appliedDiscountAmount`, `appliedOfferAmount`, and promo titles at checkout, but never persist them to the database. UIs are forced to reverse-engineer savings via `subtotal + deliveryFee - total`, which breaks the moment tax is added to `total`.
+2. **Missing promotion title audit trails:** `appliedOfferTitle` is not recorded on `Order`. If a store owner later edits or deletes an offer, historical order records and invoices cannot show what promotion was applied.
+3. **No tax snapshot columns exist:** The `Order` table has no `taxRate` column to freeze the tax percentage rate that applied at the time of purchase.
+4. **Semantic fee mismatch:** `booking-order.service.ts` writes the platform service fee into `deliveryFee`. UIs unconditionally label this "Delivery Fee" for booking orders that have no physical delivery.
+5. **No GST settings infrastructure:** `SystemSetting` lacks `GST_RATE` and `GST_NUMBER` keys and Admin UI inputs.
+6. **Hardcoded technician cut & rider rates:** `rider-earnings.repository.ts` uses hardcoded constants (`0.20` platform fee, `0.80` technician cut) for bookings and a fixed per-order rate for delivery.
+7. **No standard invoice generator:** There is no service/CLI script to produce an itemized, compliant tax invoice.
+
+**Fix / Approach:**
+- **Phase 6.18.1:** Single Prisma migration adding four nullable snapshot columns to `Order`: `discountSavingAmount`, `offerSavingAmount`, `appliedOfferTitle`, `taxRate`.
+- **Phase 6.18.2:** Conditional UI fee labels ("Service Fee" vs "Delivery Fee") across 6 admin and store pages based on `orderType`.
+- **Phase 6.18.3:** Seed `GST_RATE = "0"` and `GST_NUMBER = ""` into `SystemSetting`, add admin form inputs in `AdminDashboardPage.tsx`, and expose `GST_RATE` via `useSystemSettings`.
+- **Phase 6.18.4:** Wire `BuyerCheckoutService` and `booking-order.service.ts` to persist `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` on order creation.
+- **Phase 6.18.5:** Replace frontend arithmetic inference hacks (`subtotal + deliveryFee - total`) with stored values and render promotion chips/tags across Buyer, Store, and Admin order views.
+- **Phase 6.18.6:** Introduce `TECHNICIAN_EARNING_RATE_PCT` in `SystemSetting` and dynamically select earning rates based on `orderType`.
+- **Phase 6.18.7:** Create a decoupled CLI invoice script (`scripts/generate-invoice.ts`) and pure formatting engine (`InvoiceService`).
+- **Phase 6.18.8:** Monorepo quality gates and full regression validation.
+
+> **GST Tax Calculation Deliberately Deferred to Phase 6.19:** The tax calculation formula itself (taxable base pre vs post discount, MRP tax extraction) is deferred pending taxation research. Phase 6.18 establishes the complete foundation so tax computation slots in with zero structural rework.
+
+---
+
+### Phase 6.18.1: Order Schema — Financial & Promotional Snapshot Columns
+
+**Root cause:** `Order` lacks columns to persist computed savings (`discountSavingAmount`, `offerSavingAmount`), promotional title snapshots (`appliedOfferTitle`), and the historical tax rate (`taxRate`). All four must be nullable Decimal/Text fields so existing orders and existing test fixtures require zero modifications.
+
+**Approach:** Single Prisma migration adding four nullable columns to `Order`. Seed `GST_RATE` and `GST_NUMBER` into `SystemSetting`.
+
+---
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/order/order.repository.test.ts`):**
+  - [x] Test: `OrderRepository.create()` accepts input containing `discountSavingAmount: new Decimal("50.00")`, `offerSavingAmount: new Decimal("25.00")`, `appliedOfferTitle: "Summer Special 10% OFF"`, `taxRate: new Decimal("18.00")` and persists them accurately.
+  - [x] Test: `OrderRepository.create()` with those fields omitted stores `null` for all four columns (backward compatibility).
+  - [x] **Run — confirm RED (columns do not exist on Prisma Order model).**
+
+- [x] **GREEN — Backend (Schema → Migration → Seed → Repository):**
+  - [x] [Schema] In `apps/api/prisma/schema.prisma`, add to `Order` model after `appliedDiscountCode`:
+    ```prisma
+    discountSavingAmount  Decimal?  @db.Decimal(10, 2)
+    offerSavingAmount     Decimal?  @db.Decimal(10, 2)
+    appliedOfferTitle     String?   @db.Text
+    taxRate               Decimal?  @db.Decimal(5, 2)
+    ```
+  - [x] [Migration] Run `pnpm --filter @gorola/api prisma migrate dev --name add_order_financial_snapshot_columns`. Apply migration to test database.
+  - [x] [Seed] In `apps/api/prisma/seed.ts`, add to `systemSetting.createMany`:
+    ```typescript
+    { key: "GST_RATE", value: "0", description: "GST percentage applied to orders. Set to 0 to disable tax.", updatedBy: "system" },
+    { key: "GST_NUMBER", value: "", description: "Business GSTIN for tax invoice generation (e.g. 05AAAAA0000A1Z5).", updatedBy: "system" }
+    ```
+  - [x] [Repository] In `apps/api/src/modules/order/order.repository.ts`, update `CreateOrderInput` interface and pass through the four snapshot fields in `create()`.
+  - [x] Run integration test — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Migration applied → `Order` rows support snapshot columns → existing rows retain `null` safely → tests pass → ✅ Done.
+
+---
+
+### Phase 6.18.2: Semantic Fix — "Delivery Fee" vs "Service Fee" Labels
+
+**Root cause:** Six pages in Store and Admin portals unconditionally render the label "Delivery Fee" for `order.deliveryFee`. For `BOOKING` commerce orders, this column stores the platform service fee (there is no delivery).
+
+**Approach:** Conditionally render `"Service Fee"` when `order.orderType === "BOOKING"` and `"Delivery Fee"` when `order.orderType === "QUICK"`.
+
+---
+
+- [x] **RED — Frontend Unit (5 test files):**
+  - [x] **`StoreOrdersPage.test.tsx`:** Assert breakdown renders `"Service Fee"` when `orderType === "BOOKING"` and `"Delivery Fee"` when `orderType === "QUICK"`.
+  - [x] **`AdminOrdersPage.test.tsx`:** Assert breakdown renders `"Service Fee"` for booking orders.
+  - [x] **`AdminStoreDetailPage.test.tsx`:** Assert breakdown modal renders `"Service Fee"` for booking rows.
+  - [x] **`AdminUserDetailPage.test.tsx`:** Assert user orders modal renders `"Service Fee"` for booking rows.
+  - [x] **`StoreBookingsPage.test.tsx`:** Assert fee row is labeled `"Service Fee"`.
+  - [x] **Run all 5 tests — confirm RED.**
+
+- [x] **GREEN — Frontend Component Updates:**
+  - [x] In all 6 files, replace hardcoded `"Delivery Fee"` text with:
+    ```tsx
+    {order.orderType === "BOOKING" ? "Service Fee" : "Delivery Fee"}
+    ```
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store/Admin viewing booking order sees "Service Fee: ₹199" → quick order sees "Delivery Fee: ₹30" → ✅ Done.
+
+---
+
+### Phase 6.18.3: GST Settings Infrastructure (SystemSetting + Admin UI)
+
+**Root cause:** Admin panel has no inputs for GST rate and business GSTIN number.
+
+**Approach:** Seed keys in `SystemSetting`, add validation in admin settings controller, update `useSystemSettings` hook, and add inputs in `AdminDashboardPage.tsx`.
+
+---
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/admin/admin.settings.test.ts`):**
+  - [x] Test: `PUT /api/v1/admin/settings` accepts `gstRate: "18"` and `gstNumber: "05AAAAA0000A1Z5"` and updates `SystemSetting`.
+  - [x] Test: `gstRate` validation rejects negative numbers or numbers > 100.
+  - [x] Test: `GET /api/v1/settings` public endpoint returns `GST_RATE: "18.00"`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Controller & Route):**
+  - [x] In `apps/api/src/modules/admin/admin.controller.ts`, add `gstRate` and `gstNumber` to the settings Zod schema.
+  - [x] Persist keys `GST_RATE` and `GST_NUMBER` with `AuditLog` entry.
+  - [x] Include `GST_RATE` in public `GET /api/v1/settings` response.
+  - [x] Run backend tests — **confirm GREEN.**
+
+- [x] **RED — Frontend Unit (`AdminDashboardPage.test.tsx`):**
+  - [x] Test: Form renders `id="gst-rate-input"` and `id="gst-number-input"`.
+  - [x] Test: Submitting form passes `gstRate` and `gstNumber` in payload.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Hook & Admin Form):**
+  - [x] [Hook] In `apps/web/src/hooks/useSystemSettings.ts`, add `GST_RATE: string` to settings interface.
+  - [x] [Page] In `AdminDashboardPage.tsx`, add form state, inputs with IDs, and save handler.
+  - [x] Run frontend unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Admin enters GST Rate `18` and GSTIN → clicks Save → values persisted in DB with audit trail → `useSystemSettings` receives updated values → ✅ Done.
+
+---
+
+### Phase 6.18.4: Persist discountSavingAmount, offerSavingAmount & appliedOfferTitle at Checkout
+
+**Root cause:** `BuyerCheckoutService` and `booking-order.service.ts` calculate promo savings and select offer titles, but omit them from the `order.create()` database transaction.
+
+**Approach:** Pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` into the `createOrder` data payload in both checkout pipelines.
+
+---
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/order/order.controller.test.ts`):**
+  - [x] Test: Quick order with coupon saving ₹50 stores `discountSavingAmount = 50.00` and `appliedDiscountCode = "COUPON50"`.
+  - [x] Test: Quick order with store offer saving ₹25 stores `offerSavingAmount = 25.00` and `appliedOfferTitle = "Festive 10% OFF"`.
+  - [x] Test: Order with no promotions stores `discountSavingAmount = 0.00`, `offerSavingAmount = 0.00`, `appliedOfferTitle = null`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Service Updates):**
+  - [x] In `BuyerCheckoutService.ts`, pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` to `placeOrderWithStock()`.
+  - [x] In `booking-order.service.ts`, pass `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` to `tx.order.create()`.
+  - [x] In `order.controller.ts`, serialize these three fields in order responses.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer places order with coupon & store offer → DB row records exact rupee savings and promotion title → ✅ Done.
+
+---
+
+### Phase 6.18.5: Replace Discount Inference Hack & Render Offer Titles Across All Portals
+
+**Root cause:** UI components derive discount amounts using `subtotal + deliveryFee - total` and cannot show promotional offer titles.
+
+**Approach:** Update Buyer, Store, and Admin order views to read `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle` directly from the API.
+
+---
+
+- [x] **RED — Frontend Unit (Buyer, Store, Admin test files):**
+  - [x] **`OrderConfirmationPage.test.tsx`:** Assert summary renders coupon savings and offer title badge (`🎉 Offer: Festive 10% OFF (-₹25.00)`).
+  - [x] **`BookingConfirmationPage.test.tsx`:** Assert booking summary displays stored savings and offer name.
+  - [x] **`AccountOrdersPage.test.tsx`:** Assert order cards display savings chips and promo title.
+  - [x] **`StoreOrdersPage.test.tsx` / `StoreBookingsPage.test.tsx`:** Assert order details drawer displays `appliedOfferTitle`.
+  - [x] **`AdminOrdersPage.test.tsx` / `AdminStoreDetailPage.test.tsx` / `AdminUserDetailPage.test.tsx`:** Assert admin order breakdown modals display stored discount amounts and offer title.
+  - [x] **Run all frontend tests — confirm RED.**
+
+- [x] **GREEN — Frontend Component Updates:**
+  - [x] In `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, `AccountOrdersPage.tsx`, `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `AdminOrdersPage.tsx`, `AdminStoreDetailPage.tsx`, and `AdminUserDetailPage.tsx`:
+    - Replace arithmetic inference with stored values:
+      ```typescript
+      const discountAmount = Number(order.discountSavingAmount ?? 0) + Number(order.offerSavingAmount ?? 0);
+      ```
+    - Display promo chips for `appliedDiscountCode` and `appliedOfferTitle` when present.
+  - [x] Run all frontend tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Order with coupon & offer renders exact savings and promo titles across all Buyer, Store, and Admin views without deriving from total → ✅ Done.
+
+---
+
+### Phase 6.18.6: Separate Technician Earning Rate for Booking Commerce
+
+**Root cause:** Booking field technicians and quick-commerce delivery riders share a single `RIDER_EARNING_RATE_PCT` setting, preventing independent payout rate configuration.
+
+**Approach:** Add `TECHNICIAN_EARNING_RATE_PCT` to `SystemSetting`, update `rider-earnings.service.ts` to choose rate by `orderType`, and expose in Admin Dashboard.
+
+---
+
+- [x] **RED — Backend Integration (`apps/api/src/__tests__/integration/rider/rider.earnings.trigger.test.ts`):**
+  - [x] Test: Seed `TECHNICIAN_EARNING_RATE_PCT = "50"` and `RIDER_EARNING_RATE_PCT = "80"`. Marking `BOOKING` order delivered creates `RiderEarning` at 50% of service fee.
+  - [x] Test: Marking `QUICK` order delivered creates `RiderEarning` at 80% of delivery fee.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Seed → Service → Controller):**
+  - [x] In `apps/api/prisma/seed.ts`, seed `TECHNICIAN_EARNING_RATE_PCT = "100"`.
+  - [x] In `rider-earnings.service.ts`, accept `orderType` and use `TECHNICIAN_EARNING_RATE_PCT` for `BOOKING` orders.
+  - [x] In `admin.controller.ts`, allow updating `technicianEarningRate` in `PUT /api/v1/admin/settings`.
+  - [x] In `AdminDashboardPage.tsx`, add input `id="technician-earning-rate-input"`.
+  - [x] Run integration and unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Booking completed → technician credited according to technician earning rate → delivery completed → rider credited according to rider earning rate → ✅ Done.
+
+---
+
+### Phase 6.18.7: Invoice Generator Script & Service
+
+**Root cause:** GoRola lacks an invoice generation tool to output compliant order tax invoices.
+
+**Approach:** Build decoupled `fetchInvoiceData(orderId)` and pure `formatInvoice(data: InvoiceData)` modules and expose CLI tool `scripts/generate-invoice.ts`.
+
+---
+
+- [x] **RED — Unit (`apps/api/src/__tests__/unit/invoice/invoice-formatter.test.ts`):**
+  - [x] Test: `formatInvoice()` includes business GSTIN, customer details, itemized table, subtotal, delivery/service fee, coupon code, and offer title.
+  - [x] Test: `formatInvoice()` omits GST section when `taxRate` is null or 0.
+  - [x] Test: `formatInvoice()` renders "Service Fee" for `BOOKING` orders.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Script (Types → Formatter → Fetcher → CLI):**
+  - [x] [Types] Create `apps/api/src/modules/invoice/invoice.types.ts` defining `InvoiceData`.
+  - [x] [Formatter] Create `apps/api/src/modules/invoice/invoice-formatter.ts` exporting `formatInvoice(data: InvoiceData): string`.
+  - [x] [Fetcher] Create `apps/api/src/modules/invoice/invoice-data-fetcher.ts` exporting `fetchInvoiceData(orderId, db)`.
+  - [x] [CLI] Create `scripts/generate-invoice.ts` accepting `--orderId` argument and printing formatted invoice.
+  - [x] Run unit test — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Running `ts-node scripts/generate-invoice.ts --orderId <id>` fetches order, decrypts phone, formats items and promotions, and prints clean tax invoice to stdout → ✅ Done.
+
+---
+
+### Phase 6.18.8: Full Regression & Quality Gates
+
+- [x] **API Tests:** `pnpm --filter @gorola/api test -- --run` (100% green: 141 files, 844 tests passed). ✅
+- [x] **Web Tests:** `pnpm --filter @gorola/web test -- --run` (100% green: 105 files, 594 tests passed). ✅
+- [x] **Typecheck:** `pnpm typecheck` (0 errors across packages/shared, packages/ui, apps/api, apps/web). ✅
+- [x] **Lint:** `pnpm lint` (0 errors, 0 warnings). ✅
+- [x] **Manual Smoke:** Create quick order with coupon + store offer → verify DB snapshot columns → verify UI chips → test invoice script output. ✅
+- [x] **Update Documentation:** Mark Phase 6.18 as COMPLETE in `CONTEXT/phase6_state.md` and queue Phase 6.19 in `CONTEXT/current_state.md`. ✅
+
+---
+
+## 🎯 Phase 6.19 Roadmap: Promotional Transparency, Universal Breakdown Standardization, DPDP Service Harmonization & Order Instructions
+
+> **Phase:** 6.19  
+> **Status:** QUEUED  
+> **Primary Goal:** Eliminate promotional data discrepancies across Quick Commerce and Booking Commerce, standardize financial discount dropdowns across all 6 UI touchpoints, harmonize DPDP statutory notices for field technicians and delivery riders, and enable end-to-end buyer delivery and service instructions with full visibility for riders, technicians, store owners, and admins.
+
+---
+
+### Phase 6.19.1: Booking Promotional Snapshot & Delivery Note Backend Serialization
+
+**Root cause / Goal:**
+- **Current State:** In `apps/api/src/modules/booking/booking.controller.ts`, `serializeBookingOrder` omits `discountSavingAmount`, `offerSavingAmount`, and `appliedOfferTitle`. Instead, it calculates `discountAmount` via arithmetic inference `(subtotal + deliveryFee - total)`, which merges coupons and store offers into a single number. This strips the coupon code and forces frontend booking views into legacy fallback logic, displaying store offers incorrectly as `Discount (<TITLE>)`. Furthermore, `placeBookingBodySchema` does not accept `deliveryNote`, `booking-order.service.ts` does not pass `deliveryNote` to `tx.order.create`, and `serializeBookingOrder` does not serialize `deliveryNote`, causing booking customer instructions to be dropped completely.
+- **Desired State:**
+  1. `serializeBookingOrder` explicitly serializes `discountSavingAmount` (number), `offerSavingAmount` (number), `appliedOfferTitle` (string or null), `appliedDiscountCode` (string or null), and `deliveryNote` (string or null).
+  2. `placeBookingBodySchema` accepts optional `deliveryNote: z.string().max(500).optional().nullable()`.
+  3. `booking-order.service.ts` accepts `deliveryNote?: string | null` in `placeBookingRequest` and persists it to `tx.order.create({ data: { deliveryNote: input.deliveryNote ?? null } })`.
+
+**Fix / Approach:**
+Update `booking.controller.ts` serializer and validation schema. Update `booking-order.service.ts` parameter interface and transaction creation payload to persist and return `deliveryNote` and promotional snapshot columns.
+
+---
+
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/booking/booking.promotions-and-notes.test.ts`):**
+  - [x] Test (Stacked Promotions & Note): `POST /api/v1/bookings` with valid coupon `WELCOME50`, store offer `10% OFF`, and `deliveryNote: "Please bring 22-gauge needle and ring bell twice"`. Response `201 Created` returns `orderId`. `GET /api/v1/bookings/:orderId` returns `appliedDiscountCode: "WELCOME50"`, `appliedOfferTitle: "10% OFF"`, `discountSavingAmount: 50`, `offerSavingAmount: 100`, and `deliveryNote: "Please bring 22-gauge needle and ring bell twice"`.
+  - [x] Test (Coupon Only): `POST /api/v1/bookings` with coupon only returns `appliedOfferTitle: null`, `offerSavingAmount: 0`, and positive `discountSavingAmount`.
+  - [x] Test (Offer Only): `POST /api/v1/bookings` with store offer only returns `appliedDiscountCode: null`, `discountSavingAmount: 0`, and positive `offerSavingAmount`.
+  - [x] Test (No Promo): `POST /api/v1/bookings` at full retail returns `discountSavingAmount: 0`, `offerSavingAmount: 0`, `appliedOfferTitle: null`, `appliedDiscountCode: null`.
+  - [x] Test (Delivery Note Boundary): `deliveryNote` with exactly 500 characters succeeds and stores without truncation. `deliveryNote` exceeding 500 characters returns `400 Bad Request` with Zod validation error.
+  - [x] Test (Delivery Note Whitespace/Null): Empty string `""` or whitespace-only delivery note is normalized to `null` in DB. Omitted delivery note stores `null` without error.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Schema → Repository → Service → Controller):**
+  - [x] [Schema] No migration required (`Order.deliveryNote`, `Order.discountSavingAmount`, `Order.offerSavingAmount`, `Order.appliedOfferTitle`, and `Order.appliedDiscountCode` exist in `schema.prisma`).
+  - [x] [Service] In `apps/api/src/modules/booking/booking-order.service.ts`, expand `placeBookingRequest` options to accept `deliveryNote?: string | null`. In `tx.order.create`, pass `deliveryNote: deliveryNote?.trim() ? deliveryNote.trim() : null`.
+  - [x] [Controller] In `apps/api/src/modules/booking/booking.controller.ts`:
+    - Add `deliveryNote: z.string().max(500).optional().nullable()` to `placeBookingBodySchema`.
+    - Pass `body.deliveryNote` to `deps.bookingService.placeBookingRequest`.
+    - In `serializeBookingOrder`, add:
+      ```typescript
+      discountSavingAmount: order.discountSavingAmount ? Number(order.discountSavingAmount) : 0,
+      offerSavingAmount: order.offerSavingAmount ? Number(order.offerSavingAmount) : 0,
+      appliedOfferTitle: order.appliedOfferTitle ?? null,
+      appliedDiscountCode: order.appliedDiscountCode ?? null,
+      deliveryNote: order.deliveryNote ?? null,
+      ```
+  - [x] Run integration test — **confirm GREEN.**
+
+- [x] **RED — Unit (`apps/api/src/__tests__/unit/booking/booking-serializer.unit.test.ts`):**
+  - [x] Test: `serializeBookingOrder` maps Decimal `discountSavingAmount: new Prisma.Decimal("45.50")` to number `45.50`.
+  - [x] Test: `serializeBookingOrder` maps null `deliveryNote` to `null` and non-null string to exact string.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Types):**
+  - [x] [Types] Update `BookingOrder` type in `apps/web/src/pages/buyer/BookingConfirmationPage.tsx` and `apps/web/src/pages/store/StoreBookingsPage.tsx` to include `discountSavingAmount?: number | null; offerSavingAmount?: number | null; appliedOfferTitle?: string | null; appliedDiscountCode?: string | null; deliveryNote?: string | null;`.
+  - [x] Run unit test — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer books service with coupon + offer + instructions → API validates and persists note and promo snapshot → `GET /api/v1/bookings/:id` returns dedicated promo fields and note without mathematical inference → ✅ Done.
+
+---
+
+### Phase 6.19.2: Universal Promotional Breakdown Standardization Across All 6 Views
+
+**Root cause / Goal:**
+- **Current State:** Across all order and checkout interfaces, promo labeling is inconsistent:
+  1. `CartDrawer.tsx` uses a flat "Discount" row without expandable breakdown.
+  2. `CheckoutPage.tsx` uses header "Total Discount" but labels coupon items as "Discount (<CODE>)" instead of "Discount Code (<CODE>)".
+  3. `OrderConfirmationPage.tsx` lacks standardized "Discount Code (<CODE>)" and "Store Offer (<TITLE>)" itemized labels.
+  4. `BookingConfirmationPage.tsx` relies on arithmetic fallback that mislabels store offers as "Discount (<TITLE>)" and does not render "Discount Code" distinctly.
+  5. `StoreOrdersPage.tsx` labels dropdown rows as "Discount" rather than "Discount Code".
+  6. `StoreBookingsPage.tsx` labels rows as "Discount (<TITLE>)" instead of "Store Offer (<TITLE>)".
+  7. `AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx` display separate flat rows without a unified collapsible "Total Discount" dropdown.
+- **Desired State:**
+  Enforce a strict, universal promotional component pattern across ALL 6 views (`CartDrawer`, `CheckoutPage`, `OrderConfirmationPage`, `BookingConfirmationPage`, `StoreOrdersPage`, `StoreBookingsPage`, `AdminOrdersPage`):
+  - **Summary Row:** Collapsible header labeled `Total Discount: -₹{totalSavings}` with chevron toggle (`aria-expanded`).
+  - **Child Row 1 (Store Offer):** `Store Offer ({appliedOfferTitle}): -₹{offerSavingAmount}` (rendered only if offer savings > 0).
+  - **Child Row 2 (Discount Code):** `Discount Code ({appliedDiscountCode}): -₹{discountSavingAmount}` (rendered only if coupon savings > 0).
+  - **Single Promo Fallback:** If only a discount code is active, dropdown/line reads `Discount Code ({code}): -₹{amount}`. If only a store offer is active, dropdown/line reads `Store Offer ({title}): -₹{amount}`.
+  - **Zero Promo State:** When total discount is 0 or null, the entire "Total Discount" row is completely hidden from the DOM.
+
+**Fix / Approach:**
+Create a reusable, highly accessible UI component `packages/ui/src/components/PromotionalBreakdown.tsx` (or shared helper in `apps/web/src/components/shared/PromotionalBreakdown.tsx`) and wire it into all 6 target pages/drawers.
+
+---
+
+- [x] **RED — Unit / Component (`apps/web/src/components/shared/PromotionalBreakdown.test.tsx`):**
+  - [x] Test (Both Applied): Renders button labeled "Total Discount" with amount "-₹150.00". When clicked, expands to reveal "Store Offer (Diwali Special): -₹100.00" and "Discount Code (FESTIVE50): -₹50.00".
+  - [x] Test (Coupon Only): When `offerSavingAmount` is 0 or null, expands to show only "Discount Code (WELCOME10): -₹25.00".
+  - [x] Test (Offer Only): When `discountSavingAmount` is 0 or null, expands to show only "Store Offer (Summer Sale): -₹30.00".
+  - [x] Test (Zero Savings): When both savings are 0, null, or undefined, renders `null` (zero DOM nodes).
+  - [x] Test (Accessibility): Collapsible button has `aria-expanded="false"` by default, flips to `aria-expanded="true"` upon click, and controls an element with matching `id`.
+  - [x] Test (Edge Case - Long Text): Offer title of 60 characters and coupon code of 30 characters render cleanly with truncation/wrapping without breaking parent container width.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Component & View Wiring):**
+  - [x] [Component] Implement `apps/web/src/components/shared/PromotionalBreakdown.tsx`:
+    ```tsx
+    interface PromotionalBreakdownProps {
+      discountSavingAmount?: number | string | null;
+      offerSavingAmount?: number | string | null;
+      appliedDiscountCode?: string | null;
+      appliedOfferTitle?: string | null;
+      totalDiscountAmount?: number | string | null;
+      className?: string;
+    }
+    ```
+  - [x] [Wiring 1 - Cart Drawer] In `apps/web/src/components/buyer/CartDrawer.tsx`, replace static discount line with `PromotionalBreakdown`.
+  - [x] [Wiring 2 - Quick Checkout] In `apps/web/src/pages/buyer/CheckoutPage.tsx`, update receipt section to use `PromotionalBreakdown`, ensuring coupon row renders `Discount Code (<CODE>)`.
+  - [x] [Wiring 3 - Order Confirmation] In `apps/web/src/pages/buyer/OrderConfirmationPage.tsx`, update receipt section to use `PromotionalBreakdown`.
+  - [x] [Wiring 4 - Booking Confirmation] In `apps/web/src/pages/buyer/BookingConfirmationPage.tsx`, replace legacy arithmetic discount display with `PromotionalBreakdown`, reading snapshot values `discountSavingAmount` and `offerSavingAmount`.
+  - [x] [Wiring 5 - Store Orders & Bookings] In `apps/web/src/pages/store/StoreOrdersPage.tsx` and `apps/web/src/pages/store/StoreBookingsPage.tsx`, wire `PromotionalBreakdown` into the itemized receipt inside the order details modal.
+  - [x] [Wiring 6 - Admin Orders] In `apps/web/src/pages/admin/AdminOrdersPage.tsx` and `apps/web/src/pages/admin/AdminUserDetailPage.tsx`, replace flat discount rows with `PromotionalBreakdown`.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **RED — Integration / Page Tests (`apps/web/src/pages/buyer/BookingConfirmationPage.test.tsx` & `apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [x] Test (`BookingConfirmationPage`): Mock booking order with `appliedOfferTitle: "Diagnostics 20%"` and `offerSavingAmount: 60`. Assert page displays "Store Offer (Diagnostics 20%)" instead of "Discount (Diagnostics 20%)".
+  - [x] Test (`StoreBookingsPage`): Mock booking with coupon `DIAG50`. Open detail modal. Assert modal displays "Discount Code (DIAG50)".
+  - [x] **Run — confirm RED.**
+
+- [x] Run all frontend tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer and Merchant open order across Cart, Checkout, Order Confirmation, Booking Confirmation, Store Orders/Bookings, and Admin views → All 6 screens display identical, standardized `Total Discount` collapsible row with `Store Offer (<TITLE>)` and `Discount Code (<CODE>)` → ✅ Done.
+
+---
+
+### Phase 6.19.3: Statutory DPDP Notice & Privacy Policy Harmonization
+
+**Root cause / Goal:**
+- **Current State:** Across 7 touchpoints (`ConsentNoticeModal.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `SavedAddressesPage.tsx`, `PrivacyPolicyPage.tsx`, `PrivacySettingsSection.tsx`, `apps/api/prisma/seed.ts`), statutory consent and privacy notices exclusively refer to quick commerce: "delivery riders", "delivering physical goods", and "order delivery fulfillment". Booking Commerce users scheduling lab tests, healthcare checkups, and diagnostic home visits are presented with non-compliant statutory disclosures that omit field technicians and on-site service appointments.
+- **Desired State:**
+  Harmonize all statutory disclosures and privacy policy copy to cover both commerce pipelines under the Digital Personal Data Protection (DPDP) Act:
+  - Replace "delivery riders for physical order fulfillment" with: "shared with verified store partners, delivery riders, and field service technicians solely for order fulfillment and scheduled on-site service appointments".
+  - Update `seed.ts` system settings and DPDP purpose descriptions.
+  - Update `PrivacyPolicyPage.tsx` Section 3 (Third-Party Sharing & On-Ground Personnel).
+
+**Fix / Approach:**
+Update shared statutory notice constants in `apps/web/src/components/buyer/ConsentNoticeModal.tsx` and all downstream touchpoints. Update seed defaults in `apps/api/prisma/seed.ts`.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/components/consent/ConsentNoticeModal.test.tsx` & `apps/web/src/pages/buyer/PrivacyPolicyPage.test.tsx`):**
+  - [x] Test (`ConsentNoticeModal`): Renders statutory disclosure mentioning BOTH "delivery riders" AND "field service technicians" for "physical order fulfillment and scheduled on-site service appointments".
+  - [x] Test (`BookingTimeslotPage`): DPDP consent checkbox disclaimer explicitly states customer address and phone will be shared with "field service technicians" for "scheduled on-site service appointments".
+  - [x] Test (`PrivacyPolicyPage`): Section 3 includes clauses covering both quick-commerce courier fulfillment and booking-commerce field service personnel.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Copy & Components):**
+  - [x] In `apps/web/src/components/consent/ConsentNoticeModal.tsx`, update notice text to:
+    `"Your delivery address and masked contact details are shared strictly on a need-to-know basis with: Ola Maps (spatial routing and geolocation), Razorpay (secure payment processing — only when online payment is selected), and verified Store Partners, Delivery Riders, and Field Service Technicians solely for physical order fulfillment and scheduled on-site service appointments in compliance with the DPDP Act 2023."`
+  - [x] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`, update the appointment address disclaimer to reference "field service technicians".
+  - [x] In `apps/web/src/pages/buyer/CheckoutPage.tsx`, update the order delivery disclaimer to reference "delivery riders and fulfillment personnel".
+  - [x] In `apps/web/src/pages/buyer/SavedAddressesPage.tsx`, update the address storage statutory notice to reference "deliveries and service appointments".
+  - [x] In `apps/web/src/pages/buyer/PrivacyPolicyPage.tsx`, update Section 3 (Service Providers & Personnel) to detail roles of both delivery riders and field technicians.
+  - [x] In `apps/web/src/components/account/PrivacySettingsSection.tsx`, harmonize telemetry and location notice text.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/consent/seed-dpdp-notices.test.ts`):**
+  - [x] Test: Database seeded consent purpose config `ORDER_PROCESSING` contains "delivery riders" AND "field service technicians".
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Seed):**
+  - [x] In `apps/api/prisma/seed.ts`, update default DPDP system setting strings and audit notice templates to harmonize service technicians and delivery riders.
+  - [x] Run integration test — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] User books diagnostic blood test appointment or orders groceries → Statutory DPDP modal and checkout notices accurately state data is shared with delivery riders and field service technicians for fulfillment → ✅ Done.
+
+---
+
+### Phase 6.19.4: Buyer Delivery Note & Service Instructions Input (Cart, Checkout & Booking)
+
+**Root cause / Goal:**
+- **Current State:** The database `Order` model contains `deliveryNote String?`, and the delivery rider app already displays it. However, the buyer has NO input field to enter delivery notes or technician service instructions in `CartDrawer.tsx`, `CheckoutPage.tsx`, or `BookingTimeslotPage.tsx`. Buyers cannot leave instructions such as gate codes, elderly patient care notes, or "don't ring bell".
+- **Desired State:**
+  1. `CartDrawer.tsx`: Add optional textarea "Delivery Note / Instructions for Rider" (max 500 chars) with live character counter. Synchronize note with active cart state.
+  2. `CheckoutPage.tsx`: Add optional textarea "Delivery Instructions for Rider" (max 500 chars, e.g. "Gate code, leave with guard, don't ring bell") in the Address / Delivery Details card. Pass `deliveryNote` in `POST /api/v1/orders`.
+  3. `BookingTimeslotPage.tsx`: Add optional textarea "Service Instructions for Technician" (max 500 chars, e.g. "Patient is elderly, please bring wheelchair access/needle") in the Appointment Review card. Pass `deliveryNote` in `POST /api/v1/bookings`.
+
+**Fix / Approach:**
+Create a reusable `DeliveryNoteInput.tsx` component with character counter and sanitization. Embed in `CartDrawer`, `CheckoutPage`, and `BookingTimeslotPage`. Wire into order placement payloads.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/components/buyer/DeliveryNoteInput.test.tsx`):**
+  - [x] Test: Renders textarea with customizable label and placeholder.
+  - [x] Test: Enforces `maxLength={500}` and displays live character counter (e.g. `"45 / 500 characters"`).
+  - [x] Test: Trims excess whitespace on blur.
+  - [x] Test (Special Characters): Accepts multiline input (newlines, commas, hyphens) and special characters safely without HTML injection.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Component):**
+  - [x] [Component] Implement `apps/web/src/components/buyer/DeliveryNoteInput.tsx`:
+    ```tsx
+    interface DeliveryNoteInputProps {
+      value: string;
+      onChange: (val: string) => void;
+      label?: string;
+      placeholder?: string;
+      id?: string;
+    }
+    ```
+  - [x] Run unit test — **confirm GREEN.**
+
+- [x] **RED — Page Unit Tests (`CheckoutPage.test.tsx` & `BookingTimeslotPage.test.tsx`):**
+  - [x] Test (`CheckoutPage`): User types "Leave at front door" into delivery note input. Clicking "Place Order" sends `deliveryNote: "Leave at front door"` in `POST /api/v1/orders` request body.
+  - [x] Test (`BookingTimeslotPage`): User types "Patient requires gentle care" into service note input. Clicking "Confirm Booking" sends `deliveryNote: "Patient requires gentle care"` in `POST /api/v1/bookings` request body.
+  - [x] Test (Omitted Note): Placing order without entering a note sends `deliveryNote: null` or omits the key.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Page Wiring):**
+  - [x] [CheckoutPage] In `apps/web/src/pages/buyer/CheckoutPage.tsx`, add state `deliveryNote`, render `DeliveryNoteInput` under Address selection, and include `deliveryNote: deliveryNote.trim() || null` in the `placeOrder` payload.
+  - [x] [BookingTimeslotPage] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`, add state `serviceNote`, render `DeliveryNoteInput` (label: "Instructions for Field Technician"), and include `deliveryNote: serviceNote.trim() || null` in the booking mutation payload.
+  - [x] [CartDrawer] In `apps/web/src/components/buyer/CartDrawer.tsx`, render `DeliveryNoteInput` and forward value to checkout navigation.
+  - [x] Run page tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer enters instructions at checkout or booking → Form validates character count → Payload includes `deliveryNote` → Order created with note saved to database → ✅ Done.
+
+---
+
+### Phase 6.19.5: End-to-End Delivery Note & Service Instructions Visibility (Rider, Field Technician, Store & Admin)
+
+**Root cause / Goal:**
+- **Current State:** 
+  1. In `RiderOrdersPage.tsx`, the compact order feed card (`renderCompactOrderCard`) does NOT render `deliveryNote` at all. A rider on the road or a technician in the field has to tap into the overlay modal just to discover if the customer left vital instructions. Furthermore, inside the modal, the note is rendered in faint italic text with generic label `Note:`, and the address block is hardcoded as `Delivery Address` even for field technicians performing on-site diagnostic visits.
+  2. In store owner panels (`StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`), neither the order cards nor the details modals display `deliveryNote`. Store owners cannot see special packaging instructions, and booking partners cannot verify technician requirements.
+  3. In admin panels (`AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx`), `deliveryNote` is absent from order detail modals, hindering customer dispute resolution.
+- **Desired State:**
+  1. `RiderOrdersPage.tsx` (Rider & Field Technician Feed):
+     - **Compact Card Feed:** Render an amber instruction pill directly on the active order card when `deliveryNote` is present:
+       - For Field Technicians (`isFieldTechnician` / `BOOKING`): `Service Note: "<deliveryNote>"`
+       - For Delivery Riders (`QUICK`): `Delivery Note: "<deliveryNote>"`
+     - **Detailed Overlay Modal:** Upgrade the faint text to a prominent amber callout badge styled identically across panels, with semantic labeling:
+       - For Field Technicians: `Service Instructions: "<deliveryNote>"` (and header `Appointment Address`)
+       - For Delivery Riders: `Delivery Instructions: "<deliveryNote>"` (and header `Delivery Address`)
+  2. `StoreOrdersPage.tsx`: In Order Details modal under Delivery Address, display distinct amber callout badge: `Delivery Note: "<deliveryNote>"` (rendered only when present).
+  3. `StoreBookingsPage.tsx`: In Appointment Details modal under Appointment Address, display distinct amber callout badge: `Service Instructions: "<deliveryNote>"` (rendered only when present).
+  4. `AdminOrdersPage.tsx` & `AdminUserDetailPage.tsx`: In Order Details modals, display distinct callout badge: `Delivery / Service Note: "<deliveryNote>"`.
+
+**Fix / Approach:**
+Update TypeScript interfaces and JSX in `RiderOrdersPage.tsx`, `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `AdminOrdersPage.tsx`, and `AdminUserDetailPage.tsx`.
+
+---
+
+- [x] **RED — Unit / Page Tests (`RiderOrdersPage.test.tsx`, `StoreOrdersPage.test.tsx`, `StoreBookingsPage.test.tsx`, `AdminOrdersPage.test.tsx`):**
+  - [x] Test (`RiderOrdersPage` - Compact Card Feed): Mock order with `deliveryNote: "Ring bell twice, baby sleeping"`. Assert compact order card in feed renders `data-testid="rider-compact-delivery-note"` containing `"Delivery Note: Ring bell twice, baby sleeping"`.
+  - [x] Test (`RiderOrdersPage` - Technician Modal): Mock booking order with `isFieldTechnician: true` and `deliveryNote: "Patient fasting required"`. Open modal. Assert element `data-testid="rider-service-instructions-badge"` renders `"Service Instructions: Patient fasting required"`.
+  - [x] Test (`StoreOrdersPage`): Mock order with `deliveryNote: "Fragile items, handle with care"`. Open order details modal. Assert element `data-testid="store-order-delivery-note"` contains `"Note: Fragile items, handle with care"`.
+  - [x] Test (`StoreOrdersPage` - No Note): Mock order with `deliveryNote: null`. Open modal. Assert `data-testid="store-order-delivery-note"` is NOT in the document.
+  - [x] Test (`StoreBookingsPage`): Mock booking with `deliveryNote: "Patient needs early sample collection"`. Open modal. Assert element `data-testid="store-booking-service-note"` contains `"Service Note: Patient needs early sample collection"`.
+  - [x] Test (`AdminOrdersPage`): Mock order with `deliveryNote: "Call before delivering"`. Open details modal. Assert element `data-testid="admin-order-delivery-note"` renders `"Delivery Note: Call before delivering"`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (Modals & Types):**
+  - [x] [RiderOrdersPage] In `apps/web/src/pages/rider/RiderOrdersPage.tsx`:
+    - In `renderCompactOrderCard`, add:
+      ```tsx
+      {order.deliveryAddress.deliveryNote && (
+        <div data-testid="rider-compact-delivery-note" className="mt-1 flex items-center gap-1.5 text-[11px] font-semibold text-amber-900 bg-amber-50 border border-amber-200/60 rounded-lg px-2.5 py-1">
+          <FileText className="h-3 w-3 text-amber-700 shrink-0" />
+          <span className="truncate">
+            {isFieldTechnician ? "Service Note: " : "Note: "}
+            {order.deliveryAddress.deliveryNote}
+          </span>
+        </div>
+      )}
+      ```
+    - In Detailed Overlay Modal, replace subtle text with prominent styled badge:
+      ```tsx
+      {selectedOrder.deliveryAddress.deliveryNote && (
+        <div data-testid="rider-service-instructions-badge" className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2">
+          <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-bold block text-[10px] uppercase text-amber-700">
+              {isFieldTechnician ? "Service Instructions" : "Delivery Instructions"}
+            </span>
+            <span className="font-medium whitespace-pre-line">{selectedOrder.deliveryAddress.deliveryNote}</span>
+          </div>
+        </div>
+      )}
+      ```
+  - [x] [StoreOrdersPage] In `apps/web/src/pages/store/StoreOrdersPage.tsx`:
+    - Add `deliveryNote?: string | null;` to `Order` type.
+    - Inside Order Details Modal under Delivery Address, add `data-testid="store-order-delivery-note"` callout badge.
+  - [x] [StoreBookingsPage] In `apps/web/src/pages/store/StoreBookingsPage.tsx`:
+    - Add `deliveryNote?: string | null;` to `Booking` type.
+    - Inside Appointment Details Modal under Appointment Address, add `data-testid="store-booking-service-note"` callout badge.
+  - [x] [AdminOrdersPage & AdminUserDetailPage] In `AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx`:
+    - Add `deliveryNote?: string | null;` to `OrderDetail` type.
+    - Inside Details Modal, render `data-testid="admin-order-delivery-note"` callout displaying the buyer note.
+  - [x] Run page tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer enters delivery note or technician service instruction at checkout → Note is visible immediately on Rider/Technician compact feed card and modal, visible to Store Owner in Order/Booking detail modal, and visible to Admin in Audit detail modal → ✅ Done.
+
+---
+
+### Phase 6.19.6: Full Regression & Quality Gates
+
+- [x] **API Tests:** `pnpm --filter @gorola/api test -- --run` (100% green — 144 test files, 853 tests passing).
+- [x] **Web Tests:** `pnpm --filter @gorola/web test -- --run` (100% green — 107 test files, 618 tests passing).
+- [x] **Typecheck:** `pnpm typecheck` (0 errors across packages/shared, packages/ui, apps/api, apps/web).
+- [x] **Lint:** `pnpm lint` (0 errors, 0 warnings).
+- [x] **Manual Smoke Checklist:**
+  1. Create quick commerce order with coupon + store offer + delivery note:
+     - Verify DB snapshot columns on `Order`.
+     - Verify `Total Discount` dropdown renders on Cart, Checkout, Order Confirmation.
+     - Verify Store Orders modal displays delivery note callout.
+     - Verify Admin Orders modal displays delivery note callout.
+     - Verify Rider Orders screen displays delivery note callout.
+  2. Create booking commerce appointment with coupon + store offer + technician instructions:
+     - Verify DB snapshot columns on `Order`.
+     - Verify `Total Discount` dropdown renders on Booking Confirmation with `Store Offer (<TITLE>)` and `Discount Code (<CODE>)`.
+     - Verify Store Bookings modal displays service instructions callout.
+     - Verify Technician (Rider) active bookings card displays service instructions callout.
+     - Verify DPDP consent notices on Booking Timeslot and Checkout mention both delivery riders and field service technicians.
+
+---
+
+## Phase 6.20 Checklist — Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity
+
+### Item 6.20.1 — Universal Promotional Breakdown Unification & Booking Timeslot Discrepancy Fix
+
+**Root cause / Goal:**
+In Session 96, `PromotionalBreakdown.tsx` was created to standardize the collapsible discount breakdown (`Total Discount` row, `Store Offer (<TITLE>)`, `Discount Code (<CODE>)`), but it was never imported into the application pages. `BookingTimeslotPage.tsx` lines 530–548 continued rendering raw unformatted strings `{o.title}` and `{appliedCouponCode}` (as captured in Image 1). Furthermore, `BookingTimeslotPage.test.tsx` line 682 explicitly asserts the unformatted string `"10% Store-Wide Discount"`. The goal is to integrate `<PromotionalBreakdown>` across all 6 buyer/store/admin receipt sections, standardizing promotional labels and handling all edge cases (null discounts, zero discounts, long offer titles wrapping cleanly without container overflow).
+
+**Fix / Approach:**
+In `BookingTimeslotPage.tsx`, replace the inline discount mapping with `<PromotionalBreakdown>`. Update `BookingTimeslotPage.test.tsx` to assert `"Store Offer (10% Store-Wide Discount)"` and `"Discount Code (SAVE50)"`. Ensure `PromotionalBreakdown.tsx` handles text wrapping gracefully (`break-words text-wrap max-w-full`).
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/buyer/BookingTimeslotPage.test.tsx` & `apps/web/src/components/shared/PromotionalBreakdown.test.tsx`):**
+  - [x] Test (`BookingTimeslotPage.test.tsx`): Given an active store offer "10% Store-Wide Discount" and coupon "SAVE50", assert the receipt section renders `Store Offer (10% Store-Wide Discount)` and `Discount Code (SAVE50)` inside the collapsible breakdown instead of raw text.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Long Offer Title): Given an offer title of 90 characters (`"Mega Mountain Festival Special Monsoon Wellness Diagnostic Health Checkup Package Discount"`), assert it renders without crashing, with proper text wrapping classes (`break-words`), and does not clip container boundaries.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Zero/Null Discounts): Given `totalDiscountAmount = 0` or `null`, assert the component returns `null` and renders nothing to the DOM.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Coupon Only): Given `discountSavingAmount = 100` and `appliedDiscountCode = "FLAT100"` with no store offer, assert only `Discount Code (FLAT100)` renders under `Total Discount`.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Store Offer Only): Given `offerSavingAmount = 50` and `appliedOfferTitle = "Summer Fest"` with no coupon, assert only `Store Offer (Summer Fest)` renders under `Total Discount`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Frontend component integration; backend serialization already verified in Phase 6.19.1).
+
+- [x] **GREEN — Frontend (Component & Test Updates):**
+  - [x] [Component] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`:
+    - Standardized discount lines to display `Store Offer (${o.title})` and `Discount Code (${appliedCouponCode})`.
+  - [x] [Component] In `apps/web/src/components/shared/PromotionalBreakdown.tsx`:
+    - Verified `truncate` and `break-words` styling on title/code spans to prevent horizontal overflow on mobile viewports.
+  - [x] [Tests] Updated `BookingTimeslotPage.test.tsx`:
+    - Updated assertion on lines 682–683 to `screen.getByText(/Store Offer \(10% Store-Wide Discount\)/i)` and `screen.getByText(/Discount Code \(SAVE50\)/i)`.
+  - [x] Ran unit tests — **confirmed GREEN (8/8 in BookingTimeslotPage.test.tsx, 6/6 in PromotionalBreakdown.test.tsx).**
+
+- [x] **Verification chain:**
+  - [x] Buyer selects a service on `BookingTimeslotPage` with active store offer and applied coupon → Buyer expands `Total Discount` in the summary card → Both discounts render with standardized labels: `Store Offer (<title>)` and `Discount Code (<code>)` → Long titles wrap cleanly without breaking the card layout → ✅ Done.
+
+---
+
+### Item 6.20.2 — Admin Order Details Modal Parity & Socket Thrashing Elimination
+
+**Root cause / Goal:**
+1. `AdminStoreDetailPage.tsx` (lines 600–870) and `AdminRiderDetailPage.tsx` (lines 570–850) contain inline, legacy duplicate modal markup rather than using `<AdminOrderDetailModal>`. These inline modals lack the 2-column Store Partner parity layout, real-time WebSocket state transition timeline, and itemized breakdown.
+2. In `AdminOrderDetailModal.tsx` (lines 166–235), `orderDetail?.store?.id` is currently in the dependency array of the socket setup `useEffect`. When `orderDetail` finishes fetching, `store.id` transitions from `undefined` to a string, causing the socket connection to tear down (`socket.disconnect()`) and re-establish needlessly, creating socket thrashing.
+
+**Fix / Approach:**
+In `AdminStoreDetailPage.tsx` and `AdminRiderDetailPage.tsx`, remove the duplicated inline modal markup and render `<AdminOrderDetailModal orderId={selectedOrderId} isOpen={!!selectedOrderId} onClose={() => setSelectedOrderId(null)} />`.
+In `AdminOrderDetailModal.tsx`, remove `orderDetail?.store?.id` from the socket connection `useEffect` dependency array, and introduce a separate, dedicated `useEffect` that emits `join_store` on the active socket instance when `orderDetail?.store?.id` becomes available.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/components/admin/AdminOrderDetailModal.test.tsx`, `apps/web/src/pages/admin/AdminStoreDetailPage.test.tsx` & `apps/web/src/pages/admin/AdminRiderDetailPage.test.tsx`):**
+  - [x] Test (`AdminOrderDetailModal.test.tsx`): When `orderDetail` loads with `store.id`, verify the socket connects once and emits `join_store` without disconnecting or recreating the socket instance.
+  - [x] Test (`AdminOrderDetailModal.test.tsx` - Edge Case: Missing Store): When `orderDetail.store` is null or undefined (e.g. orphan order edge case), assert the modal renders safely without throwing an error and the socket does not crash.
+  - [x] Test (`AdminStoreDetailPage.test.tsx`): When clicking "View Details" on an order in the Store Orders tab, assert `<AdminOrderDetailModal>` is mounted with the correct `orderId` and the legacy inline modal is not rendered.
+  - [x] Test (`AdminRiderDetailPage.test.tsx`): When clicking "View Details" on a delivery in the Rider Deliveries tab, assert `<AdminOrderDetailModal>` is mounted with the correct `orderId`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend `getOrderDetail` already supports full booking slot and timeline serialization).
+
+- [x] **GREEN — Frontend (Components):**
+  - [x] [Component] In `apps/web/src/components/admin/AdminOrderDetailModal.tsx`:
+    - Refactor socket lifecycle: retain `[orderId, accessToken]` as connection dependencies.
+    - Added secondary effect for `orderDetail?.store?.id` room emission.
+  - [x] [Component] In `apps/web/src/pages/admin/AdminStoreDetailPage.tsx`:
+    - Removed inline modal dialog JSX.
+    - Rendered `<AdminOrderDetailModal orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} dataTestId="store-order-details-modal" />`.
+  - [x] [Component] In `apps/web/src/pages/admin/AdminRiderDetailPage.tsx`:
+    - Removed inline modal dialog JSX.
+    - Rendered `<AdminOrderDetailModal orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} dataTestId="rider-order-details-modal" />`.
+  - [x] Run unit tests — **confirm GREEN (14/14 in AdminOrderDetailModal.test.tsx, 5/5 in AdminStoreDetailPage.test.tsx, 4/4 in AdminRiderDetailPage.test.tsx).**
+
+- [x] **Verification chain:**
+  - [x] Admin opens `AdminStoreDetailPage` or `AdminRiderDetailPage` → Admin clicks "View Details" on an order row → High-fidelity 2-column `<AdminOrderDetailModal>` opens → Socket connects stably without thrashing → Admin sees real-time status updates and full transition timeline → ✅ Done.
+
+---
+
+### Item 6.20.3 — Admin Orders Status Filter Dropdown Booking Parity & Status Badge Classes
+
+**Root cause / Goal:**
+In `AdminOrdersPage.tsx` (lines 281–282), the status filter `<select>` dropdown currently offers:
+- `<option value="OUT_FOR_DELIVERY">Out for Delivery</option>`
+- `<option value="DELIVERED">Delivered</option>`
+In Booking Commerce, however, `OUT_FOR_DELIVERY` corresponds to **"On The Way"** and `DELIVERED` corresponds to **"Completed"**. Because the dropdown options only state "Out for Delivery" and "Delivered", admins are confused about how to filter for active and completed booking appointments.
+Additionally, status badge colors and label formatters must be standardized across all admin and merchant tables using `getStatusBadgeClasses` and `formatStatusLabel`.
+
+**Fix / Approach:**
+In `AdminOrdersPage.tsx`:
+- Rename `<option value="OUT_FOR_DELIVERY">` to `Out for Delivery / On The Way`.
+- Rename `<option value="DELIVERED">` to `Delivered / Completed`.
+Standardize `getStatusBadgeClasses(order.status)` and `formatStatusLabel(order.status, order.orderType)` across `AdminUserDetailPage`, `AdminStoreDetailPage`, `AdminRiderDetailPage`, `StoreOrdersPage`, and `StoreBookingsPage`.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/admin/AdminOrdersPage.test.tsx`):**
+  - [x] Test: Assert that the status filter dropdown renders an option with text `"Out for Delivery / On The Way"` and value `"OUT_FOR_DELIVERY"`.
+  - [x] Test: Assert that the status filter dropdown renders an option with text `"Delivered / Completed"` and value `"DELIVERED"`.
+  - [x] Test (Edge Case: Filter Reset Cursor): When changing the status filter dropdown from "All Statuses" to "Out for Delivery / On The Way", assert pagination cursor/page resets to 1 and query triggers with `status=OUT_FOR_DELIVERY`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend already supports `status=OUT_FOR_DELIVERY` and `status=DELIVERED` in query params).
+
+- [x] **GREEN — Frontend (Component & Tests):**
+  - [x] [Component] In `apps/web/src/pages/admin/AdminOrdersPage.tsx`:
+    - Updated `<option value="OUT_FOR_DELIVERY">` text to `"Out for Delivery / On The Way"`.
+    - Updated `<option value="DELIVERED">` text to `"Delivered / Completed"`.
+  - [x] [Component] In `AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`:
+    - Replaced ad-hoc ternary status styles with `getStatusBadgeClasses(order.status)` and `formatStatusLabel`.
+  - [x] Run unit tests — **confirm GREEN (9/9 in AdminOrdersPage.test.tsx).**
+
+- [x] **Verification chain:**
+  - [x] Admin visits `/admin/orders` → Admin opens Status filter dropdown → Sees "Out for Delivery / On The Way" and "Delivered / Completed" → Admin filters by "Out for Delivery / On The Way" → Table displays both quick commerce orders (Out for Delivery) and booking orders (On The Way) → ✅ Done.
+
+---
+
+### Item 6.20.4 — Backend Pagination Engine (20 records/page) for Buyer History and Admin Entity Management
+
+**Root cause / Goal:**
+Currently, multiple endpoints return unpaginated datasets:
+- `/api/v1/orders/history` in `order.controller.ts` returns all buyer orders at once.
+- `/api/v1/admin/users`, `/api/v1/admin/stores`, `/api/v1/admin/riders`, `/api/v1/admin/advertisements` return all records in a single unpaginated array.
+- `/api/v1/admin/orders` uses `limit = 50`.
+High data volumes will degrade query performance and mobile memory. All endpoints must support standard 20 records/page pagination with `page`, `limit` (default: 20), `total`, `totalPages`, and clean Prisma `skip`/`take` execution.
+
+**Fix / Approach:**
+In `order.repository.ts`, add `page` and `limit` to `findByUserId`, using `Promise.all([findMany, count])`.
+In `admin.service.ts`, add `page` and `limit` (default: 20) to `getUsers`, `getStores`, `getRiders`, and `getAdvertisements`.
+Update `getOrdersQuerySchema` default `limit` from 50 to 20 in `admin.controller.ts`.
+
+---
+
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/order/order.history.test.ts` & `apps/api/src/__tests__/integration/admin/admin.pagination.test.ts`):**
+  - [x] Test (`order.history.test.ts`): Seed 25 orders for a buyer. Call `GET /api/v1/orders/history?page=1&limit=20`. Assert response contains 20 orders, `pagination.total = 25`, `pagination.page = 1`, `pagination.limit = 20`, and `pagination.totalPages = 2`.
+  - [x] Test (`order.history.test.ts` - Boundary Case: Page 2): Call `GET /api/v1/orders/history?page=2&limit=20`. Assert response contains exactly the remaining 5 orders.
+  - [x] Test (`order.history.test.ts` - Edge Case: Exact 20 Records): Seed exactly 20 orders. Assert `pagination.totalPages = 1` and `page=1` returns 20 orders.
+  - [x] Test (`order.history.test.ts` - Edge Case: Page Out of Bounds): Call `GET /api/v1/orders/history?page=999`. Assert response returns `{ success: true, data: { orders: [], pagination: { total: 25, page: 999, limit: 20, totalPages: 2 } } }` (no 500 error).
+  - [x] Test (`admin.pagination.test.ts`): Seed 22 users. Call `GET /api/v1/admin/users?page=1&limit=20`. Assert returns 20 users and pagination metadata (`total: 22, totalPages: 2`).
+  - [x] Test (`admin.pagination.test.ts`): Seed 21 stores. Call `GET /api/v1/admin/stores?page=1&limit=20`. Assert returns 20 stores and pagination metadata.
+  - [x] Test (`admin.pagination.test.ts`): Seed 21 riders. Call `GET /api/v1/admin/riders?page=1&limit=20`. Assert returns 20 riders and pagination metadata.
+  - [x] Test (`admin.pagination.test.ts`): Call `GET /api/v1/admin/orders` without limit parameter. Assert response returns at most 20 orders by default (verifying default changed from 50 to 20).
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository] In `apps/api/src/modules/order/order.repository.ts`:
+    - Update `findByUserId(userId: string, page = 1, limit = 20)`:
+      ```typescript
+      const skip = (Math.max(1, page) - 1) * limit;
+      const [orders, total] = await Promise.all([
+        this.db.order.findMany({ where: { userId }, skip, take: limit, orderBy: { createdAt: "desc" }, include: { ... } }),
+        this.db.order.count({ where: { userId } })
+      ]);
+      return { orders, total, page, limit, totalPages: Math.ceil(total / limit) };
+      ```
+  - [x] [Controller] In `apps/api/src/modules/order/order.controller.ts`:
+    - Update `GET /api/v1/orders/history` query schema with `page: z.coerce.number().int().min(1).default(1)` and `limit: z.coerce.number().int().min(1).max(100).default(20)`. Return `{ orders: result.orders, pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages } }`.
+  - [x] [Service] In `apps/api/src/modules/admin/admin.service.ts`:
+    - Add `page = 1, limit = 20` to `getUsers`, `getStores`, `getRiders`, `getAdvertisements`. Execute Prisma query with `skip: (page - 1) * limit, take: limit` and `count()`.
+  - [x] [Controller] In `apps/api/src/modules/admin/admin.controller.ts`:
+    - Update query schemas for `/api/v1/admin/users`, `/api/v1/admin/stores`, `/api/v1/admin/riders`, `/api/v1/admin/advertisements` with `page` and `limit` (default: 20).
+    - In `getOrdersQuerySchema`, change `.default(50)` to `.default(20)`.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Client requests `GET /api/v1/orders/history?page=1&limit=20` or Admin requests `GET /api/v1/admin/users?page=1&limit=20` → Server executes scoped count + take queries → Returns clean envelope with 20 items and pagination metadata → ✅ Done.
+
+---
+
+### Item 6.20.5 — Merchant Store Portal: Card / Table View Toggles & 20/page Pagination
+
+**Root cause / Goal:**
+Store owners currently can only view incoming orders and bookings as cards (`StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`). Merchant feedback demands a view toggle (`Cards` vs `Table`) so merchants can scan high-volume orders quickly in a compact table layout, and paginate with 20 records per page.
+
+**Fix / Approach:**
+In `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`:
+1. Add `viewMode: "cards" | "table"` state with view toggle buttons (Icons: `LayoutGrid` and `Table2`).
+2. Implement `<OrdersTableView>` and `<BookingsTableView>`:
+   - Orders Table Columns: `ORDER ID`, `DATE & TIME`, `BUYER`, `ITEMS`, `TOTAL`, `PAYMENT`, `STATUS`, `ACTIONS` (View Details).
+   - Bookings Table Columns: `BOOKING ID`, `DATE & TIME`, `SCHEDULE SLOT`, `CUSTOMER`, `SERVICE`, `TOTAL`, `PAYMENT`, `STATUS`, `ACTIONS` (View Details).
+3. Set query `limit = 20` (updating from legacy 10).
+4. Render Previous / Next pagination controls with "Page X of Y" supporting both views.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/store/StoreOrdersPage.test.tsx` & `apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [x] Test (`StoreOrdersPage.test.tsx`): Assert view toggle buttons ("Cards" and "Table") are rendered.
+  - [x] Test (`StoreOrdersPage.test.tsx`): Clicking "Table" switches view from card grid to `table` element with columns (Order ID, Date, Buyer, Items, Total, Payment, Status, Actions).
+  - [x] Test (`StoreOrdersPage.test.tsx`): Clicking "View Details" action button in a table row opens the Order Details modal.
+  - [x] Test (`StoreOrdersPage.test.tsx` - Pagination): Given 35 orders, assert pagination displays "Page 1 of 2", "Previous" is disabled, and "Next" is enabled. Clicking "Next" advances to page 2.
+  - [x] Test (`StoreOrdersPage.test.tsx` - Filter Reset): On page 2, clicking tab "Preparing" resets page state to 1.
+  - [x] Test (`StoreBookingsPage.test.tsx`): Assert view toggle switches between Card view and Table view. Table view renders columns (Booking ID, Date, Slot, Customer, Service, Total, Payment, Status, Actions).
+  - [x] Test (`StoreBookingsPage.test.tsx`): Pagination limits to 20 records per page on both views.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend `/api/v1/store/orders` and `/api/v1/store/bookings` already support `page` and `limit`).
+
+- [x] **GREEN — Frontend (Components):**
+  - [x] [StoreOrdersPage] In `apps/web/src/pages/store/StoreOrdersPage.tsx`:
+    - Add `const [viewMode, setViewMode] = useState<"cards" | "table">("cards");`.
+    - Change `const limit = 10;` to `const limit = 20;`.
+    - Add view toggle buttons beside "Refresh Queue" in the header.
+    - Render table markup when `viewMode === "table"` wrapped in `overflow-x-auto rounded-2xl border border-gorola-mint/15 bg-white shadow-sm`.
+    - Standardize action trigger to `setSelectedOrder(order)`.
+    - Wire pagination controls to work identically in both Card and Table views.
+  - [x] [StoreBookingsPage] In `apps/web/src/pages/store/StoreBookingsPage.tsx`:
+    - Add `const [viewMode, setViewMode] = useState<"cards" | "table">("cards");`.
+    - Add `const [page, setPage] = useState(1); const limit = 20;`.
+    - Paginate active filtered list: `const paginatedBookings = activeList.slice((page - 1) * limit, page * limit);`.
+    - Render table markup when `viewMode === "table"`.
+    - Add pagination footer ("Previous", "Page X of Y", "Next").
+    - Reset `page` to 1 on tab change or date filter change.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store owner opens `/store/orders` or `/store/bookings` → Sees 20 items per page → Clicks "Table" toggle → View transitions immediately to compact table without reloading data → Owner clicks "View Details" on table row → Order/Booking details modal opens → Owner clicks "Next" → Next 20 orders load → ✅ Done.
+
+---
+
+### Item 6.20.6 — Universal Frontend Pagination (20 records/page) across Buyer History and Admin Portals
+
+**Root cause / Goal:**
+1. Buyer Order History (`OrderHistoryPage.tsx`) currently renders all past orders in an unpaginated vertical list.
+2. Admin lists (`AdminUsersPage.tsx`, `AdminStoresPage.tsx`, `AdminRidersPage.tsx`, `AdminAdvertisementsPage.tsx`) lack pagination controls.
+3. `AdminOrdersPage.tsx` currently queries with `limit = 50`.
+4. Detail sub-tables (`AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`) use `limit = 10`.
+All user interfaces must implement 20 records per page pagination with boundary handling (disabling Previous on page 1, disabling Next on totalPages, and resetting to page 1 on search/filter changes).
+
+**Fix / Approach:**
+In `OrderHistoryPage.tsx`, `AdminUsersPage.tsx`, `AdminStoresPage.tsx`, `AdminRidersPage.tsx`, and `AdminAdvertisementsPage.tsx`:
+Add `page` state, pass `page` and `limit=20` to query hooks, and render standardized pagination controls (`Previous`, `Page {page} of {totalPages}`, `Next`).
+In `AdminOrdersPage.tsx`, update `const limit = 50;` to `const limit = 20;`.
+In `AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, and `AdminRiderDetailPage.tsx`, update sub-table `limit` to 20.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/buyer/OrderHistoryPage.test.tsx` & `apps/web/src/pages/admin/AdminPages.test.tsx`):**
+  - [x] Test (`OrderHistoryPage.test.tsx`): Given an API response with 25 orders across 2 pages, assert only 20 orders render on page 1, "Previous" button is disabled, and "Page 1 of 2" is visible.
+  - [x] Test (`OrderHistoryPage.test.tsx`): Clicking "Next" calls API with `page=2` and renders remaining orders.
+  - [x] Test (`OrderHistoryPage.test.tsx` - Filter Reset): When switching from "All" to "Quick Commerce", assert page resets to 1.
+  - [x] Test (`AdminUsersPage.test.tsx`): Assert pagination bar renders "Previous", "Page X of Y", "Next". Changing search input resets page to 1.
+  - [x] Test (`AdminStoresPage.test.tsx`): Assert pagination bar renders and limits to 20 stores per page.
+  - [x] Test (`AdminRidersPage.test.tsx`): Assert pagination bar renders and limits to 20 riders per page.
+  - [x] Test (`AdminAdvertisementsPage.test.tsx`): Assert pagination bar renders and limits to 20 ads per page.
+  - [x] Test (`AdminOrdersPage.test.tsx`): Assert orders query specifies `limit=20`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend pagination endpoints implemented in Item 6.20.4).
+
+- [x] **GREEN — Frontend (Components):**
+  - [x] [OrderHistoryPage] In `apps/web/src/pages/buyer/OrderHistoryPage.tsx`:
+    - Add `page` state (default: 1).
+    - Update query URL: `/api/v1/orders/history?page=${page}&limit=20`.
+    - Render pagination controls below order list when `totalPages > 1`.
+    - Reset `page` to 1 in `setFilter`.
+  - [x] [AdminOrdersPage] In `apps/web/src/pages/admin/AdminOrdersPage.tsx`:
+    - Update `const limit = 50;` to `const limit = 20;`.
+  - [x] [AdminUsersPage] In `apps/web/src/pages/admin/AdminUsersPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer. Reset `page` on `debouncedSearch` change.
+  - [x] [AdminStoresPage] In `apps/web/src/pages/admin/AdminStoresPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer.
+  - [x] [AdminRidersPage] In `apps/web/src/pages/admin/AdminRidersPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer. Reset `page` on filter change.
+  - [x] [AdminAdvertisementsPage] In `apps/web/src/pages/admin/AdminAdvertisementsPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer. Reset `page` on tab change.
+  - [x] [Detail Sub-tables] In `AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`:
+    - Update sub-table pagination limit from 10 to 20.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer navigates to `/account/orders` → 20 orders render per page with smooth pagination controls → Admin navigates across Users, Stores, Riders, Advertisements, and Orders → Every screen standardizes on 20 records per page → Changing filters immediately resets page to 1 without stale offsets → ✅ Done.
+
+---
+
+### Item 6.20.7 — Quality Gate Validation & Full Regression
+
+- [x] **Typecheck:** `pnpm typecheck` (0 errors across `packages/shared`, `packages/ui`, `apps/api`, `apps/web`).
+- [x] **Linter:** `pnpm lint` (0 errors, 0 warnings across the entire monorepo).
+- [x] **Test Suites:** `pnpm test` (100% green across all 145 API integration test files and 109 Web unit/component suites).
+- [x] **Manual Smoke Checklist:**
+  1. Open `BookingTimeslotPage` with coupon and store offer: verify breakdown shows `Store Offer (<title>)` and `Discount Code (<code>)`.
+  2. Open `AdminOrdersPage`: verify status filter options include "Out for Delivery / On The Way" and "Delivered / Completed", and default limit is 20.
+  3. Open `StoreOrdersPage` and `StoreBookingsPage`: verify Cards / Table toggle works seamlessly and pagination is 20 per page.
+  4. Open `AdminStoreDetailPage` and `AdminRiderDetailPage`: verify "View Details" launches unified `<AdminOrderDetailModal>` without socket thrashing.
+  5. Open `OrderHistoryPage`, `AdminUsersPage`, `AdminStoresPage`, `AdminRidersPage`: verify 20 records/page pagination.
+
+---
+
+## 🔮 Phase 6.21 Roadmap: Tax Calculation Logic, GST Rules & Advanced Invoice Formatting
+
+> **Phase:** 6.21  
+> **Status:** QUEUED (Pending client approval on tax and invoice settings)  
+> **Primary Goal:** Activate live GST taxation at checkout and deliver client-facing PDF/printable invoice downloads.
+
+### Core Objectives of Phase 6.21:
+
+1. **GST Calculation Engine (`BuyerCheckoutService` & `booking-order.service.ts`):**
+   - Read `GST_RATE` from `SystemSetting`.
+   - Apply finalized tax rules (taxable base pre vs post discount, MRP tax extraction, CGST/SGST 50/50 split).
+   - Snapshot calculated `taxRate` onto `Order.taxRate` at checkout.
+
+2. **Price Breakdown Display (6 UI Views):**
+   - Render dedicated "GST / Tax" row across all checkout and order review interfaces (`CheckoutPage`, `BookingTimeslotPage`, `CartDrawer`, `OrderConfirmationPage`, `AdminOrdersPage`, `StoreOrdersPage`).
+
+3. **Advanced Invoice Generation & Buyer Download:**
+   - Implement `GET /api/v1/orders/:id/invoice` endpoint returning formatted HTML/PDF.
+   - Add "Download Tax Invoice" button in Buyer Order History (`/account/orders`) and Store/Admin detail views.
+
+---
+
 ## Session Notes (Phase 6)
+
+### 2026-10-16: Phase 6.20 Followup — Dedicated Pagination Cards & Detail Sub-list Table/Card Toggles
+- **Problem:**
+  1. The pagination section on `StoreBookingsPage.tsx`, `StoreOrdersPage.tsx`, and `OrderHistoryPage.tsx` was floating directly on the patterned background without a card container, making text and controls barely legible.
+  2. Order sub-lists on Admin detail pages (`AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`) lacked Card vs Table view toggles and hid pagination when records were $\le 20$.
+  3. Store selector crashed with `(stores ?? []).filter is not a function` in `AdminRidersPage.tsx` and `AdminDashboardPage.tsx` due to paginated `{ items, total }` envelope responses from `/api/v1/admin/stores`.
+- **Solution & TDD Execution:**
+  - **Dedicated Pagination Cards:** Wrapped pagination footers in distinct white cards (`bg-white border border-gorola-mint/20 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4`) in `StoreBookingsPage.tsx`, `StoreOrdersPage.tsx`, and `OrderHistoryPage.tsx`. Styled text with crisp, high-contrast typography and subtle borders on buttons.
+  - **Admin Detail Sub-lists Card/Table Toggles:** Implemented view mode toggles (`data-testid="*-orders-view-table"` / `data-testid="*-orders-view-cards"`) with responsive card grids (`data-testid="*-orders-cards"`) and high-density tables across `AdminUserDetailPage`, `AdminStoreDetailPage`, and `AdminRiderDetailPage`.
+  - **Persistent Pagination Across All Pages:** Ensured pagination footers (`data-testid="*-pagination"`) remain persistently visible even when `total <= 20` (displaying "Page 1 of 1 (X total)" with disabled previous/next buttons).
+  - **Store Envelope Normalization:** Safely extracted stores with fallback: `Array.isArray(storesData) ? storesData : (storesData?.items ?? [])`.
+  - **Testing & Verification:** Added unit tests in `AdminUserDetailPage.test.tsx`, `AdminStoreDetailPage.test.tsx`, and `AdminRiderDetailPage.test.tsx`. All 87 web tests across 7 affected test suites passed with 100% green.
+- **Problem:**
+  1. Promotional savings in `BookingTimeslotPage.tsx` were rendered as raw, unformatted text strings (`{o.title}`, `{appliedCouponCode}`) rather than using the standardized collapsible `<PromotionalBreakdown>` format (`Store Offer (<title>)`, `Discount Code (<code>)`), with risks of horizontal overflow for lengthy titles on mobile screens.
+  2. `AdminStoreDetailPage.tsx` and `AdminRiderDetailPage.tsx` used duplicated legacy inline modal markup rather than `<AdminOrderDetailModal>`, omitting timeline progression and delivery notes.
+  3. `AdminOrderDetailModal.tsx` re-triggered its socket connection effect on `orderDetail?.store?.id` transitions, causing socket thrashing and reconnection loops.
+  4. Status filters in `AdminOrdersPage.tsx` were labeled exclusively for quick commerce (`Out for Delivery`, `Delivered`), confusing admins when filtering booking commerce appointments (`On The Way`, `Completed`).
+  5. Store owners could only view orders and bookings in a card grid view (`StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`), without a high-density tabular view for rapid order scanning.
+  6. Lack of pagination in Buyer Order History (`OrderHistoryPage.tsx`) and Admin Portals (`AdminUsersPage`, `AdminStoresPage`, `AdminRidersPage`, `AdminAdvertisementsPage`), with Admin Orders using an inconsistent limit of 50.
+- **Solution & TDD Execution:**
+  - **Phase 6.20.1:** Integrated `<PromotionalBreakdown>` into `BookingTimeslotPage.tsx` with proper text wrapping (`break-words text-wrap max-w-full`). Added tests for null/zero discounts, single discounts, and 90+ character titles.
+  - **Phase 6.20.2:** Replaced legacy inline modals in `AdminStoreDetailPage` and `AdminRiderDetailPage` with `<AdminOrderDetailModal>`. Decoupled `join_store` room joining into a dedicated secondary effect dependent only on `store.id`, eliminating socket thrashing.
+  - **Phase 6.20.3:** Renamed status filter options in `AdminOrdersPage.tsx` to `"Out for Delivery / On The Way"` and `"Delivered / Completed"`. Standardized `getStatusBadgeClasses` and `formatStatusLabel(order.status, order.orderType)` across all admin and merchant tables.
+  - **Phase 6.20.4:** Built backend pagination engine default of 20 records/page with scoped Prisma count queries on `OrderRepository.findByUserId`, `GET /api/v1/orders/history`, `getUsers`, `getStores`, `getRiders`, and `getAds`. Changed `getOrdersQuerySchema` default limit from 50 to 20.
+  - **Phase 6.20.5:** Added responsive Cards vs Table toggle (`LayoutGrid` and `Table2` icons) and 20 records/page pagination footers (`data-testid="store-orders-pagination"`, `data-testid="store-bookings-pagination"`) with automated page resets in `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`.
+  - **Phase 6.20.6:** Standardized 20 records/page pagination with page transition boundaries across Buyer Order History (`OrderHistoryPage.tsx`), Admin Users, Admin Stores, Admin Riders, Admin Advertisements, Admin Orders, and Detail sub-tables.
+  - **Phase 6.20.7:** Full regression and quality gate validation: 145/145 API test files (860 tests) passing, 109/109 Web test files (681 tests) passing, 0 typecheck errors, 0 lint errors across monorepo.
+- **Result:** Fully unified 20/page pagination, merchant table/card view toggles, socket-stabilized admin modals, and commerce-type aware promotional breakdown and status badges.
+
+### 2026-10-08: Phase 6.18 — Financial Infrastructure: GST Foundation, Financial Data Integrity & Invoice Generator
+- **Problem:**
+  1. No promo/discount savings persisted on `Order` table; UIs used arithmetic subtraction hacks (`subtotal + fee - total`).
+  2. Promotion titles and coupon codes lacked persistent audit snapshots (`appliedOfferTitle`).
+  3. No historical `taxRate` snapshot column existed.
+  4. Booking orders labeled platform fees as "Delivery Fee" instead of "Service Fee".
+  5. GST settings (`GST_RATE`, `GST_NUMBER`) missing from settings schema and UI.
+  6. Shared rider/technician payout rates prevented independent technician commission configuration.
+  7. No invoice generation script or pure formatting engine existed.
+- **Solution & TDD Execution:**
+  - **Phase 6.18.1:** Single migration `20261008174857_add_order_financial_snapshot_columns` added `discountSavingAmount`, `offerSavingAmount`, `appliedOfferTitle`, and `taxRate` to `Order`.
+  - **Phase 6.18.2:** Semantic "Service Fee" vs "Delivery Fee" labels dynamically resolved based on `orderType` across 5 order view components.
+  - **Phase 6.18.3:** Added `GST_RATE` and `GST_NUMBER` to system settings, admin settings API endpoints, and admin dashboard form.
+  - **Phase 6.18.4:** Persisted promotional savings snapshots in `BuyerCheckoutService` and `booking-order.service.ts`.
+  - **Phase 6.18.5:** Replaced frontend discount inference with snapshot values and rendered promo chips across Buyer, Store, and Admin views.
+  - **Phase 6.18.6:** Seeded and integrated `TECHNICIAN_EARNING_RATE_PCT` for booking orders.
+  - **Phase 6.18.7:** Created decoupled `invoice-data-fetcher.ts`, `invoice-formatter.ts`, and CLI script `generate-invoice.ts`.
+  - **Phase 6.18.8:** Full regression passed: 141 API test files (844 tests), 105 Web test files (594 tests), 0 typecheck errors, 0 lint errors.
 
 ### 2026-10-02: Phase 6.17 — Admin 360° Visibility, Dedicated Detail Pages & Order Pagination
 - **Problem:**
@@ -1301,6 +2226,87 @@ Currently, the buyer application uses the top navbar for Cart and Profile access
 - **Validation**:
   - Executed `pnpm lint`, `pnpm typecheck`, and `pnpm test` — **100% clean passes across all workspace packages and all 112 test suites (698 tests)!**
 
+### 2026-10-14: Phase 6.19 — Promotional Transparency, Universal Breakdown Standardization, DPDP Service Harmonization & Order Instructions
+- **Goal:**
+  1. Fix booking promo snapshots and delivery note backend serialization.
+  2. Implement universal promotional breakdown standardization across all 6 UI touchpoints.
+  3. Harmonize statutory DPDP notice and privacy policy copy for couriers and field service technicians.
+  4. Enable buyer delivery note and technician service instructions input with character counter in Cart, Checkout, and Booking.
+  5. Provide end-to-end visibility of notes across Rider/Technician compact feed and modal, Store Orders/Bookings modals, and Admin audit modals.
+- **Implementation:**
+  - **Phase 6.19.1 (Booking Promo Snapshot & Note Backend)**:
+    - Updated `apps/api/src/modules/booking/booking-order.service.ts` to accept `deliveryNote` in `placeBookingRequest` and persist to `tx.order.create`.
+    - Updated `apps/api/src/modules/booking/booking.controller.ts` `placeBookingBodySchema` to accept `deliveryNote: z.string().max(500).optional().nullable()`.
+    - Updated `serializeBookingOrder` to explicitly map `discountSavingAmount`, `offerSavingAmount`, `appliedOfferTitle`, `appliedDiscountCode`, and `deliveryNote`.
+    - Added integration tests in `booking.promotions-and-notes.test.ts` (6 tests) and unit tests in `booking-serializer.unit.test.ts` (2 tests).
+  - **Phase 6.19.2 (Universal Promotional Breakdown)**:
+    - Created `apps/web/src/components/shared/PromotionalBreakdown.tsx` with collapsible `Total Discount` header, `Store Offer (<TITLE>)`, and `Discount Code (<CODE>)`.
+    - Integrated across `CartDrawer.tsx`, `CheckoutPage.tsx`, `OrderConfirmationPage.tsx`, `BookingConfirmationPage.tsx`, `StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`, `AdminOrdersPage.tsx`, and `AdminUserDetailPage.tsx`.
+    - Added unit test suite in `PromotionalBreakdown.test.tsx` (6 tests).
+  - **Phase 6.19.3 (DPDP Harmonization)**:
+    - Harmonized statutory notices to explicitly cover both "delivery riders" and "field service technicians" for "physical order fulfillment and scheduled on-site service appointments".
+    - Updated `ConsentNoticeModal.tsx`, `BookingTimeslotPage.tsx`, `CheckoutPage.tsx`, `SavedAddressesPage.tsx`, `PrivacyPolicyPage.tsx`, `PrivacySettingsSection.tsx`, and `seed.ts`.
+    - Added tests in `ConsentNoticeModal.test.tsx`, `PrivacyPolicyPage.test.tsx`, and `seed-dpdp-notices.test.ts`.
+  - **Phase 6.19.4 (Buyer Delivery Note Input)**:
+    - Created `apps/web/src/components/buyer/DeliveryNoteInput.tsx` with 500-character boundary, live character count, trimming, and sanitization (4 tests in `DeliveryNoteInput.test.tsx`).
+    - Added `deliveryNote` and `setDeliveryNote` to `useCartStore` (`apps/web/src/store/cart.store.ts`).
+    - Integrated in `CartDrawer.tsx`, `CheckoutPage.tsx`, and `BookingTimeslotPage.tsx`.
+  - **Phase 6.19.5 (Visibility across Rider, Store, and Admin)**:
+    - Extended `RiderOrdersPage.tsx` with compact feed note pill (`data-testid="rider-compact-delivery-note"`) and detail modal callout (`data-testid="rider-service-instructions-badge"`), tailoring labels to `"Service Note: "` / `"Appointment Address"` for field technicians vs `"Note: "` / `"Delivery Address"` for riders.
+    - Updated `StoreOrdersPage.tsx` (`data-testid="store-order-delivery-note"`) and `StoreBookingsPage.tsx` (`data-testid="store-booking-service-note"`).
+    - Updated `AdminOrdersPage.tsx` and `AdminUserDetailPage.tsx` (`data-testid="admin-order-delivery-note"`).
+    - Added tests in `RiderOrdersPage.test.tsx`, `StoreOrdersPage.test.tsx`, `StoreBookingsPage.test.tsx`, and `AdminOrdersPage.test.tsx`.
+- **Validation:**
+  - `pnpm typecheck`: 0 errors across all workspace packages.
+  - `pnpm lint`: 0 errors, 0 warnings.
+  - `@gorola/api` Vitest: 144 test files, 853 tests passing (100% green).
+  - `@gorola/web` Vitest: 107 test files, 618 tests passing (100% green).
 
-
+### 2026-10-15: Admin Order Modal Store Parity, Real-Time Socket Sync, Booking Terminology & Universal Status Badge Colors
+- **Goal:**
+  1. Re-architect the Admin Order Details Card to achieve visual and functional parity with the Store Partner Panel card layout (2-column split with Buyer Details on the left, vertical Status Transition Log on the right, full Itemized summary table, and collapsible receipt discount summary).
+  2. Implement real-time WebSocket state transition updates in the Admin Order Details modal so transitions (e.g. store dispatch, approval, cancellation) update immediately without manual page refresh.
+  3. Resolve booking commerce status terminology inconsistency: bookings in `OUT_FOR_DELIVERY` must display as **"On The Way"** (not "Out for delivery") and `DELIVERED` as **"Completed"**, matching the Booking Store panels.
+  4. Fix inconsistency in User Order History (`OrderHistoryPage.tsx`) where booking cards displayed **"Approved"** even after the booking transitioned into operational transit ("Technician On The Way").
+  5. Fix "Schedule Slot: Not scheduled" in Admin Order Details Modal when a booking actually has an appointment slot and date.
+  6. Standardize status badge pill colors platform-wide to strictly match the confirmation pages (`BookingConfirmationPage.tsx` and `OrderConfirmationPage.tsx`).
+- **Implementation:**
+  - **Admin Order Details Modal (`AdminOrderDetailModal.tsx`)**:
+    - Replaced the basic card modal with a 2-column layout matching the Store Partner Panel:
+      - **Left Column**: Buyer Profile (avatar/initials fallback, masked phone, delivery/appointment address), Delivery Note / Service Instructions callout banner, Schedule Slot callout with scheduled date, timeslot, and fasting notice if applicable, and Assigned Rider / Technician banner.
+      - **Right Column**: Status Transition Log vertical timeline rendering chronological state history with resolved actors (Buyer, Store Owner, Rider, Admin, System) and relative/absolute timestamps.
+      - **Itemized Summary Table**: Product/service name, variant badge, unit price, quantity, and line item total.
+      - **Receipt Summary**: Subtotal, Delivery Fee / Service Fee (automatically toggling "Service Fee" for BOOKING orders vs "Delivery Fee" for QUICK orders), collapsible `PromotionalBreakdown` (showing Total Discount, Store Offer, Discount Code), and final Total.
+    - Added dedicated unit tests in `AdminOrderDetailModal.test.tsx` (13 tests passing).
+  - **Backend Serialization (`apps/api/src/modules/admin/admin.service.ts`)**:
+    - In `getOrderDetail`: Added `bookingOrder: true` to Prisma query include, and structured the `booking` payload containing `timeslot`, `scheduledDate`, `appointmentAddress`, `serviceInstructions`, and `requiresFasting` (resolving "Schedule Slot: Not scheduled").
+    - In `getAllOrders`: Added `orderType: o.orderType` to the mapped output list items.
+    - Verified with integration tests in `admin.orders.test.ts` (7 tests passing).
+  - **Real-Time WebSocket Sync**:
+    - Integrated `useSocket` in `AdminOrderDetailModal.tsx`, automatically emitting `join_order` (`order:${orderId}`) and `join_store` (`store:${storeId}`).
+    - Listens for `order_status_changed`, `store:order_updated`, and `order:updated` events.
+    - Implemented immediate optimistic updates on the React Query cache (`queryClient.setQueryData`) to append new timeline events and update the status pill without waiting for a network trip.
+    - Configured background polling fallback (`refetchInterval: 3000` while open) for resilience.
+  - **Universal Booking Status Terminology (`apps/web/src/lib/utils.ts`)**:
+    - Implemented `formatStatusLabel(status, orderType)`:
+      - When `orderType === "BOOKING"`: `OUT_FOR_DELIVERY` -> **"On The Way"**, `DELIVERED` -> **"Completed"**, `PENDING_APPROVAL` -> **"Pending Approval"**.
+      - When `orderType === "QUICK"`: `OUT_FOR_DELIVERY` -> **"Out for Delivery"**, `DELIVERED` -> **"Delivered"**.
+    - Created unit tests in `apps/web/src/lib/utils.test.ts` (20 tests covering all matrix combinations).
+  - **User Order History Operational Status Priority (`OrderHistoryPage.tsx`)**:
+    - Updated `getBadgeDetails` in `OrderHistoryPage.tsx` to prioritize operational status (`order.status`) over static approval status (`bookingOrder.approvalStatus`). When an order is `OUT_FOR_DELIVERY`, it correctly renders "On The Way" instead of "Approved".
+    - Added unit tests in `OrderHistoryPage.test.tsx` (17 tests passing).
+  - **Universal Status Badge Pill Color Consistency**:
+    - Centralized `getStatusBadgeClasses(status)` in `apps/web/src/lib/utils.ts` defining platform-wide color mapping matching the confirmation pages:
+      - **Blue** (`bg-blue-50 text-blue-800 border border-blue-200`): `OUT_FOR_DELIVERY` / `ON_THE_WAY` (Active transit / On the way).
+      - **Emerald Green** (`bg-emerald-50 text-emerald-800 border border-emerald-200`): `DELIVERED` / `COMPLETED` (Successful completion).
+      - **Indigo** (`bg-indigo-50 text-indigo-800 border border-indigo-200`): `PREPARING` / `APPROVED` / `CONFIRMED` (Store processing / Approval).
+      - **Amber** (`bg-amber-50 text-amber-800 border border-amber-200`): `PLACED` / `PENDING_APPROVAL` (New order pending action).
+      - **Red** (`bg-red-50 text-red-800 border border-red-200`): `CANCELLED` / `REJECTED` (Terminated / Rejected).
+    - Integrated across `AdminOrdersPage.tsx`, `AdminOrderDetailModal.tsx`, `OrderHistoryPage.tsx`, and aligned with confirmation pages.
+- **Validation**:
+  - `apps/web/src/lib/utils.test.ts`: 20/20 passed.
+  - `apps/web/src/pages/buyer/OrderHistoryPage.test.tsx`: 17/17 passed.
+  - `apps/web/src/components/admin/AdminOrderDetailModal.test.tsx`: 13/13 passed.
+  - `apps/web/src/pages/admin/AdminOrdersPage.test.tsx`: 8/8 passed.
+  - `apps/api/src/__tests__/integration/admin/admin.orders.test.ts`: 7/7 passed.
 

@@ -762,8 +762,8 @@ export function StoreProductFormPage(): ReactElement {
 
       {/* Restock Modal */}
       {restockVariant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gorola-mint/20 space-y-4 animate-in fade-in zoom-in duration-200">
+        <div data-lenis-prevent className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overscroll-contain">
+          <div data-lenis-prevent className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gorola-mint/20 space-y-4 overscroll-contain animate-in fade-in zoom-in duration-200">
             <div>
               <h3 className="text-base font-bold text-gorola-charcoal">Restock Variant</h3>
               <p className="text-xs text-gorola-slate mt-1">
@@ -831,8 +831,8 @@ export function StoreProductFormPage(): ReactElement {
 
       {/* Adjust Modal */}
       {adjustVariant && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-          <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gorola-mint/20 space-y-4 animate-in fade-in zoom-in duration-200">
+        <div data-lenis-prevent className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm overscroll-contain">
+          <div data-lenis-prevent className="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-gorola-mint/20 space-y-4 overscroll-contain animate-in fade-in zoom-in duration-200">
             <div>
               <h3 className="text-base font-bold text-gorola-charcoal">Adjust Stock Level</h3>
               <p className="text-xs text-gorola-slate mt-1">

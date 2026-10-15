@@ -724,6 +724,14 @@ describe("POST /api/v1/orders (buyer checkout)", () => {
     expect(body.data.subtotal).toBe("200");
     expect(body.data.deliveryFee).toBe("30");
     expect(body.data.total).toBe("185");
+
+    const persisted = await db.order.findUniqueOrThrow({
+      where: { id: body.data.id }
+    });
+    expect(persisted.discountSavingAmount?.toFixed(2)).toBe("10.00");
+    expect(persisted.offerSavingAmount?.toFixed(2)).toBe("35.00");
+    expect(persisted.appliedOfferTitle).toBe("FLAT 20 OFF");
+    expect(persisted.taxRate?.toFixed(2)).toBe("18.00");
   });
 });
 

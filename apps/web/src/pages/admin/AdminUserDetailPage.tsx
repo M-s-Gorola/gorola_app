@@ -6,23 +6,24 @@ import {
   ChevronLeft,
   ChevronRight,
   Eye,
+  LayoutGrid,
   Lock,
   MapPin,
   Phone,
-  RefreshCw,
   ShieldCheck,
   ShoppingBag,
-  User,
-  X
+  Table2
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { AdminOrderDetailModal } from "@/components/admin/AdminOrderDetailModal";
 import { EraseUnderageModal } from "@/components/admin/AgeGateActionModals";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+import { formatStatusLabel, getStatusBadgeClasses } from "@/lib/utils";
 
 type AddressItem = {
   id: string;
@@ -107,46 +108,6 @@ type UserConsentResponse = {
   data: UserConsentData;
 };
 
-type OrderItemDetail = {
-  id: string;
-  productName: string;
-  variantLabel: string;
-  price: number;
-  quantity: number;
-};
-
-type OrderStatusHistoryItem = {
-  id: string;
-  status: string;
-  changedBy: string;
-  changedAt: string;
-  note?: string | null;
-};
-
-type OrderDetail = {
-  id: string;
-  status: string;
-  orderType?: string;
-  subtotal: number;
-  deliveryFee: number;
-  total: number;
-  paymentMethod: string;
-  landmarkDescription: string;
-  flatRoom?: string | null;
-  createdAt: string;
-  buyerMaskedPhone: string;
-  user?: { name: string; phone: string } | null;
-  store: { name: string; phone: string; storeType?: string };
-  items: OrderItemDetail[];
-  statusHistory: OrderStatusHistoryItem[];
-  riderName?: string | null;
-};
-
-type OrderDetailResponse = {
-  success: boolean;
-  data: OrderDetail;
-};
-
 export function AdminUserDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -156,6 +117,7 @@ export function AdminUserDetailPage(): ReactElement {
   // Filter & Pagination states for User Orders
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersStatusFilter, setOrdersStatusFilter] = useState<string>("ALL");
+  const [ordersViewMode, setOrdersViewMode] = useState<"table" | "cards">("table");
 
   // Consent Pagination & Accordion states
   const [consentPage, setConsentPage] = useState(1);
@@ -194,7 +156,7 @@ export function AdminUserDetailPage(): ReactElement {
       if (!api) throw new Error("API helper not initialized");
       const params = new URLSearchParams();
       params.set("page", String(ordersPage));
-      params.set("limit", "10");
+      params.set("limit", "20");
       if (ordersStatusFilter !== "ALL") {
         params.set("status", ordersStatusFilter);
       }
@@ -220,19 +182,6 @@ export function AdminUserDetailPage(): ReactElement {
     enabled: !!id
   });
 
-  // 4. Fetch Single Order Details (for modal)
-  const {
-    data: orderDetail,
-    isLoading: isOrderDetailLoading
-  } = useQuery<OrderDetail>({
-    queryKey: ["admin", "orders", selectedOrderId],
-    queryFn: async () => {
-      if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<OrderDetailResponse>(`/api/v1/admin/orders/${selectedOrderId}`);
-      return res.data.data;
-    },
-    enabled: !!selectedOrderId
-  });
 
   // Suspend / Unsuspend Mutation
   const toggleSuspendMutation = useMutation({
@@ -456,40 +405,73 @@ export function AdminUserDetailPage(): ReactElement {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <label htmlFor="user-orders-status-filter" className="text-xs font-bold text-gorola-slate">
-              Status:
-            </label>
-            <select
-              id="user-orders-status-filter"
-              value={ordersStatusFilter}
-              onChange={(e) => {
-                setOrdersStatusFilter(e.target.value);
-                setOrdersPage(1);
-              }}
-              data-testid="user-orders-status-filter"
-              className="px-3 py-1.5 bg-gorola-mint/10 border border-gorola-mint/20 text-xs font-black text-gorola-charcoal rounded-xl focus:outline-none focus:ring-2 focus:ring-gorola-pine/20"
-            >
-              <option value="ALL">All Statuses</option>
-              <option value="PLACED">Placed</option>
-              <option value="CONFIRMED">Confirmed</option>
-              <option value="PREPARING">Preparing</option>
-              <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
-              <option value="DELIVERED">Delivered</option>
-              <option value="COMPLETED">Completed</option>
-              <option value="CANCELLED">Cancelled</option>
-            </select>
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle */}
+            <div className="flex items-center p-0.5 bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl">
+              <button
+                type="button"
+                data-testid="user-orders-view-table"
+                onClick={() => setOrdersViewMode("table")}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  ordersViewMode === "table"
+                    ? "bg-white text-gorola-charcoal shadow-xs"
+                    : "text-gorola-slate hover:text-gorola-charcoal"
+                }`}
+                title="Table view"
+              >
+                <Table2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline text-[11px]">Table</span>
+              </button>
+              <button
+                type="button"
+                data-testid="user-orders-view-cards"
+                onClick={() => setOrdersViewMode("cards")}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  ordersViewMode === "cards"
+                    ? "bg-white text-gorola-charcoal shadow-xs"
+                    : "text-gorola-slate hover:text-gorola-charcoal"
+                }`}
+                title="Cards view"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline text-[11px]">Cards</span>
+              </button>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <label htmlFor="user-orders-status-filter" className="text-xs font-bold text-gorola-slate">
+                Status:
+              </label>
+              <select
+                id="user-orders-status-filter"
+                value={ordersStatusFilter}
+                onChange={(e) => {
+                  setOrdersStatusFilter(e.target.value);
+                  setOrdersPage(1);
+                }}
+                data-testid="user-orders-status-filter"
+                className="px-3 py-1.5 bg-gorola-mint/10 border border-gorola-mint/20 text-xs font-black text-gorola-charcoal rounded-xl focus:outline-none focus:ring-2 focus:ring-gorola-pine/20"
+              >
+                <option value="ALL">All Statuses</option>
+                <option value="PLACED">Placed</option>
+                <option value="CONFIRMED">Confirmed</option>
+                <option value="PREPARING">Preparing</option>
+                <option value="OUT_FOR_DELIVERY">Out for Delivery / On The Way</option>
+                <option value="DELIVERED">Delivered / Completed</option>
+                <option value="CANCELLED">Cancelled</option>
+              </select>
+            </div>
           </div>
         </div>
 
-        {/* Orders Table */}
+        {/* Orders Table or Cards */}
         {isOrdersLoading ? (
           <div className="p-8 text-center text-xs text-gorola-slate animate-pulse">Loading orders...</div>
         ) : !ordersData || ordersData.items.length === 0 ? (
           <div className="p-8 text-center text-xs text-gorola-slate bg-gorola-mint/5 rounded-2xl" data-testid="user-no-orders">
             No orders found matching the selected criteria.
           </div>
-        ) : (
+        ) : ordersViewMode === "table" ? (
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse" data-testid="user-orders-table">
               <thead>
@@ -526,15 +508,11 @@ export function AdminUserDetailPage(): ReactElement {
                     </td>
                     <td className="py-3 px-4">
                       <span
-                        className={`px-2.5 py-1 text-[10px] font-black tracking-wider uppercase rounded-full ${
-                          order.status === "DELIVERED" || order.status === "COMPLETED"
-                            ? "bg-emerald-100 text-emerald-800"
-                            : order.status === "CANCELLED"
-                            ? "bg-red-100 text-red-800"
-                            : "bg-amber-100 text-amber-800"
-                        }`}
+                        className={`inline-flex px-2.5 py-1 text-[10px] font-black tracking-wider uppercase rounded-full border ${getStatusBadgeClasses(
+                          order.status
+                        )}`}
                       >
-                        {order.status}
+                        {formatStatusLabel(order.status, order.orderType)}
                       </span>
                     </td>
                     <td className="py-3 px-4 text-gorola-slate">
@@ -558,31 +536,106 @@ export function AdminUserDetailPage(): ReactElement {
                 ))}
               </tbody>
             </table>
-
-            {/* Pagination Controls */}
-            {ordersData.totalPages > 1 && (
-              <div className="flex items-center justify-between pt-4 border-t border-gorola-charcoal/10">
-                <p className="text-xs text-gorola-slate">
-                  Page {ordersData.page} of {ordersData.totalPages}
-                </p>
-                <div className="flex items-center gap-2">
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="user-orders-cards">
+            {ordersData.items.map((order) => (
+              <div
+                key={order.id}
+                data-testid={`user-order-card-${order.id}`}
+                className="bg-white border border-gorola-charcoal/10 rounded-2xl p-4 shadow-sm hover:border-gorola-pine/30 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 border-b border-gorola-charcoal/5 pb-2.5">
+                    <div>
+                      <p className="font-mono font-bold text-xs text-gorola-charcoal">
+                        #{order.id.slice(0, 8)}...
+                      </p>
+                      <p className="text-[11px] text-gorola-slate mt-0.5">
+                        {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <span
+                        className={`inline-flex px-2 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-full border ${getStatusBadgeClasses(
+                          order.status
+                        )}`}
+                      >
+                        {formatStatusLabel(order.status, order.orderType)}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 text-[9px] font-black uppercase tracking-wider rounded-md ${
+                          order.orderType === "BOOKING"
+                            ? "bg-purple-100 text-purple-800"
+                            : "bg-blue-100 text-blue-800"
+                        }`}
+                      >
+                        {order.orderType}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-3 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Store:</span>
+                      <span className="font-bold text-gorola-charcoal truncate max-w-[150px]">{order.storeName}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Items:</span>
+                      <span className="font-semibold text-gorola-charcoal">{order.itemsCount} items</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Total:</span>
+                      <span className="font-black text-gorola-charcoal">{formatCurrency(order.total)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-gorola-charcoal/5 flex items-center justify-end">
                   <button
-                    disabled={ordersPage <= 1}
-                    onClick={() => setOrdersPage((p) => Math.max(1, p - 1))}
-                    className="p-2 rounded-xl border border-gorola-charcoal/10 disabled:opacity-40 hover:bg-gorola-mint/10 transition-colors"
+                    onClick={() => setSelectedOrderId(order.id)}
+                    data-testid={`card-view-user-order-${order.id}`}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gorola-pine/10 text-gorola-pine text-xs font-bold rounded-xl hover:bg-gorola-pine hover:text-white transition-all shadow-sm"
                   >
-                    <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
-                  </button>
-                  <button
-                    disabled={ordersPage >= ordersData.totalPages}
-                    onClick={() => setOrdersPage((p) => p + 1)}
-                    className="p-2 rounded-xl border border-gorola-charcoal/10 disabled:opacity-40 hover:bg-gorola-mint/10 transition-colors"
-                  >
-                    <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+                    <Eye className="h-3.5 w-3.5" />
+                    <span>Details</span>
                   </button>
                 </div>
               </div>
-            )}
+            ))}
+          </div>
+        )}
+
+        {/* Persistent Pagination Controls */}
+        {ordersData && (
+          <div
+            data-testid="user-orders-pagination"
+            className="flex items-center justify-between pt-4 border-t border-gorola-charcoal/10"
+          >
+            <p className="text-xs text-gorola-slate">
+              Page <span className="font-bold text-gorola-charcoal">{ordersData.page}</span> of{" "}
+              <span className="font-bold text-gorola-charcoal">{ordersData.totalPages}</span> ({ordersData.total} total)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                disabled={ordersPage <= 1}
+                onClick={() => setOrdersPage((p) => Math.max(1, p - 1))}
+                data-testid="user-orders-pagination-prev"
+                className="p-2 rounded-xl border border-gorola-charcoal/10 disabled:opacity-40 hover:bg-gorola-mint/10 transition-colors"
+              >
+                <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+              <button
+                disabled={ordersPage >= ordersData.totalPages}
+                onClick={() => setOrdersPage((p) => p + 1)}
+                data-testid="user-orders-pagination-next"
+                className="p-2 rounded-xl border border-gorola-charcoal/10 disabled:opacity-40 hover:bg-gorola-mint/10 transition-colors"
+              >
+                <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -747,8 +800,8 @@ export function AdminUserDetailPage(): ReactElement {
 
       {/* Suspend / Unsuspend Confirmation Modal */}
       {confirmStatusModalOpen && (
-        <div className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+        <div data-lenis-prevent className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain">
+          <div data-lenis-prevent className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 overscroll-contain animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-black text-gorola-charcoal">
               {user.isActive ? "Suspend User Account?" : "Unsuspend User Account?"}
             </h3>
@@ -789,183 +842,11 @@ export function AdminUserDetailPage(): ReactElement {
       )}
 
       {/* Order Details Modal (when clicked from orders table) */}
-      {selectedOrderId && (
-        <div
-          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-in fade-in duration-200"
-          data-testid="user-order-details-modal"
-        >
-          <div className="bg-white rounded-3xl w-full max-w-2xl max-h-[85vh] overflow-y-auto shadow-2xl p-6 md:p-8 space-y-6 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-gorola-charcoal/10 pb-4">
-              <div className="space-y-1">
-                <span
-                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${
-                    orderDetail?.status === "DELIVERED" || orderDetail?.status === "COMPLETED"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : orderDetail?.status === "CANCELLED"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {orderDetail?.status || "LOADING..."}
-                </span>
-                <h2 className="text-xl font-black text-gorola-charcoal font-mono">
-                  #{selectedOrderId}
-                </h2>
-                {orderDetail && (
-                  <p className="text-xs text-gorola-slate">
-                    Placed on: {new Date(orderDetail.createdAt).toLocaleString("en-IN")}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOrderId(null)}
-                className="p-2 rounded-full hover:bg-gorola-charcoal/5 text-gorola-slate hover:text-gorola-charcoal transition-colors"
-                aria-label="Close order details modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {isOrderDetailLoading || !orderDetail ? (
-              <div className="h-64 flex flex-col items-center justify-center space-y-4">
-                <RefreshCw className="h-8 w-8 text-gorola-pine animate-spin" />
-                <span className="text-sm text-gorola-slate">Retrieving detailed records...</span>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Information & Timeline */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                      Information
-                    </h3>
-                    <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <ShoppingBag className="h-4 w-4 text-gorola-slate" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Store</p>
-                          <p className="text-xs font-black text-gorola-charcoal">{orderDetail.store.name}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <Phone className="h-4 w-4 text-gorola-slate" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Buyer Contact</p>
-                          <p className="text-xs font-black text-gorola-charcoal">{orderDetail.buyerMaskedPhone}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <MapPin className="h-4 w-4 text-gorola-slate mt-0.5" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Delivery Address</p>
-                          <p className="text-xs font-black text-gorola-charcoal">
-                            {orderDetail.flatRoom ? `${orderDetail.flatRoom}, ` : ""}
-                            {orderDetail.landmarkDescription}
-                          </p>
-                        </div>
-                      </div>
-
-                      {orderDetail.riderName && (
-                        <div className="flex items-center gap-3">
-                          <User className="h-4 w-4 text-gorola-slate" />
-                          <div>
-                            <p className="text-[10px] text-gorola-slate font-bold">Assigned Rider</p>
-                            <p className="text-xs font-black text-gorola-charcoal">{orderDetail.riderName}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Audit Timeline */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                      Audit Timeline
-                    </h3>
-                    <div className="relative pl-6 space-y-4 border-l border-gorola-mint/15">
-                      {orderDetail.statusHistory?.map((hist, idx) => (
-                        <div key={hist.id} className="relative">
-                          <span
-                            className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full ${
-                              idx === orderDetail.statusHistory.length - 1
-                                ? "bg-gorola-pine scale-125"
-                                : "bg-gorola-mint"
-                            }`}
-                          />
-                          <p className="text-xs font-black text-gorola-charcoal">
-                            {hist.note?.toLowerCase().includes("accepted by")
-                              ? (orderDetail.orderType === "BOOKING" ? "Booking Accepted" : "Order Accepted")
-                              : hist.status}
-                          </p>
-                          <p className="text-[10px] text-gorola-slate mt-0.5">
-                            By {hist.changedBy} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
-                            {hist.note && !hist.note.toLowerCase().includes("accepted by") && !hist.note.toLowerCase().startsWith("order placed") && ` - ${hist.note}`}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Items Breakdown */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                    Items Breakdown
-                  </h3>
-                  <div className="border border-gorola-charcoal/10 rounded-2xl overflow-hidden bg-white">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15 text-xs font-black text-gorola-charcoal uppercase">
-                          <th className="p-3">Product</th>
-                          <th className="p-3 text-center">Qty</th>
-                          <th className="p-3 text-right">Price</th>
-                          <th className="p-3 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-xs">
-                        {orderDetail.items.map((item) => (
-                          <tr key={item.id} className="border-b border-gorola-charcoal/5 last:border-0">
-                            <td className="p-3">
-                              <p className="font-black text-gorola-charcoal">{item.productName}</p>
-                              <p className="text-[10px] text-gorola-slate">{item.variantLabel}</p>
-                            </td>
-                            <td className="p-3 text-center font-bold text-gorola-charcoal">{item.quantity}</td>
-                            <td className="p-3 text-right text-gorola-slate font-medium">
-                              {formatCurrency(Number(item.price))}
-                            </td>
-                            <td className="p-3 text-right font-black text-gorola-charcoal">
-                              {formatCurrency(Number(item.price) * item.quantity)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Grand Total Bar */}
-                <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex flex-col gap-2">
-                  <div className="flex justify-between items-center text-xs text-gorola-slate">
-                    <span>Subtotal</span>
-                    <span className="font-semibold">{formatCurrency(orderDetail.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gorola-slate">
-                    <span>Delivery Fee</span>
-                    <span className="font-semibold">{formatCurrency(orderDetail.deliveryFee)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal border-t border-gorola-charcoal/5 pt-2">
-                    <span>Grand Total</span>
-                    <span>{formatCurrency(orderDetail.total)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      <AdminOrderDetailModal
+        orderId={selectedOrderId}
+        onClose={() => setSelectedOrderId(null)}
+        dataTestId="user-order-details-modal"
+      />
 
       {user && (
         <EraseUnderageModal

@@ -447,4 +447,83 @@ describe("RiderOrdersPage", () => {
     expect(acceptedBtn).toBeInTheDocument();
     expect(acceptedBtn).toBeDisabled();
   });
+
+  it("renders compact delivery note pill on card feed when delivery note is present", async () => {
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: [
+          {
+            id: "order-note-1",
+            status: "PREPARING",
+            buyerMaskedPhone: "*********3210",
+            storeName: "Hillside Mart",
+            deliveryAddress: {
+              landmark: "Near clock tower",
+              flatRoom: "Flat 4B",
+              deliveryNote: "Ring bell twice, baby sleeping",
+              lat: 30.123,
+              lng: 78.123
+            },
+            items: [{ productName: "Milk", variantLabel: "1L", quantity: 1 }],
+            createdAt: new Date().toISOString()
+          }
+        ]
+      }
+    });
+
+    renderRiderOrders();
+
+    const compactPill = await screen.findByTestId("rider-compact-delivery-note");
+    expect(compactPill).toBeInTheDocument();
+    expect(compactPill).toHaveTextContent("Note: Ring bell twice, baby sleeping");
+  });
+
+  it("renders technician service instructions badge in detail modal", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/profile")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: "rider-123",
+              riderType: "FIELD_TECHNICIAN"
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: [
+            {
+              id: "booking-tech-1",
+              status: "PREPARING",
+              orderType: "BOOKING",
+              buyerMaskedPhone: "*********4321",
+              deliveryAddress: {
+                landmark: "Near hospital",
+                flatRoom: "House 12",
+                deliveryNote: "Patient fasting required"
+              },
+              bookingOrder: {
+                timeslot: "09:00 AM - 10:00 AM",
+                requiresFasting: true
+              },
+              items: [{ productName: "Blood Sugar Test", variantLabel: "Standard", quantity: 1 }],
+              createdAt: new Date().toISOString()
+            }
+          ]
+        }
+      });
+    });
+
+    renderRiderOrders();
+
+    fireEvent.click(await screen.findByTestId("booking-order-card"));
+
+    const badge = await screen.findByTestId("rider-service-instructions-badge");
+    expect(badge).toBeInTheDocument();
+    expect(badge).toHaveTextContent("Service Instructions: Patient fasting required");
+  });
 });

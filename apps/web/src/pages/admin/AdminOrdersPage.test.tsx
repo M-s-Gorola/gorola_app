@@ -107,7 +107,7 @@ describe("AdminOrdersPage", () => {
     expect(screen.getByText("Rider Bob")).toBeInTheDocument();
     expect(screen.getByText("3")).toBeInTheDocument();
     expect(screen.getByText("₹250.00")).toBeInTheDocument();
-    expect(screen.getByText("PLACED")).toBeInTheDocument();
+    expect(screen.getAllByText("Placed")).toHaveLength(2);
 
     // Mock detail route response when clicking row
     const mockDetailData = {
@@ -274,5 +274,372 @@ describe("AdminOrdersPage", () => {
     expect(within(modal).getByText(/By Buyer \(Registered User\)/)).toBeInTheDocument();
     expect(within(modal).getByText(/By Store Owner \(Dairy Plaza\)/)).toBeInTheDocument();
   });
+
+  it("renders 'Service Fee' for BOOKING orders and 'Delivery Fee' for QUICK orders in detail modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-booking-admin",
+            buyerMaskedPhone: "******9001",
+            storeName: "GoRola Repairs",
+            itemsCount: 1,
+            total: 350.0,
+            status: "PLACED",
+            orderType: "BOOKING",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-repair", name: "GoRola Repairs" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-booking-admin",
+        status: "PLACED",
+        orderType: "BOOKING",
+        subtotal: 300.0,
+        deliveryFee: 50.0,
+        total: 350.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Clock Tower",
+        flatRoom: "Flat 101",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "Alice", phone: "+919999999001" },
+        store: { name: "GoRola Repairs", phone: "+91000" },
+        items: [
+          { id: "item-1", productName: "Plumbing Service", variantLabel: "Standard", price: 300.0, quantity: 1 }
+        ],
+        statusHistory: []
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-booking-admin")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-booking-admin"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders promotional offer and discount breakdown lines in admin order details modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-promo-admin",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 1,
+            total: 200.0,
+            status: "PLACED",
+            orderType: "QUICK",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-1", name: "Dairy Plaza" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-promo-admin",
+        status: "PLACED",
+        orderType: "QUICK",
+        subtotal: 220.0,
+        deliveryFee: 30.0,
+        total: 200.0,
+        discountSavingAmount: 20.0,
+        offerSavingAmount: 30.0,
+        appliedOfferTitle: "Mega Summer Deal",
+        appliedDiscountCode: "PROMO20",
+        paymentMethod: "COD",
+        landmarkDescription: "Clock Tower",
+        flatRoom: "Flat 101",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "Alice", phone: "+919999999001" },
+        store: { name: "Dairy Plaza", phone: "+91000" },
+        items: [{ id: "item-1", productName: "Milk", variantLabel: "1L", price: 220.0, quantity: 1 }],
+        statusHistory: []
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-promo-admin")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-promo-admin"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    const discountSummary = await within(modal).findByTestId("admin-order-discount");
+    expect(discountSummary).toBeInTheDocument();
+    expect(within(discountSummary).getByText("Total Discount:")).toBeInTheDocument();
+    expect(within(discountSummary).getByText("-Rs 50.00")).toBeInTheDocument();
+
+    // Breakdown list is initially hidden
+    expect(within(modal).queryByTestId("admin-order-discount-list")).not.toBeInTheDocument();
+
+    // Click toggle button to expand dropdown
+    const toggle = within(modal).getByTestId("admin-order-discount-toggle");
+    fireEvent.click(toggle);
+
+    // Now breakdown items are visible
+    expect(within(modal).getByTestId("admin-order-discount-list")).toBeInTheDocument();
+    expect(within(modal).getByText(/• Store Offer \(Mega Summer Deal\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/• Discount Code \(PROMO20\)/)).toBeInTheDocument();
+
+    // Click again to collapse
+    fireEvent.click(toggle);
+    expect(within(modal).queryByTestId("admin-order-discount-list")).not.toBeInTheDocument();
+  });
+
+  it("displays delivery note callout badge in order details modal when deliveryNote is present", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-note-admin",
+            userId: "u1",
+            storeId: "store-1",
+            storeName: "Dairy Plaza",
+            buyerMaskedPhone: "******9001",
+            buyerName: "Alice",
+            status: "PLACED",
+            total: 200.0,
+            itemCount: 1,
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-1", name: "Dairy Plaza" }]
+      }
+    };
+
+    const mockDetailData = {
+      success: true,
+      data: {
+        id: "order-note-admin",
+        status: "PLACED",
+        orderType: "QUICK",
+        subtotal: 200.0,
+        deliveryFee: 30.0,
+        total: 230.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Clock Tower",
+        flatRoom: "Flat 101",
+        deliveryNote: "Call before delivering",
+        createdAt: "2026-06-04T12:00:00.000Z",
+        buyerMaskedPhone: "******9001",
+        user: { name: "Alice", phone: "+919999999001" },
+        store: { name: "Dairy Plaza", phone: "+91000" },
+        items: [{ id: "item-1", productName: "Milk", variantLabel: "1L", price: 200.0, quantity: 1 }],
+        statusHistory: []
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({ data: mockDetailData });
+
+    renderAdminOrders();
+
+    expect(await screen.findByTestId("view-details-order-note-admin")).toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("view-details-order-note-admin"));
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    const noteBadge = await screen.findByTestId("admin-order-delivery-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Delivery Note: Call before delivering");
+  });
+
+  it("renders booking status terminology 'On The Way' and consistent pill classes in table", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-booking-ontheway",
+            buyerMaskedPhone: "******9001",
+            storeName: "Clean Pro",
+            itemsCount: 1,
+            total: 500.0,
+            status: "OUT_FOR_DELIVERY",
+            orderType: "BOOKING",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        nextCursor: null,
+        stores: [{ id: "store-clean", name: "Clean Pro" }]
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+
+    renderAdminOrders();
+
+    expect(await screen.findAllByText("Clean Pro")).toHaveLength(2);
+    const statusPill = screen.getByText("On The Way");
+    expect(statusPill).toBeInTheDocument();
+    expect(statusPill.className).toContain("bg-blue-50 text-blue-800");
+  });
+
+  it("displays renamed status filter options including On The Way and Completed for bookings", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          items: [],
+          nextCursor: null,
+          stores: []
+        }
+      }
+    });
+
+    renderAdminOrders();
+
+    const statusSelect = await screen.findByTestId("filter-status-select");
+    const options = within(statusSelect).getAllByRole("option");
+    const outForDeliveryOption = options.find((opt) => opt.getAttribute("value") === "OUT_FOR_DELIVERY");
+    const deliveredOption = options.find((opt) => opt.getAttribute("value") === "DELIVERED");
+
+    expect(outForDeliveryOption).toHaveTextContent("Out for Delivery / On The Way");
+    expect(deliveredOption).toHaveTextContent("Delivered / Completed");
+  });
+
+  it("supports switching between Table and Cards view mode and opens details modal from card", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-card-1",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 2,
+            total: 250.0,
+            status: "PLACED",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        stores: [{ id: "store-1", name: "Dairy Plaza" }],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          id: "order-card-1",
+          status: "PLACED",
+          orderType: "QUICK",
+          subtotal: 220.0,
+          deliveryFee: 30.0,
+          total: 250.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near Market",
+          flatRoom: "Flat 2",
+          createdAt: "2026-06-04T12:00:00.000Z",
+          buyerMaskedPhone: "******9001",
+          user: { name: "Buyer User", phone: "+919999999001" },
+          store: { name: "Dairy Plaza", phone: "+91000" },
+          items: [{ id: "item-1", productName: "Cheese", variantLabel: "200g", price: 220.0, quantity: 1 }],
+          statusHistory: []
+        }
+      }
+    });
+
+    renderAdminOrders();
+
+    // Default view is table
+    expect(await screen.findByTestId("admin-orders-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-orders-cards")).not.toBeInTheDocument();
+
+    // Toggle to cards view
+    const cardsToggle = screen.getByTestId("view-mode-cards");
+    fireEvent.click(cardsToggle);
+
+    // Cards view is now visible
+    expect(await screen.findByTestId("admin-orders-cards")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-orders-table")).not.toBeInTheDocument();
+
+    // Open detail modal from card
+    const cardViewDetailsBtn = screen.getByTestId("card-view-details-order-card-1");
+    fireEvent.click(cardViewDetailsBtn);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Buyer User")).toBeInTheDocument();
+  });
+
+  it("always displays persistent pagination bar even when total <= 20", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-single-1",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 1,
+            total: 100.0,
+            status: "PLACED",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        stores: [{ id: "store-1", name: "Dairy Plaza" }],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+
+    renderAdminOrders();
+
+    const paginationBar = await screen.findByTestId("admin-orders-pagination");
+    expect(paginationBar).toBeInTheDocument();
+    expect(paginationBar).toHaveTextContent(/showing page 1 of 1 \(1 orders\)/i);
+
+    const prevBtn = screen.getByTestId("pagination-prev-btn");
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(prevBtn).toBeDisabled();
+    expect(nextBtn).toBeDisabled();
+  });
 });
+
+
 

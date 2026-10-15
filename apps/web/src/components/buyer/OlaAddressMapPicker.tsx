@@ -447,7 +447,10 @@ export function OlaAddressMapPicker({
           </div>
         )}
         {suggestions.length > 0 && (
-          <ul className="absolute left-0 mt-1 max-h-48 w-full overflow-y-auto rounded-lg border border-gorola-pine/10 bg-gorola-fog shadow-lg z-20">
+          <ul
+            data-lenis-prevent
+            className="absolute left-0 mt-1 max-h-48 w-full overflow-y-auto overscroll-contain rounded-lg border border-gorola-pine/10 bg-gorola-fog shadow-lg z-20"
+          >
             {suggestions.map((item, idx) => (
               <li
                 key={item.place_id}

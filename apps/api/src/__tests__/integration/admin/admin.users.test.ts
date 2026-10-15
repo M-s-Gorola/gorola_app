@@ -151,9 +151,9 @@ describe("Admin Users Integration Tests", () => {
     expect(resAll.statusCode).toBe(200);
     const bodyAll = resAll.json();
     expect(bodyAll.success).toBe(true);
-    expect(bodyAll.data.length).toBe(2);
+    expect((bodyAll.data.items ?? bodyAll.data).length).toBe(2);
 
-    const match1 = (bodyAll.data as Array<{ id: string; name: string; maskedPhone: string; orderCount: number; totalSpent: number; isActive: boolean }>).find((u) => u.id === buyer1.id);
+    const match1 = ((bodyAll.data.items ?? bodyAll.data) as Array<{ id: string; name: string; maskedPhone: string; orderCount: number; totalSpent: number; isActive: boolean }>).find((u) => u.id === buyer1.id);
     expect(match1).toBeDefined();
     expect(match1?.name).toBe("Abhishek Sharma");
     expect(match1?.maskedPhone).toBe("*********3210");
@@ -169,8 +169,8 @@ describe("Admin Users Integration Tests", () => {
     });
     expect(resFiltered.statusCode).toBe(200);
     const bodyFiltered = resFiltered.json();
-    expect(bodyFiltered.data.length).toBe(1);
-    expect(bodyFiltered.data[0].id).toBe(buyer2.id);
+    expect((bodyFiltered.data.items ?? bodyFiltered.data).length).toBe(1);
+    expect((bodyFiltered.data.items ?? bodyFiltered.data)[0].id).toBe(buyer2.id);
 
     // Test: GET single user details
     const resDetail = await server.inject({

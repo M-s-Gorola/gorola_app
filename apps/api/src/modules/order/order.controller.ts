@@ -71,6 +71,10 @@ function serializeOrderResponse(
     scheduledFor: order.scheduledFor?.toISOString() ?? null,
 
     status: order.status,
+    discountSavingAmount: order.discountSavingAmount ? order.discountSavingAmount.toString() : null,
+    offerSavingAmount: order.offerSavingAmount ? order.offerSavingAmount.toString() : null,
+    appliedOfferTitle: order.appliedOfferTitle ?? null,
+    taxRate: order.taxRate ? order.taxRate.toString() : null,
     discount: {
       amount: discount.amount,
       code: discount.code,
@@ -112,6 +116,11 @@ function serializeOrderResponse(
 }
 
 function inferDiscountAmount(order: OrderWithRelations): string {
+  if (order.discountSavingAmount !== null || order.offerSavingAmount !== null) {
+    const d = Number(order.discountSavingAmount?.toString() ?? "0");
+    const o = Number(order.offerSavingAmount?.toString() ?? "0");
+    return (d + o).toFixed(2);
+  }
   const subtotalPlusDelivery = Number(order.subtotal.toString()) + Number(order.deliveryFee.toString());
   const total = Number(order.total.toString());
   return Math.max(subtotalPlusDelivery - total, 0).toFixed(2);
@@ -196,6 +205,11 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
     }
   );
 
+  const orderHistoryQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20)
+  });
+
   app.get(
     "/api/v1/orders/history",
     { preHandler: preCheckout },
@@ -204,11 +218,21 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       if (!buyerId) {
         throw new UnauthorizedError("Buyer subject missing");
       }
-      const orders = await deps.orders.findByUserId(buyerId);
+      const query = orderHistoryQuerySchema.parse(request.query);
+      const result = await deps.orders.findByUserId(buyerId, {
+        page: query.page,
+        limit: query.limit
+      });
       return success(request, reply, {
-        orders: orders.map((o) =>
+        orders: result.orders.map((o) =>
           serializeOrderResponse(o, { amount: inferDiscountAmount(o), code: o.appliedDiscountCode })
-        )
+        ),
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages
+        }
       });
     }
   );

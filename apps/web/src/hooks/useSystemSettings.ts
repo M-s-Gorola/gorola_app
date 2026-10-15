@@ -8,6 +8,10 @@ import { useAuthStore } from "@/store/auth.store";
 export type SystemSettingsMap = {
   DELIVERY_CHARGE: string;
   SERVICE_CHARGE: string;
+  GST_RATE?: string;
+  GST_NUMBER?: string;
+  RIDER_EARNING_RATE_PCT?: string;
+  TECHNICIAN_EARNING_RATE_PCT?: string;
 };
 
 export function useSystemSettings() {
@@ -21,7 +25,11 @@ export function useSystemSettings() {
     staleTime: 5 * 60 * 1000, // 5 minutes
     initialData: {
       DELIVERY_CHARGE: "30",
-      SERVICE_CHARGE: "0"
+      SERVICE_CHARGE: "0",
+      GST_RATE: "18.00",
+      GST_NUMBER: "",
+      RIDER_EARNING_RATE_PCT: "100",
+      TECHNICIAN_EARNING_RATE_PCT: "100"
     }
   });
 }

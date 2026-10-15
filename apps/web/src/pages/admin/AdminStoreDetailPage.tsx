@@ -6,22 +6,24 @@ import {
   ChevronLeft,
   ChevronRight,
   Layers,
+  LayoutGrid,
   MapPin,
   Phone,
   RefreshCw,
   ShoppingBag,
+  Table2,
   TrendingUp,
-  Truck,
   User,
-  X,
 } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { toast } from "sonner";
 
+import { AdminOrderDetailModal } from "@/components/admin/AdminOrderDetailModal";
 import { api } from "@/lib/api";
 import { getScopedPath, resolveSubdomain } from "@/lib/subdomain-resolver";
+import { formatCurrency, formatStatusLabel, getStatusBadgeClasses } from "@/lib/utils";
 
 type StoreOwnerItem = {
   id: string;
@@ -76,37 +78,6 @@ type PaginatedStoreOrdersResponse = {
   totalPages: number;
 };
 
-type OrderDetailResponse = {
-  id: string;
-  status: string;
-  orderType: "QUICK" | "BOOKING";
-  subtotal: number;
-  deliveryFee: number;
-  total: number;
-  paymentMethod: string;
-  landmarkDescription: string;
-  flatRoom?: string | null;
-  createdAt: string;
-  buyerMaskedPhone: string;
-  user?: { name?: string | null; phone?: string | null };
-  store: { name: string; phone?: string };
-  items: {
-    id: string;
-    productName: string;
-    variantLabel: string;
-    price: number;
-    quantity: number;
-  }[];
-  statusHistory?: {
-    id: string;
-    status: string;
-    note?: string | null;
-    changedBy: string;
-    changedAt: string;
-  }[];
-  riderName?: string | null;
-};
-
 export function AdminStoreDetailPage(): ReactElement {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -118,6 +89,7 @@ export function AdminStoreDetailPage(): ReactElement {
   // Orders Pagination & Filter State
   const [ordersPage, setOrdersPage] = useState(1);
   const [ordersStatusFilter, setOrdersStatusFilter] = useState<string>("");
+  const [ordersViewMode, setOrdersViewMode] = useState<"table" | "cards">("table");
 
   // Modal State
   const [selectedOrderId, setSelectedOrderId] = useState<string | null>(null);
@@ -144,7 +116,7 @@ export function AdminStoreDetailPage(): ReactElement {
       if (!api) throw new Error("API helper not initialized");
       const params = new URLSearchParams({
         page: String(ordersPage),
-        limit: "10"
+        limit: "20"
       });
       if (ordersStatusFilter) {
         params.append("status", ordersStatusFilter);
@@ -156,23 +128,6 @@ export function AdminStoreDetailPage(): ReactElement {
     },
     enabled: Boolean(id),
     staleTime: 5000
-  });
-
-  // Fetch Specific Order Details for Modal Breakdown
-  const {
-    data: orderDetail,
-    isLoading: isOrderDetailLoading
-  } = useQuery<OrderDetailResponse>({
-    queryKey: ["admin", "order-detail", selectedOrderId],
-    queryFn: async () => {
-      if (!api || !selectedOrderId) throw new Error("API or Order ID not set");
-      const res = await api.get<{ success: boolean; data: OrderDetailResponse }>(
-        `/api/v1/admin/orders/${selectedOrderId}`
-      );
-      return res.data.data;
-    },
-    enabled: Boolean(selectedOrderId),
-    staleTime: 10000
   });
 
   useEffect(() => {
@@ -197,13 +152,6 @@ export function AdminStoreDetailPage(): ReactElement {
       toast.error("Failed to update store rider earning rate");
     }
   });
-
-  const formatCurrency = (val: number): string => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR"
-    }).format(val);
-  };
 
   if (isLoading) {
     return (
@@ -459,8 +407,39 @@ export function AdminStoreDetailPage(): ReactElement {
             )}
           </div>
 
-          {/* Status Filter & Refresh */}
+          {/* View Mode Toggle, Status Filter & Refresh */}
           <div className="flex items-center gap-3">
+            <div className="flex items-center p-0.5 bg-gorola-charcoal/5 border border-gorola-charcoal/10 rounded-xl">
+              <button
+                type="button"
+                data-testid="store-orders-view-table"
+                onClick={() => setOrdersViewMode("table")}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  ordersViewMode === "table"
+                    ? "bg-white text-gorola-charcoal shadow-xs"
+                    : "text-gorola-slate hover:text-gorola-charcoal"
+                }`}
+                title="Table view"
+              >
+                <Table2 className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline text-[11px]">Table</span>
+              </button>
+              <button
+                type="button"
+                data-testid="store-orders-view-cards"
+                onClick={() => setOrdersViewMode("cards")}
+                className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1 ${
+                  ordersViewMode === "cards"
+                    ? "bg-white text-gorola-charcoal shadow-xs"
+                    : "text-gorola-slate hover:text-gorola-charcoal"
+                }`}
+                title="Cards view"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline text-[11px]">Cards</span>
+              </button>
+            </div>
+
             <select
               value={ordersStatusFilter}
               onChange={(e) => {
@@ -472,8 +451,8 @@ export function AdminStoreDetailPage(): ReactElement {
               className="px-3 py-1.5 bg-white border border-gorola-charcoal/10 rounded-xl text-xs font-bold text-gorola-charcoal focus:outline-none focus:ring-2 focus:ring-gorola-pine/20"
             >
               <option value="">All Statuses</option>
-              <option value="DELIVERED">Delivered</option>
-              <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
+              <option value="OUT_FOR_DELIVERY">Out for Delivery / On The Way</option>
+              <option value="DELIVERED">Delivered / Completed</option>
               <option value="PREPARING">Preparing</option>
               <option value="PLACED">Placed</option>
               <option value="CANCELLED">Cancelled</option>
@@ -491,36 +470,32 @@ export function AdminStoreDetailPage(): ReactElement {
           </div>
         </div>
 
-        {/* Store Orders Table */}
-        <div className="overflow-x-auto" data-testid="store-orders-table">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gorola-charcoal/10 bg-gorola-charcoal/[0.02]">
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Order ID</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Customer</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Status</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Rider</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Items</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Total</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Date</th>
-                <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate text-right whitespace-nowrap">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gorola-charcoal/5">
-              {isOrdersLoading ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-xs text-gorola-slate">
-                    Loading store orders...
-                  </td>
+        {/* Store Orders Content */}
+        {isOrdersLoading ? (
+          <div className="p-8 text-center text-xs text-gorola-slate animate-pulse">
+            Loading store orders...
+          </div>
+        ) : !ordersData || ordersData.items.length === 0 ? (
+          <div className="p-8 text-center text-xs text-gorola-slate bg-gorola-mint/5 rounded-2xl" data-testid="store-no-orders">
+            No order records found for this store.
+          </div>
+        ) : ordersViewMode === "table" ? (
+          <div className="overflow-x-auto" data-testid="store-orders-table">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gorola-charcoal/10 bg-gorola-charcoal/[0.02]">
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Order ID</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Customer</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Status</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Rider</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Items</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Total</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate whitespace-nowrap">Date</th>
+                  <th className="p-3 text-[10px] font-black uppercase tracking-wider text-gorola-slate text-right whitespace-nowrap">Action</th>
                 </tr>
-              ) : !ordersData || ordersData.items.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="p-8 text-center text-xs text-gorola-slate">
-                    No order records found for this store.
-                  </td>
-                </tr>
-              ) : (
-                ordersData.items.map((order) => (
+              </thead>
+              <tbody className="divide-y divide-gorola-charcoal/5">
+                {ordersData.items.map((order) => (
                   <tr key={order.id} className="hover:bg-gorola-charcoal/[0.01] transition-colors">
                     <td className="p-3 font-mono font-bold text-xs text-gorola-charcoal whitespace-nowrap">
                       #{order.id.slice(-8).toUpperCase()}
@@ -531,15 +506,9 @@ export function AdminStoreDetailPage(): ReactElement {
                     </td>
                     <td className="p-3 whitespace-nowrap">
                       <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${
-                          order.status === "DELIVERED"
-                            ? "bg-emerald-100 text-emerald-800 border-emerald-200/50"
-                            : order.status === "CANCELLED"
-                            ? "bg-rose-100 text-rose-800 border-rose-200/50"
-                            : "bg-amber-100 text-amber-800 border-amber-200/50"
-                        }`}
+                        className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadgeClasses(order.status)}`}
                       >
-                        {order.status}
+                        {formatStatusLabel(order.status, order.orderType || store?.storeType)}
                       </span>
                     </td>
                     <td className="p-3 text-xs text-gorola-charcoal whitespace-nowrap font-medium">
@@ -569,24 +538,92 @@ export function AdminStoreDetailPage(): ReactElement {
                       </button>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" data-testid="store-orders-cards">
+            {ordersData.items.map((order) => (
+              <div
+                key={order.id}
+                data-testid={`store-order-card-${order.id}`}
+                className="bg-white border border-gorola-charcoal/10 rounded-2xl p-4 shadow-sm hover:border-gorola-pine/30 transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-start justify-between gap-2 border-b border-gorola-charcoal/5 pb-2.5">
+                    <div>
+                      <p className="font-mono font-bold text-xs text-gorola-charcoal">
+                        #{order.id.slice(-8).toUpperCase()}
+                      </p>
+                      <p className="text-[11px] text-gorola-slate mt-0.5">
+                        {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric"
+                        })}
+                      </p>
+                    </div>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadgeClasses(order.status)}`}
+                    >
+                      {formatStatusLabel(order.status, order.orderType || store?.storeType)}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1.5 text-xs">
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Customer:</span>
+                      <span className="font-bold text-gorola-charcoal truncate max-w-[150px]">{order.userName}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Phone:</span>
+                      <span className="font-mono text-gorola-charcoal">{order.userMaskedPhone}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Rider:</span>
+                      <span className="font-medium text-gorola-charcoal">{order.riderName || "—"}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Items:</span>
+                      <span className="font-semibold text-gorola-charcoal">{order.itemCount} items</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Total:</span>
+                      <span className="font-black text-gorola-charcoal">{formatCurrency(order.total)}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-gorola-charcoal/5 flex items-center justify-end">
+                  <button
+                    type="button"
+                    data-testid={`card-view-store-order-${order.id}`}
+                    onClick={() => setSelectedOrderId(order.id)}
+                    className="px-2.5 py-1 bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-lg text-xs font-bold text-gorola-pine shadow-sm transition-all"
+                  >
+                    View Details
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
 
-        {/* Pagination Controls */}
-        {ordersData && ordersData.totalPages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-gorola-charcoal/10">
+        {/* Persistent Pagination Controls */}
+        {ordersData && (
+          <div
+            data-testid="store-orders-pagination"
+            className="flex items-center justify-between pt-4 border-t border-gorola-charcoal/10"
+          >
             <p className="text-xs text-gorola-slate">
-              Showing page <span className="font-bold">{ordersData.page}</span> of{" "}
-              <span className="font-bold">{ordersData.totalPages}</span>
+              Showing page <span className="font-bold text-gorola-charcoal">{ordersData.page}</span> of{" "}
+              <span className="font-bold text-gorola-charcoal">{ordersData.totalPages}</span> ({ordersData.total} total)
             </p>
             <div className="flex items-center gap-2">
               <button
                 type="button"
                 disabled={ordersPage <= 1}
                 onClick={() => setOrdersPage((p) => Math.max(1, p - 1))}
+                data-testid="store-orders-pagination-prev"
                 className="p-1.5 border border-gorola-charcoal/10 rounded-lg text-gorola-slate hover:text-gorola-charcoal disabled:opacity-40"
               >
                 <ChevronLeft className="h-4 w-4" />
@@ -595,6 +632,7 @@ export function AdminStoreDetailPage(): ReactElement {
                 type="button"
                 disabled={ordersPage >= ordersData.totalPages}
                 onClick={() => setOrdersPage((p) => Math.min(ordersData.totalPages, p + 1))}
+                data-testid="store-orders-pagination-next"
                 className="p-1.5 border border-gorola-charcoal/10 rounded-lg text-gorola-slate hover:text-gorola-charcoal disabled:opacity-40"
               >
                 <ChevronRight className="h-4 w-4" />
@@ -606,190 +644,13 @@ export function AdminStoreDetailPage(): ReactElement {
 
       {/* Order Details Breakdown Modal */}
       {selectedOrderId && (
-        <div
-          data-testid="store-order-details-modal"
-          className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overflow-y-auto"
-        >
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-2xl w-full shadow-2xl space-y-6 my-8 animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between border-b border-gorola-charcoal/10 pb-4">
-              <div className="space-y-1">
-                <span
-                  className={`px-3 py-1 text-[10px] font-black uppercase tracking-wider rounded-full ${
-                    orderDetail?.status === "DELIVERED"
-                      ? "bg-emerald-100 text-emerald-800"
-                      : orderDetail?.status === "CANCELLED"
-                      ? "bg-red-100 text-red-800"
-                      : "bg-amber-100 text-amber-800"
-                  }`}
-                >
-                  {orderDetail?.status || "LOADING..."}
-                </span>
-                <h2 className="text-xl font-black text-gorola-charcoal font-mono">
-                  #{selectedOrderId}
-                </h2>
-                {orderDetail && (
-                  <p className="text-xs text-gorola-slate">
-                    Placed on: {new Date(orderDetail.createdAt).toLocaleString("en-IN")}
-                  </p>
-                )}
-              </div>
-              <button
-                type="button"
-                onClick={() => setSelectedOrderId(null)}
-                className="p-2 rounded-full hover:bg-gorola-charcoal/5 text-gorola-slate hover:text-gorola-charcoal transition-colors"
-                aria-label="Close order details modal"
-              >
-                <X className="h-5 w-5" />
-              </button>
-            </div>
-
-            {isOrderDetailLoading || !orderDetail ? (
-              <div className="h-64 flex flex-col items-center justify-center space-y-4">
-                <RefreshCw className="h-8 w-8 text-gorola-pine animate-spin" />
-                <span className="text-sm text-gorola-slate">Retrieving detailed records...</span>
-              </div>
-            ) : (
-              <div className="space-y-6">
-                {/* Information & Timeline */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                      Information
-                    </h3>
-                    <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 space-y-3">
-                      <div className="flex items-center gap-3">
-                        <ShoppingBag className="h-4 w-4 text-gorola-slate" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Store</p>
-                          <p className="text-xs font-black text-gorola-charcoal">{orderDetail.store.name}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <User className="h-4 w-4 text-gorola-slate" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Buyer Profile</p>
-                          <p className="text-xs font-black text-gorola-charcoal">
-                            {orderDetail.user?.name?.trim() || "Registered User"}
-                          </p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-3">
-                        <Phone className="h-4 w-4 text-gorola-slate" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Buyer Contact</p>
-                          <p className="text-xs font-black text-gorola-charcoal">{orderDetail.buyerMaskedPhone}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-start gap-3">
-                        <MapPin className="h-4 w-4 text-gorola-slate mt-0.5" />
-                        <div>
-                          <p className="text-[10px] text-gorola-slate font-bold">Delivery Address</p>
-                          <p className="text-xs font-black text-gorola-charcoal">
-                            {orderDetail.flatRoom ? `${orderDetail.flatRoom}, ` : ""}
-                            {orderDetail.landmarkDescription}
-                          </p>
-                        </div>
-                      </div>
-
-                      {orderDetail.riderName && (
-                        <div className="flex items-center gap-3">
-                          <Truck className="h-4 w-4 text-gorola-slate" />
-                          <div>
-                            <p className="text-[10px] text-gorola-slate font-bold">Assigned Rider</p>
-                            <p className="text-xs font-black text-gorola-charcoal">{orderDetail.riderName}</p>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Audit Timeline */}
-                  <div className="space-y-4">
-                    <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                      Audit Timeline
-                    </h3>
-                    <div className="relative pl-6 space-y-4 border-l border-gorola-mint/15">
-                      {orderDetail.statusHistory?.map((hist, idx) => (
-                        <div key={hist.id} className="relative">
-                          <span
-                            className={`absolute -left-[31px] top-1.5 h-2.5 w-2.5 rounded-full ${
-                              idx === orderDetail.statusHistory!.length - 1
-                                ? "bg-gorola-pine scale-125"
-                                : "bg-gorola-mint"
-                            }`}
-                          />
-                          <p className="text-xs font-black text-gorola-charcoal">
-                            {hist.note?.toLowerCase().includes("accepted by")
-                              ? (orderDetail.orderType === "BOOKING" ? "Booking Accepted" : "Order Accepted")
-                              : hist.status}
-                          </p>
-                          <p className="text-[10px] text-gorola-slate mt-0.5">
-                            By {hist.changedBy} at {new Date(hist.changedAt).toLocaleString("en-IN", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", hour12: true })}
-                            {hist.note && !hist.note.toLowerCase().includes("accepted by") && !hist.note.toLowerCase().startsWith("order placed") && ` - ${hist.note}`}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </div>
-
-                {/* Items Breakdown */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-black uppercase tracking-wider text-gorola-slate/60">
-                    Items Breakdown
-                  </h3>
-                  <div className="border border-gorola-charcoal/10 rounded-2xl overflow-hidden bg-white">
-                    <table className="w-full text-left border-collapse">
-                      <thead>
-                        <tr className="bg-gorola-mint/10 border-b border-gorola-mint/15 text-xs font-black text-gorola-charcoal uppercase">
-                          <th className="p-3">Product</th>
-                          <th className="p-3 text-center">Qty</th>
-                          <th className="p-3 text-right">Price</th>
-                          <th className="p-3 text-right">Total</th>
-                        </tr>
-                      </thead>
-                      <tbody className="text-xs">
-                        {orderDetail.items.map((item) => (
-                          <tr key={item.id} className="border-b border-gorola-charcoal/5 last:border-0">
-                            <td className="p-3">
-                              <p className="font-black text-gorola-charcoal">{item.productName}</p>
-                              <p className="text-[10px] text-gorola-slate">{item.variantLabel}</p>
-                            </td>
-                            <td className="p-3 text-center font-bold text-gorola-charcoal">{item.quantity}</td>
-                            <td className="p-3 text-right text-gorola-slate">{formatCurrency(item.price)}</td>
-                            <td className="p-3 text-right font-black text-gorola-charcoal">
-                              {formatCurrency(item.price * item.quantity)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-
-                {/* Calculations */}
-                <div className="bg-gorola-mint/5 border border-gorola-mint/15 rounded-2xl p-4 flex flex-col gap-2">
-                  <div className="flex justify-between items-center text-xs text-gorola-slate">
-                    <span>Subtotal</span>
-                    <span className="font-semibold">{formatCurrency(orderDetail.subtotal)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gorola-slate">
-                    <span>Delivery Fee</span>
-                    <span className="font-semibold">{formatCurrency(orderDetail.deliveryFee)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-sm font-black text-gorola-charcoal border-t border-gorola-charcoal/5 pt-2">
-                    <span>Grand Total</span>
-                    <span>{formatCurrency(orderDetail.total)}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
+        <AdminOrderDetailModal
+          orderId={selectedOrderId}
+          onClose={() => setSelectedOrderId(null)}
+          dataTestId="store-order-details-modal"
+        />
       )}
+
     </div>
   );
 }

@@ -61,16 +61,21 @@ export class RiderEarningsService {
     riderId: string,
     orderId: string,
     deliveryFee: Decimal,
-    storeId: string
+    storeId: string,
+    orderType?: string
   ): Promise<RiderEarning> {
+    const isBooking = orderType === "BOOKING";
     const store = await this.db.store.findUnique({
       where: { id: storeId }
     });
 
+    const settingKey = isBooking ? "TECHNICIAN_EARNING_RATE_PCT" : "RIDER_EARNING_RATE_PCT";
+    const defaultRate = isBooking ? "80.00" : "100";
+
     const rateString =
-      store?.riderEarningRatePct !== null && store?.riderEarningRatePct !== undefined
+      !isBooking && store?.riderEarningRatePct !== null && store?.riderEarningRatePct !== undefined
         ? store.riderEarningRatePct.toString()
-        : await this.systemSettingService.getSettingValue("RIDER_EARNING_RATE_PCT", "100");
+        : await this.systemSettingService.getSettingValue(settingKey, defaultRate);
 
     const earningRatePct = new Decimal(rateString);
 

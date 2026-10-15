@@ -471,4 +471,294 @@ describe("OrderHistoryPage", () => {
 
     expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
   });
+
+  describe("Booking Commerce Order Status Badge Edge and Special Cases", () => {
+    it("renders 'On The Way' badge when booking order is OUT_FOR_DELIVERY even if approvalStatus is APPROVED", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-dispatched",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "OUT_FOR_DELIVERY",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [
+                  { id: "i1", productId: "p1", productVariantId: "v1", productName: "Blood Sugar Test", quantity: 1, variantLabel: "Fasting" }
+                ],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-dispatched",
+                  scheduledDate: "2026-10-15T00:00:00.000Z",
+                  timeslot: "09:00 - 11:00",
+                  requiresFasting: true,
+                  approvalStatus: "APPROVED",
+                  rejectionReason: null
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+
+      // Crucial assertion: Must render "On The Way", NOT "Approved"
+      expect(screen.getByText("On The Way")).toBeInTheDocument();
+      expect(screen.queryByText("Approved")).not.toBeInTheDocument();
+    });
+
+    it("renders 'Completed' badge when booking order is DELIVERED even if approvalStatus is APPROVED", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-delivered",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "DELIVERED",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [
+                  { id: "i1", productId: "p1", productVariantId: "v1", productName: "Blood Sugar Test", quantity: 1, variantLabel: "Fasting" }
+                ],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-delivered",
+                  scheduledDate: "2026-10-15T00:00:00.000Z",
+                  timeslot: "09:00 - 11:00",
+                  requiresFasting: true,
+                  approvalStatus: "APPROVED",
+                  rejectionReason: null
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+
+      // Must render "Completed", NOT "Approved" or "Delivered"
+      expect(screen.getByText("Completed")).toBeInTheDocument();
+      expect(screen.queryByText("Approved")).not.toBeInTheDocument();
+    });
+
+    it("renders 'Pending Approval' when bookingOrder approvalStatus is PENDING_APPROVAL", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-pending",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "CONFIRMED",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-pending",
+                  scheduledDate: "2026-10-16T00:00:00.000Z",
+                  timeslot: "14:00 - 16:00",
+                  requiresFasting: false,
+                  approvalStatus: "PENDING_APPROVAL",
+                  rejectionReason: null
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+      expect(screen.getByText("Pending Approval")).toBeInTheDocument();
+    });
+
+    it("renders 'Rejected' when bookingOrder approvalStatus is REJECTED", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "booking-rejected",
+                store: { name: "Care Diagnostic Clinic", storeType: "BOOKING_COMMERCE" },
+                total: "650.00",
+                status: "CANCELLED",
+                orderType: "BOOKING",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [],
+                rating: null,
+                ratingComment: null,
+                bookingOrder: {
+                  id: "bo-rejected",
+                  scheduledDate: "2026-10-16T00:00:00.000Z",
+                  timeslot: "14:00 - 16:00",
+                  requiresFasting: false,
+                  approvalStatus: "REJECTED",
+                  rejectionReason: "No technician available"
+                }
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Care Diagnostic Clinic")).toBeInTheDocument();
+      expect(screen.getByText("Rejected")).toBeInTheDocument();
+    });
+
+    it("renders 'Out For Delivery' for standard regular commerce orders", async () => {
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: [
+              {
+                id: "regular-out-for-delivery",
+                store: { name: "Quick Grocery Store", storeType: "GROCERY" },
+                total: "350.00",
+                status: "OUT_FOR_DELIVERY",
+                orderType: "REGULAR",
+                createdAt: "2026-10-15T04:00:00Z",
+                items: [],
+                rating: null,
+                ratingComment: null
+              }
+            ]
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Quick Grocery Store")).toBeInTheDocument();
+      expect(screen.getByText("Out For Delivery")).toBeInTheDocument();
+    });
+
+    it("renders 20-per-page pagination controls when total > 20 and handles page navigation", async () => {
+      const page1Orders = Array.from({ length: 20 }, (_, i) => ({
+        id: `order-${i + 1}`,
+        store: { name: `Store ${i + 1}` },
+        total: "100.00",
+        status: "DELIVERED",
+        createdAt: "2026-10-15T10:00:00Z",
+        items: [],
+        rating: null,
+        ratingComment: null
+      }));
+
+      apiGetSpy.mockImplementation((url: string) => {
+        if (url.includes("page=2")) {
+          return Promise.resolve({
+            data: {
+              data: {
+                orders: [
+                  {
+                    id: "order-21",
+                    store: { name: "Store 21" },
+                    total: "200.00",
+                    status: "DELIVERED",
+                    createdAt: "2026-10-15T11:00:00Z",
+                    items: [],
+                    rating: null,
+                    ratingComment: null
+                  }
+                ],
+                total: 21,
+                page: 2,
+                limit: 20,
+                totalPages: 2
+              }
+            }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any);
+        }
+        return Promise.resolve({
+          data: {
+            data: {
+              orders: page1Orders,
+              total: 21,
+              page: 1,
+              limit: 20,
+              totalPages: 2
+            }
+          }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+      });
+
+      renderComponent();
+
+      expect(await screen.findByText("Store 1")).toBeInTheDocument();
+
+      const paginationFooter = await screen.findByTestId("orders-pagination");
+      expect(paginationFooter).toBeInTheDocument();
+      expect(paginationFooter).toHaveTextContent(/page 1 of 2/i);
+
+      const nextBtn = screen.getByTestId("pagination-next-btn");
+      expect(nextBtn).toBeEnabled();
+
+      const user = userEvent.setup();
+      await user.click(nextBtn);
+
+      expect(await screen.findByText("Store 21")).toBeInTheDocument();
+      expect(screen.getByTestId("orders-pagination")).toHaveTextContent(/page 2 of 2/i);
+    });
+
+    it("boundary test: exactly 20 records renders page 1 of 1 and next button is disabled", async () => {
+      const page1Orders = Array.from({ length: 20 }, (_, i) => ({
+        id: `exact-order-${i + 1}`,
+        store: { name: `Exact Store ${i + 1}` },
+        total: "100.00",
+        status: "DELIVERED",
+        createdAt: "2026-10-15T10:00:00Z",
+        items: [],
+        rating: null,
+        ratingComment: null
+      }));
+
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: page1Orders,
+            total: 20,
+            page: 1,
+            limit: 20,
+            totalPages: 1
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Exact Store 1")).toBeInTheDocument();
+      const paginationFooter = await screen.findByTestId("orders-pagination");
+      expect(paginationFooter).toBeInTheDocument();
+      expect(paginationFooter).toHaveTextContent(/page 1 of 1/i);
+
+      const nextBtn = screen.getByTestId("pagination-next-btn");
+      expect(nextBtn).toBeDisabled();
+    });
+  });
 });

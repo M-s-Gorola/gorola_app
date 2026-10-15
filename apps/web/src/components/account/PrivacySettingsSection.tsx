@@ -73,11 +73,11 @@ const PURPOSE_META: Record<
     title: "Order Fulfillment & Location Services",
     description: (
       <span>
-        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
+        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders, fulfill deliveries, and coordinate scheduled on-site service appointments. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners, delivery riders, and field service technicians for order fulfillment and scheduled service appointments. Governed by India&apos;s DPDP Act 2023.
       </span>
     ),
     plainText:
-      "We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with Ola Maps for navigation, Razorpay for online payments, and assigned store partners & delivery riders for order fulfillment. Governed by India's DPDP Act 2023.",
+      "We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders, fulfill deliveries, and coordinate scheduled on-site service appointments. Data is shared with Ola Maps for navigation, Razorpay for online payments, and assigned store partners, delivery riders, and field service technicians for order fulfillment and scheduled service appointments. Governed by India's DPDP Act 2023.",
     noticeLabel: "Order Fulfillment Notice",
     transparencyPrompt: "For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the",
     essential: true

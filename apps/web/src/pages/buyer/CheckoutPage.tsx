@@ -1,10 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { isAxiosError } from "axios";
-import { Home } from "lucide-react";
+import { FileText, Home } from "lucide-react";
 import type { ReactElement } from "react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
+import { DeliveryNoteInput } from "@/components/buyer/DeliveryNoteInput";
 import {
   type MapCoordinates,
   MUSSOORIE_AREA_CENTER,
@@ -95,6 +96,15 @@ export function CheckoutPage(): ReactElement {
   const [marketingOptIn, setMarketingOptIn] = useState(false);
   const [opAcknowledged, setOpAcknowledged] = useState(false);
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const cartDeliveryNote = useCartStore((s) => s.deliveryNote);
+  const setStoreDeliveryNote = useCartStore((s) => s.setDeliveryNote);
+  const [deliveryNote, setDeliveryNote] = useState(() => useCartStore.getState().deliveryNote || "");
+
+  useEffect(() => {
+    if (cartDeliveryNote && !deliveryNote) {
+      setDeliveryNote(cartDeliveryNote);
+    }
+  }, [cartDeliveryNote]);
 
   const addressesList = addressesQuery.data ?? [];
 
@@ -241,6 +251,10 @@ export function CheckoutPage(): ReactElement {
         if (discountCode.trim().length > 0) {
           body.discountCode = discountCode.trim();
         }
+      }
+
+      if (deliveryNote.trim().length > 0) {
+        body.deliveryNote = deliveryNote.trim();
       }
 
       const res = await api.post<{ data?: { id: string } }>(`/api/v1/orders`, body);
@@ -520,7 +534,7 @@ export function CheckoutPage(): ReactElement {
                         <span>Order Fulfillment &amp; Location Services</span>
                       </div>
                       <p className="text-muted-foreground leading-relaxed">
-                        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners &amp; delivery riders for order fulfillment. Governed by India&apos;s DPDP Act 2023.
+                        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners, delivery riders, and fulfillment personnel for order fulfillment. Governed by India&apos;s DPDP Act 2023.
                       </p>
                       
                       <div className="pt-0.5 text-[11px] text-muted-foreground">
@@ -559,6 +573,17 @@ export function CheckoutPage(): ReactElement {
                     </div>
                   </div>
                 ) : null}
+
+                <div className="pt-3 border-t border-gorola-pine/10">
+                  <DeliveryNoteInput
+                    value={deliveryNote}
+                    placeholder="Gate code, leave with guard, don't ring bell"
+                    onChange={(val) => {
+                      setDeliveryNote(val);
+                      setStoreDeliveryNote(val);
+                    }}
+                  />
+                </div>
               </div>
 
               {step1Error !== null ? (
@@ -629,7 +654,7 @@ export function CheckoutPage(): ReactElement {
                         aria-expanded={isDiscountExpanded}
                         className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
                       >
-                        <span>Discount:</span>
+                        <span>Total Discount:</span>
                         <span className="text-[10px] transform transition-transform duration-200">
                           {isDiscountExpanded ? "▼" : "▶"}
                         </span>
@@ -646,7 +671,7 @@ export function CheckoutPage(): ReactElement {
                         ))}
                         {discountSavedAmount > 0 && (
                           <div className="flex justify-between items-start gap-4 text-xs text-emerald-600/90 italic" data-testid="checkout-coupon-discount">
-                            <span className="text-left flex-1">• Discount ({discountCode || "Applied"})</span>
+                            <span className="text-left flex-1">• Discount Code ({discountCode || "Applied"})</span>
                             <span className="text-right whitespace-nowrap shrink-0">-Rs {discountSavedAmount.toFixed(2)}</span>
                           </div>
                         )}
@@ -695,6 +720,20 @@ export function CheckoutPage(): ReactElement {
                   {selectedFlatRoom ? `${selectedFlatRoom}, ` : ""}
                   {selectedLandmark}
                 </p>
+                {deliveryNote.trim().length > 0 && (
+                  <div
+                    data-testid="review-delivery-note"
+                    className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+                  >
+                    <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="font-bold block text-[10px] uppercase text-amber-700">
+                        Delivery Instructions
+                      </span>
+                      <span className="font-medium whitespace-pre-line">{deliveryNote.trim()}</span>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

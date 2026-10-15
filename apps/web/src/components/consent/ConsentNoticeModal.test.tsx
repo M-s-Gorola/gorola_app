@@ -50,6 +50,17 @@ describe("ConsentNoticeModal (DPDP Phase 8.2.9.5)", () => {
     expect(screen.getAllByText(/Data Protection Board of India/i).length).toBeGreaterThanOrEqual(1);
   });
 
+  it("renders ORDER_PROCESSING notice harmonized for both delivery riders and field service technicians", async () => {
+    const user = userEvent.setup();
+    render(<ConsentNoticeModal purpose="ORDER_PROCESSING" />);
+
+    await user.click(screen.getByTestId("view-notice-btn-ORDER_PROCESSING"));
+
+    const modal = await screen.findByTestId("consent-notice-modal");
+    expect(modal).toHaveTextContent(/field service technicians/i);
+    expect(modal).toHaveTextContent(/scheduled on-site service appointments/i);
+  });
+
   it("renders MARKETING_COMMS notice with SMS promotion channel and voluntary withdrawal terms", async () => {
     const user = userEvent.setup();
     render(<ConsentNoticeModal purpose="MARKETING_COMMS" />);

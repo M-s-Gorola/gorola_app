@@ -94,6 +94,11 @@ describe("BookingConfirmationPage", () => {
       },
       discountAmount: undefined as string | undefined,
       discountCode: undefined as string | null | undefined,
+      appliedOfferTitle: undefined as string | null | undefined,
+      offerSavingAmount: undefined as number | null | undefined,
+      appliedDiscountCode: undefined as string | null | undefined,
+      discountSavingAmount: undefined as number | null | undefined,
+      deliveryNote: undefined as string | null | undefined,
       rating: null as number | null | undefined,
       ratingComment: null as string | null | undefined,
       deliveryLat: undefined as number | null | undefined,
@@ -227,12 +232,45 @@ describe("BookingConfirmationPage", () => {
     // 4. Verify breakdown is now visible with discount code and correct itemized discount amount
     const breakdown = screen.getByTestId("discount-breakdown");
     expect(breakdown).toBeInTheDocument();
-    expect(within(breakdown).getByText("SAVE50")).toBeInTheDocument();
+    expect(within(breakdown).getByText("Discount Code (SAVE50)")).toBeInTheDocument();
     expect(within(breakdown).getByText("-Rs 50.00")).toBeInTheDocument();
 
     // 5. Toggle breakdown again to hide
     fireEvent.click(toggleChevron);
     expect(screen.queryByTestId("discount-breakdown")).not.toBeInTheDocument();
+  });
+
+  it("renders standardized Store Offer and Discount Code labels when snapshot promotions are present", async () => {
+    const envelope = mockBookingEnvelope("APPROVED");
+    envelope.data = {
+      ...envelope.data,
+      discountAmount: "110.00",
+      appliedOfferTitle: "Diagnostics 20%",
+      offerSavingAmount: 60,
+      appliedDiscountCode: "DIAG50",
+      discountSavingAmount: 50,
+    };
+
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+
+    const discountSummary = screen.getByTestId("discount-summary");
+    expect(discountSummary).toBeInTheDocument();
+    expect(discountSummary).toHaveTextContent("Total Discount");
+
+    const toggleChevron = screen.getByTestId("discount-toggle-chevron");
+    fireEvent.click(toggleChevron);
+
+    // Verify standardized labels
+    expect(screen.getByText(/Store Offer \(Diagnostics 20%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Discount Code \(DIAG50\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Offer \(Diagnostics 20%\)$/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Discount \(DIAG50\)$/)).not.toBeInTheDocument();
   });
 
   it("does not render rating/feedback form when status is not COMPLETED or DELIVERED", async () => {
@@ -286,5 +324,39 @@ describe("BookingConfirmationPage", () => {
     expect(screen.getByText(/4.5 \/ 5/i)).toBeInTheDocument();
     expect(screen.getByText(/"It was too late"/i)).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Rate 5.0 stars/i })).not.toBeInTheDocument();
+  });
+
+  it("renders service instructions callout badge under appointment address when deliveryNote is present", async () => {
+    const envelope = mockBookingEnvelope("APPROVED");
+    envelope.data = {
+      ...envelope.data,
+      deliveryNote: "Patient requires gentle vein puncture, please bring 22G needle",
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+
+    const noteBadge = screen.getByTestId("booking-service-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Service Instructions");
+    expect(noteBadge).toHaveTextContent("Patient requires gentle vein puncture, please bring 22G needle");
+  });
+
+  it("does not render service instructions badge when deliveryNote is null", async () => {
+    const envelope = mockBookingEnvelope("APPROVED");
+    envelope.data = {
+      ...envelope.data,
+      deliveryNote: null,
+    };
+    apiGetSpy.mockResolvedValue({
+      data: envelope,
+    });
+
+    renderComponent();
+    expect(await screen.findByText("CBC Blood Test")).toBeInTheDocument();
+    expect(screen.queryByTestId("booking-service-note")).not.toBeInTheDocument();
   });
 });

@@ -33,9 +33,13 @@ export type OrderWithRelations = Prisma.OrderGetPayload<{
 export type CreateOrderInput = {
   userId: string;
   storeId: string;
-  subtotal: string | number;
-  deliveryFee: string | number;
-  total: string | number;
+  subtotal: string | number | Prisma.Decimal;
+  deliveryFee: string | number | Prisma.Decimal;
+  total: string | number | Prisma.Decimal;
+  discountSavingAmount?: string | number | Prisma.Decimal | null;
+  offerSavingAmount?: string | number | Prisma.Decimal | null;
+  appliedOfferTitle?: string | null;
+  taxRate?: string | number | Prisma.Decimal | null;
   paymentMethod: PaymentMethod;
   landmarkDescription: string;
   addressLabel?: string | null;
@@ -49,7 +53,7 @@ export type CreateOrderInput = {
     productVariantId: string;
     productName: string;
     variantLabel: string;
-    price: string | number;
+    price: string | number | Prisma.Decimal;
     quantity: number;
   }>;
   changedBy: string;
@@ -64,7 +68,8 @@ function isPrismaError(error: unknown, code: string): boolean {
   );
 }
 
-function toDecimal(value: string | number): Prisma.Decimal {
+function toDecimal(value: string | number | Prisma.Decimal): Prisma.Decimal {
+  if (value instanceof Prisma.Decimal) return value;
   return new Prisma.Decimal(typeof value === "number" ? String(value) : value);
 }
 
@@ -99,6 +104,19 @@ export class OrderRepository {
           subtotal: toDecimal(input.subtotal),
           deliveryFee: toDecimal(input.deliveryFee),
           total: toDecimal(input.total),
+          discountSavingAmount:
+            input.discountSavingAmount !== undefined && input.discountSavingAmount !== null
+              ? toDecimal(input.discountSavingAmount)
+              : null,
+          offerSavingAmount:
+            input.offerSavingAmount !== undefined && input.offerSavingAmount !== null
+              ? toDecimal(input.offerSavingAmount)
+              : null,
+          appliedOfferTitle: input.appliedOfferTitle ?? null,
+          taxRate:
+            input.taxRate !== undefined && input.taxRate !== null
+              ? toDecimal(input.taxRate)
+              : null,
           paymentMethod: input.paymentMethod,
           landmarkDescription: input.landmarkDescription,
           addressLabel: input.addressLabel ?? null,
@@ -150,12 +168,45 @@ export class OrderRepository {
     });
   }
 
-  public async findByUserId(userId: string): Promise<OrderWithRelations[]> {
-    return this.db.order.findMany({
-      include: orderRelationsInclude,
-      orderBy: { createdAt: "desc" },
-      where: { userId }
-    });
+  public async findByUserId(userId: string): Promise<OrderWithRelations[]>;
+  public async findByUserId(
+    userId: string,
+    pagination: { page?: number; limit?: number }
+  ): Promise<{ orders: OrderWithRelations[]; total: number; page: number; limit: number; totalPages: number }>;
+  public async findByUserId(
+    userId: string,
+    pagination?: { page?: number; limit?: number }
+  ): Promise<OrderWithRelations[] | { orders: OrderWithRelations[]; total: number; page: number; limit: number; totalPages: number }> {
+    if (!pagination) {
+      return this.db.order.findMany({
+        include: orderRelationsInclude,
+        orderBy: { createdAt: "desc" },
+        where: { userId }
+      });
+    }
+
+    const page = Math.max(1, pagination.page ?? 1);
+    const limit = Math.max(1, pagination.limit ?? 20);
+    const skip = (page - 1) * limit;
+
+    const [orders, total] = await Promise.all([
+      this.db.order.findMany({
+        include: orderRelationsInclude,
+        orderBy: { createdAt: "desc" },
+        where: { userId },
+        skip,
+        take: limit
+      }),
+      this.db.order.count({ where: { userId } })
+    ]);
+
+    return {
+      orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   public async findByStoreId(storeId: string): Promise<OrderWithRelations[]> {

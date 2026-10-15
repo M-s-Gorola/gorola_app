@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertCircle, AlertTriangle, CheckCircle, ExternalLink, RefreshCw, XCircle } from "lucide-react";
+import { AlertCircle, AlertTriangle, CheckCircle, ChevronLeft, ChevronRight, ExternalLink, RefreshCw, XCircle } from "lucide-react";
 import type { ReactElement } from "react";
 import { useState } from "react";
 import { Link } from "react-router-dom";
@@ -24,7 +24,15 @@ type AdvertisementItem = {
 
 type AdvertisementsResponse = {
   success: boolean;
-  data: AdvertisementItem[];
+  data:
+    | {
+        items: AdvertisementItem[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+    | AdvertisementItem[];
 };
 
 export function AdminAdvertisementsPage(): ReactElement {
@@ -32,15 +40,23 @@ export function AdminAdvertisementsPage(): ReactElement {
   const [activeTab, setActiveTab] = useState<"PENDING" | "APPROVED" | "ALL">("PENDING");
   const [rejectingAdId, setRejectingAdId] = useState<string | null>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   const { isSubdomainMode } = resolveSubdomain(window.location.hostname);
 
   // Fetch advertisements query
-  const { data: advertisements, isLoading, isError, isFetching, refetch } = useQuery<AdvertisementItem[]>({
-    queryKey: ["admin", "advertisements"],
+  const { data: adsData, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ["admin", "advertisements", activeTab, page, limit],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<AdvertisementsResponse>("/api/v1/admin/advertisements");
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("limit", limit.toString());
+      if (activeTab !== "ALL") {
+        params.append("status", activeTab);
+      }
+      const res = await api.get<AdvertisementsResponse>(`/api/v1/admin/advertisements?${params.toString()}`);
       return res.data.data;
     },
     staleTime: 15000,
@@ -128,7 +144,7 @@ export function AdminAdvertisementsPage(): ReactElement {
     rejectMutation.mutate({ id: rejectingAdId, reason: rejectionReason });
   };
 
-  if (isLoading && !advertisements) {
+  if (isLoading && !adsData) {
     return (
       <div data-testid="advertisements-loading-skeleton" className="space-y-6 animate-pulse">
         <div className="h-10 bg-gorola-charcoal/10 rounded-xl w-48" />
@@ -150,7 +166,9 @@ export function AdminAdvertisementsPage(): ReactElement {
     );
   }
 
-  const list = advertisements ?? [];
+  const list: AdvertisementItem[] = Array.isArray(adsData) ? adsData : (adsData?.items ?? []);
+  const total = Array.isArray(adsData) ? adsData.length : (adsData?.total ?? 0);
+  const totalPages = Array.isArray(adsData) ? (Math.ceil(total / limit) || 1) : (adsData?.totalPages ?? 1);
   const filteredAds = list.filter((ad) => {
     if (activeTab === "PENDING") {
       return !ad.isApproved && ad.isActive;
@@ -187,7 +205,10 @@ export function AdminAdvertisementsPage(): ReactElement {
         <button
           role="tab"
           aria-selected={activeTab === "PENDING"}
-          onClick={() => setActiveTab("PENDING")}
+          onClick={() => {
+            setActiveTab("PENDING");
+            setPage(1);
+          }}
           className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-xl transition-all ${
             activeTab === "PENDING"
               ? "bg-gorola-pine text-white shadow-sm"
@@ -199,7 +220,10 @@ export function AdminAdvertisementsPage(): ReactElement {
         <button
           role="tab"
           aria-selected={activeTab === "APPROVED"}
-          onClick={() => setActiveTab("APPROVED")}
+          onClick={() => {
+            setActiveTab("APPROVED");
+            setPage(1);
+          }}
           className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-xl transition-all ${
             activeTab === "APPROVED"
               ? "bg-gorola-pine text-white shadow-sm"
@@ -211,7 +235,10 @@ export function AdminAdvertisementsPage(): ReactElement {
         <button
           role="tab"
           aria-selected={activeTab === "ALL"}
-          onClick={() => setActiveTab("ALL")}
+          onClick={() => {
+            setActiveTab("ALL");
+            setPage(1);
+          }}
           className={`px-4 py-2 text-xs font-bold uppercase tracking-wide rounded-xl transition-all ${
             activeTab === "ALL"
               ? "bg-gorola-pine text-white shadow-sm"
@@ -343,10 +370,44 @@ export function AdminAdvertisementsPage(): ReactElement {
         )}
       </div>
 
+      {/* Pagination Footer */}
+      {filteredAds.length > 0 && (
+        <div
+          data-testid="admin-advertisements-pagination"
+          className="flex items-center justify-between p-4 bg-white border border-gorola-mint/15 rounded-2xl shadow-sm"
+        >
+          <p className="text-xs font-medium text-gorola-slate">
+            Showing page {page} of {totalPages} ({total} advertisements)
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="pagination-prev-btn"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+              aria-label="Previous Page"
+            >
+              <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+            </button>
+            <button
+              type="button"
+              data-testid="pagination-next-btn"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+              aria-label="Next Page"
+            >
+              <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Rejection Modal Dialog */}
       {rejectingAdId && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm animate-in fade-in duration-200">
-          <div role="dialog" aria-modal="true" className="bg-white rounded-3xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-mint/15 transform animate-in zoom-in-95 duration-200">
+        <div data-lenis-prevent className="fixed inset-0 z-50 flex items-center justify-center bg-gorola-charcoal/40 backdrop-blur-sm overscroll-contain animate-in fade-in duration-200">
+          <div data-lenis-prevent role="dialog" aria-modal="true" className="bg-white rounded-3xl p-6 max-w-md w-full mx-4 shadow-xl border border-gorola-mint/15 transform overscroll-contain animate-in zoom-in-95 duration-200">
             <h3 className="text-lg font-bold text-gorola-charcoal flex items-center gap-2 font-heading">
               <AlertTriangle className="h-5 w-5 text-red-500" />
               Reject Advertisement

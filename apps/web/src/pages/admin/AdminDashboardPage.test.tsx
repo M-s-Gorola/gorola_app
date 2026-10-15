@@ -344,7 +344,7 @@ describe("AdminDashboardPage", () => {
     expect(screen.queryByText("WEATHER_MODE_ACTIVE")).not.toBeInTheDocument();
   });
 
-  it("renders Platform Fees Settings card and updates settings on save", async () => {
+  it("renders Platform Fees & Financial Settings card and updates settings on save", async () => {
     getMock.mockImplementation((url: string) => {
       if (url.includes("/admin/stores")) {
         return Promise.resolve({ data: { success: true, data: [] } });
@@ -355,7 +355,10 @@ describe("AdminDashboardPage", () => {
             success: true,
             data: [
               { key: "DELIVERY_CHARGE", value: "30.00" },
-              { key: "SERVICE_CHARGE", value: "0.00" }
+              { key: "SERVICE_CHARGE", value: "0.00" },
+              { key: "GST_RATE", value: "18.00" },
+              { key: "GST_NUMBER", value: "05AAAAA0000A1Z5" },
+              { key: "TECHNICIAN_EARNING_RATE_PCT", value: "80.00" }
             ]
           }
         });
@@ -383,34 +386,52 @@ describe("AdminDashboardPage", () => {
         success: true,
         data: [
           { key: "DELIVERY_CHARGE", value: "45.00" },
-          { key: "SERVICE_CHARGE", value: "25.00" }
+          { key: "SERVICE_CHARGE", value: "25.00" },
+          { key: "GST_RATE", value: "12.00" },
+          { key: "GST_NUMBER", value: "05BBBBB0000B1Z6" },
+          { key: "TECHNICIAN_EARNING_RATE_PCT", value: "90.00" }
         ]
       }
     });
 
     renderAdminDashboard();
 
-    expect(await screen.findByText("Platform Fees Settings")).toBeInTheDocument();
+    expect(await screen.findByText(/Platform Fees & Financial Settings/i)).toBeInTheDocument();
 
     const deliveryInput = screen.getByLabelText(/delivery charge/i) as HTMLInputElement;
     const serviceInput = screen.getByLabelText(/service charge/i) as HTMLInputElement;
+    const gstRateInput = screen.getByTestId("gst-rate-input") as HTMLInputElement;
+    const gstNumberInput = screen.getByTestId("gst-number-input") as HTMLInputElement;
+    const technicianInput = screen.getByTestId("technician-earning-rate-input") as HTMLInputElement;
     const saveButton = screen.getByRole("button", { name: /save platform fees/i });
 
     expect(deliveryInput.value).toBe("30.00");
     expect(serviceInput.value).toBe("0.00");
+    expect(gstRateInput.value).toBe("18.00");
+    expect(gstNumberInput.value).toBe("05AAAAA0000A1Z5");
+    expect(technicianInput.value).toBe("80.00");
 
     fireEvent.change(deliveryInput, { target: { value: "45.00" } });
     fireEvent.change(serviceInput, { target: { value: "25.00" } });
+    fireEvent.change(gstRateInput, { target: { value: "12.00" } });
+    fireEvent.change(gstNumberInput, { target: { value: "05BBBBB0000B1Z6" } });
+    fireEvent.change(technicianInput, { target: { value: "90.00" } });
 
     expect(deliveryInput.value).toBe("45.00");
     expect(serviceInput.value).toBe("25.00");
+    expect(gstRateInput.value).toBe("12.00");
+    expect(gstNumberInput.value).toBe("05BBBBB0000B1Z6");
+    expect(technicianInput.value).toBe("90.00");
 
     fireEvent.click(saveButton);
 
     await waitFor(() => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/admin/settings", {
         deliveryCharge: "45.00",
-        serviceCharge: "25.00"
+        serviceCharge: "25.00",
+        gstRate: "12.00",
+        gstNumber: "05BBBBB0000B1Z6",
+        technicianEarningRate: "90.00"
       });
     });
   });

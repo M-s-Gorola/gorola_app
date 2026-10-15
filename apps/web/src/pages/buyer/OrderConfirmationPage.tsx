@@ -2,7 +2,7 @@ import "leaflet/dist/leaflet.css";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import gsap from "gsap";
-import { Bike, CheckCircle2, Home, MessageSquare, Package } from "lucide-react";
+import { Bike, CheckCircle2, FileText, Home, MessageSquare, Package } from "lucide-react";
 import {
   type ReactElement,
   useCallback,
@@ -42,10 +42,6 @@ export type StatusHistoryItem = {
 export type BuyerOrderDetail = {
   createdAt?: string;
   deliveryFee: string;
-  discount?: {
-    amount: string;
-    code: string | null;
-  };
   id: string;
   orderType?: string;
   items: BuyerOrderConfirmationItem[];
@@ -62,6 +58,18 @@ export type BuyerOrderDetail = {
   scheduledFor?: string | null;
   status: string;
   statusHistory?: StatusHistoryItem[];
+  discountSavingAmount?: number | string | null;
+  offerSavingAmount?: number | string | null;
+  appliedOfferTitle?: string | null;
+  appliedDiscountCode?: string | null;
+  deliveryNote?: string | null;
+  taxRate?: number | string | null;
+  discount?: {
+    amount: string;
+    code: string | null;
+    appliedDiscountAmount?: string;
+    appliedOfferAmount?: string;
+  } | null;
   store: {
     id: string;
     name: string;
@@ -124,6 +132,20 @@ function AddressBlock({ order }: { order: BuyerOrderDetail }): ReactElement {
         {order.flatRoom ? `${order.flatRoom}, ` : ""}
         {order.landmarkDescription}
       </p>
+      {order.deliveryNote && (
+        <div
+          data-testid="order-delivery-note"
+          className="mt-2 text-xs bg-amber-50 border border-amber-200/60 text-amber-900 rounded-xl p-3 flex items-start gap-2"
+        >
+          <FileText className="h-4 w-4 text-amber-700 mt-0.5 shrink-0" />
+          <div>
+            <span className="font-bold block text-[10px] uppercase text-amber-700">
+              Delivery Instructions
+            </span>
+            <span className="font-medium whitespace-pre-line">{order.deliveryNote}</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -404,6 +426,32 @@ interface StoreOffer {
   });
 
   const getAppliedDiscounts = (order: BuyerOrderDetail) => {
+    // 1. Direct Stored Snapshots (Preferred)
+    const hasStoredPromo =
+      (order.discountSavingAmount !== undefined && order.discountSavingAmount !== null) ||
+      (order.offerSavingAmount !== undefined && order.offerSavingAmount !== null);
+
+    if (hasStoredPromo) {
+      const result: { label: string; amount: number }[] = [];
+      const offerAmt = Number(order.offerSavingAmount || 0);
+      const discountAmt = Number(order.discountSavingAmount || 0);
+
+      if (offerAmt > 0) {
+        result.push({
+          label: order.appliedOfferTitle ? `Store Offer (${order.appliedOfferTitle})` : "Store Offer",
+          amount: offerAmt
+        });
+      }
+      if (discountAmt > 0) {
+        result.push({
+          label: order.appliedDiscountCode || order.discount?.code ? `Discount Code (${order.appliedDiscountCode || order.discount?.code})` : "Discount Code",
+          amount: discountAmt
+        });
+      }
+      return result;
+    }
+
+    // 2. Fallback
     const subtotal = Number(order.subtotal);
     const deliveryFee = Number(order.deliveryFee);
     const total = Number(order.total);
@@ -442,7 +490,7 @@ interface StoreOffer {
         const appliedAmt = Number(Math.min(remainingDiscount, offerDiscount).toFixed(2));
         if (appliedAmt > 0.05) {
           result.push({
-            label: `Discount (${offer.title})`,
+            label: `Store Offer (${offer.title})`,
             amount: appliedAmt
           });
           remainingDiscount = Number((remainingDiscount - appliedAmt).toFixed(2));
@@ -452,7 +500,7 @@ interface StoreOffer {
 
     if (remainingDiscount > 0.05) {
       result.push({
-        label: order.discount?.code ? `Discount (${order.discount.code})` : "Discount",
+        label: order.discount?.code ? `Discount Code (${order.discount.code})` : "Discount Code",
         amount: remainingDiscount
       });
     }
@@ -790,7 +838,7 @@ interface StoreOffer {
                             aria-expanded={isDiscountExpanded}
                             className="flex items-center gap-1 text-emerald-700 hover:text-emerald-800 transition-colors font-medium focus:outline-none"
                           >
-                            <span>Discount:</span>
+                            <span>Total Discount:</span>
                             <span className="text-[10px] transform transition-transform duration-200">
                               {isDiscountExpanded ? "▼" : "▶"}
                             </span>

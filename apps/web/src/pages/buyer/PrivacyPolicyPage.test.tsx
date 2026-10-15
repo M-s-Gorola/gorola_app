@@ -29,6 +29,8 @@ describe("PrivacyPolicyPage (/privacy)", () => {
     expect(screen.getByTestId("view-notice-btn-ORDER_PROCESSING")).toBeInTheDocument();
     expect(screen.getByTestId("view-notice-btn-MARKETING_COMMS")).toBeInTheDocument();
     expect(screen.getByTestId("view-notice-btn-ANALYTICS")).toBeInTheDocument();
+    expect(screen.getAllByText(/field service technicians/i).length).toBeGreaterThanOrEqual(1);
+    expect(screen.getAllByText(/scheduled on-site service appointments/i).length).toBeGreaterThanOrEqual(1);
 
     // Section 4: Retention Schedules & Auto-Purge Timelines
     expect(screen.getByRole("heading", { name: /4\. Retention Schedules & Auto-Purge Timelines/i })).toBeInTheDocument();

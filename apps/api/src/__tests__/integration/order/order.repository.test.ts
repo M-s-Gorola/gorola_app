@@ -138,6 +138,70 @@ describe("OrderRepository", () => {
       expect(order.store.phone).toBe("+911111111177");
     });
 
+    it("creates order with financial snapshot columns and persists them", async () => {
+      const order = await repo.create({
+        userId: user.id,
+        storeId: store.id,
+        subtotal: "170.00",
+        deliveryFee: "20.00",
+        total: "190.00",
+        discountSavingAmount: "50.00",
+        offerSavingAmount: "25.00",
+        appliedOfferTitle: "Summer Special 10% OFF",
+        taxRate: "18.00",
+        paymentMethod: "COD",
+        landmarkDescription: "Near clock tower",
+        items: [
+          {
+            productVariantId: variantA.id,
+            productName: "Order Product",
+            variantLabel: "500g",
+            price: "45.00",
+            quantity: 2
+          }
+        ],
+        changedBy: "SYSTEM"
+      });
+
+      expect(order.discountSavingAmount?.toString()).toBe("50");
+      expect(order.offerSavingAmount?.toString()).toBe("25");
+      expect(order.appliedOfferTitle).toBe("Summer Special 10% OFF");
+      expect(order.taxRate?.toString()).toBe("18");
+
+      const dbOrder = await db.order.findUnique({ where: { id: order.id } });
+      expect(dbOrder?.discountSavingAmount?.toString()).toBe("50");
+      expect(dbOrder?.offerSavingAmount?.toString()).toBe("25");
+      expect(dbOrder?.appliedOfferTitle).toBe("Summer Special 10% OFF");
+      expect(dbOrder?.taxRate?.toString()).toBe("18");
+    });
+
+    it("creates order with omitted financial snapshot fields and stores null", async () => {
+      const order = await repo.create({
+        userId: user.id,
+        storeId: store.id,
+        subtotal: "170.00",
+        deliveryFee: "20.00",
+        total: "190.00",
+        paymentMethod: "COD",
+        landmarkDescription: "Near clock tower",
+        items: [
+          {
+            productVariantId: variantA.id,
+            productName: "Order Product",
+            variantLabel: "500g",
+            price: "45.00",
+            quantity: 2
+          }
+        ],
+        changedBy: "SYSTEM"
+      });
+
+      expect(order.discountSavingAmount).toBeNull();
+      expect(order.offerSavingAmount).toBeNull();
+      expect(order.appliedOfferTitle).toBeNull();
+      expect(order.taxRate).toBeNull();
+    });
+
     it("throws ValidationError when items are empty", async () => {
       await expect(
         repo.create({

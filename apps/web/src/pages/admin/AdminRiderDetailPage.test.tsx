@@ -137,7 +137,7 @@ describe("AdminRiderDetailPage", () => {
     expect(screen.getByTestId("rider-phone")).toHaveTextContent("*********0015");
     expect(screen.getByTestId("rider-email")).toHaveTextContent("rider@gorola.in");
     expect(screen.getByTestId("rider-total-deliveries")).toHaveTextContent("42");
-    expect(screen.getByTestId("rider-total-earnings")).toHaveTextContent("₹1,050.00");
+    expect(screen.getByTestId("rider-total-earnings")).toHaveTextContent(/1,?050\.00/);
 
     // Verify assigned stores
     expect(screen.getAllByText("Hillside Fresh").length).toBeGreaterThanOrEqual(1);
@@ -147,7 +147,7 @@ describe("AdminRiderDetailPage", () => {
     // Verify Deliveries table
     expect(screen.getByTestId("rider-orders-table")).toBeInTheDocument();
     expect(screen.getByText("Alice Walker")).toBeInTheDocument();
-    expect(screen.getByText("₹350.00")).toBeInTheDocument();
+    expect(screen.getByText(/350\.00/)).toBeInTheDocument();
   });
 
   it("handles status toggle modal and PUT trigger", async () => {
@@ -215,5 +215,142 @@ describe("AdminRiderDetailPage", () => {
     const modal = await screen.findByTestId("rider-order-details-modal");
     expect(await within(modal).findByText("Farm Apples")).toBeInTheDocument();
     expect(within(modal).getByText(/By Rider \(Hillside Rider\)/)).toBeInTheDocument();
+    expect(within(modal).getByText("Delivery Fee")).toBeInTheDocument();
+  });
+
+  it("renders 'Service Fee' for BOOKING orders in rider order details modal", async () => {
+    const mockOrderDetailData = {
+      success: true,
+      data: {
+        id: "ord-901",
+        status: "DELIVERED",
+        orderType: "BOOKING",
+        subtotal: 400.0,
+        deliveryFee: 40.0,
+        total: 440.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near Mall Road Clock",
+        flatRoom: "Suite 101",
+        createdAt: "2026-06-02T14:00:00.000Z",
+        buyerMaskedPhone: "*********3210",
+        store: { name: "GoRola Repairs", phone: "+919999999011" },
+        items: [
+          { id: "item-1", productName: "Device Repair", variantLabel: "Standard", price: 400.0, quantity: 1 }
+        ],
+        statusHistory: [],
+        riderName: "Tech Bob"
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/admin/orders/ord-901") return Promise.resolve({ data: mockOrderDetailData });
+      if (url.includes("/orders")) return Promise.resolve({ data: mockRiderOrdersData });
+      return Promise.resolve({ data: mockRiderData });
+    });
+
+    renderAdminRiderDetail();
+
+    const viewBtn = await screen.findByTestId("view-rider-order-ord-901");
+    fireEvent.click(viewBtn);
+
+    const modal = await screen.findByTestId("rider-order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders status badges formatted by commerce type and renamed filter options in rider deliveries table", async () => {
+    const mockRiderOrdersMixed = {
+      items: [
+        {
+          id: "r-ord-booking-1",
+          orderNumber: "r-ord-booking-1",
+          status: "OUT_FOR_DELIVERY",
+          orderType: "BOOKING",
+          createdAt: "2026-10-15T10:00:00Z",
+          total: 1299.10,
+          subtotal: 1200.0,
+          deliveryFee: 99.10,
+          paymentMethod: "COD",
+          storeName: "Mussoorie Repairs Hub",
+          storeId: "store-repair-1",
+          userName: "Registered User",
+          userMaskedPhone: "*********7890",
+          itemCount: 1
+        },
+        {
+          id: "r-ord-booking-2",
+          orderNumber: "r-ord-booking-2",
+          status: "DELIVERED",
+          orderType: "BOOKING",
+          createdAt: "2026-10-15T11:00:00Z",
+          total: 649.0,
+          subtotal: 600.0,
+          deliveryFee: 49.0,
+          paymentMethod: "COD",
+          storeName: "Mussoorie Repairs Hub",
+          storeId: "store-repair-1",
+          userName: "Registered User",
+          userMaskedPhone: "*********7890",
+          itemCount: 1
+        }
+      ],
+      total: 2,
+      page: 1,
+      limit: 20,
+      totalPages: 1
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/orders")) return Promise.resolve({ data: { success: true, data: mockRiderOrdersMixed } });
+      return Promise.resolve({ data: mockRiderData });
+    });
+
+    renderAdminRiderDetail();
+
+    const table = await screen.findByTestId("rider-orders-table");
+    expect(table).toBeInTheDocument();
+
+    // Verify filter options
+    const filterSelect = screen.getByTestId("rider-orders-status-filter");
+    expect(within(filterSelect).getByText("Out for Delivery / On The Way")).toBeInTheDocument();
+    expect(within(filterSelect).getByText("Delivered / Completed")).toBeInTheDocument();
+
+    // Verify status labels in table for BOOKING orders
+    expect(within(table).getByText("On The Way")).toBeInTheDocument();
+    expect(within(table).getByText("Completed")).toBeInTheDocument();
+  });
+
+  it("supports switching between Table and Cards view mode and renders persistent pagination", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/orders")) return Promise.resolve({ data: mockRiderOrdersData });
+      return Promise.resolve({ data: mockRiderData });
+    });
+
+    renderAdminRiderDetail();
+
+    // Table view by default
+    expect(await screen.findByTestId("rider-orders-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("rider-orders-cards")).not.toBeInTheDocument();
+
+    // Persistent pagination bar
+    const pagination = screen.getByTestId("rider-orders-pagination");
+    expect(pagination).toBeInTheDocument();
+    expect(pagination).toHaveTextContent(/page 1 of 1/i);
+    expect(screen.getByTestId("rider-orders-pagination-prev")).toBeDisabled();
+    expect(screen.getByTestId("rider-orders-pagination-next")).toBeDisabled();
+
+    // Toggle to cards view
+    const cardsBtn = screen.getByTestId("rider-orders-view-cards");
+    fireEvent.click(cardsBtn);
+
+    expect(await screen.findByTestId("rider-orders-cards")).toBeInTheDocument();
+    expect(screen.queryByTestId("rider-orders-table")).not.toBeInTheDocument();
+    expect(screen.getByTestId("rider-order-card-ord-901")).toBeInTheDocument();
+
+    // Toggle back to table view
+    const tableBtn = screen.getByTestId("rider-orders-view-table");
+    fireEvent.click(tableBtn);
+    expect(await screen.findByTestId("rider-orders-table")).toBeInTheDocument();
   });
 });

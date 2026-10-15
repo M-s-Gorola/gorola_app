@@ -139,6 +139,59 @@ describe("BookingTimeslotPage", () => {
     expect(confirmBtn).toBeEnabled();
   });
 
+  it("renders harmonized DPDP statutory consent notice covering field service technicians", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { consents: [] }
+          }
+        });
+      }
+      if (url.includes("/api/v1/promotions/store/")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: []
+          }
+        });
+      }
+      if (url.includes("/api/v1/products/prod1")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: "prod1",
+              name: "CBC Blood Test",
+              store: { id: "store1", name: "Apex Labs", bookingLeadDays: 1 },
+              variants: [
+                {
+                  id: "var1",
+                  label: "Standard Test",
+                  price: "500.00",
+                  requiresFasting: false,
+                  allowedTimeslots: ["09:00-12:00"]
+                }
+              ]
+            }
+          }
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: { addresses: [] } } });
+    });
+
+    renderComponent();
+    await screen.findByText("CBC Blood Test");
+
+    const addNewBtn = screen.getByRole("button", { name: /Add New/i });
+    fireEvent.click(addNewBtn);
+
+    const notice = await screen.findByTestId("order-processing-consent-notice");
+    expect(notice).toHaveTextContent(/field service technicians/i);
+    expect(notice).toHaveTextContent(/scheduled on-site service appointments/i);
+  });
+
   const renderComponent = (searchParams = "?productId=prod1&variantId=var1&storeId=store1") => {
     render(
       <MemoryRouter initialEntries={[`/bookings/new${searchParams}`]}>
@@ -624,10 +677,8 @@ describe("BookingTimeslotPage", () => {
     fireEvent.click(toggleChevron);
 
     // Verify itemized components rendered
-    const breakdownItems = screen.getAllByTestId("discount-breakdown-item");
-    expect(breakdownItems).toHaveLength(2);
-    expect(screen.getByText("10% Store-Wide Discount")).toBeInTheDocument();
-    expect(screen.getByText("SAVE50")).toBeInTheDocument();
+    expect(screen.getByText(/Store Offer \(10% Store-Wide Discount\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Discount Code \(SAVE50\)/i)).toBeInTheDocument();
 
     // 5. Confirm booking with coupon code sends discountCode in the request payload
     const confirmBtn = screen.getByRole("button", { name: /Confirm Booking/i });
@@ -641,6 +692,116 @@ describe("BookingTimeslotPage", () => {
           storeId: "store1",
           discountCode: "SAVE50",
         }),
+      );
+    });
+  });
+
+  it("submits deliveryNote in POST /api/v1/bookings when buyer enters technician instructions", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              consents: [
+                {
+                  id: "c-op",
+                  purpose: "ORDER_PROCESSING",
+                  isWithdrawn: false,
+                  consentVersion: "1.0",
+                  createdAt: "2026-09-20T00:00:00Z"
+                }
+              ]
+            }
+          }
+        });
+      }
+      if (url.includes("/api/v1/promotions/store/")) {
+        return Promise.resolve({
+          data: { success: true, data: [] }
+        });
+      }
+      if (url.includes("/api/v1/products/prod1")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: "prod1",
+              name: "CBC Blood Test",
+              store: { id: "store1", name: "Apex Labs", bookingLeadDays: 1 },
+              variants: [
+                {
+                  id: "var1",
+                  label: "Standard Test",
+                  price: "500.00",
+                  requiresFasting: false,
+                  allowedTimeslots: ["09:00-12:00"]
+                }
+              ]
+            }
+          }
+        });
+      }
+      if (url.includes("/api/v1/addresses")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              addresses: [
+                {
+                  id: "addr1",
+                  label: "Home",
+                  landmarkDescription: "Near Clock Tower Mussoorie",
+                  flatRoom: "1A"
+                }
+              ]
+            }
+          }
+        });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    apiPostSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/bookings") {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { orderId: "ord-new-123" }
+          }
+        });
+      }
+      return Promise.reject(new Error("Not found"));
+    });
+
+    renderComponent();
+    await screen.findByText("CBC Blood Test");
+
+    const dateInput = screen.getByLabelText(/Select Date/i);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    fireEvent.change(dateInput, { target: { value: tomorrowStr } });
+
+    const slotBtn = screen.getByRole("button", { name: "09:00-12:00" });
+    fireEvent.click(slotBtn);
+
+    const addressRadio = screen.getByLabelText(/Near Clock Tower Mussoorie/i);
+    fireEvent.click(addressRadio);
+
+    const noteInput = screen.getByLabelText(/Instructions for Field Technician/i);
+    fireEvent.change(noteInput, { target: { value: "Patient requires gentle care" } });
+
+    const confirmBtn = screen.getByRole("button", { name: /Confirm Booking/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(apiPostSpy).toHaveBeenCalledWith(
+        "/api/v1/bookings",
+        expect.objectContaining({
+          storeId: "store1",
+          deliveryNote: "Patient requires gentle care"
+        })
       );
     });
   });

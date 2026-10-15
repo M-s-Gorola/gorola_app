@@ -297,5 +297,165 @@ describe("AdminUserDetailPage", () => {
     const modal = await screen.findByTestId("user-order-details-modal");
     expect(await within(modal).findByText("Basmati Rice")).toBeInTheDocument();
     expect(within(modal).getByText(/By Buyer \(Alice Walker\)/)).toBeInTheDocument();
+    expect(within(modal).getByText("Delivery Fee")).toBeInTheDocument();
+  });
+
+  it("renders 'Service Fee' for BOOKING orders in user order details modal", async () => {
+    const mockOrderDetailData = {
+      success: true,
+      data: {
+        id: "order-booking-user-1",
+        status: "DELIVERED",
+        orderType: "BOOKING",
+        subtotal: 600.0,
+        deliveryFee: 60.0,
+        total: 660.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Near Mall",
+        flatRoom: "Flat 402",
+        createdAt: "2026-06-02T14:00:00.000Z",
+        buyerMaskedPhone: "*********3210",
+        store: { name: "GoRola Repairs", phone: "+919999999011" },
+        items: [
+          { id: "item-1", productName: "Wiring Repair", variantLabel: "Standard", price: 600.0, quantity: 1 }
+        ],
+        statusHistory: [],
+        riderName: "Tech Bob"
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/admin/orders/order-booking-user-1") return Promise.resolve({ data: mockOrderDetailData });
+      if (url.includes("/orders")) return Promise.resolve({ data: mockUserOrdersData });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({ data: mockUserData });
+    });
+
+    renderAdminUserDetail();
+
+    const viewBtn = await screen.findByTestId("view-user-order-order-101");
+    // We mock that order-101 details route returns BOOKING order details for order-booking-user-1
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/admin/orders/order-101") return Promise.resolve({ data: mockOrderDetailData });
+      if (url.includes("/orders")) return Promise.resolve({ data: mockUserOrdersData });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({ data: mockUserData });
+    });
+
+    fireEvent.click(viewBtn);
+
+    const modal = await screen.findByTestId("user-order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders status badges formatted by commerce type and renamed filter options in buyer orders table", async () => {
+    const mockOrdersMultiType = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-booking-1",
+            storeId: "store-repair",
+            storeName: "GoRola Repairs",
+            total: 1299.10,
+            subtotal: 1200.0,
+            deliveryFee: 99.10,
+            status: "OUT_FOR_DELIVERY",
+            orderType: "BOOKING",
+            paymentMethod: "COD",
+            itemsCount: 1,
+            createdAt: "2026-10-15T10:00:00.000Z"
+          },
+          {
+            id: "order-booking-2",
+            storeId: "store-repair",
+            storeName: "GoRola Repairs",
+            total: 649.0,
+            subtotal: 600.0,
+            deliveryFee: 49.0,
+            status: "DELIVERED",
+            orderType: "BOOKING",
+            paymentMethod: "COD",
+            itemsCount: 1,
+            createdAt: "2026-10-15T11:00:00.000Z"
+          },
+          {
+            id: "order-quick-1",
+            storeId: "store-grocery",
+            storeName: "Hillside Mart",
+            total: 980.0,
+            subtotal: 950.0,
+            deliveryFee: 30.0,
+            status: "OUT_FOR_DELIVERY",
+            orderType: "QUICK",
+            paymentMethod: "COD",
+            itemsCount: 2,
+            createdAt: "2026-10-15T12:00:00.000Z"
+          }
+        ],
+        total: 3,
+        page: 1,
+        limit: 20,
+        totalPages: 1
+      }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/orders")) return Promise.resolve({ data: mockOrdersMultiType });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({ data: mockUserData });
+    });
+
+    renderAdminUserDetail();
+
+    const table = await screen.findByTestId("user-orders-table");
+    expect(table).toBeInTheDocument();
+
+    // Verify filter options
+    const filterSelect = screen.getByTestId("user-orders-status-filter");
+    expect(within(filterSelect).getByText("Out for Delivery / On The Way")).toBeInTheDocument();
+    expect(within(filterSelect).getByText("Delivered / Completed")).toBeInTheDocument();
+
+    // Verify commerce-type aware status labels in table
+    expect(within(table).getByText("On The Way")).toBeInTheDocument();
+    expect(within(table).getByText("Completed")).toBeInTheDocument();
+    expect(within(table).getByText("Out For Delivery")).toBeInTheDocument();
+  });
+
+  it("supports switching between Table and Cards view mode and always displays persistent pagination", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/orders")) return Promise.resolve({ data: mockUserOrdersData });
+      if (url.includes("/consents")) return Promise.resolve({ data: mockConsentsData });
+      return Promise.resolve({ data: mockUserData });
+    });
+
+    renderAdminUserDetail();
+
+    // Verify table is initially rendered
+    expect(await screen.findByTestId("user-orders-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("user-orders-cards")).not.toBeInTheDocument();
+
+    // Verify persistent pagination bar even for 1 order / totalPages = 1
+    const pagination = screen.getByTestId("user-orders-pagination");
+    expect(pagination).toBeInTheDocument();
+    expect(pagination).toHaveTextContent(/page 1 of 1/i);
+    expect(screen.getByTestId("user-orders-pagination-prev")).toBeDisabled();
+    expect(screen.getByTestId("user-orders-pagination-next")).toBeDisabled();
+
+    // Toggle to cards view
+    const cardsBtn = screen.getByTestId("user-orders-view-cards");
+    fireEvent.click(cardsBtn);
+
+    // Cards should now be visible and table hidden
+    expect(await screen.findByTestId("user-orders-cards")).toBeInTheDocument();
+    expect(screen.queryByTestId("user-orders-table")).not.toBeInTheDocument();
+    expect(screen.getByTestId("user-order-card-order-101")).toBeInTheDocument();
+
+    // Toggle back to table view
+    const tableBtn = screen.getByTestId("user-orders-view-table");
+    fireEvent.click(tableBtn);
+    expect(await screen.findByTestId("user-orders-table")).toBeInTheDocument();
   });
 });

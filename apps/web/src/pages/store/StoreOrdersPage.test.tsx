@@ -194,7 +194,7 @@ describe("StoreOrdersPage", () => {
     fireEvent.click(discountToggle);
     expect(discountToggle.getAttribute("aria-expanded")).toBe("true");
     const discountContainer = screen.getByTestId("store-order-discount");
-    expect(within(discountContainer).getByText(/• Discount \(Inaugural Store Offer\)/)).toBeInTheDocument();
+    expect(within(discountContainer).getByText(/• Store Offer \(Inaugural Store Offer\)/)).toBeInTheDocument();
     expect(within(discountContainer).getAllByText("-₹20.00").length).toBeGreaterThanOrEqual(1);
     
     // Verify complete delivery address displays inside detailed modal
@@ -345,7 +345,7 @@ describe("StoreOrdersPage", () => {
 
     const discountList = screen.getByTestId("store-order-discount-list");
     expect(discountList).toBeInTheDocument();
-    expect(within(discountList).getByText(/• Discount \(Inaugural Store Offer\)/)).toBeInTheDocument();
+    expect(within(discountList).getByText(/• Store Offer \(Inaugural Store Offer\)/)).toBeInTheDocument();
     expect(within(discountList).getByText("-₹20.00")).toBeInTheDocument();
 
     // Toggle collapse
@@ -656,4 +656,271 @@ describe("StoreOrdersPage", () => {
     // It should format "rider:rider-123" using the rider's name "Hillside Rider"
     expect(screen.getByText(/By Hillside Rider at/i)).toBeInTheDocument();
   });
+
+  it("renders 'Service Fee' for BOOKING orders and 'Delivery Fee' for QUICK orders in detail modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-booking-1",
+          userId: "buyer-123",
+          storeId: "store-456",
+          orderType: "BOOKING",
+          status: "PLACED",
+          subtotal: 500.0,
+          deliveryFee: 50.0,
+          total: 550.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "AC Repair", price: 500.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockResolvedValue({ data: mockOrdersData });
+
+    renderStoreOrders();
+
+    const card = await screen.findByTestId("order-card-order-booking-1");
+    fireEvent.click(card);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(within(modal).getByText("Service Fee")).toBeInTheDocument();
+    expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders stored offer and discount snapshot titles in order breakdown modal", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-promo-snapshot-1",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PLACED",
+          subtotal: 300.0,
+          deliveryFee: 30.0,
+          total: 260.0,
+          discountSavingAmount: 15.0,
+          offerSavingAmount: 25.0,
+          appliedOfferTitle: "Festive 25 OFF",
+          appliedDiscountCode: "SAVE15",
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Item A", price: 300.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) {
+        // Return empty offers list to prove it renders from stored snapshot, not active offers
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    const card = await screen.findByTestId("order-card-order-promo-snapshot-1");
+    fireEvent.click(card);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    const discountToggle = await screen.findByTestId("store-order-discount-toggle");
+    fireEvent.click(discountToggle);
+
+    expect(within(modal).getByText(/Store Offer \(Festive 25 OFF\)/)).toBeInTheDocument();
+    expect(within(modal).getByText(/Discount Code \(SAVE15\)/)).toBeInTheDocument();
+  });
+
+  it("displays delivery note badge in order details modal when present", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-note-1",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PLACED",
+          subtotal: 200.0,
+          deliveryFee: 30.0,
+          total: 230.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          deliveryNote: "Fragile items, handle with care",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Item A", price: 200.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    const card = await screen.findByTestId("order-card-order-note-1");
+    fireEvent.click(card);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    const noteBadge = await screen.findByTestId("store-order-delivery-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Note: Fragile items, handle with care");
+  });
+
+  it("does not display delivery note badge when deliveryNote is null", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-no-note-1",
+          userId: "buyer-123",
+          storeId: "store-456",
+          status: "PLACED",
+          subtotal: 200.0,
+          deliveryFee: 30.0,
+          total: 230.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          deliveryNote: null,
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Item A", price: 200.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1 }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    const card = await screen.findByTestId("order-card-order-no-note-1");
+    fireEvent.click(card);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+
+    expect(screen.queryByTestId("store-order-delivery-note")).not.toBeInTheDocument();
+  });
+
+  it("toggles between cards and table view and opens modal from table", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-toggle-1",
+          status: "OUT_FOR_DELIVERY",
+          subtotal: 500.0,
+          deliveryFee: 30.0,
+          total: 530.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Organic Milk", price: 500.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1, page: 1, limit: 20, hasMore: false }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) return Promise.resolve({ data: { success: true, data: [] } });
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    // Verify view toggle buttons exist
+    const cardsBtn = await screen.findByTestId("view-mode-cards");
+    const tableBtn = await screen.findByTestId("view-mode-table");
+    expect(cardsBtn).toBeInTheDocument();
+    expect(tableBtn).toBeInTheDocument();
+
+    // Default is cards view
+    expect(await screen.findByTestId("order-card-order-toggle-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("store-orders-table")).not.toBeInTheDocument();
+
+    // Switch to table view
+    fireEvent.click(tableBtn);
+
+    const table = await screen.findByTestId("store-orders-table");
+    expect(table).toBeInTheDocument();
+    expect(within(table).getByText("Organic Milk (x1)")).toBeInTheDocument();
+    expect(within(table).getByText("Out For Delivery")).toBeInTheDocument();
+
+    // Open details modal from table action
+    const viewBtn = within(table).getByTestId("view-details-order-toggle-1");
+    fireEvent.click(viewBtn);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+  });
+
+  it("renders 20-per-page pagination controls and navigates pages", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: Array.from({ length: 20 }, (_, i) => ({
+        id: `order-page-${i + 1}`,
+        status: "PLACED",
+        subtotal: 100.0,
+        deliveryFee: 20.0,
+        total: 120.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Mall Road",
+        createdAt: new Date().toISOString(),
+        buyerMaskedPhone: "*********3210",
+        items: [{ id: `item-${i + 1}`, productName: `Product ${i + 1}`, price: 100.0, quantity: 1 }],
+        statusHistory: []
+      })),
+      meta: { total: 25, page: 1, limit: 20, hasMore: true }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) return Promise.resolve({ data: { success: true, data: [] } });
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    expect(await screen.findByTestId("order-card-order-page-1")).toBeInTheDocument();
+
+    const paginationFooter = await screen.findByTestId("store-orders-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(within(paginationFooter).getByText(/page 1 of 2/i)).toBeInTheDocument();
+
+    const nextBtn = within(paginationFooter).getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeEnabled();
+    fireEvent.click(nextBtn);
+
+    expect(getMock).toHaveBeenCalledWith(expect.stringContaining("page=2"));
+  });
 });
+

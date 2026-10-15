@@ -753,7 +753,7 @@ describe("StoreBookingsPage TDD", () => {
     // Verify discount list detail is now visible and contains promo info
     const discountList = screen.getByTestId("store-booking-discount-list");
     expect(discountList).toBeInTheDocument();
-    expect(within(discountList).getByText(/• WELCOME200/)).toBeInTheDocument();
+    expect(within(discountList).getByText(/• Discount Code \(WELCOME200\)/)).toBeInTheDocument();
     expect(within(discountList).getByText("-Rs 200.00")).toBeInTheDocument();
 
     // Click toggle again to collapse
@@ -948,7 +948,7 @@ describe("StoreBookingsPage TDD", () => {
     // Verify discount list detail is now visible and contains promo info
     const discountList = screen.getByTestId("store-booking-discount-list");
     expect(discountList).toBeInTheDocument();
-    expect(within(discountList).getByText(/• WELCOME200/)).toBeInTheDocument();
+    expect(within(discountList).getByText(/• Discount Code \(WELCOME200\)/)).toBeInTheDocument();
     expect(within(discountList).getByText("-Rs 200.00")).toBeInTheDocument();
 
     // Click toggle again to collapse
@@ -1181,4 +1181,256 @@ describe("StoreBookingsPage TDD", () => {
 
     expect(await screen.findByText("Search Param Test")).toBeInTheDocument();
   });
+
+  it("renders standardized Store Offer and Discount Code labels in booking details modal", async () => {
+    const user = userEvent.setup();
+    const mockBookings = [
+      {
+        id: "booking-promo-test",
+        orderId: "order-promo-test",
+        status: "APPROVED",
+        createdAt: new Date().toISOString(),
+        customerPhone: "+919876543210",
+        discountAmount: "110.00",
+        appliedOfferTitle: "Diagnostics 20%",
+        offerSavingAmount: 60,
+        discountCode: "DIAG50",
+        appliedDiscountCode: "DIAG50",
+        discountSavingAmount: 50,
+        subtotal: 500,
+        deliveryFee: 0,
+        total: 390,
+        items: [
+          {
+            id: "item-promo",
+            productName: "Diagnostic Blood Test",
+            variantLabel: "Comprehensive"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: new Date().toISOString(),
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/store/bookings?tab=APPROVED"]}>
+        <QueryClientProvider client={queryClient}>
+          <StoreBookingsPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const card = await screen.findByTestId("booking-card-booking-promo-test");
+    await user.click(card);
+
+    // Modal is opened
+    expect(await screen.findByText(/Buyer & Appointment/i)).toBeInTheDocument();
+
+    const toggle = screen.getByTestId("store-booking-discount-toggle");
+    await user.click(toggle);
+
+    // Assert standardized labels
+    expect(screen.getByText(/Store Offer \(Diagnostics 20%\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Discount Code \(DIAG50\)/)).toBeInTheDocument();
+    expect(screen.getByText("Total Discount:")).toBeInTheDocument();
+  });
+
+  it("displays service instructions badge in booking details modal when deliveryNote is present", async () => {
+    const user = userEvent.setup();
+    const mockBookings = [
+      {
+        id: "booking-note-test",
+        orderId: "order-note-test",
+        status: "APPROVED",
+        createdAt: new Date().toISOString(),
+        customerPhone: "+919876543210",
+        landmarkDescription: "Mall Road",
+        deliveryNote: "Patient needs early sample collection",
+        items: [
+          {
+            id: "item-note",
+            productName: "Diagnostic Blood Test",
+            variantLabel: "Standard"
+          }
+        ],
+        bookingOrder: {
+          scheduledDate: new Date().toISOString(),
+          timeslot: "09:00-12:00",
+          requiresFasting: false,
+          approvalStatus: "APPROVED"
+        }
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false } }
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/store/bookings?tab=APPROVED"]}>
+        <QueryClientProvider client={queryClient}>
+          <StoreBookingsPage />
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const card = await screen.findByTestId("booking-card-booking-note-test");
+    await user.click(card);
+
+    const noteBadge = await screen.findByTestId("store-booking-service-note");
+    expect(noteBadge).toBeInTheDocument();
+    expect(noteBadge).toHaveTextContent("Service Note: Patient needs early sample collection");
+  });
+
+  it("toggles between cards and table view and displays commerce-type aware status labels in table", async () => {
+    const mockBookings = [
+      {
+        id: "booking-toggle-1",
+        orderId: "order-toggle-1",
+        status: "OUT_FOR_DELIVERY",
+        createdAt: "2026-10-15T10:00:00.000Z",
+        customerPhone: "+919876543210",
+        items: [
+          { id: "item-1", productName: "Blood Sugar Test", variantLabel: "Standard", price: 300, quantity: 1 }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-10-16T09:00:00.000Z",
+          timeslot: "09:00-12:00",
+          requiresFasting: true,
+          approvalStatus: "APPROVED"
+        },
+        subtotal: 300,
+        deliveryFee: 50,
+        total: 350,
+        statusHistory: []
+      },
+      {
+        id: "booking-toggle-2",
+        orderId: "order-toggle-2",
+        status: "COMPLETED",
+        createdAt: "2026-10-15T11:00:00.000Z",
+        customerPhone: "+919876543211",
+        items: [
+          { id: "item-2", productName: "Thyroid Profile", variantLabel: "Standard", price: 600, quantity: 1 }
+        ],
+        bookingOrder: {
+          scheduledDate: "2026-10-16T12:00:00.000Z",
+          timeslot: "12:00-15:00",
+          requiresFasting: false,
+          approvalStatus: "COMPLETED"
+        },
+        subtotal: 600,
+        deliveryFee: 50,
+        total: 650,
+        statusHistory: []
+      }
+    ];
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookings
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    // Toggle buttons exist
+    const cardsBtn = await screen.findByTestId("view-mode-cards");
+    const tableBtn = await screen.findByTestId("view-mode-table");
+    expect(cardsBtn).toBeInTheDocument();
+    expect(tableBtn).toBeInTheDocument();
+
+    // Default is cards view
+    expect(await screen.findByTestId("booking-card-booking-toggle-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("store-bookings-table")).not.toBeInTheDocument();
+
+    // Switch to table view
+    const user = userEvent.setup();
+    await user.click(tableBtn);
+
+    const table = await screen.findByTestId("store-bookings-table");
+    expect(table).toBeInTheDocument();
+
+    // Verify commerce-type aware status labels in table
+    expect(within(table).getByText("On The Way")).toBeInTheDocument();
+    expect(within(table).getByText("Completed")).toBeInTheDocument();
+
+    // Open details modal from table action
+    const viewBtn = within(table).getByTestId("view-details-booking-toggle-1");
+    await user.click(viewBtn);
+
+    const modal = await screen.findByTestId("booking-details-modal");
+    expect(modal).toBeInTheDocument();
+  });
+
+  it("renders 20-per-page pagination controls for bookings and navigates pages", async () => {
+    const mockBookingsMany = Array.from({ length: 25 }, (_, i) => ({
+      id: `booking-pg-${i + 1}`,
+      orderId: `order-pg-${i + 1}`,
+      status: "APPROVED",
+      createdAt: "2026-10-15T10:00:00.000Z",
+      customerPhone: "+919876543210",
+      items: [
+        { id: `item-${i + 1}`, productName: `Service ${i + 1}`, variantLabel: "Standard", price: 200, quantity: 1 }
+      ],
+      bookingOrder: {
+        scheduledDate: "2026-10-16T09:00:00.000Z",
+        timeslot: "09:00-12:00",
+        requiresFasting: false,
+        approvalStatus: "APPROVED"
+      },
+      subtotal: 200,
+      deliveryFee: 50,
+      total: 250,
+      statusHistory: []
+    }));
+
+    getMock.mockResolvedValue({
+      data: {
+        success: true,
+        data: mockBookingsMany
+      }
+    });
+
+    renderWithProviders(<StoreBookingsPage />);
+
+    expect(await screen.findByTestId("booking-card-booking-pg-1")).toBeInTheDocument();
+
+    const paginationFooter = await screen.findByTestId("store-bookings-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(within(paginationFooter).getByText(/page 1 of 2/i)).toBeInTheDocument();
+
+    const nextBtn = within(paginationFooter).getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeEnabled();
+
+    const user = userEvent.setup();
+    await user.click(nextBtn);
+
+    expect(within(paginationFooter).getByText(/page 2 of 2/i)).toBeInTheDocument();
+    expect(await screen.findByTestId("booking-card-booking-pg-25")).toBeInTheDocument();
+  });
 });
+

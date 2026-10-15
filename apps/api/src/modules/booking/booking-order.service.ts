@@ -30,7 +30,8 @@ export class BookingOrderService {
     bookingDetails: { scheduledDate: Date; timeslot: string; addressId: string },
     ip?: string,
     userAgent?: string,
-    discountCode?: string
+    discountCode?: string,
+    deliveryNote?: string | null
   ): Promise<Order> {
     if (!items || items.length === 0) {
       throw new ValidationError("Booking order must contain at least one item.");
@@ -202,6 +203,7 @@ export class BookingOrderService {
     });
 
     let appliedOfferAmount = new Prisma.Decimal(0);
+    let appliedOfferTitle: string | null = null;
     for (const offer of activeOffers) {
       const minOrderAmount =
         offer.minOrderAmount === null ? null : new Prisma.Decimal(offer.minOrderAmount.toString());
@@ -220,12 +222,16 @@ export class BookingOrderService {
         currentOfferAmount = Prisma.Decimal.min(subtotal.sub(appliedOfferAmount), currentOfferAmount);
         if (currentOfferAmount.greaterThan(0)) {
           appliedOfferAmount = appliedOfferAmount.add(currentOfferAmount);
+          if (!appliedOfferTitle) {
+            appliedOfferTitle = offer.title;
+          }
         }
       }
     }
 
     const serviceChargeVal = await this.systemSettingService.getSettingValue("SERVICE_CHARGE", "0");
     const serviceCharge = new Prisma.Decimal(serviceChargeVal);
+    const gstRateVal = await this.systemSettingService.getSettingValue("GST_RATE", "18.00");
 
     const total = Prisma.Decimal.max(
       subtotal.add(serviceCharge).sub(appliedDiscountAmount).sub(appliedOfferAmount),
@@ -254,9 +260,14 @@ export class BookingOrderService {
           landmarkDescription: address.landmarkDescription,
           addressLabel: address.label,
           flatRoom: address.flatRoom,
+          deliveryNote: deliveryNote?.trim() ? deliveryNote.trim() : null,
           deliveryLat: address.lat,
           deliveryLng: address.lng,
           appliedDiscountCode: discountIdToIncrement ? normalizedCode : null,
+          discountSavingAmount: appliedDiscountAmount.greaterThan(0) ? appliedDiscountAmount : null,
+          offerSavingAmount: appliedOfferAmount.greaterThan(0) ? appliedOfferAmount : null,
+          appliedOfferTitle,
+          taxRate: new Prisma.Decimal(gstRateVal),
           items: {
             create: items.map((item) => {
               const v = variantMap.get(item.variantId)!;

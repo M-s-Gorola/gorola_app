@@ -362,11 +362,11 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByLabelText(/^Home$/));
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
-    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("Total Discount:")).toBeInTheDocument();
     expect(screen.getByText("-Rs 20.00")).toBeInTheDocument();
 
     await user.click(screen.getByTestId("discount-breakdown-toggle"));
-    expect(screen.getByTestId("checkout-coupon-discount")).toHaveTextContent("Discount (SAVE20)");
+    expect(screen.getByTestId("checkout-coupon-discount")).toHaveTextContent("Discount Code (SAVE20)");
     expect(screen.getByText("Total:")).toBeInTheDocument();
     expect(screen.getByText(/Rs\s*110\.00/)).toBeInTheDocument();
   });
@@ -453,7 +453,7 @@ describe("CheckoutPage", () => {
     await user.click(screen.getByLabelText(/^Home$/));
     await user.click(screen.getByRole("button", { name: /^Continue$/i }));
 
-    expect(screen.getByText("Discount:")).toBeInTheDocument();
+    expect(screen.getByText("Total Discount:")).toBeInTheDocument();
     expect(screen.getByText("-Rs 20.00")).toBeInTheDocument();
 
     await user.click(screen.getByTestId("discount-breakdown-toggle"));
@@ -638,6 +638,46 @@ describe("CheckoutPage", () => {
     expect(screen.queryByTestId("confirmation")).not.toBeInTheDocument();
 
     vi.unstubAllGlobals();
+  });
+
+  it("submits deliveryNote in POST /api/v1/orders when user enters delivery instructions", async () => {
+    postMock.mockResolvedValueOnce({
+      data: {
+        data: {
+          id: "order-with-note"
+        },
+        success: true
+      }
+    });
+
+    const user = userEvent.setup();
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText(/^Home$/));
+
+    const noteInput = screen.getByLabelText(/Delivery Note \/ Instructions for Rider/i);
+    await user.type(noteInput, "Gate code 5566, leave at guard");
+
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    const reviewNote = screen.getByTestId("review-delivery-note");
+    expect(reviewNote).toBeInTheDocument();
+    expect(reviewNote).toHaveTextContent("Gate code 5566, leave at guard");
+    expect(reviewNote).toHaveTextContent("Delivery Instructions");
+
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        "/api/v1/orders",
+        expect.objectContaining({
+          deliveryNote: "Gate code 5566, leave at guard"
+        })
+      );
+    });
   });
 });
 

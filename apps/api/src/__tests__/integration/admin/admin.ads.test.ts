@@ -155,9 +155,9 @@ describe("Admin Advertisements Integration Tests", () => {
       expect(res.statusCode).toBe(200);
       const body = res.json();
       expect(body.success).toBe(true);
-      expect(body.data.length).toBe(2);
-      expect(body.data[0]).toHaveProperty("storeName");
-      expect(body.data[0]).toHaveProperty("submittedAt");
+      expect(body.data.items.length).toBe(2);
+      expect(body.data.items[0]).toHaveProperty("storeName");
+      expect(body.data.items[0]).toHaveProperty("submittedAt");
     });
 
     it("should filter by PENDING status correctly", async () => {
@@ -195,9 +195,9 @@ describe("Admin Advertisements Integration Tests", () => {
 
       expect(res.statusCode).toBe(200);
       const body = res.json();
-      expect(body.data.length).toBe(1);
-      expect(body.data[0].title).toBe("Pending Ad");
-      expect(body.data[0].storeName).toBe("Hillside Groceries");
+      expect(body.data.items.length).toBe(1);
+      expect(body.data.items[0].title).toBe("Pending Ad");
+      expect(body.data.items[0].storeName).toBe("Hillside Groceries");
     });
   });
 

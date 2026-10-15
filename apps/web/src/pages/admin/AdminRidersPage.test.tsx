@@ -161,4 +161,165 @@ describe("AdminRidersPage", () => {
       });
     });
   });
+
+  it("renders 20-per-page pagination controls and navigates between pages", async () => {
+    const page1Riders = Array.from({ length: 20 }, (_, i) => ({
+      id: `rider-${i + 1}`,
+      name: `Rider ${i + 1}`,
+      phone: `+9190000000${i < 9 ? `0${i + 1}` : i + 1}`,
+      email: `rider${i + 1}@test.com`,
+      riderType: "DELIVERY",
+      isActive: true,
+      stores: []
+    }));
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/admin/stores")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      if (url.includes("page=2")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              items: [
+                {
+                  id: "rider-21",
+                  name: "Rider 21",
+                  phone: "+919000000021",
+                  email: "rider21@test.com",
+                  riderType: "FIELD_TECHNICIAN",
+                  isActive: true,
+                  stores: []
+                }
+              ],
+              total: 21,
+              page: 2,
+              limit: 20,
+              totalPages: 2
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            items: page1Riders,
+            total: 21,
+            page: 1,
+            limit: 20,
+            totalPages: 2
+          }
+        }
+      });
+    });
+
+    renderAdminRiders();
+
+    expect(await screen.findByText("Rider 1")).toBeInTheDocument();
+
+    const paginationFooter = await screen.findByTestId("admin-riders-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(paginationFooter).toHaveTextContent(/page 1 of 2/i);
+
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeEnabled();
+
+    fireEvent.click(nextBtn);
+
+    expect(await screen.findByText("Rider 21")).toBeInTheDocument();
+    expect(screen.getByTestId("admin-riders-pagination")).toHaveTextContent(/page 2 of 2/i);
+  });
+
+  it("boundary test: exactly 20 riders renders page 1 of 1 and next button is disabled", async () => {
+    const page1Riders = Array.from({ length: 20 }, (_, i) => ({
+      id: `rider-${i + 1}`,
+      name: `Exact Rider ${i + 1}`,
+      phone: `+9190000000${i < 9 ? `0${i + 1}` : i + 1}`,
+      email: `exact${i + 1}@test.com`,
+      riderType: "DELIVERY",
+      isActive: true,
+      stores: []
+    }));
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/admin/stores")) {
+        return Promise.resolve({ data: { success: true, data: [] } });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            items: page1Riders,
+            total: 20,
+            page: 1,
+            limit: 20,
+            totalPages: 1
+          }
+        }
+      });
+    });
+
+    renderAdminRiders();
+
+    expect(await screen.findByText("Exact Rider 1")).toBeInTheDocument();
+    const paginationFooter = await screen.findByTestId("admin-riders-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(paginationFooter).toHaveTextContent(/page 1 of 1/i);
+
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeDisabled();
+  });
+
+  it("handles paginated envelope from /api/v1/admin/stores and populates store options safely", async () => {
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/admin/stores")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              items: [
+                { id: "store-qc-1", name: "QC Grocery Store", storeType: "QUICK_COMMERCE", isActive: true },
+                { id: "store-book-1", name: "Diagnostic Booking Center", storeType: "BOOKING_COMMERCE", isActive: true }
+              ],
+              total: 2,
+              page: 1,
+              limit: 100,
+              totalPages: 1
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            items: [],
+            total: 0,
+            page: 1,
+            limit: 20,
+            totalPages: 1
+          }
+        }
+      });
+    });
+
+    renderAdminRiders();
+
+    expect(await screen.findByText("Platform Riders")).toBeInTheDocument();
+
+    // Open add modal
+    const addRiderBtn = screen.getByTestId("add-rider-button");
+    fireEvent.click(addRiderBtn);
+
+    expect(await screen.findByText("Add New Rider Partner")).toBeInTheDocument();
+
+    // Select Delivery Rider type
+    const deliveryRadio = screen.getByLabelText(/delivery rider/i);
+    fireEvent.click(deliveryRadio);
+
+    // Available stores should filter QC Store safely without throwing error
+    expect(await screen.findByText("QC Grocery Store")).toBeInTheDocument();
+  });
 });

@@ -1,6 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
   RefreshCw,
   Search
 } from "lucide-react";
@@ -24,7 +26,15 @@ type UserListItem = {
 
 type UsersListResponse = {
   success: boolean;
-  data: UserListItem[];
+  data:
+    | {
+        items: UserListItem[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+    | UserListItem[];
 };
 
 export function AdminUsersPage(): ReactElement {
@@ -35,6 +45,8 @@ export function AdminUsersPage(): ReactElement {
   // Search and debounce states
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   // Confirmation dialog states
   const [confirmStatusChangeUserId, setConfirmStatusChangeUserId] = useState<string | null>(null);
@@ -43,6 +55,7 @@ export function AdminUsersPage(): ReactElement {
   useEffect(() => {
     const handler = setTimeout(() => {
       setDebouncedSearch(searchInput.trim());
+      setPage(1);
     }, 300);
 
     return () => {
@@ -51,14 +64,17 @@ export function AdminUsersPage(): ReactElement {
   }, [searchInput]);
 
   // Fetch users query
-  const { data: users, isLoading, isError, isFetching, refetch } = useQuery<UserListItem[]>({
-    queryKey: ["admin", "users", debouncedSearch],
+  const { data: usersData, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ["admin", "users", debouncedSearch, page, limit],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const url = debouncedSearch
-        ? `/api/v1/admin/users?phone=${encodeURIComponent(debouncedSearch)}`
-        : "/api/v1/admin/users";
-      const res = await api.get<UsersListResponse>(url);
+      const params = new URLSearchParams();
+      params.append("page", page.toString());
+      params.append("limit", limit.toString());
+      if (debouncedSearch) {
+        params.append("phone", debouncedSearch);
+      }
+      const res = await api.get<UsersListResponse>(`/api/v1/admin/users?${params.toString()}`);
       return res.data.data;
     },
     staleTime: 10000
@@ -120,7 +136,9 @@ export function AdminUsersPage(): ReactElement {
     );
   }
 
-  const items = users || [];
+  const items: UserListItem[] = Array.isArray(usersData) ? usersData : (usersData?.items ?? []);
+  const total = Array.isArray(usersData) ? usersData.length : (usersData?.total ?? 0);
+  const totalPages = Array.isArray(usersData) ? (Math.ceil(total / limit) || 1) : (usersData?.totalPages ?? 1);
 
   return (
     <div className="space-y-6 pb-12">
@@ -239,13 +257,45 @@ export function AdminUsersPage(): ReactElement {
               )}
             </tbody>
           </table>
+
+          {/* Pagination Footer */}
+          <div
+            data-testid="admin-users-pagination"
+            className="flex items-center justify-between p-4 border-t border-gorola-charcoal/10 bg-gorola-mint/5"
+          >
+            <p className="text-xs font-medium text-gorola-slate">
+              Showing page {page} of {totalPages} ({total} users)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="pagination-prev-btn"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+              <button
+                type="button"
+                data-testid="pagination-next-btn"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+                aria-label="Next Page"
+              >
+                <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 
       {/* Confirmation Modal for Suspending/Unsuspending */}
       {confirmStatusChangeUserId && (
-        <div className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 animate-in zoom-in-95 duration-200">
+        <div data-lenis-prevent className="fixed inset-0 bg-gorola-charcoal/40 backdrop-blur-sm z-50 flex items-center justify-center p-4 overscroll-contain">
+          <div data-lenis-prevent className="bg-white rounded-3xl p-6 md:p-8 max-w-md w-full shadow-2xl space-y-4 overscroll-contain animate-in zoom-in-95 duration-200">
             {(() => {
               const targetUser = items.find((u) => u.id === confirmStatusChangeUserId);
               if (!targetUser) return null;

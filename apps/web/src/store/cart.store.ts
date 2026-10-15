@@ -28,6 +28,8 @@ type CartState = {
   activeOffers: ActiveOffer[];
   storeId: string | null;
   selectedPaymentMethod: "COD" | "UPI" | "CARD";
+  deliveryNote: string;
+  setDeliveryNote: (deliveryNote: string) => void;
   setActiveOffer: (offer: ActiveOffer | null) => void;
   setActiveOffers: (offers: ActiveOffer[]) => void;
   setStoreId: (storeId: string | null) => void;
@@ -84,6 +86,8 @@ export const useCartStore = create<CartState>((set, get) => ({
   activeOffers: [],
   storeId: null,
   selectedPaymentMethod: "COD",
+  deliveryNote: "",
+  setDeliveryNote: (deliveryNote) => set({ deliveryNote }),
   setActiveOffer: (offer) => set({ activeOffer: offer }),
   setActiveOffers: (offers) => set({ activeOffers: offers }),
   setStoreId: (storeId) => set({ storeId }),
@@ -137,7 +141,8 @@ export const useCartStore = create<CartState>((set, get) => ({
       activeOffer: null,
       activeOffers: [],
       storeId: null,
-      selectedPaymentMethod: "COD"
+      selectedPaymentMethod: "COD",
+      deliveryNote: ""
     }),
   totalItemCount: () => get().lines.reduce((acc, l) => acc + l.quantity, 0)
 }));

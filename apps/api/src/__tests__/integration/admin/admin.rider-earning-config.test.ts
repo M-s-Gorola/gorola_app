@@ -163,6 +163,35 @@ describe("Admin Rider Earning Config Integration Tests", () => {
     });
   });
 
+  describe("PUT /api/v1/admin/system-settings/TECHNICIAN_EARNING_RATE_PCT", () => {
+    it("should update setting TECHNICIAN_EARNING_RATE_PCT successfully", async () => {
+      const res = await server.inject({
+        method: "PUT",
+        url: "/api/v1/admin/system-settings/TECHNICIAN_EARNING_RATE_PCT",
+        headers: { authorization: `Bearer ${adminToken}` },
+        payload: { value: "90" }
+      });
+
+      expect(res.statusCode).toBe(200);
+
+      const dbSetting = await db.systemSetting.findUnique({
+        where: { key: "TECHNICIAN_EARNING_RATE_PCT" }
+      });
+      expect(dbSetting?.value).toBe("90");
+    });
+
+    it("should reject non-admin access with 403", async () => {
+      const res = await server.inject({
+        method: "PUT",
+        url: "/api/v1/admin/system-settings/TECHNICIAN_EARNING_RATE_PCT",
+        headers: { authorization: `Bearer ${storeOwnerToken}` },
+        payload: { value: "90" }
+      });
+
+      expect(res.statusCode).toBe(403);
+    });
+  });
+
   describe("PUT /api/v1/admin/stores/:storeId/rider-earning-rate", () => {
     it("should update store riderEarningRatePct override successfully", async () => {
       const res = await server.inject({

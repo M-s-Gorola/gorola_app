@@ -63,16 +63,16 @@ export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
     version: "1.0",
     effectiveDate: "29/09/2026",
     purpose:
-      "We process your location and transaction details to calculate accurate delivery routes, coordinate with local fulfillment hubs, assign delivery riders, and process electronic payments.",
+      "We process your location and transaction details to calculate accurate delivery routes, coordinate with local fulfillment hubs, assign delivery riders and field service technicians, and process electronic payments.",
     dataCollected: [
-      "Delivery Address & Landmark Notes",
-      "GPS Coordinates (saved address pin & order delivery coordinates)",
-      "Display Name (if you have set one) — shared with your assigned store partner and delivery rider for order identification",
+      "Delivery or Service Address & Landmark Notes",
+      "GPS Coordinates (saved address pin, order delivery coordinates, and on-site appointment locations)",
+      "Display Name (if you have set one) — shared with your assigned store partner, delivery rider, or field service technician for fulfillment and appointment verification",
       "Transaction & Billing Details (excluding raw credit card data/CVV) — only when online payment is selected"
     ],
     thirdParties: (
       <span>
-        Shared strictly on a need-to-know basis with: <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> (spatial routing and geolocation), <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> (secure payment processing — only when online payment is selected), and <strong className="font-semibold text-gorola-charcoal">Local Store Partners &amp; Assigned Delivery Riders</strong> (physical order fulfillment).
+        Your delivery address and masked contact details are shared strictly on a need-to-know basis with: <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> (spatial routing and geolocation), <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> (secure payment processing — only when online payment is selected), and verified <strong className="font-semibold text-gorola-charcoal">Store Partners, Delivery Riders, and Field Service Technicians</strong> solely for physical order fulfillment and scheduled on-site service appointments in compliance with the DPDP Act 2023.
       </span>
     ),
     retention: (

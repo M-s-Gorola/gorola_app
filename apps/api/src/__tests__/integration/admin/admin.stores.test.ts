@@ -215,12 +215,13 @@ describe("Admin Stores API Integration Tests", () => {
     });
     expect(resAll.statusCode).toBe(200);
     const bodyAll = resAll.json();
-    expect(bodyAll.data.length).toBe(1);
-    expect(bodyAll.data[0].name).toBe("Test Store 1");
-    expect(bodyAll.data[0].ownerEmail).toBe("test_owner_1@test.com");
-    expect(bodyAll.data[0].productCount).toBe(1);
-    expect(bodyAll.data[0].orderCount).toBe(1);
-    expect(bodyAll.data[0].revenue).toBe(50.00);
+    const storesAll = bodyAll.data.items ?? bodyAll.data;
+    expect(storesAll.length).toBe(1);
+    expect(storesAll[0].name).toBe("Test Store 1");
+    expect(storesAll[0].ownerEmail).toBe("test_owner_1@test.com");
+    expect(storesAll[0].productCount).toBe(1);
+    expect(storesAll[0].orderCount).toBe(1);
+    expect(storesAll[0].revenue).toBe(50.00);
 
     // 2. GET detail
     const resDetail = await server.inject({

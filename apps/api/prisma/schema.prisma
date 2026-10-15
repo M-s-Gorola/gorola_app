@@ -306,6 +306,10 @@ model Order {
   rating              Decimal?             @db.Decimal(2, 1)
   ratingComment       String?
   appliedDiscountCode String?
+  discountSavingAmount Decimal?            @db.Decimal(10, 2)
+  offerSavingAmount    Decimal?            @db.Decimal(10, 2)
+  appliedOfferTitle    String?             @db.Text
+  taxRate              Decimal?            @db.Decimal(5, 2)
   createdAt           DateTime             @default(now())
   updatedAt           DateTime             @updatedAt
   user                User                 @relation(fields: [userId], references: [id], onDelete: Restrict)

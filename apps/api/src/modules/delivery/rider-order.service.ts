@@ -167,7 +167,8 @@ export class RiderOrderService {
           riderId,
           orderId,
           order.deliveryFee,
-          order.storeId
+          order.storeId,
+          order.orderType
         );
       } catch (err) {
         console.error("Failed to create rider earning:", err);
