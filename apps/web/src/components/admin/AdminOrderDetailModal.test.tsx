@@ -4,6 +4,7 @@ import type { ReactElement } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 import { useAuthStore } from "@/store/auth.store";
+
 import { AdminOrderDetailModal } from "./AdminOrderDetailModal";
 
 const mockGet = vi.fn();
@@ -351,7 +352,7 @@ describe("AdminOrderDetailModal", () => {
       expect(storeOrderUpdatedCb).toBeDefined();
 
       act(() => {
-        storeOrderUpdatedCb({
+        storeOrderUpdatedCb!({
           orderId: "ord_1234567890",
           status: "OUT_FOR_DELIVERY",
           statusHistory: [
@@ -386,7 +387,7 @@ describe("AdminOrderDetailModal", () => {
 
       // Socket emits uppercase or mixed case order ID
       act(() => {
-        orderStatusChangedCb({
+        orderStatusChangedCb!({
           orderId: "ORD_1234567890",
           status: "CANCELLED",
           statusHistory: [
@@ -418,7 +419,7 @@ describe("AdminOrderDetailModal", () => {
       const orderStatusChangedCb = socketListeners["order_status_changed"];
 
       act(() => {
-        orderStatusChangedCb({
+        orderStatusChangedCb!({
           orderId: "ord_DIFFERENT_999",
           status: "CANCELLED"
         });
@@ -455,6 +456,22 @@ describe("AdminOrderDetailModal", () => {
       expect(screen.getByText(/02:00 PM - 04:00 PM/)).toBeInTheDocument();
       expect(screen.getByText(/Call when reaching gate/i)).toBeInTheDocument();
       expect(screen.getByText(/Fasting Required/i)).toBeInTheDocument();
+    });
+
+    it("does not disconnect socket when store ID becomes available", async () => {
+      const orderWithStoreId = {
+        ...mockOrderData,
+        store: { id: "store_99", name: "Test Store" }
+      };
+      mockGet.mockResolvedValueOnce({ data: { success: true, data: orderWithStoreId } });
+
+      renderWithClient(
+        <AdminOrderDetailModal orderId="ord_1234567890" onClose={vi.fn()} />
+      );
+
+      await screen.findByText(/#ORD_1234567890/i);
+      expect(mockSocket.disconnect).not.toHaveBeenCalled();
+      expect(mockSocket.emit).toHaveBeenCalledWith("join_store", "store_99");
     });
   });
 });

@@ -114,7 +114,8 @@ export function registerAdminRoutes(
     startsAt: z.string().optional(),
     endsAt: z.string().optional(),
     cursor: z.string().optional(),
-    limit: z.coerce.number().int().min(1).max(100).default(50)
+    page: z.coerce.number().int().min(1).optional(),
+    limit: z.coerce.number().int().min(1).max(100).default(20)
   });
 
   app.get("/api/v1/admin/orders", { preHandler }, async (request, reply) => {
@@ -207,7 +208,9 @@ export function registerAdminRoutes(
   });
 
   const getUsersQuerySchema = z.object({
-    phone: z.string().optional()
+    phone: z.string().optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20)
   });
 
   app.get("/api/v1/admin/users", { preHandler }, async (request, reply) => {
@@ -539,8 +542,17 @@ export function registerAdminRoutes(
     };
   });
 
+  const getStoresQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20)
+  });
+
   app.get("/api/v1/admin/stores", { preHandler }, async (request, reply) => {
-    const result = await adminService.getStores();
+    const parsed = getStoresQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+    const result = await adminService.getStores(parsed.data);
     return {
       success: true,
       data: result,
@@ -990,14 +1002,16 @@ export function registerAdminRoutes(
 
   app.get("/api/v1/admin/advertisements", { preHandler }, async (request, reply) => {
     const statusSchema = z.object({
-      status: z.enum(["PENDING", "APPROVED", "ALL"]).optional()
+      status: z.enum(["PENDING", "APPROVED", "ALL"]).optional(),
+      page: z.coerce.number().int().min(1).default(1),
+      limit: z.coerce.number().int().min(1).max(100).default(20)
     });
     const parsed = statusSchema.safeParse(request.query);
     if (!parsed.success) {
       throw new ValidationError("Invalid status filter", parsed.error.flatten());
     }
 
-    const result = await adminService.getAds(parsed.data.status);
+    const result = await adminService.getAds(parsed.data);
     return {
       success: true,
       data: result,
@@ -1172,8 +1186,17 @@ export function registerAdminRoutes(
     primaryStoreId: z.string().min(1, "Primary store must be specified").optional()
   });
 
+  const getRidersQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20)
+  });
+
   app.get("/api/v1/admin/riders", { preHandler }, async (request, reply) => {
-    const riders = await adminService.listRiders();
+    const parsed = getRidersQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      throw new ValidationError("Invalid query parameters", parsed.error.flatten());
+    }
+    const riders = await adminService.listRiders(parsed.data);
     return {
       success: true,
       data: riders,

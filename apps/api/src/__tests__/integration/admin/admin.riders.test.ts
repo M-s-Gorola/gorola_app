@@ -118,11 +118,12 @@ describe("Admin Riders Integration Tests", () => {
     expect(response.statusCode).toBe(200);
     const body = response.json();
     expect(body.success).toBe(true);
-    expect(body.data.length).toBe(1);
-    expect(body.data[0].id).toBe(rider.id);
-    expect(body.data[0].stores.length).toBe(1);
-    expect(body.data[0].stores[0].storeId).toBe(qcStore.id);
-    expect(body.data[0].stores[0].store.name).toBe("Quick Commerce Store");
+    const riders = body.data.items ?? body.data;
+    expect(riders.length).toBe(1);
+    expect(riders[0].id).toBe(rider.id);
+    expect(riders[0].stores.length).toBe(1);
+    expect(riders[0].stores[0].storeId).toBe(qcStore.id);
+    expect(riders[0].stores[0].store.name).toBe("Quick Commerce Store");
   });
 
   it("POST /api/v1/admin/riders should create a DELIVERY rider mapped to a QUICK_COMMERCE store", async () => {

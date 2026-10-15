@@ -1,8 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
   Download,
-  RefreshCw
+  LayoutGrid,
+  RefreshCw,
+  Table2
 } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
@@ -21,22 +25,6 @@ type OrderStatus =
   | "CANCELLED"
   | "PENDING_APPROVAL"
   | "APPROVED";
-
-type OrderItem = {
-  id: string;
-  productName: string;
-  variantLabel: string;
-  price: number;
-  quantity: number;
-};
-
-type OrderStatusHistory = {
-  id: string;
-  status: OrderStatus;
-  changedAt: string;
-  changedBy: string;
-  note?: string | null;
-};
 
 type OrderListItem = {
   id: string;
@@ -60,8 +48,12 @@ type OrdersResponse = {
   success: boolean;
   data: {
     items: OrderListItem[];
-    nextCursor: string | null;
+    nextCursor?: string | null;
     stores: StoreOption[];
+    total?: number;
+    page?: number;
+    limit?: number;
+    totalPages?: number;
   };
 };
 
@@ -76,10 +68,9 @@ export function AdminOrdersPage(): ReactElement {
   const startsAtFilter = searchParams.get("startsAt") ?? "";
   const endsAtFilter = searchParams.get("endsAt") ?? "";
 
-  // Cursor-based pagination state
-  const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [cursorIndex, setCursorIndex] = useState(0);
-  const currentCursor = cursors[cursorIndex];
+  // Pagination and view mode state
+  const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<"table" | "cards">("table");
 
   // Modals state
   const [selectedOrderDetailsId, setSelectedOrderDetailsId] = useState<string | null>(null);
@@ -87,7 +78,7 @@ export function AdminOrdersPage(): ReactElement {
   const [forceStatus, setForceStatus] = useState<OrderStatus>("CANCELLED");
   const [auditNote, setAuditNote] = useState("");
 
-  const limit = 50;
+  const limit = 20;
 
   // Invalidate pagination cursors if filters change
   const handleFilterChange = (key: string, value: string) => {
@@ -99,23 +90,22 @@ export function AdminOrdersPage(): ReactElement {
       }
       return prev;
     });
-    setCursors([null]);
-    setCursorIndex(0);
+    setPage(1);
   };
 
   // Fetch orders query
   const { data, isLoading, isError, isFetching, refetch } = useQuery<OrdersResponse["data"]>({
-    queryKey: ["admin", "orders", storeFilter, statusFilter, paymentFilter, startsAtFilter, endsAtFilter, currentCursor],
+    queryKey: ["admin", "orders", storeFilter, statusFilter, paymentFilter, startsAtFilter, endsAtFilter, page],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
       const params = new URLSearchParams();
+      params.append("page", page.toString());
       params.append("limit", limit.toString());
       if (storeFilter) params.append("storeId", storeFilter);
       if (statusFilter) params.append("status", statusFilter);
       if (paymentFilter) params.append("paymentMethod", paymentFilter);
       if (startsAtFilter) params.append("startsAt", startsAtFilter);
       if (endsAtFilter) params.append("endsAt", endsAtFilter);
-      if (currentCursor) params.append("cursor", currentCursor);
 
       const res = await api.get<OrdersResponse>(`/api/v1/admin/orders?${params.toString()}`);
       return res.data.data;
@@ -179,10 +169,6 @@ export function AdminOrdersPage(): ReactElement {
     }
   };
 
-  const getStatusBadgeClass = (status: OrderStatus) => {
-    return getStatusBadgeClasses(status);
-  };
-
   const formatCurrency = (val: number): string => {
     return `₹${val.toLocaleString("en-IN", {
       minimumFractionDigits: 2,
@@ -214,6 +200,8 @@ export function AdminOrdersPage(): ReactElement {
 
   const items = data?.items ?? [];
   const stores = data?.stores ?? [];
+  const total = data?.total ?? items.length;
+  const totalPages = data?.totalPages ?? (Math.ceil(total / limit) || 1);
 
   return (
     <div className="space-y-6">
@@ -227,6 +215,38 @@ export function AdminOrdersPage(): ReactElement {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* View Mode Toggle */}
+          <div className="flex items-center gap-1 bg-white border border-gorola-charcoal/10 rounded-xl p-1 shadow-sm">
+            <button
+              type="button"
+              data-testid="view-mode-table"
+              onClick={() => setViewMode("table")}
+              className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === "table"
+                  ? "bg-gorola-pine text-white shadow-xs"
+                  : "text-gorola-slate hover:text-gorola-charcoal hover:bg-gorola-mint/10"
+              }`}
+              title="Table View"
+            >
+              <Table2 className="h-4 w-4" />
+              <span className="hidden sm:inline">Table</span>
+            </button>
+            <button
+              type="button"
+              data-testid="view-mode-cards"
+              onClick={() => setViewMode("cards")}
+              className={`p-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                viewMode === "cards"
+                  ? "bg-gorola-pine text-white shadow-xs"
+                  : "text-gorola-slate hover:text-gorola-charcoal hover:bg-gorola-mint/10"
+              }`}
+              title="Cards View"
+            >
+              <LayoutGrid className="h-4 w-4" />
+              <span className="hidden sm:inline">Cards</span>
+            </button>
+          </div>
+
           <button
             onClick={handleExport}
             data-testid="export-csv-button"
@@ -278,8 +298,8 @@ export function AdminOrdersPage(): ReactElement {
             <option value="">All Statuses</option>
             <option value="PLACED">Placed</option>
             <option value="PREPARING">Preparing</option>
-            <option value="OUT_FOR_DELIVERY">Out for Delivery</option>
-            <option value="DELIVERED">Delivered</option>
+            <option value="OUT_FOR_DELIVERY">Out for Delivery / On The Way</option>
+            <option value="DELIVERED">Delivered / Completed</option>
             <option value="CANCELLED">Cancelled</option>
             <option value="PENDING_APPROVAL">Pending Approval</option>
             <option value="APPROVED">Approved</option>
@@ -327,113 +347,201 @@ export function AdminOrdersPage(): ReactElement {
         </div>
       </section>
 
-      {/* Orders Table */}
+      {/* Orders View (Table or Cards) */}
       <div className="bg-white rounded-2xl border border-gorola-charcoal/10 overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b border-gorola-charcoal/5 bg-gorola-mint/5">
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Order ID</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Date</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Store</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Buyer Phone</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Rider</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Items</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Total</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Status</th>
-                <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gorola-charcoal/[0.03]">
-              {items.map((order) => (
-                <tr key={order.id} className="hover:bg-gorola-mint/5 transition-colors">
-                  <td className="p-4 font-mono text-xs font-black text-gorola-charcoal">
-                    #{order.id.slice(-8).toUpperCase()}
-                  </td>
-                  <td className="p-4 text-xs text-gorola-slate font-medium">
-                    {new Date(order.createdAt).toLocaleDateString("en-IN", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit"
-                    })}
-                  </td>
-                  <td className="p-4 text-xs font-bold text-gorola-charcoal">{order.storeName}</td>
-                  <td className="p-4 text-xs font-bold text-gorola-slate">{order.buyerMaskedPhone}</td>
-                  <td className="p-4 text-xs font-bold text-gorola-slate">{order.riderName || "-"}</td>
-                  <td className="p-4 text-xs font-bold text-gorola-charcoal text-center">{order.itemsCount}</td>
-                  <td className="p-4 text-xs font-black text-gorola-charcoal text-right">
-                    {formatCurrency(order.total)}
-                  </td>
-                  <td className="p-4 text-center">
+        {viewMode === "table" ? (
+          <div data-testid="admin-orders-table" className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                <tr className="border-b border-gorola-charcoal/5 bg-gorola-mint/5">
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Order ID</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Date</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Store</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Buyer Phone</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider">Rider</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Items</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Total</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-center">Status</th>
+                  <th className="p-4 text-xs font-bold text-gorola-slate/60 uppercase tracking-wider text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gorola-charcoal/[0.03]">
+                {items.map((order) => (
+                  <tr key={order.id} className="hover:bg-gorola-mint/5 transition-colors">
+                    <td className="p-4 font-mono text-xs font-black text-gorola-charcoal">
+                      #{order.id.slice(-8).toUpperCase()}
+                    </td>
+                    <td className="p-4 text-xs text-gorola-slate font-medium">
+                      {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                        day: "numeric",
+                        month: "short",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </td>
+                    <td className="p-4 text-xs font-bold text-gorola-charcoal">{order.storeName}</td>
+                    <td className="p-4 text-xs font-bold text-gorola-slate">{order.buyerMaskedPhone}</td>
+                    <td className="p-4 text-xs font-bold text-gorola-slate">{order.riderName || "-"}</td>
+                    <td className="p-4 text-xs font-bold text-gorola-charcoal text-center">{order.itemsCount}</td>
+                    <td className="p-4 text-xs font-black text-gorola-charcoal text-right">
+                      {formatCurrency(order.total)}
+                    </td>
+                    <td className="p-4 text-center">
+                      <span
+                        className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadgeClasses(
+                          order.status
+                        )}`}
+                      >
+                        {formatStatusLabel(order.status, order.orderType)}
+                      </span>
+                    </td>
+                    <td className="p-4 text-right space-x-2 whitespace-nowrap">
+                      <button
+                        onClick={() => setSelectedOrderDetailsId(order.id)}
+                        data-testid={`view-details-${order.id}`}
+                        className="px-3 py-1.5 border border-gorola-pine/25 hover:border-gorola-pine text-gorola-pine hover:bg-gorola-pine/5 rounded-lg text-xs font-bold transition-all"
+                      >
+                        View Details
+                      </button>
+                      <button
+                        onClick={() => {
+                          setForceUpdateOrderId(order.id);
+                          setForceStatus(order.status);
+                        }}
+                        data-testid={`force-update-status-${order.id}`}
+                        className="px-3 py-1.5 bg-gorola-charcoal hover:bg-gorola-charcoal/90 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                      >
+                        Force Update
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr>
+                    <td colSpan={9} className="p-8 text-sm text-gorola-slate/60 italic text-center">
+                      No orders matching filters found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div data-testid="admin-orders-cards" className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {items.map((order) => (
+              <div
+                key={order.id}
+                className="bg-white rounded-2xl border border-gorola-charcoal/10 p-4 shadow-xs hover:shadow-md transition-all flex flex-col justify-between"
+              >
+                <div>
+                  <div className="flex items-center justify-between pb-3 border-b border-gorola-charcoal/5">
+                    <span className="font-mono font-bold text-xs text-gorola-charcoal">
+                      #{order.id.slice(-8).toUpperCase()}
+                    </span>
                     <span
-                      className={`inline-flex px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadgeClass(
+                      className={`inline-flex px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider border ${getStatusBadgeClasses(
                         order.status
                       )}`}
                     >
                       {formatStatusLabel(order.status, order.orderType)}
                     </span>
-                  </td>
-                  <td className="p-4 text-right space-x-2 whitespace-nowrap">
-                    <button
-                      onClick={() => setSelectedOrderDetailsId(order.id)}
-                      data-testid={`view-details-${order.id}`}
-                      className="px-3 py-1.5 border border-gorola-pine/25 hover:border-gorola-pine text-gorola-pine hover:bg-gorola-pine/5 rounded-lg text-xs font-bold transition-all"
-                    >
-                      View Details
-                    </button>
-                    <button
-                      onClick={() => {
-                        setForceUpdateOrderId(order.id);
-                        setForceStatus(order.status);
-                      }}
-                      data-testid={`force-update-status-${order.id}`}
-                      className="px-3 py-1.5 bg-gorola-charcoal hover:bg-gorola-charcoal/90 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
-                    >
-                      Force Update
-                    </button>
-                  </td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr>
-                  <td colSpan={8} className="p-8 text-sm text-gorola-slate/60 italic text-center">
-                    No orders matching filters found.
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Cursor Pagination */}
-        {data && (data.nextCursor || cursorIndex > 0) && (
-          <div className="flex justify-center items-center gap-4 py-4 border-t border-gorola-charcoal/5 bg-gorola-mint/5">
-            <button
-              disabled={cursorIndex === 0}
-              onClick={() => setCursorIndex((idx) => Math.max(idx - 1, 0))}
-              className="px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 disabled:opacity-50 disabled:pointer-events-none rounded-xl text-xs font-bold shadow-sm transition-all"
-            >
-              Previous
-            </button>
-            <span className="text-xs font-bold text-gorola-slate">Page {cursorIndex + 1}</span>
-            <button
-              disabled={!data.nextCursor}
-              onClick={() => {
-                if (data.nextCursor) {
-                  setCursors((prev) => {
-                    const nextList = [...prev.slice(0, cursorIndex + 1), data.nextCursor];
-                    return nextList;
-                  });
-                  setCursorIndex((idx) => idx + 1);
-                }
-              }}
-              className="px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 disabled:opacity-50 disabled:pointer-events-none rounded-xl text-xs font-bold shadow-sm transition-all"
-            >
-              Next
-            </button>
+                  </div>
+                  <div className="mt-3 space-y-2 text-xs">
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Store:</span>
+                      <span className="font-bold text-gorola-charcoal truncate max-w-[150px]">{order.storeName}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Buyer Phone:</span>
+                      <span className="font-mono font-semibold text-gorola-charcoal">{order.buyerMaskedPhone}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Rider / Tech:</span>
+                      <span className="font-medium text-gorola-charcoal">{order.riderName || "-"}</span>
+                    </div>
+                    <div className="flex items-center justify-between text-gorola-slate">
+                      <span>Items & Total:</span>
+                      <span className="font-black text-gorola-charcoal">
+                        {order.itemsCount} items • {formatCurrency(order.total)}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between text-[11px] text-gorola-slate/70 pt-1">
+                      <span>
+                        {new Date(order.createdAt).toLocaleString("en-IN", {
+                          day: "numeric",
+                          month: "short",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        })}
+                      </span>
+                      <span className="px-1.5 py-0.5 bg-gorola-mint/20 text-gorola-pine rounded font-bold uppercase text-[9px]">
+                        {order.paymentMethod}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+                <div className="mt-4 pt-3 border-t border-gorola-charcoal/5 flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setSelectedOrderDetailsId(order.id)}
+                    data-testid={`card-view-details-${order.id}`}
+                    className="px-3 py-1.5 border border-gorola-pine/25 hover:border-gorola-pine text-gorola-pine hover:bg-gorola-pine/5 rounded-lg text-xs font-bold transition-all"
+                  >
+                    View Details
+                  </button>
+                  <button
+                    onClick={() => {
+                      setForceUpdateOrderId(order.id);
+                      setForceStatus(order.status);
+                    }}
+                    data-testid={`card-force-update-${order.id}`}
+                    className="px-3 py-1.5 bg-gorola-charcoal hover:bg-gorola-charcoal/90 text-white rounded-lg text-xs font-bold transition-all shadow-sm"
+                  >
+                    Force Update
+                  </button>
+                </div>
+              </div>
+            ))}
+            {items.length === 0 && (
+              <div className="col-span-full p-8 text-sm text-gorola-slate/60 italic text-center">
+                No orders matching filters found.
+              </div>
+            )}
           </div>
         )}
+
+        {/* Persistent Pagination Bar */}
+        <div
+          data-testid="admin-orders-pagination"
+          className="flex flex-col sm:flex-row items-center justify-between gap-3 px-6 py-4 border-t border-gorola-charcoal/10 bg-gorola-mint/5"
+        >
+          <span className="text-xs font-bold text-gorola-slate">
+            Showing page <span className="text-gorola-charcoal font-black">{page}</span> of{" "}
+            <span className="text-gorola-charcoal font-black">{totalPages}</span> ({total} orders)
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              data-testid="pagination-prev-btn"
+              className="px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none rounded-xl text-xs font-bold text-gorola-charcoal shadow-sm transition-all flex items-center gap-1.5"
+            >
+              <ChevronLeft className="h-4 w-4" />
+              <span>Previous</span>
+            </button>
+            <span className="text-xs font-bold text-gorola-charcoal px-2">
+              Page {page} of {totalPages}
+            </span>
+            <button
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              data-testid="pagination-next-btn"
+              className="px-4 py-2 bg-white border border-gorola-charcoal/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none rounded-xl text-xs font-bold text-gorola-charcoal shadow-sm transition-all flex items-center gap-1.5"
+            >
+              <span>Next</span>
+              <ChevronRight className="h-4 w-4" />
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* Details Modal */}

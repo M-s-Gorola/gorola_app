@@ -2,11 +2,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
   CheckCircle,
+  ChevronLeft,
+  ChevronRight,
   Clock,
   FileText,
+  LayoutGrid,
   MapPin,
   Phone,
   ShoppingBag,
+  Table2,
   Truck,
   User,
   XCircle
@@ -171,6 +175,8 @@ export function StoreOrdersPage(): ReactElement {
   const [customTo, setCustomTo] = useState(() => searchParams.get("customTo") || "");
 
   const [page, setPage] = useState(1);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const limit = 20;
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const selectedOrderRef = useRef<Order | null>(null);
   selectedOrderRef.current = selectedOrder;
@@ -435,8 +441,6 @@ export function StoreOrdersPage(): ReactElement {
     };
   }, [storeId, accessToken, queryClient]);
 
-  const limit = 10;
-
   // 1. Query for fetching orders
   const {
     data,
@@ -667,6 +671,38 @@ export function StoreOrdersPage(): ReactElement {
             <option value="THIS_MONTH">This Month</option>
             <option value="CUSTOM">Custom Range</option>
           </select>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-white border border-gorola-mint/20 rounded-xl p-1 shadow-sm gap-1">
+            <button
+              type="button"
+              data-testid="view-mode-cards"
+              onClick={() => setViewMode("cards")}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === "cards"
+                  ? "bg-gorola-pine text-white shadow-sm"
+                  : "text-gorola-slate hover:text-gorola-charcoal hover:bg-gorola-mint/10"
+              }`}
+              title="Cards View"
+              aria-label="Cards View"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              data-testid="view-mode-table"
+              onClick={() => setViewMode("table")}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === "table"
+                  ? "bg-gorola-pine text-white shadow-sm"
+                  : "text-gorola-slate hover:text-gorola-charcoal hover:bg-gorola-mint/10"
+              }`}
+              title="Table View"
+              aria-label="Table View"
+            >
+              <Table2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -704,92 +740,182 @@ export function StoreOrdersPage(): ReactElement {
         </div>
       ) : data?.data && data.data.length > 0 ? (
         <div className="space-y-6">
-          <div className="grid gap-4 md:grid-cols-2">
-            {data.data.map((order) => (
-              <div
-                key={order.id}
-                data-testid={`order-card-${order.id}`}
-                onClick={() => setSelectedOrder(order)}
-                className="bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer flex flex-col justify-between"
-              >
-                <div>
-                  {/* Card Head */}
-                  <div className="flex justify-between items-start gap-4 mb-4">
-                    <div>
-                      <h4 className="font-mono text-sm font-black text-gorola-charcoal">
+          {viewMode === "table" ? (
+            <div className="bg-white border border-gorola-mint/15 rounded-2xl overflow-hidden shadow-sm overflow-x-auto">
+              <table className="w-full text-left border-collapse" data-testid="store-orders-table">
+                <thead>
+                  <tr className="border-b border-gorola-mint/15 bg-gorola-mint/5 text-[10px] font-black uppercase text-gorola-slate tracking-wider">
+                    <th className="py-3 px-4 whitespace-nowrap">Order ID</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Time / Date</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Customer</th>
+                    <th className="py-3 px-4">Items</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Total</th>
+                    <th className="py-3 px-4 whitespace-nowrap">Status</th>
+                    <th className="py-3 px-4 text-right whitespace-nowrap">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gorola-mint/10 text-xs">
+                  {data.data.map((order) => (
+                    <tr
+                      key={order.id}
+                      onClick={() => setSelectedOrder(order)}
+                      className="hover:bg-gorola-mint/5 transition-colors cursor-pointer"
+                    >
+                      <td className="py-3 px-4 font-mono font-bold text-gorola-charcoal text-[11px] whitespace-nowrap">
                         #{order.id.slice(-8).toUpperCase()}
-                      </h4>
-                      <p className="text-[10px] text-gorola-slate font-semibold mt-0.5">
-                        {new Date(order.createdAt).toLocaleTimeString("en-IN", {
-                          hour: "2-digit",
-                          minute: "2-digit"
-                        })}
+                      </td>
+                      <td className="py-3 px-4 text-gorola-slate whitespace-nowrap">
+                        <p className="font-semibold text-gorola-charcoal">
+                          {new Date(order.createdAt).toLocaleTimeString("en-IN", {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </p>
+                        <p className="text-[10px]">
+                          {new Date(order.createdAt).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short"
+                          })}
+                        </p>
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <p className="font-bold text-gorola-charcoal">{order.user?.name || "Registered User"}</p>
+                        <p className="font-mono text-[10px] text-gorola-slate">{order.buyerMaskedPhone}</p>
+                      </td>
+                      <td className="py-3 px-4 text-gorola-charcoal max-w-[260px] truncate">
+                        {order.items.map((item) => `${item.productName} (x${item.quantity})`).join(", ")}
+                      </td>
+                      <td className="py-3 px-4 font-black text-gorola-charcoal whitespace-nowrap">
+                        {formatCurrency(order.total)}
+                      </td>
+                      <td className="py-3 px-4 whitespace-nowrap">
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide border ${getStatusBadgeStyles(
+                            order.status
+                          )}`}
+                        >
+                          {getStatusIcon(order.status)}
+                          {formatStatusLabel(order.status, "QUICK")}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right whitespace-nowrap">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedOrder(order);
+                          }}
+                          data-testid={`view-details-${order.id}`}
+                          className="px-3 py-1.5 text-xs font-bold text-gorola-pine bg-gorola-pine/10 hover:bg-gorola-pine hover:text-white rounded-xl transition-all"
+                        >
+                          View Details
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2">
+              {data.data.map((order) => (
+                <div
+                  key={order.id}
+                  data-testid={`order-card-${order.id}`}
+                  onClick={() => setSelectedOrder(order)}
+                  className="bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 rounded-2xl p-6 shadow-sm hover:shadow-md transition-all duration-300 cursor-pointer flex flex-col justify-between"
+                >
+                  <div>
+                    {/* Card Head */}
+                    <div className="flex justify-between items-start gap-4 mb-4">
+                      <div>
+                        <h4 className="font-mono text-sm font-black text-gorola-charcoal">
+                          #{order.id.slice(-8).toUpperCase()}
+                        </h4>
+                        <p className="text-[10px] text-gorola-slate font-semibold mt-0.5">
+                          {new Date(order.createdAt).toLocaleTimeString("en-IN", {
+                            hour: "2-digit",
+                            minute: "2-digit"
+                          })}
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <ElapsedTimer createdAt={order.createdAt} />
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide border ${getStatusBadgeStyles(
+                            order.status
+                          )}`}
+                        >
+                          {getStatusIcon(order.status)}
+                          {formatStatusLabel(order.status)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Items summary */}
+                    <div className="space-y-1 mb-4">
+                      <p className="text-xs font-bold text-gorola-slate/80">
+                        {order.items.length} {order.items.length === 1 ? "Item" : "Items"}
+                      </p>
+                      <p className="text-xs text-gorola-charcoal font-semibold truncate max-w-[300px]">
+                        {order.items.map((item) => `${item.productName} (x${item.quantity})`).join(", ")}
                       </p>
                     </div>
+                  </div>
 
-                    <div className="flex items-center gap-2">
-                      <ElapsedTimer createdAt={order.createdAt} />
-                      <span
-                        className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-extrabold tracking-wide border ${getStatusBadgeStyles(
-                          order.status
-                        )}`}
-                      >
-                        {getStatusIcon(order.status)}
-                        {formatStatusLabel(order.status)}
-                      </span>
+                  <div className="pt-4 border-t border-gorola-mint/10 flex items-center justify-between">
+                    <div>
+                      <p className="text-[10px] text-gorola-slate uppercase tracking-wider font-bold">
+                        Grand Total
+                      </p>
+                      <p className="text-base font-black text-gorola-charcoal">
+                        {formatCurrency(order.total)}
+                      </p>
                     </div>
-                  </div>
-
-                  {/* Items summary */}
-                  <div className="space-y-1 mb-4">
-                    <p className="text-xs font-bold text-gorola-slate/80">
-                      {order.items.length} {order.items.length === 1 ? "Item" : "Items"}
-                    </p>
-                    <p className="text-xs text-gorola-charcoal font-semibold truncate max-w-[300px]">
-                      {order.items.map((item) => `${item.productName} (x${item.quantity})`).join(", ")}
-                    </p>
+                    <span className="text-xs font-extrabold text-gorola-pine hover:underline">
+                      View Details →
+                    </span>
                   </div>
                 </div>
-
-                <div className="pt-4 border-t border-gorola-mint/10 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] text-gorola-slate uppercase tracking-wider font-bold">
-                      Grand Total
-                    </p>
-                    <p className="text-base font-black text-gorola-charcoal">
-                      {formatCurrency(order.total)}
-                    </p>
-                  </div>
-                  <span className="text-xs font-extrabold text-gorola-pine hover:underline">
-                    View Details →
-                  </span>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* Pagination */}
-          {data.meta && (data.meta.total > limit) && (
-            <div className="flex justify-center items-center gap-4 pt-4">
-              <button
-                disabled={page <= 1}
-                onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                className="px-4 py-2 bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 disabled:opacity-50 disabled:pointer-events-none rounded-xl text-xs font-bold shadow-sm transition-all"
-              >
-                Previous
-              </button>
-              <span className="text-xs font-bold text-gorola-slate">
-                Page {page} of {Math.ceil(data.meta.total / limit)}
-              </span>
-              <button
-                disabled={!data.meta.hasMore}
-                onClick={() => setPage((p) => p + 1)}
-                className="px-4 py-2 bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 disabled:opacity-50 disabled:pointer-events-none rounded-xl text-xs font-bold shadow-sm transition-all"
-              >
-                Next
-              </button>
+              ))}
             </div>
           )}
+
+          {/* Pagination Card */}
+          <div
+            data-testid="store-orders-pagination"
+            className="bg-white border border-gorola-mint/20 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4"
+          >
+            <p className="text-xs font-semibold text-gorola-charcoal">
+              Showing page {page} of {Math.ceil((data.meta?.total || data.data.length) / limit) || 1} (
+              {data.meta?.total || data.data.length} orders)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="pagination-prev-btn"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="p-2 rounded-xl bg-white border border-gorola-charcoal/10 hover:bg-gorola-mint/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+              <button
+                type="button"
+                data-testid="pagination-next-btn"
+                disabled={
+                  data.meta ? !data.meta.hasMore && page >= Math.ceil(data.meta.total / limit) : data.data.length < limit
+                }
+                onClick={() => setPage((p) => p + 1)}
+                className="p-2 rounded-xl bg-white border border-gorola-charcoal/10 hover:bg-gorola-mint/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+                aria-label="Next Page"
+              >
+                <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="bg-white border border-gorola-mint/15 rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">

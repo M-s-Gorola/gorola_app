@@ -507,6 +507,138 @@ describe("AdminOrdersPage", () => {
     expect(statusPill).toBeInTheDocument();
     expect(statusPill.className).toContain("bg-blue-50 text-blue-800");
   });
+
+  it("displays renamed status filter options including On The Way and Completed for bookings", async () => {
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          items: [],
+          nextCursor: null,
+          stores: []
+        }
+      }
+    });
+
+    renderAdminOrders();
+
+    const statusSelect = await screen.findByTestId("filter-status-select");
+    const options = within(statusSelect).getAllByRole("option");
+    const outForDeliveryOption = options.find((opt) => opt.getAttribute("value") === "OUT_FOR_DELIVERY");
+    const deliveredOption = options.find((opt) => opt.getAttribute("value") === "DELIVERED");
+
+    expect(outForDeliveryOption).toHaveTextContent("Out for Delivery / On The Way");
+    expect(deliveredOption).toHaveTextContent("Delivered / Completed");
+  });
+
+  it("supports switching between Table and Cards view mode and opens details modal from card", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-card-1",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 2,
+            total: 250.0,
+            status: "PLACED",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        stores: [{ id: "store-1", name: "Dairy Plaza" }],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          id: "order-card-1",
+          status: "PLACED",
+          orderType: "QUICK",
+          subtotal: 220.0,
+          deliveryFee: 30.0,
+          total: 250.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Near Market",
+          flatRoom: "Flat 2",
+          createdAt: "2026-06-04T12:00:00.000Z",
+          buyerMaskedPhone: "******9001",
+          user: { name: "Buyer User", phone: "+919999999001" },
+          store: { name: "Dairy Plaza", phone: "+91000" },
+          items: [{ id: "item-1", productName: "Cheese", variantLabel: "200g", price: 220.0, quantity: 1 }],
+          statusHistory: []
+        }
+      }
+    });
+
+    renderAdminOrders();
+
+    // Default view is table
+    expect(await screen.findByTestId("admin-orders-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-orders-cards")).not.toBeInTheDocument();
+
+    // Toggle to cards view
+    const cardsToggle = screen.getByTestId("view-mode-cards");
+    fireEvent.click(cardsToggle);
+
+    // Cards view is now visible
+    expect(await screen.findByTestId("admin-orders-cards")).toBeInTheDocument();
+    expect(screen.queryByTestId("admin-orders-table")).not.toBeInTheDocument();
+
+    // Open detail modal from card
+    const cardViewDetailsBtn = screen.getByTestId("card-view-details-order-card-1");
+    fireEvent.click(cardViewDetailsBtn);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+    expect(await within(modal).findByText("Buyer User")).toBeInTheDocument();
+  });
+
+  it("always displays persistent pagination bar even when total <= 20", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: {
+        items: [
+          {
+            id: "order-single-1",
+            buyerMaskedPhone: "******9001",
+            storeName: "Dairy Plaza",
+            itemsCount: 1,
+            total: 100.0,
+            status: "PLACED",
+            createdAt: "2026-06-04T12:00:00.000Z",
+            paymentMethod: "COD"
+          }
+        ],
+        stores: [{ id: "store-1", name: "Dairy Plaza" }],
+        total: 1,
+        page: 1,
+        limit: 20,
+        totalPages: 1
+      }
+    };
+
+    getMock.mockResolvedValueOnce({ data: mockOrdersData });
+
+    renderAdminOrders();
+
+    const paginationBar = await screen.findByTestId("admin-orders-pagination");
+    expect(paginationBar).toBeInTheDocument();
+    expect(paginationBar).toHaveTextContent(/showing page 1 of 1 \(1 orders\)/i);
+
+    const prevBtn = screen.getByTestId("pagination-prev-btn");
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(prevBtn).toBeDisabled();
+    expect(nextBtn).toBeDisabled();
+  });
 });
 
 

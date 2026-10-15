@@ -654,5 +654,111 @@ describe("OrderHistoryPage", () => {
       expect(await screen.findByText("Quick Grocery Store")).toBeInTheDocument();
       expect(screen.getByText("Out For Delivery")).toBeInTheDocument();
     });
+
+    it("renders 20-per-page pagination controls when total > 20 and handles page navigation", async () => {
+      const page1Orders = Array.from({ length: 20 }, (_, i) => ({
+        id: `order-${i + 1}`,
+        store: { name: `Store ${i + 1}` },
+        total: "100.00",
+        status: "DELIVERED",
+        createdAt: "2026-10-15T10:00:00Z",
+        items: [],
+        rating: null,
+        ratingComment: null
+      }));
+
+      apiGetSpy.mockImplementation((url: string) => {
+        if (url.includes("page=2")) {
+          return Promise.resolve({
+            data: {
+              data: {
+                orders: [
+                  {
+                    id: "order-21",
+                    store: { name: "Store 21" },
+                    total: "200.00",
+                    status: "DELIVERED",
+                    createdAt: "2026-10-15T11:00:00Z",
+                    items: [],
+                    rating: null,
+                    ratingComment: null
+                  }
+                ],
+                total: 21,
+                page: 2,
+                limit: 20,
+                totalPages: 2
+              }
+            }
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          } as any);
+        }
+        return Promise.resolve({
+          data: {
+            data: {
+              orders: page1Orders,
+              total: 21,
+              page: 1,
+              limit: 20,
+              totalPages: 2
+            }
+          }
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        } as any);
+      });
+
+      renderComponent();
+
+      expect(await screen.findByText("Store 1")).toBeInTheDocument();
+
+      const paginationFooter = await screen.findByTestId("orders-pagination");
+      expect(paginationFooter).toBeInTheDocument();
+      expect(paginationFooter).toHaveTextContent(/page 1 of 2/i);
+
+      const nextBtn = screen.getByTestId("pagination-next-btn");
+      expect(nextBtn).toBeEnabled();
+
+      const user = userEvent.setup();
+      await user.click(nextBtn);
+
+      expect(await screen.findByText("Store 21")).toBeInTheDocument();
+      expect(screen.getByTestId("orders-pagination")).toHaveTextContent(/page 2 of 2/i);
+    });
+
+    it("boundary test: exactly 20 records renders page 1 of 1 and next button is disabled", async () => {
+      const page1Orders = Array.from({ length: 20 }, (_, i) => ({
+        id: `exact-order-${i + 1}`,
+        store: { name: `Exact Store ${i + 1}` },
+        total: "100.00",
+        status: "DELIVERED",
+        createdAt: "2026-10-15T10:00:00Z",
+        items: [],
+        rating: null,
+        ratingComment: null
+      }));
+
+      apiGetSpy.mockResolvedValue({
+        data: {
+          data: {
+            orders: page1Orders,
+            total: 20,
+            page: 1,
+            limit: 20,
+            totalPages: 1
+          }
+        }
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      } as any);
+
+      renderComponent();
+
+      expect(await screen.findByText("Exact Store 1")).toBeInTheDocument();
+      const paginationFooter = await screen.findByTestId("orders-pagination");
+      expect(paginationFooter).toBeInTheDocument();
+      expect(paginationFooter).toHaveTextContent(/page 1 of 1/i);
+
+      const nextBtn = screen.getByTestId("pagination-next-btn");
+      expect(nextBtn).toBeDisabled();
+    });
   });
 });

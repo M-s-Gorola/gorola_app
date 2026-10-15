@@ -829,5 +829,98 @@ describe("StoreOrdersPage", () => {
 
     expect(screen.queryByTestId("store-order-delivery-note")).not.toBeInTheDocument();
   });
+
+  it("toggles between cards and table view and opens modal from table", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: [
+        {
+          id: "order-toggle-1",
+          status: "OUT_FOR_DELIVERY",
+          subtotal: 500.0,
+          deliveryFee: 30.0,
+          total: 530.0,
+          paymentMethod: "COD",
+          landmarkDescription: "Mall Road",
+          createdAt: new Date().toISOString(),
+          buyerMaskedPhone: "*********3210",
+          items: [{ id: "item-1", productName: "Organic Milk", price: 500.0, quantity: 1 }],
+          statusHistory: []
+        }
+      ],
+      meta: { total: 1, page: 1, limit: 20, hasMore: false }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) return Promise.resolve({ data: { success: true, data: [] } });
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    // Verify view toggle buttons exist
+    const cardsBtn = await screen.findByTestId("view-mode-cards");
+    const tableBtn = await screen.findByTestId("view-mode-table");
+    expect(cardsBtn).toBeInTheDocument();
+    expect(tableBtn).toBeInTheDocument();
+
+    // Default is cards view
+    expect(await screen.findByTestId("order-card-order-toggle-1")).toBeInTheDocument();
+    expect(screen.queryByTestId("store-orders-table")).not.toBeInTheDocument();
+
+    // Switch to table view
+    fireEvent.click(tableBtn);
+
+    const table = await screen.findByTestId("store-orders-table");
+    expect(table).toBeInTheDocument();
+    expect(within(table).getByText("Organic Milk (x1)")).toBeInTheDocument();
+    expect(within(table).getByText("Out For Delivery")).toBeInTheDocument();
+
+    // Open details modal from table action
+    const viewBtn = within(table).getByTestId("view-details-order-toggle-1");
+    fireEvent.click(viewBtn);
+
+    const modal = await screen.findByTestId("order-details-modal");
+    expect(modal).toBeInTheDocument();
+  });
+
+  it("renders 20-per-page pagination controls and navigates pages", async () => {
+    const mockOrdersData = {
+      success: true,
+      data: Array.from({ length: 20 }, (_, i) => ({
+        id: `order-page-${i + 1}`,
+        status: "PLACED",
+        subtotal: 100.0,
+        deliveryFee: 20.0,
+        total: 120.0,
+        paymentMethod: "COD",
+        landmarkDescription: "Mall Road",
+        createdAt: new Date().toISOString(),
+        buyerMaskedPhone: "*********3210",
+        items: [{ id: `item-${i + 1}`, productName: `Product ${i + 1}`, price: 100.0, quantity: 1 }],
+        statusHistory: []
+      })),
+      meta: { total: 25, page: 1, limit: 20, hasMore: true }
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/offers")) return Promise.resolve({ data: { success: true, data: [] } });
+      return Promise.resolve({ data: mockOrdersData });
+    });
+
+    renderStoreOrders();
+
+    expect(await screen.findByTestId("order-card-order-page-1")).toBeInTheDocument();
+
+    const paginationFooter = await screen.findByTestId("store-orders-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(within(paginationFooter).getByText(/page 1 of 2/i)).toBeInTheDocument();
+
+    const nextBtn = within(paginationFooter).getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeEnabled();
+    fireEvent.click(nextBtn);
+
+    expect(getMock).toHaveBeenCalledWith(expect.stringContaining("page=2"));
+  });
 });
 

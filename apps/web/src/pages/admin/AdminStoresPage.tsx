@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Eye, EyeOff, Plus, RefreshCw } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Eye, EyeOff, Plus, RefreshCw } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -30,7 +30,15 @@ type AdminStore = {
 
 type StoresListResponse = {
   success: boolean;
-  data: AdminStore[];
+  data:
+    | {
+        items: AdminStore[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+    | AdminStore[];
 };
 
 export function AdminStoresPage(): ReactElement {
@@ -41,6 +49,8 @@ export function AdminStoresPage(): ReactElement {
   // Dialog and confirmation states
   const [isAddFormOpen, setIsAddFormOpen] = useState(false);
   const [confirmStatusChangeStoreId, setConfirmStatusChangeStoreId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   // Form states
   const [storeName, setStoreName] = useState("");
@@ -54,11 +64,11 @@ export function AdminStoresPage(): ReactElement {
   const [formError, setFormError] = useState<string | null>(null);
 
   // Fetch stores query
-  const { data: stores, isLoading, isError, isFetching, refetch } = useQuery<AdminStore[]>({
-    queryKey: ["admin", "stores"],
+  const { data: storesData, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ["admin", "stores", page, limit],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<StoresListResponse>("/api/v1/admin/stores");
+      const res = await api.get<StoresListResponse>(`/api/v1/admin/stores?page=${page}&limit=${limit}`);
       return res.data.data;
     },
     staleTime: 10000,
@@ -162,9 +172,13 @@ export function AdminStoresPage(): ReactElement {
     });
   };
 
+  const items: AdminStore[] = Array.isArray(storesData) ? storesData : (storesData?.items ?? []);
+  const total = Array.isArray(storesData) ? storesData.length : (storesData?.total ?? 0);
+  const totalPages = Array.isArray(storesData) ? (Math.ceil(total / limit) || 1) : (storesData?.totalPages ?? 1);
+
   const handleToggleStatusConfirm = () => {
     if (!confirmStatusChangeStoreId) return;
-    const store = stores?.find((s) => s.id === confirmStatusChangeStoreId);
+    const store = items.find((s) => s.id === confirmStatusChangeStoreId);
     if (!store) return;
 
     toggleStatusMutation.mutate({
@@ -180,7 +194,7 @@ export function AdminStoresPage(): ReactElement {
     })}`;
   };
 
-  if (isLoading && !stores) {
+  if (isLoading && !storesData) {
     return (
       <div data-testid="stores-loading-skeleton" className="space-y-6 animate-pulse">
         <div className="h-10 bg-gorola-charcoal/10 rounded-xl w-48" />
@@ -202,7 +216,6 @@ export function AdminStoresPage(): ReactElement {
     );
   }
 
-  const items = stores ?? [];
   const confirmStore = items.find((s) => s.id === confirmStatusChangeStoreId);
 
   return (
@@ -328,6 +341,38 @@ export function AdminStoresPage(): ReactElement {
               )}
             </tbody>
           </table>
+
+          {/* Pagination Footer */}
+          <div
+            data-testid="admin-stores-pagination"
+            className="flex items-center justify-between p-4 border-t border-gorola-charcoal/10 bg-gorola-mint/5"
+          >
+            <p className="text-xs font-medium text-gorola-slate">
+              Showing page {page} of {totalPages} ({total} stores)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="pagination-prev-btn"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+              <button
+                type="button"
+                data-testid="pagination-next-btn"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+                aria-label="Next Page"
+              >
+                <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

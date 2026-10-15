@@ -244,4 +244,118 @@ describe("AdminAdvertisementsPage", () => {
       expect(putMock).toHaveBeenCalledWith("/api/v1/admin/advertisements/ad-1/deactivate", {});
     });
   });
+
+  it("renders 20-per-page pagination controls and navigates between pages", async () => {
+    const page1Ads = Array.from({ length: 20 }, (_, i) => ({
+      id: `ad-${i + 1}`,
+      storeId: `store-${i + 1}`,
+      storeName: `Store ${i + 1}`,
+      title: `Ad Title ${i + 1}`,
+      imageUrl: "https://test.com/img.png",
+      linkUrl: "https://test.com/link",
+      startsAt: "2026-12-01T00:00:00.000Z",
+      endsAt: "2026-12-25T00:00:00.000Z",
+      isApproved: false,
+      isActive: true,
+      submittedAt: "2026-11-20T10:00:00.000Z"
+    }));
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("page=2")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              items: [
+                {
+                  id: "ad-21",
+                  storeId: "store-21",
+                  storeName: "Store 21",
+                  title: "Ad Title 21",
+                  imageUrl: "https://test.com/img21.png",
+                  linkUrl: "https://test.com/link21",
+                  startsAt: "2026-12-01T00:00:00.000Z",
+                  endsAt: "2026-12-25T00:00:00.000Z",
+                  isApproved: false,
+                  isActive: true,
+                  submittedAt: "2026-11-20T10:00:00.000Z"
+                }
+              ],
+              total: 21,
+              page: 2,
+              limit: 20,
+              totalPages: 2
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            items: page1Ads,
+            total: 21,
+            page: 1,
+            limit: 20,
+            totalPages: 2
+          }
+        }
+      });
+    });
+
+    renderAdminAdvertisements();
+
+    expect(await screen.findByText("Ad Title 1")).toBeInTheDocument();
+
+    const paginationFooter = await screen.findByTestId("admin-advertisements-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(paginationFooter).toHaveTextContent(/page 1 of 2/i);
+
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeEnabled();
+
+    fireEvent.click(nextBtn);
+
+    expect(await screen.findByText("Ad Title 21")).toBeInTheDocument();
+    expect(screen.getByTestId("admin-advertisements-pagination")).toHaveTextContent(/page 2 of 2/i);
+  });
+
+  it("boundary test: exactly 20 advertisements renders page 1 of 1 and next button is disabled", async () => {
+    const page1Ads = Array.from({ length: 20 }, (_, i) => ({
+      id: `exact-ad-${i + 1}`,
+      storeId: `store-${i + 1}`,
+      storeName: `Exact Store ${i + 1}`,
+      title: `Exact Ad ${i + 1}`,
+      imageUrl: "https://test.com/img.png",
+      linkUrl: "https://test.com/link",
+      startsAt: "2026-12-01T00:00:00.000Z",
+      endsAt: "2026-12-25T00:00:00.000Z",
+      isApproved: false,
+      isActive: true,
+      submittedAt: "2026-11-20T10:00:00.000Z"
+    }));
+
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          items: page1Ads,
+          total: 20,
+          page: 1,
+          limit: 20,
+          totalPages: 1
+        }
+      }
+    });
+
+    renderAdminAdvertisements();
+
+    expect(await screen.findByText("Exact Ad 1")).toBeInTheDocument();
+    const paginationFooter = await screen.findByTestId("admin-advertisements-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(paginationFooter).toHaveTextContent(/page 1 of 1/i);
+
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeDisabled();
+  });
 });

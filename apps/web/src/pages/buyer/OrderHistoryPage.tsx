@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { format } from "date-fns";
-import { CheckCircle2, ChevronRight, Clock, MessageSquare, RefreshCcw } from "lucide-react";
+import { CheckCircle2, ChevronLeft, ChevronRight, Clock, MessageSquare, RefreshCcw } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { io } from "socket.io-client";
@@ -64,6 +64,8 @@ export function OrderHistoryPage() {
   const [ratingComment, setRatingComment] = useState<Record<string, string>>({});
   const [activeRating, setActiveRating] = useState<Record<string, number>>({});
   const [filter, setFilter] = useState<"all" | "quick" | "booking">("all");
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   const getBadgeDetails = (order: Order) => {
     const isBooking = order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE";
@@ -106,13 +108,17 @@ export function OrderHistoryPage() {
 
   const accessToken = useAuthStore((s) => s.accessToken);
 
-  const { data: orders, isLoading, isFetching, refetch } = useQuery({
-    queryKey: ["orders", "history"],
+  const { data: orderResponse, isLoading, isFetching, refetch } = useQuery({
+    queryKey: ["orders", "history", { page, limit }],
     queryFn: async () => {
-      const res = await api!.get("/api/v1/orders/history");
-      return res.data.data.orders as Order[];
+      const res = await api!.get(`/api/v1/orders/history?page=${page}&limit=${limit}`);
+      return res.data.data;
     }
   });
+
+  const orders = (orderResponse?.orders ?? (Array.isArray(orderResponse) ? orderResponse : [])) as Order[];
+  const total = Number(orderResponse?.total ?? orders?.length ?? 0);
+  const totalPages = Number(orderResponse?.totalPages ?? (Math.ceil(total / limit) || 1));
 
   const filteredOrders = orders?.filter((order) => {
     const isBooking = order.orderType === "BOOKING" || order.store?.storeType === "BOOKING_COMMERCE";
@@ -268,7 +274,10 @@ export function OrderHistoryPage() {
       {/* Filter Tabs */}
       <div className="flex flex-wrap gap-2 p-1 bg-gorola-charcoal/[0.04] rounded-2xl mb-6 w-full select-none">
         <button
-          onClick={() => setFilter("all")}
+          onClick={() => {
+            setFilter("all");
+            setPage(1);
+          }}
           className={`flex-1 py-2 px-3 sm:px-4 text-center rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
             filter === "all"
               ? "bg-white text-gorola-charcoal shadow-sm"
@@ -278,7 +287,10 @@ export function OrderHistoryPage() {
           All
         </button>
         <button
-          onClick={() => setFilter("quick")}
+          onClick={() => {
+            setFilter("quick");
+            setPage(1);
+          }}
           className={`flex-1 py-2 px-3 sm:px-4 text-center rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
             filter === "quick"
               ? "bg-white text-gorola-pine shadow-sm"
@@ -288,7 +300,10 @@ export function OrderHistoryPage() {
           ⚡ Instant Deliveries
         </button>
         <button
-          onClick={() => setFilter("booking")}
+          onClick={() => {
+            setFilter("booking");
+            setPage(1);
+          }}
           className={`flex-1 py-2 px-3 sm:px-4 text-center rounded-xl text-xs sm:text-sm font-bold whitespace-nowrap transition-all duration-300 ${
             filter === "booking"
               ? "bg-white text-indigo-600 shadow-sm"
@@ -465,6 +480,40 @@ export function OrderHistoryPage() {
           );
         })}
       </div>
+
+      {/* Pagination Card */}
+      {orders && orders.length > 0 && (
+        <div
+          data-testid="orders-pagination"
+          className="bg-white border border-gorola-charcoal/10 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4 mt-6"
+        >
+          <p className="text-xs font-semibold text-gorola-charcoal">
+            Showing page {page} of {totalPages} ({total} orders)
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              data-testid="pagination-prev-btn"
+              disabled={page <= 1}
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              className="p-2 rounded-xl bg-white border border-gorola-charcoal/10 hover:bg-gorola-mint/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+              aria-label="Previous Page"
+            >
+              <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+            </button>
+            <button
+              type="button"
+              data-testid="pagination-next-btn"
+              disabled={page >= totalPages}
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              className="p-2 rounded-xl bg-white border border-gorola-charcoal/10 hover:bg-gorola-mint/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+              aria-label="Next Page"
+            >
+              <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

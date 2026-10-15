@@ -168,12 +168,45 @@ export class OrderRepository {
     });
   }
 
-  public async findByUserId(userId: string): Promise<OrderWithRelations[]> {
-    return this.db.order.findMany({
-      include: orderRelationsInclude,
-      orderBy: { createdAt: "desc" },
-      where: { userId }
-    });
+  public async findByUserId(userId: string): Promise<OrderWithRelations[]>;
+  public async findByUserId(
+    userId: string,
+    pagination: { page?: number; limit?: number }
+  ): Promise<{ orders: OrderWithRelations[]; total: number; page: number; limit: number; totalPages: number }>;
+  public async findByUserId(
+    userId: string,
+    pagination?: { page?: number; limit?: number }
+  ): Promise<OrderWithRelations[] | { orders: OrderWithRelations[]; total: number; page: number; limit: number; totalPages: number }> {
+    if (!pagination) {
+      return this.db.order.findMany({
+        include: orderRelationsInclude,
+        orderBy: { createdAt: "desc" },
+        where: { userId }
+      });
+    }
+
+    const page = Math.max(1, pagination.page ?? 1);
+    const limit = Math.max(1, pagination.limit ?? 20);
+    const skip = (page - 1) * limit;
+
+    const [orders, total] = await Promise.all([
+      this.db.order.findMany({
+        include: orderRelationsInclude,
+        orderBy: { createdAt: "desc" },
+        where: { userId },
+        skip,
+        take: limit
+      }),
+      this.db.order.count({ where: { userId } })
+    ]);
+
+    return {
+      orders,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   public async findByStoreId(storeId: string): Promise<OrderWithRelations[]> {

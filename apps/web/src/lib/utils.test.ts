@@ -48,6 +48,12 @@ describe("utils", () => {
         expect(formatStatusLabel("REJECTED", "BOOKING")).toBe("Rejected");
         expect(formatStatusLabel("CANCELLED", "BOOKING")).toBe("Cancelled");
       });
+
+      it("translates statuses properly when passed BOOKING_COMMERCE storeType", () => {
+        expect(formatStatusLabel("OUT_FOR_DELIVERY", "BOOKING_COMMERCE")).toBe("On The Way");
+        expect(formatStatusLabel("DELIVERED", "BOOKING_COMMERCE")).toBe("Completed");
+        expect(formatStatusLabel("APPROVED", "BOOKING_COMMERCE")).toBe("Approved");
+      });
     });
 
     describe("Edge and Special Cases", () => {
@@ -86,7 +92,8 @@ describe("utils", () => {
 
   describe("cn (tailwind merge)", () => {
     it("merges class names correctly", () => {
-      expect(cn("px-2", "py-1", true && "text-red-500")).toBe("px-2 py-1 text-red-500");
+      const isRed = Boolean(1);
+      expect(cn("px-2", "py-1", isRed && "text-red-500")).toBe("px-2 py-1 text-red-500");
       expect(cn("px-2 px-4")).toBe("px-4");
     });
   });

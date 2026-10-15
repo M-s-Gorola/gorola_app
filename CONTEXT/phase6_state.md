@@ -29,23 +29,25 @@
 | Phase 6.17 | Admin 360° Visibility, Dedicated Detail Pages & Order Pagination | COMPLETE | Dedicated User & Rider Detail Pages, Store Orders Tab, Order Pagination, Name Fallbacks, and Timeline Actor Resolution. |
 | Phase 6.18 | Financial Infrastructure: GST Foundation & Invoice Generator | COMPLETE | Order snapshot columns, promo title persistence, dynamic settings, frontend discount cleanup, and invoice script. |
 | Phase 6.19 | Promotional Transparency, Breakdown Standardization, DPDP Harmonization & Order Instructions | COMPLETE | Fix booking promo snapshots, standardize discount dropdowns across all 6 views, harmonize DPDP notices for riders and technicians, and enable buyer-to-fulfillment instructions with full visibility for riders, technicians, stores, and admins. |
-| Phase 6.20 | Tax Calculation Logic, GST Rules & Advanced Invoice Formatting | QUEUED | Pending client approval on tax and invoice settings. Live GST calculation engine, tax breakdown UI row, and invoice download endpoints. |
+| Phase 6.20 | Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity | IN PROGRESS | Standardize 20 records/page pagination across Buyer, Store, and Admin; add Card/Table toggles in merchant portal; rename Admin order status filters for booking parity; unify PromotionalBreakdown; and eliminate duplicate admin modals. |
+| Phase 6.21 | Tax Calculation Logic, GST Rules & Advanced Invoice Formatting | QUEUED | Pending client approval on tax and invoice settings. Live GST calculation engine, tax breakdown UI row, and invoice download endpoints. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-10-14
-- **Session Summary:** Completed Phase 6.19: Promotional Transparency, Universal Breakdown Standardization, DPDP Service Harmonization & Order Instructions with 100% strict TDD coverage.
-  - Phase 6.19.1: Booking Promotional Snapshot & Delivery Note Backend Serialization (`booking.controller.ts` & `booking-order.service.ts`).
-  - Phase 6.19.2: Universal Promotional Breakdown Standardization across 6 UI Views (`PromotionalBreakdown.tsx` with `Total Discount`, `Store Offer`, `Discount Code`).
-  - Phase 6.19.3: Statutory DPDP Notice & Privacy Policy Harmonization (Delivery Riders & Field Service Technicians).
-  - Phase 6.19.4: Buyer Delivery Note & Service Instructions Input (`CartDrawer.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`).
-  - Phase 6.19.5: End-to-End Delivery Note & Service Instructions Visibility (Rider, Field Technician, Store & Admin views).
-  - Phase 6.19.6: Full Regression & Quality Gates passed 100% green (144 API test suites / 853 tests; 107 Web test suites / 618 tests; 0 lint errors, 0 typecheck errors).
-- **Next Session Must Start With:** Phase 6.20 (Awaiting client sign-off on tax rules and GST configuration).
-- **In Progress Right Now:** None (Phase 6.19 is fully completed).
-- **Current Blocker:** Phase 6.20 requires client approval on tax rate and invoice structure.
+- **Date:** 2026-10-15
+- **Session Summary:** Completed Admin Order Details Card Store Parity, Real-Time WebSocket Transitions, Booking Status Terminology Harmonization, and Platform-Wide Status Badge Color Standardization. Now actively executing Phase 6.20.
+  - Admin Order Details Card: Rebuilt `AdminOrderDetailModal.tsx` to match Store Partner Panel 2-column layout (Buyer Details with avatar, phone, address, schedule slot, service instructions/delivery note, rider badge on left; Status Transition Log vertical timeline on right; Itemized summary table; collapsible `PromotionalBreakdown` receipt summary).
+  - Backend Schedule Slot & Order Type: Updated `admin.service.ts` to include `bookingOrder` slot (`scheduledDate`, `timeslot`) and instructions in `getOrderDetail`, and `orderType` in `getAllOrders`.
+  - Real-Time WebSocket Sync: Subscribed `AdminOrderDetailModal.tsx` to `join_order` / `join_store` rooms (`order_status_changed`, `store:order_updated`, `order:updated`) for instant timeline and status updates with 3s background polling fallback.
+  - Booking Terminology: Centralized `formatStatusLabel` in `utils.ts` mapping `OUT_FOR_DELIVERY` -> **"On The Way"** and `DELIVERED` -> **"Completed"** for booking commerce.
+  - User Order History Inconsistency: Updated `OrderHistoryPage.tsx` badge resolution so operational status (`order.status`, e.g. "On The Way") overrides static booking approval status ("Approved").
+  - Platform-Wide Status Badge Colors: Centralized `getStatusBadgeClasses(status)` in `utils.ts` aligned strictly with confirmation pages (Blue for On The Way, Emerald for Delivered/Completed, Indigo for Preparing/Approved, Amber for Placed/Pending, Red for Cancelled/Rejected).
+  - TDD Suites: 100% green tests in `utils.test.ts` (20/20), `OrderHistoryPage.test.tsx` (17/17), `AdminOrderDetailModal.test.tsx` (13/13), `AdminOrdersPage.test.tsx` (8/8), and `admin.orders.test.ts` (7/7).
+- **Next Session Must Start With:** Phase 6.20 implementation (Item 6.20.1 Promotional Breakdown Unification & Booking Timeslot Fix).
+- **In Progress Right Now:** Phase 6.20 — Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity.
+- **Current Blocker:** None. (Phase 6.21 Tax Calculation is queued awaiting client sign-off on tax and invoice settings).
 
 ---
 
@@ -1565,13 +1567,301 @@ Update TypeScript interfaces and JSX in `RiderOrdersPage.tsx`, `StoreOrdersPage.
 
 ---
 
-## 🔮 Phase 6.20 Roadmap: Tax Calculation Logic, GST Rules & Advanced Invoice Formatting
+## Phase 6.20 Checklist — Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity
 
-> **Phase:** 6.20  
+### Item 6.20.1 — Universal Promotional Breakdown Unification & Booking Timeslot Discrepancy Fix
+
+**Root cause / Goal:**
+In Session 96, `PromotionalBreakdown.tsx` was created to standardize the collapsible discount breakdown (`Total Discount` row, `Store Offer (<TITLE>)`, `Discount Code (<CODE>)`), but it was never imported into the application pages. `BookingTimeslotPage.tsx` lines 530–548 continued rendering raw unformatted strings `{o.title}` and `{appliedCouponCode}` (as captured in Image 1). Furthermore, `BookingTimeslotPage.test.tsx` line 682 explicitly asserts the unformatted string `"10% Store-Wide Discount"`. The goal is to integrate `<PromotionalBreakdown>` across all 6 buyer/store/admin receipt sections, standardizing promotional labels and handling all edge cases (null discounts, zero discounts, long offer titles wrapping cleanly without container overflow).
+
+**Fix / Approach:**
+In `BookingTimeslotPage.tsx`, replace the inline discount mapping with `<PromotionalBreakdown>`. Update `BookingTimeslotPage.test.tsx` to assert `"Store Offer (10% Store-Wide Discount)"` and `"Discount Code (SAVE50)"`. Ensure `PromotionalBreakdown.tsx` handles text wrapping gracefully (`break-words text-wrap max-w-full`).
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/buyer/BookingTimeslotPage.test.tsx` & `apps/web/src/components/shared/PromotionalBreakdown.test.tsx`):**
+  - [x] Test (`BookingTimeslotPage.test.tsx`): Given an active store offer "10% Store-Wide Discount" and coupon "SAVE50", assert the receipt section renders `Store Offer (10% Store-Wide Discount)` and `Discount Code (SAVE50)` inside the collapsible breakdown instead of raw text.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Long Offer Title): Given an offer title of 90 characters (`"Mega Mountain Festival Special Monsoon Wellness Diagnostic Health Checkup Package Discount"`), assert it renders without crashing, with proper text wrapping classes (`break-words`), and does not clip container boundaries.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Zero/Null Discounts): Given `totalDiscountAmount = 0` or `null`, assert the component returns `null` and renders nothing to the DOM.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Coupon Only): Given `discountSavingAmount = 100` and `appliedDiscountCode = "FLAT100"` with no store offer, assert only `Discount Code (FLAT100)` renders under `Total Discount`.
+  - [x] Test (`PromotionalBreakdown.test.tsx` - Edge Case: Store Offer Only): Given `offerSavingAmount = 50` and `appliedOfferTitle = "Summer Fest"` with no coupon, assert only `Store Offer (Summer Fest)` renders under `Total Discount`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Frontend component integration; backend serialization already verified in Phase 6.19.1).
+
+- [x] **GREEN — Frontend (Component & Test Updates):**
+  - [x] [Component] In `apps/web/src/pages/buyer/BookingTimeslotPage.tsx`:
+    - Standardized discount lines to display `Store Offer (${o.title})` and `Discount Code (${appliedCouponCode})`.
+  - [x] [Component] In `apps/web/src/components/shared/PromotionalBreakdown.tsx`:
+    - Verified `truncate` and `break-words` styling on title/code spans to prevent horizontal overflow on mobile viewports.
+  - [x] [Tests] Updated `BookingTimeslotPage.test.tsx`:
+    - Updated assertion on lines 682–683 to `screen.getByText(/Store Offer \(10% Store-Wide Discount\)/i)` and `screen.getByText(/Discount Code \(SAVE50\)/i)`.
+  - [x] Ran unit tests — **confirmed GREEN (8/8 in BookingTimeslotPage.test.tsx, 6/6 in PromotionalBreakdown.test.tsx).**
+
+- [x] **Verification chain:**
+  - [x] Buyer selects a service on `BookingTimeslotPage` with active store offer and applied coupon → Buyer expands `Total Discount` in the summary card → Both discounts render with standardized labels: `Store Offer (<title>)` and `Discount Code (<code>)` → Long titles wrap cleanly without breaking the card layout → ✅ Done.
+
+---
+
+### Item 6.20.2 — Admin Order Details Modal Parity & Socket Thrashing Elimination
+
+**Root cause / Goal:**
+1. `AdminStoreDetailPage.tsx` (lines 600–870) and `AdminRiderDetailPage.tsx` (lines 570–850) contain inline, legacy duplicate modal markup rather than using `<AdminOrderDetailModal>`. These inline modals lack the 2-column Store Partner parity layout, real-time WebSocket state transition timeline, and itemized breakdown.
+2. In `AdminOrderDetailModal.tsx` (lines 166–235), `orderDetail?.store?.id` is currently in the dependency array of the socket setup `useEffect`. When `orderDetail` finishes fetching, `store.id` transitions from `undefined` to a string, causing the socket connection to tear down (`socket.disconnect()`) and re-establish needlessly, creating socket thrashing.
+
+**Fix / Approach:**
+In `AdminStoreDetailPage.tsx` and `AdminRiderDetailPage.tsx`, remove the duplicated inline modal markup and render `<AdminOrderDetailModal orderId={selectedOrderId} isOpen={!!selectedOrderId} onClose={() => setSelectedOrderId(null)} />`.
+In `AdminOrderDetailModal.tsx`, remove `orderDetail?.store?.id` from the socket connection `useEffect` dependency array, and introduce a separate, dedicated `useEffect` that emits `join_store` on the active socket instance when `orderDetail?.store?.id` becomes available.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/components/admin/AdminOrderDetailModal.test.tsx`, `apps/web/src/pages/admin/AdminStoreDetailPage.test.tsx` & `apps/web/src/pages/admin/AdminRiderDetailPage.test.tsx`):**
+  - [x] Test (`AdminOrderDetailModal.test.tsx`): When `orderDetail` loads with `store.id`, verify the socket connects once and emits `join_store` without disconnecting or recreating the socket instance.
+  - [x] Test (`AdminOrderDetailModal.test.tsx` - Edge Case: Missing Store): When `orderDetail.store` is null or undefined (e.g. orphan order edge case), assert the modal renders safely without throwing an error and the socket does not crash.
+  - [x] Test (`AdminStoreDetailPage.test.tsx`): When clicking "View Details" on an order in the Store Orders tab, assert `<AdminOrderDetailModal>` is mounted with the correct `orderId` and the legacy inline modal is not rendered.
+  - [x] Test (`AdminRiderDetailPage.test.tsx`): When clicking "View Details" on a delivery in the Rider Deliveries tab, assert `<AdminOrderDetailModal>` is mounted with the correct `orderId`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend `getOrderDetail` already supports full booking slot and timeline serialization).
+
+- [x] **GREEN — Frontend (Components):**
+  - [x] [Component] In `apps/web/src/components/admin/AdminOrderDetailModal.tsx`:
+    - Refactor socket lifecycle: retain `[orderId, accessToken]` as connection dependencies.
+    - Added secondary effect for `orderDetail?.store?.id` room emission.
+  - [x] [Component] In `apps/web/src/pages/admin/AdminStoreDetailPage.tsx`:
+    - Removed inline modal dialog JSX.
+    - Rendered `<AdminOrderDetailModal orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} dataTestId="store-order-details-modal" />`.
+  - [x] [Component] In `apps/web/src/pages/admin/AdminRiderDetailPage.tsx`:
+    - Removed inline modal dialog JSX.
+    - Rendered `<AdminOrderDetailModal orderId={selectedOrderId} onClose={() => setSelectedOrderId(null)} dataTestId="rider-order-details-modal" />`.
+  - [x] Run unit tests — **confirm GREEN (14/14 in AdminOrderDetailModal.test.tsx, 5/5 in AdminStoreDetailPage.test.tsx, 4/4 in AdminRiderDetailPage.test.tsx).**
+
+- [x] **Verification chain:**
+  - [x] Admin opens `AdminStoreDetailPage` or `AdminRiderDetailPage` → Admin clicks "View Details" on an order row → High-fidelity 2-column `<AdminOrderDetailModal>` opens → Socket connects stably without thrashing → Admin sees real-time status updates and full transition timeline → ✅ Done.
+
+---
+
+### Item 6.20.3 — Admin Orders Status Filter Dropdown Booking Parity & Status Badge Classes
+
+**Root cause / Goal:**
+In `AdminOrdersPage.tsx` (lines 281–282), the status filter `<select>` dropdown currently offers:
+- `<option value="OUT_FOR_DELIVERY">Out for Delivery</option>`
+- `<option value="DELIVERED">Delivered</option>`
+In Booking Commerce, however, `OUT_FOR_DELIVERY` corresponds to **"On The Way"** and `DELIVERED` corresponds to **"Completed"**. Because the dropdown options only state "Out for Delivery" and "Delivered", admins are confused about how to filter for active and completed booking appointments.
+Additionally, status badge colors and label formatters must be standardized across all admin and merchant tables using `getStatusBadgeClasses` and `formatStatusLabel`.
+
+**Fix / Approach:**
+In `AdminOrdersPage.tsx`:
+- Rename `<option value="OUT_FOR_DELIVERY">` to `Out for Delivery / On The Way`.
+- Rename `<option value="DELIVERED">` to `Delivered / Completed`.
+Standardize `getStatusBadgeClasses(order.status)` and `formatStatusLabel(order.status, order.orderType)` across `AdminUserDetailPage`, `AdminStoreDetailPage`, `AdminRiderDetailPage`, `StoreOrdersPage`, and `StoreBookingsPage`.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/admin/AdminOrdersPage.test.tsx`):**
+  - [x] Test: Assert that the status filter dropdown renders an option with text `"Out for Delivery / On The Way"` and value `"OUT_FOR_DELIVERY"`.
+  - [x] Test: Assert that the status filter dropdown renders an option with text `"Delivered / Completed"` and value `"DELIVERED"`.
+  - [x] Test (Edge Case: Filter Reset Cursor): When changing the status filter dropdown from "All Statuses" to "Out for Delivery / On The Way", assert pagination cursor/page resets to 1 and query triggers with `status=OUT_FOR_DELIVERY`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend already supports `status=OUT_FOR_DELIVERY` and `status=DELIVERED` in query params).
+
+- [x] **GREEN — Frontend (Component & Tests):**
+  - [x] [Component] In `apps/web/src/pages/admin/AdminOrdersPage.tsx`:
+    - Updated `<option value="OUT_FOR_DELIVERY">` text to `"Out for Delivery / On The Way"`.
+    - Updated `<option value="DELIVERED">` text to `"Delivered / Completed"`.
+  - [x] [Component] In `AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`:
+    - Replaced ad-hoc ternary status styles with `getStatusBadgeClasses(order.status)` and `formatStatusLabel`.
+  - [x] Run unit tests — **confirm GREEN (9/9 in AdminOrdersPage.test.tsx).**
+
+- [x] **Verification chain:**
+  - [x] Admin visits `/admin/orders` → Admin opens Status filter dropdown → Sees "Out for Delivery / On The Way" and "Delivered / Completed" → Admin filters by "Out for Delivery / On The Way" → Table displays both quick commerce orders (Out for Delivery) and booking orders (On The Way) → ✅ Done.
+
+---
+
+### Item 6.20.4 — Backend Pagination Engine (20 records/page) for Buyer History and Admin Entity Management
+
+**Root cause / Goal:**
+Currently, multiple endpoints return unpaginated datasets:
+- `/api/v1/orders/history` in `order.controller.ts` returns all buyer orders at once.
+- `/api/v1/admin/users`, `/api/v1/admin/stores`, `/api/v1/admin/riders`, `/api/v1/admin/advertisements` return all records in a single unpaginated array.
+- `/api/v1/admin/orders` uses `limit = 50`.
+High data volumes will degrade query performance and mobile memory. All endpoints must support standard 20 records/page pagination with `page`, `limit` (default: 20), `total`, `totalPages`, and clean Prisma `skip`/`take` execution.
+
+**Fix / Approach:**
+In `order.repository.ts`, add `page` and `limit` to `findByUserId`, using `Promise.all([findMany, count])`.
+In `admin.service.ts`, add `page` and `limit` (default: 20) to `getUsers`, `getStores`, `getRiders`, and `getAdvertisements`.
+Update `getOrdersQuerySchema` default `limit` from 50 to 20 in `admin.controller.ts`.
+
+---
+
+- [x] **RED — Integration (`apps/api/src/__tests__/integration/order/order.history.test.ts` & `apps/api/src/__tests__/integration/admin/admin.pagination.test.ts`):**
+  - [x] Test (`order.history.test.ts`): Seed 25 orders for a buyer. Call `GET /api/v1/orders/history?page=1&limit=20`. Assert response contains 20 orders, `pagination.total = 25`, `pagination.page = 1`, `pagination.limit = 20`, and `pagination.totalPages = 2`.
+  - [x] Test (`order.history.test.ts` - Boundary Case: Page 2): Call `GET /api/v1/orders/history?page=2&limit=20`. Assert response contains exactly the remaining 5 orders.
+  - [x] Test (`order.history.test.ts` - Edge Case: Exact 20 Records): Seed exactly 20 orders. Assert `pagination.totalPages = 1` and `page=1` returns 20 orders.
+  - [x] Test (`order.history.test.ts` - Edge Case: Page Out of Bounds): Call `GET /api/v1/orders/history?page=999`. Assert response returns `{ success: true, data: { orders: [], pagination: { total: 25, page: 999, limit: 20, totalPages: 2 } } }` (no 500 error).
+  - [x] Test (`admin.pagination.test.ts`): Seed 22 users. Call `GET /api/v1/admin/users?page=1&limit=20`. Assert returns 20 users and pagination metadata (`total: 22, totalPages: 2`).
+  - [x] Test (`admin.pagination.test.ts`): Seed 21 stores. Call `GET /api/v1/admin/stores?page=1&limit=20`. Assert returns 20 stores and pagination metadata.
+  - [x] Test (`admin.pagination.test.ts`): Seed 21 riders. Call `GET /api/v1/admin/riders?page=1&limit=20`. Assert returns 20 riders and pagination metadata.
+  - [x] Test (`admin.pagination.test.ts`): Call `GET /api/v1/admin/orders` without limit parameter. Assert response returns at most 20 orders by default (verifying default changed from 50 to 20).
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend (Repository → Service → Controller):**
+  - [x] [Repository] In `apps/api/src/modules/order/order.repository.ts`:
+    - Update `findByUserId(userId: string, page = 1, limit = 20)`:
+      ```typescript
+      const skip = (Math.max(1, page) - 1) * limit;
+      const [orders, total] = await Promise.all([
+        this.db.order.findMany({ where: { userId }, skip, take: limit, orderBy: { createdAt: "desc" }, include: { ... } }),
+        this.db.order.count({ where: { userId } })
+      ]);
+      return { orders, total, page, limit, totalPages: Math.ceil(total / limit) };
+      ```
+  - [x] [Controller] In `apps/api/src/modules/order/order.controller.ts`:
+    - Update `GET /api/v1/orders/history` query schema with `page: z.coerce.number().int().min(1).default(1)` and `limit: z.coerce.number().int().min(1).max(100).default(20)`. Return `{ orders: result.orders, pagination: { total: result.total, page: result.page, limit: result.limit, totalPages: result.totalPages } }`.
+  - [x] [Service] In `apps/api/src/modules/admin/admin.service.ts`:
+    - Add `page = 1, limit = 20` to `getUsers`, `getStores`, `getRiders`, `getAdvertisements`. Execute Prisma query with `skip: (page - 1) * limit, take: limit` and `count()`.
+  - [x] [Controller] In `apps/api/src/modules/admin/admin.controller.ts`:
+    - Update query schemas for `/api/v1/admin/users`, `/api/v1/admin/stores`, `/api/v1/admin/riders`, `/api/v1/admin/advertisements` with `page` and `limit` (default: 20).
+    - In `getOrdersQuerySchema`, change `.default(50)` to `.default(20)`.
+  - [x] Run integration tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Client requests `GET /api/v1/orders/history?page=1&limit=20` or Admin requests `GET /api/v1/admin/users?page=1&limit=20` → Server executes scoped count + take queries → Returns clean envelope with 20 items and pagination metadata → ✅ Done.
+
+---
+
+### Item 6.20.5 — Merchant Store Portal: Card / Table View Toggles & 20/page Pagination
+
+**Root cause / Goal:**
+Store owners currently can only view incoming orders and bookings as cards (`StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`). Merchant feedback demands a view toggle (`Cards` vs `Table`) so merchants can scan high-volume orders quickly in a compact table layout, and paginate with 20 records per page.
+
+**Fix / Approach:**
+In `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`:
+1. Add `viewMode: "cards" | "table"` state with view toggle buttons (Icons: `LayoutGrid` and `Table2`).
+2. Implement `<OrdersTableView>` and `<BookingsTableView>`:
+   - Orders Table Columns: `ORDER ID`, `DATE & TIME`, `BUYER`, `ITEMS`, `TOTAL`, `PAYMENT`, `STATUS`, `ACTIONS` (View Details).
+   - Bookings Table Columns: `BOOKING ID`, `DATE & TIME`, `SCHEDULE SLOT`, `CUSTOMER`, `SERVICE`, `TOTAL`, `PAYMENT`, `STATUS`, `ACTIONS` (View Details).
+3. Set query `limit = 20` (updating from legacy 10).
+4. Render Previous / Next pagination controls with "Page X of Y" supporting both views.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/store/StoreOrdersPage.test.tsx` & `apps/web/src/pages/store/StoreBookingsPage.test.tsx`):**
+  - [x] Test (`StoreOrdersPage.test.tsx`): Assert view toggle buttons ("Cards" and "Table") are rendered.
+  - [x] Test (`StoreOrdersPage.test.tsx`): Clicking "Table" switches view from card grid to `table` element with columns (Order ID, Date, Buyer, Items, Total, Payment, Status, Actions).
+  - [x] Test (`StoreOrdersPage.test.tsx`): Clicking "View Details" action button in a table row opens the Order Details modal.
+  - [x] Test (`StoreOrdersPage.test.tsx` - Pagination): Given 35 orders, assert pagination displays "Page 1 of 2", "Previous" is disabled, and "Next" is enabled. Clicking "Next" advances to page 2.
+  - [x] Test (`StoreOrdersPage.test.tsx` - Filter Reset): On page 2, clicking tab "Preparing" resets page state to 1.
+  - [x] Test (`StoreBookingsPage.test.tsx`): Assert view toggle switches between Card view and Table view. Table view renders columns (Booking ID, Date, Slot, Customer, Service, Total, Payment, Status, Actions).
+  - [x] Test (`StoreBookingsPage.test.tsx`): Pagination limits to 20 records per page on both views.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend `/api/v1/store/orders` and `/api/v1/store/bookings` already support `page` and `limit`).
+
+- [x] **GREEN — Frontend (Components):**
+  - [x] [StoreOrdersPage] In `apps/web/src/pages/store/StoreOrdersPage.tsx`:
+    - Add `const [viewMode, setViewMode] = useState<"cards" | "table">("cards");`.
+    - Change `const limit = 10;` to `const limit = 20;`.
+    - Add view toggle buttons beside "Refresh Queue" in the header.
+    - Render table markup when `viewMode === "table"` wrapped in `overflow-x-auto rounded-2xl border border-gorola-mint/15 bg-white shadow-sm`.
+    - Standardize action trigger to `setSelectedOrder(order)`.
+    - Wire pagination controls to work identically in both Card and Table views.
+  - [x] [StoreBookingsPage] In `apps/web/src/pages/store/StoreBookingsPage.tsx`:
+    - Add `const [viewMode, setViewMode] = useState<"cards" | "table">("cards");`.
+    - Add `const [page, setPage] = useState(1); const limit = 20;`.
+    - Paginate active filtered list: `const paginatedBookings = activeList.slice((page - 1) * limit, page * limit);`.
+    - Render table markup when `viewMode === "table"`.
+    - Add pagination footer ("Previous", "Page X of Y", "Next").
+    - Reset `page` to 1 on tab change or date filter change.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Store owner opens `/store/orders` or `/store/bookings` → Sees 20 items per page → Clicks "Table" toggle → View transitions immediately to compact table without reloading data → Owner clicks "View Details" on table row → Order/Booking details modal opens → Owner clicks "Next" → Next 20 orders load → ✅ Done.
+
+---
+
+### Item 6.20.6 — Universal Frontend Pagination (20 records/page) across Buyer History and Admin Portals
+
+**Root cause / Goal:**
+1. Buyer Order History (`OrderHistoryPage.tsx`) currently renders all past orders in an unpaginated vertical list.
+2. Admin lists (`AdminUsersPage.tsx`, `AdminStoresPage.tsx`, `AdminRidersPage.tsx`, `AdminAdvertisementsPage.tsx`) lack pagination controls.
+3. `AdminOrdersPage.tsx` currently queries with `limit = 50`.
+4. Detail sub-tables (`AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`) use `limit = 10`.
+All user interfaces must implement 20 records per page pagination with boundary handling (disabling Previous on page 1, disabling Next on totalPages, and resetting to page 1 on search/filter changes).
+
+**Fix / Approach:**
+In `OrderHistoryPage.tsx`, `AdminUsersPage.tsx`, `AdminStoresPage.tsx`, `AdminRidersPage.tsx`, and `AdminAdvertisementsPage.tsx`:
+Add `page` state, pass `page` and `limit=20` to query hooks, and render standardized pagination controls (`Previous`, `Page {page} of {totalPages}`, `Next`).
+In `AdminOrdersPage.tsx`, update `const limit = 50;` to `const limit = 20;`.
+In `AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, and `AdminRiderDetailPage.tsx`, update sub-table `limit` to 20.
+
+---
+
+- [x] **RED — Unit (`apps/web/src/pages/buyer/OrderHistoryPage.test.tsx` & `apps/web/src/pages/admin/AdminPages.test.tsx`):**
+  - [x] Test (`OrderHistoryPage.test.tsx`): Given an API response with 25 orders across 2 pages, assert only 20 orders render on page 1, "Previous" button is disabled, and "Page 1 of 2" is visible.
+  - [x] Test (`OrderHistoryPage.test.tsx`): Clicking "Next" calls API with `page=2` and renders remaining orders.
+  - [x] Test (`OrderHistoryPage.test.tsx` - Filter Reset): When switching from "All" to "Quick Commerce", assert page resets to 1.
+  - [x] Test (`AdminUsersPage.test.tsx`): Assert pagination bar renders "Previous", "Page X of Y", "Next". Changing search input resets page to 1.
+  - [x] Test (`AdminStoresPage.test.tsx`): Assert pagination bar renders and limits to 20 stores per page.
+  - [x] Test (`AdminRidersPage.test.tsx`): Assert pagination bar renders and limits to 20 riders per page.
+  - [x] Test (`AdminAdvertisementsPage.test.tsx`): Assert pagination bar renders and limits to 20 ads per page.
+  - [x] Test (`AdminOrdersPage.test.tsx`): Assert orders query specifies `limit=20`.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Backend:**
+  - [x] N/A (Backend pagination endpoints implemented in Item 6.20.4).
+
+- [x] **GREEN — Frontend (Components):**
+  - [x] [OrderHistoryPage] In `apps/web/src/pages/buyer/OrderHistoryPage.tsx`:
+    - Add `page` state (default: 1).
+    - Update query URL: `/api/v1/orders/history?page=${page}&limit=20`.
+    - Render pagination controls below order list when `totalPages > 1`.
+    - Reset `page` to 1 in `setFilter`.
+  - [x] [AdminOrdersPage] In `apps/web/src/pages/admin/AdminOrdersPage.tsx`:
+    - Update `const limit = 50;` to `const limit = 20;`.
+  - [x] [AdminUsersPage] In `apps/web/src/pages/admin/AdminUsersPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer. Reset `page` on `debouncedSearch` change.
+  - [x] [AdminStoresPage] In `apps/web/src/pages/admin/AdminStoresPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer.
+  - [x] [AdminRidersPage] In `apps/web/src/pages/admin/AdminRidersPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer. Reset `page` on filter change.
+  - [x] [AdminAdvertisementsPage] In `apps/web/src/pages/admin/AdminAdvertisementsPage.tsx`:
+    - Add `page` state, query params `page=${page}&limit=20`, and pagination footer. Reset `page` on tab change.
+  - [x] [Detail Sub-tables] In `AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`:
+    - Update sub-table pagination limit from 10 to 20.
+  - [x] Run unit tests — **confirm GREEN.**
+
+- [x] **Verification chain:**
+  - [x] Buyer navigates to `/account/orders` → 20 orders render per page with smooth pagination controls → Admin navigates across Users, Stores, Riders, Advertisements, and Orders → Every screen standardizes on 20 records per page → Changing filters immediately resets page to 1 without stale offsets → ✅ Done.
+
+---
+
+### Item 6.20.7 — Quality Gate Validation & Full Regression
+
+- [x] **Typecheck:** `pnpm typecheck` (0 errors across `packages/shared`, `packages/ui`, `apps/api`, `apps/web`).
+- [x] **Linter:** `pnpm lint` (0 errors, 0 warnings across the entire monorepo).
+- [x] **Test Suites:** `pnpm test` (100% green across all 145 API integration test files and 109 Web unit/component suites).
+- [x] **Manual Smoke Checklist:**
+  1. Open `BookingTimeslotPage` with coupon and store offer: verify breakdown shows `Store Offer (<title>)` and `Discount Code (<code>)`.
+  2. Open `AdminOrdersPage`: verify status filter options include "Out for Delivery / On The Way" and "Delivered / Completed", and default limit is 20.
+  3. Open `StoreOrdersPage` and `StoreBookingsPage`: verify Cards / Table toggle works seamlessly and pagination is 20 per page.
+  4. Open `AdminStoreDetailPage` and `AdminRiderDetailPage`: verify "View Details" launches unified `<AdminOrderDetailModal>` without socket thrashing.
+  5. Open `OrderHistoryPage`, `AdminUsersPage`, `AdminStoresPage`, `AdminRidersPage`: verify 20 records/page pagination.
+
+---
+
+## 🔮 Phase 6.21 Roadmap: Tax Calculation Logic, GST Rules & Advanced Invoice Formatting
+
+> **Phase:** 6.21  
 > **Status:** QUEUED (Pending client approval on tax and invoice settings)  
 > **Primary Goal:** Activate live GST taxation at checkout and deliver client-facing PDF/printable invoice downloads.
 
-### Core Objectives of Phase 6.20:
+### Core Objectives of Phase 6.21:
 
 1. **GST Calculation Engine (`BuyerCheckoutService` & `booking-order.service.ts`):**
    - Read `GST_RATE` from `SystemSetting`.
@@ -1588,6 +1878,34 @@ Update TypeScript interfaces and JSX in `RiderOrdersPage.tsx`, `StoreOrdersPage.
 ---
 
 ## Session Notes (Phase 6)
+
+### 2026-10-16: Phase 6.20 Followup — Dedicated Pagination Cards & Detail Sub-list Table/Card Toggles
+- **Problem:**
+  1. The pagination section on `StoreBookingsPage.tsx`, `StoreOrdersPage.tsx`, and `OrderHistoryPage.tsx` was floating directly on the patterned background without a card container, making text and controls barely legible.
+  2. Order sub-lists on Admin detail pages (`AdminUserDetailPage.tsx`, `AdminStoreDetailPage.tsx`, `AdminRiderDetailPage.tsx`) lacked Card vs Table view toggles and hid pagination when records were $\le 20$.
+  3. Store selector crashed with `(stores ?? []).filter is not a function` in `AdminRidersPage.tsx` and `AdminDashboardPage.tsx` due to paginated `{ items, total }` envelope responses from `/api/v1/admin/stores`.
+- **Solution & TDD Execution:**
+  - **Dedicated Pagination Cards:** Wrapped pagination footers in distinct white cards (`bg-white border border-gorola-mint/20 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4`) in `StoreBookingsPage.tsx`, `StoreOrdersPage.tsx`, and `OrderHistoryPage.tsx`. Styled text with crisp, high-contrast typography and subtle borders on buttons.
+  - **Admin Detail Sub-lists Card/Table Toggles:** Implemented view mode toggles (`data-testid="*-orders-view-table"` / `data-testid="*-orders-view-cards"`) with responsive card grids (`data-testid="*-orders-cards"`) and high-density tables across `AdminUserDetailPage`, `AdminStoreDetailPage`, and `AdminRiderDetailPage`.
+  - **Persistent Pagination Across All Pages:** Ensured pagination footers (`data-testid="*-pagination"`) remain persistently visible even when `total <= 20` (displaying "Page 1 of 1 (X total)" with disabled previous/next buttons).
+  - **Store Envelope Normalization:** Safely extracted stores with fallback: `Array.isArray(storesData) ? storesData : (storesData?.items ?? [])`.
+  - **Testing & Verification:** Added unit tests in `AdminUserDetailPage.test.tsx`, `AdminStoreDetailPage.test.tsx`, and `AdminRiderDetailPage.test.tsx`. All 87 web tests across 7 affected test suites passed with 100% green.
+- **Problem:**
+  1. Promotional savings in `BookingTimeslotPage.tsx` were rendered as raw, unformatted text strings (`{o.title}`, `{appliedCouponCode}`) rather than using the standardized collapsible `<PromotionalBreakdown>` format (`Store Offer (<title>)`, `Discount Code (<code>)`), with risks of horizontal overflow for lengthy titles on mobile screens.
+  2. `AdminStoreDetailPage.tsx` and `AdminRiderDetailPage.tsx` used duplicated legacy inline modal markup rather than `<AdminOrderDetailModal>`, omitting timeline progression and delivery notes.
+  3. `AdminOrderDetailModal.tsx` re-triggered its socket connection effect on `orderDetail?.store?.id` transitions, causing socket thrashing and reconnection loops.
+  4. Status filters in `AdminOrdersPage.tsx` were labeled exclusively for quick commerce (`Out for Delivery`, `Delivered`), confusing admins when filtering booking commerce appointments (`On The Way`, `Completed`).
+  5. Store owners could only view orders and bookings in a card grid view (`StoreOrdersPage.tsx`, `StoreBookingsPage.tsx`), without a high-density tabular view for rapid order scanning.
+  6. Lack of pagination in Buyer Order History (`OrderHistoryPage.tsx`) and Admin Portals (`AdminUsersPage`, `AdminStoresPage`, `AdminRidersPage`, `AdminAdvertisementsPage`), with Admin Orders using an inconsistent limit of 50.
+- **Solution & TDD Execution:**
+  - **Phase 6.20.1:** Integrated `<PromotionalBreakdown>` into `BookingTimeslotPage.tsx` with proper text wrapping (`break-words text-wrap max-w-full`). Added tests for null/zero discounts, single discounts, and 90+ character titles.
+  - **Phase 6.20.2:** Replaced legacy inline modals in `AdminStoreDetailPage` and `AdminRiderDetailPage` with `<AdminOrderDetailModal>`. Decoupled `join_store` room joining into a dedicated secondary effect dependent only on `store.id`, eliminating socket thrashing.
+  - **Phase 6.20.3:** Renamed status filter options in `AdminOrdersPage.tsx` to `"Out for Delivery / On The Way"` and `"Delivered / Completed"`. Standardized `getStatusBadgeClasses` and `formatStatusLabel(order.status, order.orderType)` across all admin and merchant tables.
+  - **Phase 6.20.4:** Built backend pagination engine default of 20 records/page with scoped Prisma count queries on `OrderRepository.findByUserId`, `GET /api/v1/orders/history`, `getUsers`, `getStores`, `getRiders`, and `getAds`. Changed `getOrdersQuerySchema` default limit from 50 to 20.
+  - **Phase 6.20.5:** Added responsive Cards vs Table toggle (`LayoutGrid` and `Table2` icons) and 20 records/page pagination footers (`data-testid="store-orders-pagination"`, `data-testid="store-bookings-pagination"`) with automated page resets in `StoreOrdersPage.tsx` and `StoreBookingsPage.tsx`.
+  - **Phase 6.20.6:** Standardized 20 records/page pagination with page transition boundaries across Buyer Order History (`OrderHistoryPage.tsx`), Admin Users, Admin Stores, Admin Riders, Admin Advertisements, Admin Orders, and Detail sub-tables.
+  - **Phase 6.20.7:** Full regression and quality gate validation: 145/145 API test files (860 tests) passing, 109/109 Web test files (681 tests) passing, 0 typecheck errors, 0 lint errors across monorepo.
+- **Result:** Fully unified 20/page pagination, merchant table/card view toggles, socket-stabilized admin modals, and commerce-type aware promotional breakdown and status badges.
 
 ### 2026-10-08: Phase 6.18 — Financial Infrastructure: GST Foundation, Financial Data Integrity & Invoice Generator
 - **Problem:**
@@ -1943,3 +2261,52 @@ Update TypeScript interfaces and JSX in `RiderOrdersPage.tsx`, `StoreOrdersPage.
   - `pnpm lint`: 0 errors, 0 warnings.
   - `@gorola/api` Vitest: 144 test files, 853 tests passing (100% green).
   - `@gorola/web` Vitest: 107 test files, 618 tests passing (100% green).
+
+### 2026-10-15: Admin Order Modal Store Parity, Real-Time Socket Sync, Booking Terminology & Universal Status Badge Colors
+- **Goal:**
+  1. Re-architect the Admin Order Details Card to achieve visual and functional parity with the Store Partner Panel card layout (2-column split with Buyer Details on the left, vertical Status Transition Log on the right, full Itemized summary table, and collapsible receipt discount summary).
+  2. Implement real-time WebSocket state transition updates in the Admin Order Details modal so transitions (e.g. store dispatch, approval, cancellation) update immediately without manual page refresh.
+  3. Resolve booking commerce status terminology inconsistency: bookings in `OUT_FOR_DELIVERY` must display as **"On The Way"** (not "Out for delivery") and `DELIVERED` as **"Completed"**, matching the Booking Store panels.
+  4. Fix inconsistency in User Order History (`OrderHistoryPage.tsx`) where booking cards displayed **"Approved"** even after the booking transitioned into operational transit ("Technician On The Way").
+  5. Fix "Schedule Slot: Not scheduled" in Admin Order Details Modal when a booking actually has an appointment slot and date.
+  6. Standardize status badge pill colors platform-wide to strictly match the confirmation pages (`BookingConfirmationPage.tsx` and `OrderConfirmationPage.tsx`).
+- **Implementation:**
+  - **Admin Order Details Modal (`AdminOrderDetailModal.tsx`)**:
+    - Replaced the basic card modal with a 2-column layout matching the Store Partner Panel:
+      - **Left Column**: Buyer Profile (avatar/initials fallback, masked phone, delivery/appointment address), Delivery Note / Service Instructions callout banner, Schedule Slot callout with scheduled date, timeslot, and fasting notice if applicable, and Assigned Rider / Technician banner.
+      - **Right Column**: Status Transition Log vertical timeline rendering chronological state history with resolved actors (Buyer, Store Owner, Rider, Admin, System) and relative/absolute timestamps.
+      - **Itemized Summary Table**: Product/service name, variant badge, unit price, quantity, and line item total.
+      - **Receipt Summary**: Subtotal, Delivery Fee / Service Fee (automatically toggling "Service Fee" for BOOKING orders vs "Delivery Fee" for QUICK orders), collapsible `PromotionalBreakdown` (showing Total Discount, Store Offer, Discount Code), and final Total.
+    - Added dedicated unit tests in `AdminOrderDetailModal.test.tsx` (13 tests passing).
+  - **Backend Serialization (`apps/api/src/modules/admin/admin.service.ts`)**:
+    - In `getOrderDetail`: Added `bookingOrder: true` to Prisma query include, and structured the `booking` payload containing `timeslot`, `scheduledDate`, `appointmentAddress`, `serviceInstructions`, and `requiresFasting` (resolving "Schedule Slot: Not scheduled").
+    - In `getAllOrders`: Added `orderType: o.orderType` to the mapped output list items.
+    - Verified with integration tests in `admin.orders.test.ts` (7 tests passing).
+  - **Real-Time WebSocket Sync**:
+    - Integrated `useSocket` in `AdminOrderDetailModal.tsx`, automatically emitting `join_order` (`order:${orderId}`) and `join_store` (`store:${storeId}`).
+    - Listens for `order_status_changed`, `store:order_updated`, and `order:updated` events.
+    - Implemented immediate optimistic updates on the React Query cache (`queryClient.setQueryData`) to append new timeline events and update the status pill without waiting for a network trip.
+    - Configured background polling fallback (`refetchInterval: 3000` while open) for resilience.
+  - **Universal Booking Status Terminology (`apps/web/src/lib/utils.ts`)**:
+    - Implemented `formatStatusLabel(status, orderType)`:
+      - When `orderType === "BOOKING"`: `OUT_FOR_DELIVERY` -> **"On The Way"**, `DELIVERED` -> **"Completed"**, `PENDING_APPROVAL` -> **"Pending Approval"**.
+      - When `orderType === "QUICK"`: `OUT_FOR_DELIVERY` -> **"Out for Delivery"**, `DELIVERED` -> **"Delivered"**.
+    - Created unit tests in `apps/web/src/lib/utils.test.ts` (20 tests covering all matrix combinations).
+  - **User Order History Operational Status Priority (`OrderHistoryPage.tsx`)**:
+    - Updated `getBadgeDetails` in `OrderHistoryPage.tsx` to prioritize operational status (`order.status`) over static approval status (`bookingOrder.approvalStatus`). When an order is `OUT_FOR_DELIVERY`, it correctly renders "On The Way" instead of "Approved".
+    - Added unit tests in `OrderHistoryPage.test.tsx` (17 tests passing).
+  - **Universal Status Badge Pill Color Consistency**:
+    - Centralized `getStatusBadgeClasses(status)` in `apps/web/src/lib/utils.ts` defining platform-wide color mapping matching the confirmation pages:
+      - **Blue** (`bg-blue-50 text-blue-800 border border-blue-200`): `OUT_FOR_DELIVERY` / `ON_THE_WAY` (Active transit / On the way).
+      - **Emerald Green** (`bg-emerald-50 text-emerald-800 border border-emerald-200`): `DELIVERED` / `COMPLETED` (Successful completion).
+      - **Indigo** (`bg-indigo-50 text-indigo-800 border border-indigo-200`): `PREPARING` / `APPROVED` / `CONFIRMED` (Store processing / Approval).
+      - **Amber** (`bg-amber-50 text-amber-800 border border-amber-200`): `PLACED` / `PENDING_APPROVAL` (New order pending action).
+      - **Red** (`bg-red-50 text-red-800 border border-red-200`): `CANCELLED` / `REJECTED` (Terminated / Rejected).
+    - Integrated across `AdminOrdersPage.tsx`, `AdminOrderDetailModal.tsx`, `OrderHistoryPage.tsx`, and aligned with confirmation pages.
+- **Validation**:
+  - `apps/web/src/lib/utils.test.ts`: 20/20 passed.
+  - `apps/web/src/pages/buyer/OrderHistoryPage.test.tsx`: 17/17 passed.
+  - `apps/web/src/components/admin/AdminOrderDetailModal.test.tsx`: 13/13 passed.
+  - `apps/web/src/pages/admin/AdminOrdersPage.test.tsx`: 8/8 passed.
+  - `apps/api/src/__tests__/integration/admin/admin.orders.test.ts`: 7/7 passed.
+

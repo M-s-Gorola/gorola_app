@@ -9,7 +9,7 @@ export function formatStatusLabel(status: string, orderType?: string | null): st
   if (!status) return "";
   const normalized = status.toUpperCase().trim();
 
-  if (orderType === "BOOKING") {
+  if (orderType === "BOOKING" || orderType === "BOOKING_COMMERCE") {
     switch (normalized) {
       case "OUT_FOR_DELIVERY":
       case "ON_THE_WAY":

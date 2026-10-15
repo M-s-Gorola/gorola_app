@@ -68,7 +68,15 @@ type AdminStoreListItem = {
 
 type StoresListResponse = {
   success: boolean;
-  data: AdminStoreListItem[];
+  data:
+    | {
+        items: AdminStoreListItem[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+    | AdminStoreListItem[];
 };
 
 export function AdminDashboardPage(): ReactElement {
@@ -158,17 +166,17 @@ export function AdminDashboardPage(): ReactElement {
   const [volumeStorePickerOpen, setVolumeStorePickerOpen] = useState(false);
   const [volumeStoreType, setVolumeStoreType] = useState<"QUICK_COMMERCE" | "BOOKING_COMMERCE" | undefined>(undefined);
 
-  const { data: storesList } = useQuery<AdminStoreListItem[]>({
-    queryKey: ["admin", "stores"],
+  const { data: storesList } = useQuery<StoresListResponse["data"]>({
+    queryKey: ["admin", "stores", "picker"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<StoresListResponse>("/api/v1/admin/stores");
+      const res = await api.get<StoresListResponse>("/api/v1/admin/stores?limit=100");
       return res.data.data;
     },
     staleTime: 60000
   });
 
-  const allStores = Array.isArray(storesList) ? storesList : [];
+  const allStores = Array.isArray(storesList) ? storesList : (storesList?.items ?? []);
 
   const { data: dashboard, isLoading, error } = useQuery<AdminDashboardData>({
     queryKey: ["admin", "dashboard", range, groupBy, selectedStoreIds, storeType],

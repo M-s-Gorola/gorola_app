@@ -3,10 +3,14 @@ import {
   AlertTriangle,
   Calendar,
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   FileText,
+  LayoutGrid,
   MapPin,
   Phone,
   RefreshCw,
+  Table2,
   Truck,
   User,
   XCircle
@@ -172,6 +176,9 @@ export function StoreBookingsPage(): ReactElement {
   const selectedBookingRef = useRef<Booking | null>(null);
   selectedBookingRef.current = selectedBooking;
   const [isDiscountExpanded, setIsDiscountExpanded] = useState(false);
+  const [viewMode, setViewMode] = useState<"cards" | "table">("cards");
+  const [page, setPage] = useState(1);
+  const limit = 20;
   const [confirmingBookingUpdate, setConfirmingBookingUpdate] = useState<{
     orderId: string;
     action: "APPROVE" | "DISPATCH" | "COMPLETE";
@@ -575,6 +582,10 @@ export function StoreBookingsPage(): ReactElement {
     }
   };
 
+  const activeList = getActiveList();
+  const totalPages = Math.ceil(activeList.length / limit) || 1;
+  const paginatedBookings = activeList.slice((page - 1) * limit, page * limit);
+
   return (
     <div className="space-y-8 animate-in fade-in duration-300">
       {/* Title Header */}
@@ -614,7 +625,10 @@ export function StoreBookingsPage(): ReactElement {
                 key={tab}
                 role="tab"
                 aria-selected={isActive}
-                onClick={() => setActiveTab(tab)}
+                onClick={() => {
+                  setActiveTab(tab);
+                  setPage(1);
+                }}
                 className={`flex-1 py-3 rounded-xl text-xs font-extrabold uppercase tracking-wider transition-all duration-200 flex items-center justify-center gap-2 px-4 ${
                   isActive
                     ? "bg-gorola-pine text-white shadow-md shadow-gorola-pine/20"
@@ -642,7 +656,10 @@ export function StoreBookingsPage(): ReactElement {
                 type="date"
                 data-testid="date-from-input"
                 value={customFrom}
-                onChange={(e) => setCustomFrom(e.target.value)}
+                onChange={(e) => {
+                  setCustomFrom(e.target.value);
+                  setPage(1);
+                }}
                 className="px-3 py-2 text-xs font-semibold rounded-xl border border-gorola-mint/20 focus:border-gorola-pine outline-none bg-white text-gorola-charcoal shadow-sm"
               />
               <span className="text-xs font-bold text-gorola-slate">to</span>
@@ -650,7 +667,10 @@ export function StoreBookingsPage(): ReactElement {
                 type="date"
                 data-testid="date-to-input"
                 value={customTo}
-                onChange={(e) => setCustomTo(e.target.value)}
+                onChange={(e) => {
+                  setCustomTo(e.target.value);
+                  setPage(1);
+                }}
                 className="px-3 py-2 text-xs font-semibold rounded-xl border border-gorola-mint/20 focus:border-gorola-pine outline-none bg-white text-gorola-charcoal shadow-sm"
               />
             </div>
@@ -659,7 +679,10 @@ export function StoreBookingsPage(): ReactElement {
           <select
             data-testid="booking-date-filter"
             value={dateFilter}
-            onChange={(e) => setDateFilter(e.target.value as DateFilter)}
+            onChange={(e) => {
+              setDateFilter(e.target.value as DateFilter);
+              setPage(1);
+            }}
             className="px-4 py-2.5 text-xs font-bold uppercase tracking-wider bg-white border border-gorola-mint/20 hover:border-gorola-pine/20 rounded-xl transition-all shadow-sm focus:outline-none text-gorola-pine cursor-pointer"
           >
             <option value="ALL">All Dates</option>
@@ -669,6 +692,38 @@ export function StoreBookingsPage(): ReactElement {
             <option value="THIS_MONTH">This Month</option>
             <option value="CUSTOM">Custom Range</option>
           </select>
+
+          {/* View Mode Toggle */}
+          <div className="flex items-center bg-white border border-gorola-mint/20 rounded-xl p-1 shadow-sm gap-1">
+            <button
+              type="button"
+              data-testid="view-mode-cards"
+              onClick={() => setViewMode("cards")}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === "cards"
+                  ? "bg-gorola-pine text-white shadow-sm"
+                  : "text-gorola-slate hover:text-gorola-charcoal hover:bg-gorola-mint/10"
+              }`}
+              title="Cards View"
+              aria-label="Cards View"
+            >
+              <LayoutGrid className="h-4 w-4" />
+            </button>
+            <button
+              type="button"
+              data-testid="view-mode-table"
+              onClick={() => setViewMode("table")}
+              className={`p-2 rounded-lg transition-all ${
+                viewMode === "table"
+                  ? "bg-gorola-pine text-white shadow-sm"
+                  : "text-gorola-slate hover:text-gorola-charcoal hover:bg-gorola-mint/10"
+              }`}
+              title="Table View"
+              aria-label="Table View"
+            >
+              <Table2 className="h-4 w-4" />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -697,89 +752,219 @@ export function StoreBookingsPage(): ReactElement {
             An error occurred while communicating with the service. Please try again.
           </p>
         </div>
-      ) : getActiveList().length > 0 ? (
-        <div className="grid gap-6 md:grid-cols-2">
-          {getActiveList().map((booking) => {
-            const item = booking.items?.[0];
+      ) : activeList.length > 0 ? (
+        <div className="space-y-6">
+          {viewMode === "table" ? (
+            <div className="bg-white border border-gorola-mint/15 rounded-2xl shadow-sm overflow-x-auto">
+              <table data-testid="store-bookings-table" className="w-full text-left border-collapse text-xs">
+                <thead>
+                  <tr className="border-b border-gorola-mint/15 text-gorola-slate uppercase tracking-wider font-extrabold bg-gorola-mint/5">
+                    <th className="py-3 px-4">Booking ID</th>
+                    <th className="py-3 px-4">Scheduled Date & Slot</th>
+                    <th className="py-3 px-4">Customer</th>
+                    <th className="py-3 px-4">Service</th>
+                    <th className="py-3 px-4">Total</th>
+                    <th className="py-3 px-4">Status</th>
+                    <th className="py-3 px-4 text-right">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gorola-mint/10 font-medium">
+                  {paginatedBookings.map((booking) => {
+                    const item = booking.items?.[0];
+                    return (
+                      <tr
+                        key={booking.id}
+                        onClick={() => setSelectedBooking(booking)}
+                        className="hover:bg-gorola-mint/5 transition-colors cursor-pointer"
+                      >
+                        <td className="py-3 px-4 font-mono font-bold text-gorola-charcoal whitespace-nowrap">
+                          #{(booking.orderId || booking.id).slice(-8).toUpperCase()}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <p className="font-bold text-gorola-charcoal">
+                            {formatDateString(booking.bookingOrder?.scheduledDate || booking.createdAt)}
+                          </p>
+                          <p className="text-[10px] text-gorola-slate font-medium">
+                            {booking.bookingOrder?.timeslot || "Standard Slot"}
+                          </p>
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <p className="font-bold text-gorola-charcoal">{booking.user?.name || "Customer"}</p>
+                          <p className="font-mono text-[10px] text-gorola-slate">
+                            {formatMaskedPhone(booking.buyerMaskedPhone || booking.customerPhone || "")}
+                          </p>
+                        </td>
+                        <td className="py-3 px-4 text-gorola-charcoal max-w-[240px] truncate">
+                          <p className="font-bold truncate">{item?.productName || "Service Booking"}</p>
+                          {item?.variantLabel && (
+                            <p className="text-[10px] text-gorola-slate truncate">{item.variantLabel}</p>
+                          )}
+                        </td>
+                        <td className="py-3 px-4 font-black text-gorola-charcoal whitespace-nowrap">
+                          Rs {Number(booking.total || 0).toFixed(2)}
+                        </td>
+                        <td className="py-3 px-4 whitespace-nowrap">
+                          <span
+                            className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-extrabold tracking-wide border ${
+                              booking.status === "APPROVED"
+                                ? "bg-indigo-50 text-indigo-700 border-indigo-200/50"
+                                : booking.status === "OUT_FOR_DELIVERY"
+                                ? "bg-blue-50 text-blue-700 border-blue-200/50"
+                                : (booking.status === "COMPLETED" || booking.status === "DELIVERED")
+                                ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
+                                : (booking.status === "REJECTED" || booking.status === "CANCELLED")
+                                ? "bg-rose-50 text-rose-700 border-rose-200/50"
+                                : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
+                            }`}
+                          >
+                            {booking.status === "APPROVED" ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : booking.status === "OUT_FOR_DELIVERY" ? (
+                              <Truck className="h-3 w-3" />
+                            ) : (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? (
+                              <CheckCircle2 className="h-3 w-3" />
+                            ) : (
+                              <XCircle className="h-3 w-3" />
+                            )}
+                            {formatStatusLabel(booking.status, "BOOKING")}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 text-right whitespace-nowrap">
+                          <button
+                            type="button"
+                            data-testid={`view-details-${booking.id}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedBooking(booking);
+                            }}
+                            className="px-3 py-1.5 text-xs font-bold text-gorola-pine bg-gorola-pine/10 hover:bg-gorola-pine hover:text-white rounded-xl transition-all"
+                          >
+                            View Details
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="grid gap-6 md:grid-cols-2">
+              {paginatedBookings.map((booking) => {
+                const item = booking.items?.[0];
 
-            return (
-              <div
-                key={booking.id}
-                data-testid={`booking-card-${booking.id}`}
-                onClick={() => setSelectedBooking(booking)}
-                className="bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
-              >
-                <div className="space-y-4">
-                  {/* Card Header Info */}
-                  <div className="flex justify-between items-start gap-4">
-                    <div>
-                      <h3 className="text-base font-extrabold text-gorola-charcoal leading-tight">
-                        {item?.productName || "Service Booking"}
-                      </h3>
-                      <p className="text-xs text-gorola-slate mt-0.5">{item?.variantLabel}</p>
+                return (
+                  <div
+                    key={booking.id}
+                    data-testid={`booking-card-${booking.id}`}
+                    onClick={() => setSelectedBooking(booking)}
+                    className="bg-white border border-gorola-mint/15 hover:border-gorola-pine/20 rounded-3xl p-6 shadow-sm hover:shadow-md transition-all duration-300 flex flex-col justify-between cursor-pointer"
+                  >
+                    <div className="space-y-4">
+                      {/* Card Header Info */}
+                      <div className="flex justify-between items-start gap-4">
+                        <div>
+                          <h3 className="text-base font-extrabold text-gorola-charcoal leading-tight">
+                            {item?.productName || "Service Booking"}
+                          </h3>
+                          <p className="text-xs text-gorola-slate mt-0.5">{item?.variantLabel}</p>
+                        </div>
+
+                        <div className="flex flex-col items-end gap-1.5">
+                          <ElapsedTimer createdAt={booking.createdAt} />
+                          {booking.bookingOrder?.requiresFasting && (
+                            <span className="bg-amber-50 text-amber-700 border border-amber-200/50 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                              ⚠️ Fasting Required
+                            </span>
+                          )}
+                        </div>
+                      </div>
                     </div>
 
-                    <div className="flex flex-col items-end gap-1.5">
-                      <ElapsedTimer createdAt={booking.createdAt} />
-                      {booking.bookingOrder?.requiresFasting && (
-                        <span className="bg-amber-50 text-amber-700 border border-amber-200/50 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                          ⚠️ Fasting Required
+                    {/* Read-Only Status Indicator badges for non-pending requests inside card */}
+                    {activeTab !== "PENDING" && (
+                      <div className="mt-4 pt-3 border-t border-gorola-mint/10 flex items-center justify-between">
+                        <span className="text-[10px] text-gorola-slate uppercase tracking-wider font-extrabold">
+                          Appointment Status
                         </span>
-                      )}
+
+                        <span
+                          className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border ${
+                            booking.status === "APPROVED"
+                              ? "bg-indigo-50 text-indigo-700 border-indigo-200/50"
+                              : booking.status === "OUT_FOR_DELIVERY"
+                              ? "bg-blue-50 text-blue-700 border-blue-200/50"
+                              : (booking.status === "COMPLETED" || booking.status === "DELIVERED")
+                              ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
+                              : (booking.status === "REJECTED" || booking.status === "CANCELLED")
+                              ? "bg-rose-50 text-rose-700 border-rose-200/50"
+                              : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
+                          }`}
+                        >
+                          {booking.status === "APPROVED" ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                          ) : booking.status === "OUT_FOR_DELIVERY" ? (
+                            <Truck className="h-3 w-3" />
+                          ) : (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? (
+                            <CheckCircle2 className="h-3 w-3" />
+                          ) : (
+                            <XCircle className="h-3 w-3" />
+                          )}
+                          {formatStatusLabel(booking.status, "BOOKING")}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="pt-4 mt-6 border-t border-gorola-mint/10 flex items-center justify-between">
+                      <div>
+                        <p className="text-[10px] text-gorola-slate uppercase tracking-wider font-bold">
+                          Grand Total
+                        </p>
+                        <p className="text-base font-black text-gorola-charcoal">
+                          Rs {Number(booking.total || 0).toFixed(2)}
+                        </p>
+                      </div>
+                      <span className="text-xs font-extrabold text-gorola-pine hover:underline">
+                        View Details →
+                      </span>
                     </div>
                   </div>
-                </div>
+                );
+              })}
+            </div>
+          )}
 
-                {/* Read-Only Status Indicator badges for non-pending requests inside card */}
-                {activeTab !== "PENDING" && (
-                  <div className="mt-4 pt-3 border-t border-gorola-mint/10 flex items-center justify-between">
-                    <span className="text-[10px] text-gorola-slate uppercase tracking-wider font-extrabold">
-                      Appointment Status
-                    </span>
-
-                    <span
-                      className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-black border ${
-                        booking.status === "APPROVED"
-                          ? "bg-indigo-50 text-indigo-700 border-indigo-200/50"
-                          : booking.status === "OUT_FOR_DELIVERY"
-                          ? "bg-blue-50 text-blue-700 border-blue-200/50"
-                          : (booking.status === "COMPLETED" || booking.status === "DELIVERED")
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200/50"
-                          : (booking.status === "REJECTED" || booking.status === "CANCELLED")
-                          ? "bg-rose-50 text-rose-700 border-rose-200/50"
-                          : "bg-gorola-slate/10 text-gorola-slate border-gorola-slate/20"
-                      }`}
-                    >
-                      {booking.status === "APPROVED" ? (
-                        <CheckCircle2 className="h-3 w-3" />
-                      ) : booking.status === "OUT_FOR_DELIVERY" ? (
-                        <Truck className="h-3 w-3" />
-                      ) : (booking.status === "COMPLETED" || booking.status === "DELIVERED") ? (
-                        <CheckCircle2 className="h-3 w-3" />
-                      ) : (
-                        <XCircle className="h-3 w-3" />
-                      )}
-                      {formatStatusLabel(booking.status === "OUT_FOR_DELIVERY" ? "ON_THE_WAY" : booking.status === "DELIVERED" ? "COMPLETED" : booking.status)}
-                    </span>
-                  </div>
-                )}
-
-                <div className="pt-4 mt-6 border-t border-gorola-mint/10 flex items-center justify-between">
-                  <div>
-                    <p className="text-[10px] text-gorola-slate uppercase tracking-wider font-bold">
-                      Grand Total
-                    </p>
-                    <p className="text-base font-black text-gorola-charcoal">
-                      Rs {Number(booking.total || 0).toFixed(2)}
-                    </p>
-                  </div>
-                  <span className="text-xs font-extrabold text-gorola-pine hover:underline">
-                    View Details →
-                  </span>
-                </div>
-              </div>
-            );
-          })}
+          {/* Pagination Card */}
+          <div
+            data-testid="store-bookings-pagination"
+            className="bg-white border border-gorola-mint/20 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4"
+          >
+            <p className="text-xs font-semibold text-gorola-charcoal">
+              Showing page {page} of {totalPages} ({activeList.length} bookings)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="pagination-prev-btn"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="p-2 rounded-xl bg-white border border-gorola-charcoal/10 hover:bg-gorola-mint/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+              <button
+                type="button"
+                data-testid="pagination-next-btn"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="p-2 rounded-xl bg-white border border-gorola-charcoal/10 hover:bg-gorola-mint/10 hover:border-gorola-pine/20 disabled:opacity-40 disabled:pointer-events-none transition-all shadow-xs"
+                aria-label="Next Page"
+              >
+                <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+            </div>
+          </div>
         </div>
       ) : (
         <div className="bg-white border border-gorola-mint/15 rounded-3xl p-12 text-center flex flex-col items-center justify-center space-y-4 shadow-sm">

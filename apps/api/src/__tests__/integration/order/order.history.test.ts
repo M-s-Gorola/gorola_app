@@ -240,4 +240,113 @@ describe("GET /api/v1/orders/history", () => {
     expect(firstOrder.items[0]?.productVariantId).toBe(variant.id);
     expect(firstOrder.items[0]?.productId).toBe(product.id);
   });
+
+  describe("Pagination (20 records/page)", () => {
+    it("paginates buyer order history with default 20 records/page and returns correct metadata", async () => {
+      // Seed 25 orders
+      for (let i = 0; i < 25; i++) {
+        await db.order.create({
+          data: {
+            deliveryFee: 10,
+            landmarkDescription: `addr-${i}`,
+            storeId: store.id,
+            subtotal: 100,
+            total: 110,
+            userId: user.id,
+            status: "DELIVERED",
+            createdAt: new Date(Date.now() - (25 - i) * 60000)
+          }
+        });
+      }
+
+      // Page 1
+      const resPage1 = await server.inject({
+        headers: { authorization: `Bearer ${token}` },
+        method: "GET",
+        url: "/api/v1/orders/history?page=1&limit=20"
+      });
+      expect(resPage1.statusCode).toBe(200);
+      const body1 = resPage1.json() as {
+        data: {
+          orders: Array<{ id: string }>;
+          pagination: { total: number; page: number; limit: number; totalPages: number };
+        };
+      };
+      expect(body1.data.orders).toHaveLength(20);
+      expect(body1.data.pagination.total).toBe(25);
+      expect(body1.data.pagination.page).toBe(1);
+      expect(body1.data.pagination.limit).toBe(20);
+      expect(body1.data.pagination.totalPages).toBe(2);
+
+      // Page 2 (remaining 5)
+      const resPage2 = await server.inject({
+        headers: { authorization: `Bearer ${token}` },
+        method: "GET",
+        url: "/api/v1/orders/history?page=2&limit=20"
+      });
+      expect(resPage2.statusCode).toBe(200);
+      const body2 = resPage2.json() as {
+        data: {
+          orders: Array<{ id: string }>;
+          pagination: { total: number; page: number; limit: number; totalPages: number };
+        };
+      };
+      expect(body2.data.orders).toHaveLength(5);
+      expect(body2.data.pagination.total).toBe(25);
+      expect(body2.data.pagination.page).toBe(2);
+      expect(body2.data.pagination.limit).toBe(20);
+      expect(body2.data.pagination.totalPages).toBe(2);
+
+      // Page out of bounds (page 999)
+      const resPage999 = await server.inject({
+        headers: { authorization: `Bearer ${token}` },
+        method: "GET",
+        url: "/api/v1/orders/history?page=999&limit=20"
+      });
+      expect(resPage999.statusCode).toBe(200);
+      const body999 = resPage999.json() as {
+        data: {
+          orders: Array<{ id: string }>;
+          pagination: { total: number; page: number; limit: number; totalPages: number };
+        };
+      };
+      expect(body999.data.orders).toHaveLength(0);
+      expect(body999.data.pagination.total).toBe(25);
+      expect(body999.data.pagination.page).toBe(999);
+      expect(body999.data.pagination.limit).toBe(20);
+      expect(body999.data.pagination.totalPages).toBe(2);
+    });
+
+    it("handles exact 20 records boundary with totalPages = 1", async () => {
+      for (let i = 0; i < 20; i++) {
+        await db.order.create({
+          data: {
+            deliveryFee: 10,
+            landmarkDescription: `boundary-${i}`,
+            storeId: store.id,
+            subtotal: 100,
+            total: 110,
+            userId: user.id,
+            status: "DELIVERED"
+          }
+        });
+      }
+
+      const res = await server.inject({
+        headers: { authorization: `Bearer ${token}` },
+        method: "GET",
+        url: "/api/v1/orders/history"
+      });
+      expect(res.statusCode).toBe(200);
+      const body = res.json() as {
+        data: {
+          orders: Array<{ id: string }>;
+          pagination: { total: number; page: number; limit: number; totalPages: number };
+        };
+      };
+      expect(body.data.orders).toHaveLength(20);
+      expect(body.data.pagination.total).toBe(20);
+      expect(body.data.pagination.totalPages).toBe(1);
+    });
+  });
 });

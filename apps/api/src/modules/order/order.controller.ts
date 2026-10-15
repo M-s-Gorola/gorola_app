@@ -205,6 +205,11 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
     }
   );
 
+  const orderHistoryQuerySchema = z.object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20)
+  });
+
   app.get(
     "/api/v1/orders/history",
     { preHandler: preCheckout },
@@ -213,11 +218,21 @@ export function registerOrderRoutes(app: FastifyInstance, deps: RegisterOrderDep
       if (!buyerId) {
         throw new UnauthorizedError("Buyer subject missing");
       }
-      const orders = await deps.orders.findByUserId(buyerId);
+      const query = orderHistoryQuerySchema.parse(request.query);
+      const result = await deps.orders.findByUserId(buyerId, {
+        page: query.page,
+        limit: query.limit
+      });
       return success(request, reply, {
-        orders: orders.map((o) =>
+        orders: result.orders.map((o) =>
           serializeOrderResponse(o, { amount: inferDiscountAmount(o), code: o.appliedDiscountCode })
-        )
+        ),
+        pagination: {
+          total: result.total,
+          page: result.page,
+          limit: result.limit,
+          totalPages: result.totalPages
+        }
       });
     }
   );

@@ -533,7 +533,7 @@ export function BookingTimeslotPage(): ReactElement {
                         data-testid="discount-breakdown-item"
                         className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
                       >
-                        <span className="break-words text-left flex-1">{o.title}</span>
+                        <span className="break-words text-left flex-1">Store Offer ({o.title})</span>
                         <span className="text-right whitespace-nowrap shrink-0">-Rs {o.savedAmount.toFixed(2)}</span>
                       </div>
                     ))}
@@ -542,7 +542,7 @@ export function BookingTimeslotPage(): ReactElement {
                         data-testid="discount-breakdown-item"
                         className="flex justify-between items-start gap-4 text-gorola-pine/80 text-xs w-full font-dm-sans font-bold"
                       >
-                        <span className="break-words text-left flex-1">{appliedCouponCode}</span>
+                        <span className="break-words text-left flex-1">Discount Code ({appliedCouponCode})</span>
                         <span className="text-right whitespace-nowrap shrink-0">-Rs {couponSavedAmount.toFixed(2)}</span>
                       </div>
                     )}

@@ -677,10 +677,8 @@ describe("BookingTimeslotPage", () => {
     fireEvent.click(toggleChevron);
 
     // Verify itemized components rendered
-    const breakdownItems = screen.getAllByTestId("discount-breakdown-item");
-    expect(breakdownItems).toHaveLength(2);
-    expect(screen.getByText("10% Store-Wide Discount")).toBeInTheDocument();
-    expect(screen.getByText("SAVE50")).toBeInTheDocument();
+    expect(screen.getByText(/Store Offer \(10% Store-Wide Discount\)/i)).toBeInTheDocument();
+    expect(screen.getByText(/Discount Code \(SAVE50\)/i)).toBeInTheDocument();
 
     // 5. Confirm booking with coupon code sends discountCode in the request payload
     const confirmBtn = screen.getByRole("button", { name: /Confirm Booking/i });

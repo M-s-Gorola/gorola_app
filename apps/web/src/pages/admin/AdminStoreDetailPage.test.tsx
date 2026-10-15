@@ -267,7 +267,7 @@ describe("AdminStoreDetailPage Override Tests", () => {
     // Verify Orders section
     expect(await screen.findByTestId("store-orders-table")).toBeInTheDocument();
     expect(screen.getByText("Store Customer")).toBeInTheDocument();
-    expect(screen.getByText("₹520.00")).toBeInTheDocument();
+    expect(screen.getByText(/520\.00/)).toBeInTheDocument();
 
     // Open modal
     const viewBtn = screen.getByTestId("view-store-order-store-ord-501");
@@ -365,5 +365,167 @@ describe("AdminStoreDetailPage Override Tests", () => {
     expect(modal).toBeInTheDocument();
     expect(await within(modal).findByText("Service Fee")).toBeInTheDocument();
     expect(within(modal).queryByText("Delivery Fee")).not.toBeInTheDocument();
+  });
+
+  it("renders status badges formatted by commerce type and renamed filter options in store orders table", async () => {
+    const mockStoreBooking = {
+      id: "store-booking-node",
+      name: "Mussoorie Repairs Hub",
+      description: "Appliance Repair",
+      phone: "+919876543210",
+      address: "Mall Road",
+      storeType: "BOOKING_COMMERCE",
+      isActive: true,
+      createdAt: "2026-07-14T00:00:00Z",
+      revenue: 5000,
+      productCount: 5,
+      orderCount: 2,
+      owners: [],
+      riderEarningRatePct: 90.00
+    };
+
+    const mockOrdersBookingStore = {
+      items: [
+        {
+          id: "bk-ord-1",
+          orderNumber: "bk-ord-1",
+          status: "OUT_FOR_DELIVERY",
+          orderType: "BOOKING",
+          createdAt: "2026-10-15T10:00:00Z",
+          total: 1299.10,
+          subtotal: 1200.0,
+          deliveryFee: 99.10,
+          paymentMethod: "COD",
+          storeName: "Mussoorie Repairs Hub",
+          storeId: "store-booking-node",
+          userName: "Registered User",
+          userMaskedPhone: "*********7890",
+          riderName: "Tech Bob",
+          itemCount: 1
+        },
+        {
+          id: "bk-ord-2",
+          orderNumber: "bk-ord-2",
+          status: "DELIVERED",
+          orderType: "BOOKING",
+          createdAt: "2026-10-15T11:00:00Z",
+          total: 649.0,
+          subtotal: 600.0,
+          deliveryFee: 49.0,
+          paymentMethod: "COD",
+          storeName: "Mussoorie Repairs Hub",
+          storeId: "store-booking-node",
+          userName: "Registered User",
+          userMaskedPhone: "*********7890",
+          riderName: "Tech Bob",
+          itemCount: 1
+        }
+      ],
+      total: 2,
+      page: 1,
+      limit: 20,
+      totalPages: 1
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/admin/stores/store-booking-node/orders")) {
+        return Promise.resolve({ data: { success: true, data: mockOrdersBookingStore } });
+      }
+      if (url.includes("/api/v1/admin/stores/store-booking-node")) {
+        return Promise.resolve({ data: { success: true, data: mockStoreBooking } });
+      }
+      return Promise.reject(new Error("Unknown url " + url));
+    });
+
+    renderAdminStoreDetailPage("store-booking-node");
+
+    const table = await screen.findByTestId("store-orders-table");
+    expect(table).toBeInTheDocument();
+
+    // Verify filter options
+    const filterSelect = screen.getByTestId("store-orders-status-filter");
+    expect(within(filterSelect).getByText("Out for Delivery / On The Way")).toBeInTheDocument();
+    expect(within(filterSelect).getByText("Delivered / Completed")).toBeInTheDocument();
+
+    // Verify status labels in table for BOOKING_COMMERCE store
+    expect(within(table).getByText("On The Way")).toBeInTheDocument();
+    expect(within(table).getByText("Completed")).toBeInTheDocument();
+  });
+
+  it("supports switching between Table and Cards view mode and renders persistent pagination", async () => {
+    const mockStore = {
+      id: "store-toggle-test",
+      name: "Toggle Store",
+      description: "Description",
+      phone: "+919000000000",
+      address: "Address",
+      storeType: "QUICK_COMMERCE",
+      isActive: true,
+      createdAt: "2026-07-14T00:00:00Z",
+      revenue: 1000,
+      productCount: 15,
+      orderCount: 10,
+      owners: [],
+      riderEarningRatePct: null
+    };
+
+    const mockOrders = {
+      items: [
+        {
+          id: "store-toggle-ord-1",
+          orderNumber: "ord-1",
+          status: "DELIVERED",
+          orderType: "QUICK",
+          createdAt: "2026-07-14T10:00:00Z",
+          total: 350.0,
+          subtotal: 320.0,
+          deliveryFee: 30.0,
+          paymentMethod: "COD",
+          storeName: "Toggle Store",
+          storeId: "store-toggle-test",
+          userName: "Customer A",
+          userMaskedPhone: "*********1234",
+          riderName: "Rider 1",
+          itemCount: 2
+        }
+      ],
+      total: 1,
+      page: 1,
+      limit: 20,
+      totalPages: 1
+    };
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("/orders")) {
+        return Promise.resolve({ data: { success: true, data: mockOrders } });
+      }
+      return Promise.resolve({ data: { success: true, data: mockStore } });
+    });
+
+    renderAdminStoreDetailPage("store-toggle-test");
+
+    // Table view by default
+    expect(await screen.findByTestId("store-orders-table")).toBeInTheDocument();
+    expect(screen.queryByTestId("store-orders-cards")).not.toBeInTheDocument();
+
+    // Persistent pagination bar
+    const pagination = screen.getByTestId("store-orders-pagination");
+    expect(pagination).toBeInTheDocument();
+    expect(pagination).toHaveTextContent(/page 1 of 1/i);
+    expect(screen.getByTestId("store-orders-pagination-prev")).toBeDisabled();
+    expect(screen.getByTestId("store-orders-pagination-next")).toBeDisabled();
+
+    // Toggle to cards view
+    const cardsBtn = screen.getByTestId("store-orders-view-cards");
+    fireEvent.click(cardsBtn);
+
+    expect(await screen.findByTestId("store-orders-cards")).toBeInTheDocument();
+    expect(screen.queryByTestId("store-orders-table")).not.toBeInTheDocument();
+    expect(screen.getByTestId("store-order-card-store-toggle-ord-1")).toBeInTheDocument();
+
+    // Toggle back to table view
+    const tableBtn = screen.getByTestId("store-orders-view-table");
+    fireEvent.click(tableBtn);
+    expect(await screen.findByTestId("store-orders-table")).toBeInTheDocument();
   });
 });

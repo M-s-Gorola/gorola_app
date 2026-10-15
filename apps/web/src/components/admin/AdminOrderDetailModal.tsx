@@ -9,8 +9,8 @@ import {
   User,
 } from "lucide-react";
 import type { ReactElement } from "react";
-import { useEffect, useState } from "react";
-import { io } from "socket.io-client";
+import { useEffect, useRef, useState } from "react";
+import { io, type Socket } from "socket.io-client";
 
 import { api } from "@/lib/api";
 import { lenis } from "@/lib/lenis";
@@ -149,7 +149,7 @@ export function AdminOrderDetailModal({
     setIsDiscountExpanded(false);
   }, [orderId]);
 
-  const { data: orderDetail, isLoading: isDetailLoading, refetch } = useQuery<AdminOrderDetail | null>({
+  const { data: orderDetail, isLoading: isDetailLoading } = useQuery<AdminOrderDetail | null>({
     queryKey: ["adminOrderDetail", orderId],
     queryFn: async () => {
       if (!orderId || !api) return null;
@@ -162,6 +162,8 @@ export function AdminOrderDetailModal({
     refetchInterval: 3000
   });
 
+  const socketRef = useRef<Socket | null>(null);
+
   // Real-time WebSocket connection to subscribe to order updates
   useEffect(() => {
     if (!orderId || !accessToken) return;
@@ -172,6 +174,7 @@ export function AdminOrderDetailModal({
       withCredentials: true,
       transports: ["websocket", "polling"]
     });
+    socketRef.current = socket;
 
     socket.on("connect", () => {
       socket.emit("join_order", orderId);
@@ -185,7 +188,8 @@ export function AdminOrderDetailModal({
       status: string;
       statusHistory?: AdminOrderDetailHistory[];
     }) => {
-      const incomingId = payload?.orderId?.toLowerCase();
+      if (!payload) return;
+      const incomingId = payload.orderId?.toLowerCase();
       const currentId = orderId?.toLowerCase();
       if (!incomingId || !currentId) return;
       if (incomingId !== currentId && !incomingId.includes(currentId) && !currentId.includes(incomingId)) {
@@ -231,8 +235,16 @@ export function AdminOrderDetailModal({
 
     return () => {
       socket.disconnect();
+      socketRef.current = null;
     };
-  }, [orderId, accessToken, queryClient, orderDetail?.store?.id]);
+  }, [orderId, accessToken, queryClient]);
+
+  // When store ID becomes available, join store room without reconnecting socket
+  useEffect(() => {
+    if (socketRef.current && orderDetail?.store?.id) {
+      socketRef.current.emit("join_store", orderDetail.store.id);
+    }
+  }, [orderDetail?.store?.id]);
 
   if (!orderId) {
     return null;

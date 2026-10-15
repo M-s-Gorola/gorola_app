@@ -322,10 +322,13 @@ export class AdminService {
     startsAt?: string | undefined;
     endsAt?: string | undefined;
     cursor?: string | undefined;
+    page?: number | undefined;
     limit?: number | undefined;
   }) {
-    const limit = filters.limit ?? 50;
+    const limit = filters.limit ?? 20;
     const { storeId, status, paymentMethod, startsAt, endsAt, cursor } = filters;
+    const page = filters.page ? Math.max(1, filters.page) : (cursor ? undefined : 1);
+    const skip = page ? (page - 1) * limit : undefined;
 
     const where: Prisma.OrderWhereInput = {
       ...(storeId ? { storeId } : {}),
@@ -339,24 +342,33 @@ export class AdminService {
       } : {})
     };
 
-    const orders = await this.db.order.findMany({
-      where,
-      take: limit + 1,
-      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      orderBy: [
-        { createdAt: "desc" },
-        { id: "desc" }
-      ],
-      include: {
-        store: { select: { id: true, name: true } },
-        user: { select: { phone: true } },
-        items: true,
-        rider: { select: { name: true } }
-      }
-    });
+    const [orders, total, stores] = await Promise.all([
+      this.db.order.findMany({
+        where,
+        take: cursor ? limit + 1 : limit,
+        ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+        ...(skip !== undefined ? { skip } : {}),
+        orderBy: [
+          { createdAt: "desc" },
+          { id: "desc" }
+        ],
+        include: {
+          store: { select: { id: true, name: true } },
+          user: { select: { phone: true } },
+          items: true,
+          rider: { select: { name: true } }
+        }
+      }),
+      this.db.order.count({ where }),
+      this.db.store.findMany({
+        where: { isDeleted: false },
+        select: { id: true, name: true },
+        orderBy: { name: "asc" }
+      })
+    ]);
 
-    const hasMore = orders.length > limit;
-    const pageItems = hasMore ? orders.slice(0, limit) : orders;
+    const hasMore = cursor ? orders.length > limit : (page ? page * limit < total : false);
+    const pageItems = cursor && hasMore ? orders.slice(0, limit) : orders;
 
     const mapped = pageItems.map((o) => {
       const itemsCount = o.items.reduce((sum, item) => sum + item.quantity, 0);
@@ -374,18 +386,16 @@ export class AdminService {
       };
     });
 
-    const nextCursor = hasMore && pageItems.length > 0 ? pageItems[pageItems.length - 1]!.id : null;
-
-    const stores = await this.db.store.findMany({
-      where: { isDeleted: false },
-      select: { id: true, name: true },
-      orderBy: { name: "asc" }
-    });
+    const nextCursor = cursor && hasMore && pageItems.length > 0 ? pageItems[pageItems.length - 1]!.id : null;
 
     return {
       items: mapped,
       nextCursor,
-      stores
+      stores,
+      total,
+      page: page ?? 1,
+      limit,
+      totalPages: Math.ceil(total / limit) || 1
     };
   }
 
@@ -592,26 +602,68 @@ export class AdminService {
     return csvContent;
   }
 
-  public async getUsers(filters: { phone?: string | undefined }) {
-    const { phone } = filters;
+  public async getUsers(filters: { phone?: string | undefined; page?: number | undefined; limit?: number | undefined }) {
+    const { phone, page = 1, limit = 20 } = filters;
+    const skip = (Math.max(1, page) - 1) * limit;
 
-    const users = await this.db.user.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: "desc" },
-      include: {
-        orders: {
-          select: {
-            total: true
+    if (phone) {
+      const allUsers = await this.db.user.findMany({
+        where: { isDeleted: false },
+        orderBy: { createdAt: "desc" },
+        include: {
+          orders: {
+            select: {
+              total: true
+            }
           }
         }
-      }
-    });
+      });
+      const filteredUsers = allUsers.filter((u) => u.phone && u.phone.includes(phone));
+      const total = filteredUsers.length;
+      const paginatedUsers = filteredUsers.slice(skip, skip + limit);
 
-    const filteredUsers = phone
-      ? users.filter((u) => u.phone && u.phone.includes(phone))
-      : users;
+      const items = paginatedUsers.map((u) => {
+        const orderCount = u.orders.length;
+        const totalSpent = u.orders.reduce((sum, o) => sum + Number(o.total), 0);
+        return {
+          id: u.id,
+          maskedPhone: maskPhone(u.phone),
+          name: u.name,
+          orderCount,
+          totalSpent,
+          createdAt: u.createdAt.toISOString(),
+          isActive: u.isActive
+        };
+      });
 
-    return filteredUsers.map((u) => {
+      return {
+        items,
+        total,
+        page,
+        limit,
+        totalPages: Math.ceil(total / limit)
+      };
+    }
+
+    const where: Prisma.UserWhereInput = { isDeleted: false };
+    const [users, total] = await Promise.all([
+      this.db.user.findMany({
+        where,
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          orders: {
+            select: {
+              total: true
+            }
+          }
+        }
+      }),
+      this.db.user.count({ where })
+    ]);
+
+    const items = users.map((u) => {
       const orderCount = u.orders.length;
       const totalSpent = u.orders.reduce((sum, o) => sum + Number(o.total), 0);
       return {
@@ -624,6 +676,14 @@ export class AdminService {
         isActive: u.isActive
       };
     });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
 
@@ -1193,34 +1253,44 @@ export class AdminService {
     });
   }
 
-  public async getStores() {
-    const stores = await this.db.store.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: "desc" },
-      include: {
-        owners: {
-          where: { isDeleted: false },
-          select: { email: true }
-        },
-        _count: {
-          select: {
-            orders: true,
-            products: { where: { isDeleted: false } }
+  public async getStores(filters?: { page?: number | undefined; limit?: number | undefined }) {
+    const page = Math.max(1, filters?.page ?? 1);
+    const limit = Math.max(1, filters?.limit ?? 20);
+    const skip = (page - 1) * limit;
+
+    const [stores, total] = await Promise.all([
+      this.db.store.findMany({
+        where: { isDeleted: false },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          owners: {
+            where: { isDeleted: false },
+            select: { email: true }
+          },
+          _count: {
+            select: {
+              orders: true,
+              products: { where: { isDeleted: false } }
+            }
           }
         }
-      }
-    });
+      }),
+      this.db.store.count({ where: { isDeleted: false } })
+    ]);
 
-    const orders = await this.db.order.findMany({
+    const storeIds = stores.map((s) => s.id);
+    const orders = storeIds.length > 0 ? await this.db.order.findMany({
       where: {
         status: { not: "CANCELLED" },
-        store: { isDeleted: false }
+        storeId: { in: storeIds }
       },
       select: {
         storeId: true,
         total: true
       }
-    });
+    }) : [];
 
     const revenueByStore = new Map<string, number>();
     for (const order of orders) {
@@ -1228,7 +1298,7 @@ export class AdminService {
       revenueByStore.set(order.storeId, current + Number(order.total));
     }
 
-    return stores.map((s) => {
+    const items = stores.map((s) => {
       const firstOwner = s.owners[0];
       const ownerEmail = firstOwner ? firstOwner.email : "";
       const revenue = revenueByStore.get(s.id) ?? 0;
@@ -1244,6 +1314,14 @@ export class AdminService {
         isActive: s.isActive
       };
     });
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   public async getStoreDetail(storeId: string) {
@@ -1776,7 +1854,12 @@ export class AdminService {
     return updated;
   }
 
-  public async getAds(status?: string) {
+  public async getAds(filters?: { status?: string | undefined; page?: number | undefined; limit?: number | undefined } | string) {
+    const status = typeof filters === "string" ? filters : filters?.status;
+    const page = typeof filters === "object" ? Math.max(1, filters.page ?? 1) : 1;
+    const limit = typeof filters === "object" ? Math.max(1, filters.limit ?? 20) : 20;
+    const skip = (page - 1) * limit;
+
     const where: Prisma.AdvertisementWhereInput = {
       store: { isDeleted: false }
     };
@@ -1789,17 +1872,22 @@ export class AdminService {
       where.isActive = true;
     }
 
-    const ads = await this.db.advertisement.findMany({
-      where,
-      include: {
-        store: {
-          select: { name: true }
-        }
-      },
-      orderBy: { createdAt: "desc" }
-    });
+    const [ads, total] = await Promise.all([
+      this.db.advertisement.findMany({
+        where,
+        include: {
+          store: {
+            select: { name: true }
+          }
+        },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit
+      }),
+      this.db.advertisement.count({ where })
+    ]);
 
-    return ads.map((ad) => ({
+    const items = ads.map((ad) => ({
       id: ad.id,
       storeId: ad.storeId,
       storeName: ad.store.name,
@@ -1812,6 +1900,14 @@ export class AdminService {
       isActive: ad.isActive,
       submittedAt: ad.createdAt
     }));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   public async approveAd(
@@ -2218,45 +2314,46 @@ export class AdminService {
     };
   }
 
-  public async listRiders(): Promise<
-    Prisma.DeliveryRiderGetPayload<{
-      include: {
-        stores: {
-          include: {
-            store: {
-              select: {
-                id: true;
-                name: true;
-                storeType: true;
-              };
-            };
-          };
-        };
-      };
-    }>[]
-  > {
-    const riders = await this.db.deliveryRider.findMany({
-      where: { isDeleted: false },
-      orderBy: { createdAt: "desc" },
-      include: {
-        stores: {
-          include: {
-            store: {
-              select: {
-                id: true,
-                name: true,
-                storeType: true
+  public async listRiders(filters?: { page?: number | undefined; limit?: number | undefined }) {
+    const page = Math.max(1, filters?.page ?? 1);
+    const limit = Math.max(1, filters?.limit ?? 20);
+    const skip = (page - 1) * limit;
+
+    const [riders, total] = await Promise.all([
+      this.db.deliveryRider.findMany({
+        where: { isDeleted: false },
+        orderBy: { createdAt: "desc" },
+        skip,
+        take: limit,
+        include: {
+          stores: {
+            include: {
+              store: {
+                select: {
+                  id: true,
+                  name: true,
+                  storeType: true
+                }
               }
             }
           }
         }
-      }
-    });
+      }),
+      this.db.deliveryRider.count({ where: { isDeleted: false } })
+    ]);
 
-    return riders.map((r) => ({
+    const items = riders.map((r) => ({
       ...r,
       phone: decryptPII(r.phone)
     }));
+
+    return {
+      items,
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit)
+    };
   }
 
   public async createRider(

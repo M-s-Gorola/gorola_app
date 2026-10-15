@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Edit2, Eye, EyeOff, Plus, RefreshCw, UserCheck, UserX } from "lucide-react";
+import { AlertTriangle, ChevronLeft, ChevronRight, Edit2, Eye, EyeOff, Plus, RefreshCw, UserCheck, UserX } from "lucide-react";
 import type { FormEvent, ReactElement } from "react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
@@ -39,7 +39,15 @@ type Rider = {
 
 type RidersListResponse = {
   success: boolean;
-  data: Rider[];
+  data:
+    | {
+        items: Rider[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+    | Rider[];
 };
 
 type PlatformStore = {
@@ -51,7 +59,15 @@ type PlatformStore = {
 
 type StoresListResponse = {
   success: boolean;
-  data: PlatformStore[];
+  data:
+    | {
+        items: PlatformStore[];
+        total: number;
+        page: number;
+        limit: number;
+        totalPages: number;
+      }
+    | PlatformStore[];
 };
 
 export function AdminRidersPage(): ReactElement {
@@ -64,6 +80,8 @@ export function AdminRidersPage(): ReactElement {
   const [isEditFormOpen, setIsEditFormOpen] = useState(false);
   const [selectedRider, setSelectedRider] = useState<Rider | null>(null);
   const [confirmStatusChangeRiderId, setConfirmStatusChangeRiderId] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const limit = 20;
 
   // Form states
   const [name, setName] = useState("");
@@ -77,26 +95,28 @@ export function AdminRidersPage(): ReactElement {
   const [showPassword, setShowPassword] = useState(false);
 
   // Fetch riders list
-  const { data: riders, isLoading, isError, isFetching, refetch } = useQuery<Rider[]>({
-    queryKey: ["admin", "riders"],
+  const { data: ridersData, isLoading, isError, isFetching, refetch } = useQuery({
+    queryKey: ["admin", "riders", page, limit],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<RidersListResponse>("/api/v1/admin/riders");
+      const res = await api.get<RidersListResponse>(`/api/v1/admin/riders?page=${page}&limit=${limit}`);
       return res.data.data;
     },
     staleTime: 10000,
   });
 
   // Fetch platform stores
-  const { data: stores } = useQuery<PlatformStore[]>({
-    queryKey: ["admin", "stores"],
+  const { data: storesData } = useQuery<StoresListResponse["data"]>({
+    queryKey: ["admin", "stores", "picker"],
     queryFn: async () => {
       if (!api) throw new Error("API helper not initialized");
-      const res = await api.get<StoresListResponse>("/api/v1/admin/stores");
+      const res = await api.get<StoresListResponse>("/api/v1/admin/stores?limit=100");
       return res.data.data;
     },
     staleTime: 30000,
   });
+
+  const stores: PlatformStore[] = Array.isArray(storesData) ? storesData : (storesData?.items ?? []);
 
   // Reset store selections if riderType changes
   useEffect(() => {
@@ -262,9 +282,13 @@ export function AdminRidersPage(): ReactElement {
     });
   };
 
+  const items: Rider[] = Array.isArray(ridersData) ? ridersData : (ridersData?.items ?? []);
+  const total = Array.isArray(ridersData) ? ridersData.length : (ridersData?.total ?? 0);
+  const totalPages = Array.isArray(ridersData) ? (Math.ceil(total / limit) || 1) : (ridersData?.totalPages ?? 1);
+
   const handleToggleStatusConfirm = () => {
     if (!confirmStatusChangeRiderId) return;
-    const rider = riders?.find((r) => r.id === confirmStatusChangeRiderId);
+    const rider = items.find((r) => r.id === confirmStatusChangeRiderId);
     if (!rider) return;
 
     toggleStatusMutation.mutate({
@@ -284,7 +308,7 @@ export function AdminRidersPage(): ReactElement {
     return false;
   });
 
-  if (isLoading && !riders) {
+  if (isLoading && !ridersData) {
     return (
       <div data-testid="riders-loading-skeleton" className="space-y-6 animate-pulse">
         <div className="h-10 bg-gorola-charcoal/10 rounded-xl w-48" />
@@ -306,7 +330,6 @@ export function AdminRidersPage(): ReactElement {
     );
   }
 
-  const items = riders ?? [];
   const confirmRider = items.find((r) => r.id === confirmStatusChangeRiderId);
 
   return (
@@ -444,6 +467,38 @@ export function AdminRidersPage(): ReactElement {
               )}
             </tbody>
           </table>
+
+          {/* Pagination Footer */}
+          <div
+            data-testid="admin-riders-pagination"
+            className="flex items-center justify-between p-4 border-t border-gorola-charcoal/10 bg-gorola-mint/5"
+          >
+            <p className="text-xs font-medium text-gorola-slate">
+              Showing page {page} of {totalPages} ({total} riders)
+            </p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                data-testid="pagination-prev-btn"
+                disabled={page <= 1}
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+                aria-label="Previous Page"
+              >
+                <ChevronLeft className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+              <button
+                type="button"
+                data-testid="pagination-next-btn"
+                disabled={page >= totalPages}
+                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                className="p-2 rounded-xl border border-gorola-charcoal/10 hover:bg-gorola-mint/10 disabled:opacity-40 transition-colors"
+                aria-label="Next Page"
+              >
+                <ChevronRight className="h-4 w-4 text-gorola-charcoal" />
+              </button>
+            </div>
+          </div>
         </div>
       </div>
 

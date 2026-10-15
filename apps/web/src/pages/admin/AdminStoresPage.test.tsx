@@ -160,4 +160,109 @@ describe("AdminStoresPage", () => {
       });
     });
   });
+
+  it("renders 20-per-page pagination controls and navigates between pages", async () => {
+    const page1Stores = Array.from({ length: 20 }, (_, i) => ({
+      id: `store-${i + 1}`,
+      name: `Store ${i + 1}`,
+      storeType: "QUICK_COMMERCE",
+      ownerEmail: `owner${i + 1}@test.com`,
+      orderCount: 10,
+      revenue: 500.0,
+      productCount: 10,
+      isActive: true
+    }));
+
+    getMock.mockImplementation((url: string) => {
+      if (url.includes("page=2")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              items: [
+                {
+                  id: "store-21",
+                  name: "Store 21",
+                  storeType: "BOOKING_COMMERCE",
+                  ownerEmail: "owner21@test.com",
+                  orderCount: 5,
+                  revenue: 250.0,
+                  productCount: 5,
+                  isActive: true
+                }
+              ],
+              total: 21,
+              page: 2,
+              limit: 20,
+              totalPages: 2
+            }
+          }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          success: true,
+          data: {
+            items: page1Stores,
+            total: 21,
+            page: 1,
+            limit: 20,
+            totalPages: 2
+          }
+        }
+      });
+    });
+
+    renderAdminStores();
+
+    expect(await screen.findByText("Store 1")).toBeInTheDocument();
+
+    const paginationFooter = await screen.findByTestId("admin-stores-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(paginationFooter).toHaveTextContent(/page 1 of 2/i);
+
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeEnabled();
+
+    fireEvent.click(nextBtn);
+
+    expect(await screen.findByText("Store 21")).toBeInTheDocument();
+    expect(screen.getByTestId("admin-stores-pagination")).toHaveTextContent(/page 2 of 2/i);
+  });
+
+  it("boundary test: exactly 20 stores renders page 1 of 1 and next button is disabled", async () => {
+    const page1Stores = Array.from({ length: 20 }, (_, i) => ({
+      id: `store-${i + 1}`,
+      name: `Exact Store ${i + 1}`,
+      storeType: "QUICK_COMMERCE",
+      ownerEmail: `owner${i + 1}@test.com`,
+      orderCount: 10,
+      revenue: 500.0,
+      productCount: 10,
+      isActive: true
+    }));
+
+    getMock.mockResolvedValueOnce({
+      data: {
+        success: true,
+        data: {
+          items: page1Stores,
+          total: 20,
+          page: 1,
+          limit: 20,
+          totalPages: 1
+        }
+      }
+    });
+
+    renderAdminStores();
+
+    expect(await screen.findByText("Exact Store 1")).toBeInTheDocument();
+    const paginationFooter = await screen.findByTestId("admin-stores-pagination");
+    expect(paginationFooter).toBeInTheDocument();
+    expect(paginationFooter).toHaveTextContent(/page 1 of 1/i);
+
+    const nextBtn = screen.getByTestId("pagination-next-btn");
+    expect(nextBtn).toBeDisabled();
+  });
 });
