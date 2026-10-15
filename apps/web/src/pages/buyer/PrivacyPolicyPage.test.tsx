@@ -1,3 +1,4 @@
+import { CANONICAL_CONSENT_NOTICES, type ConsentPurpose } from "@gorola/shared";
 import { render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
@@ -81,5 +82,29 @@ describe("PrivacyPolicyPage (/privacy)", () => {
     const manageLink = screen.getByRole("link", { name: /Manage Privacy & Consent Settings/i });
     expect(manageLink).toBeInTheDocument();
     expect(manageLink).toHaveAttribute("href", "/account/privacy");
+  });
+
+  it("renders Section 3 with 5 informational ConsentOptInCard components matching canonical registry", () => {
+    render(
+      <MemoryRouter>
+        <PrivacyPolicyPage />
+      </MemoryRouter>
+    );
+
+    const purposes: ConsentPurpose[] = [
+      "OTP_AUTH",
+      "AGE_DECLARATION",
+      "ORDER_PROCESSING",
+      "MARKETING_COMMS",
+      "ANALYTICS"
+    ];
+
+    for (const purpose of purposes) {
+      const card = screen.getByTestId(`privacy-policy-purpose-${purpose}`);
+      expect(card).toBeInTheDocument();
+      expect(card).toHaveTextContent(CANONICAL_CONSENT_NOTICES[purpose].summaryText);
+      expect(card).toHaveTextContent(CANONICAL_CONSENT_NOTICES[purpose].title);
+      expect(card.querySelector('input[type="checkbox"]')).toBeNull();
+    }
   });
 });

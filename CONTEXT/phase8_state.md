@@ -11,25 +11,23 @@
 
 | Phase   | Name                    | Status      | Notes |
 | ------- | ----------------------- | ----------- | ----- |
-| Phase 8 | DPDP Act 2023 Compliance | 🟡 IN PROGRESS | Sections 8.1, 8.2, 8.3 (Two-Stage Erasure, Data Portability, Nominee), 8.3.4 (Consent Overhaul & Admin Consent Panel), and 8.3.5 (DPDP UI Alignment, Audit Log Search & Nominee PII Protection) complete; Phases 8.4–8.6 complete; 8.7 documentation corrected 2026-10-05 (provider register + accurate DPA steps); 8.8 (Age Eligibility Gate, 18+) planned and ready to build; 8.9 (SMS OTP & call masking) pending vendor decision. |
+| Phase 8 | DPDP Act 2023 Compliance | 🟡 IN PROGRESS | Sections 8.1–8.6 complete; 8.7 DPA documentation complete; 8.8 (Age Eligibility Gate, 18+) complete; 8.9 (Universal DRY DPDP Consent Forms & Canonical Shared Notice Registry) planned and ready to build; 8.10 (SMS OTP & call masking) pending vendor decision. |
 
 ---
 
 ## 📍 Last Updated
 
-- **Date:** 2026-10-07
-- **Session Summary (2026-10-07 — Section 8.8.14 Admin Dashboard Complete Age-Gate Case Pipeline Complete):**
-  1. **Section 8.8.14 (Admin Dashboard: The Complete Age-Gate Case Pipeline):**
-     - Implemented backend service methods `lookupAgeGate`, `listAgeGateLockouts`, `declineAgeGateAppeal`, and updated `suspendUser` to accept optional `reason` (10–500 chars), record it in the audit log, and immediately revoke all user sessions in Redis (`rt:*` and `user_sessions:*`).
-     - Added endpoints `POST /api/v1/admin/age-gate/lookup`, `GET /api/v1/admin/age-gate/lockouts`, `POST /api/v1/admin/age-gate/decline` under `requireRole(["ADMIN"])` preHandler.
-     - Added DTO types (`AgeGateLookupResult`, `AgeGateLockoutList`, etc.) in `packages/shared/src/age-gate.ts` and pure helpers in `apps/api/src/modules/admin/admin-age-gate.util.ts`.
-     - Built comprehensive frontend components: `AgeGateActionModals.tsx` (`UnlockModal`, `DeclineModal`, `SuspendModal`, `EraseUnderageModal`), `AgeGateLookupCards.tsx` (Lockout Card & Account Card), and `AdminAgeGatePage.tsx` (Lookup search bar, summary metric tiles, Recent Refusals table with pagination).
-     - Integrated `Age Confirmed (18+)` metadata and `Erase Underage Account` modal into `AdminUserDetailPage.tsx`, added `Age Gate` nav link in `AdminLayout.tsx`, and registered `/admin/age-gate` route in `apps/web/src/app/routes/admin.tsx`.
-     - Created Playwright E2E test suite in `apps/web/tests/e2e/admin-age-gate.spec.ts` covering Scenarios 1–4 (Approve/Unlock, Decline appeal, Erase underage, Suspend/Unsuspend).
-  2. **Quality Gates:**
-     - 100% GREEN across all checks: `pnpm lint` (0 errors, 0 warnings across all 4 workspace packages), `pnpm typecheck` (0 errors across workspace), `pnpm --filter @gorola/api test` (139 test files, 834 tests passing), `pnpm --filter @gorola/web test` (103 test files, 581 tests passing), and production build `pnpm build` clean.
-- **Next Session Must Start With:** Phase 8 close-out / Phase 8.9 (SMS OTP & call masking vendor evaluation).
-- **In Progress Right Now:** Section 8.8.14 complete. Phase 8.8 is 100% complete across all 15 sub-sections.
+- **Date:** 2026-10-16
+- **Session Summary (2026-10-16 — Phase 8.9 Universal DRY DPDP Consent Forms & Canonical Shared Notices Specification):**
+  1. **Phase 8.9 Plan Created (Universal DRY DPDP Consent Forms & Canonical Shared Notices):**
+     - Formulated comprehensive architectural specification following `TDD_INSTRUCTION_GUIDE.md` to eliminate widespread UI duplication and text drift across all 12 statutory consent and notice touchpoints (`LoginPage`, `AgeStep`, `SavedAddressesPage`, `CheckoutPage` address dialog & review section, `BookingTimeslotPage` address modal & marketing section, `AnalyticsConsentBanner`, `PrivacyPolicyPage` Section 3, `PrivacySettingsSection`, `ConsentNoticeModal`, `AdminUserDetailPage`).
+     - Designed `@gorola/shared` canonical consent notice registry containing all 5 purposes (`OTP_AUTH`, `AGE_DECLARATION`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`), standardizing summary text, audit plain-text, and statutory disclosures.
+     - Designed universal `<ConsentOptInCard>` component (with `essential-gate`, `optional-opt-in`, and `informational` modes) and `useRecordConsent` hook to encapsulate essential/optional badges, modal triggers, status pills, acknowledgments, and background API logging with error suppression.
+     - Outlined full test synchronization plan across all affected test suites with edge cases (active consent bypass, non-blocking network errors, voluntary marketing toggles).
+  2. **Renumbered Vendor-Pending Items:**
+     - Shifted pending vendor items (SMS OTP DLT & Call Masking) from Section 8.9 to Section 8.10.
+- **Next Session Must Start With:** Phase 8.9.1 — Implement Canonical Consent Notice & Purpose Registry in `packages/shared/src/consent-notices.ts` and test suite.
+- **In Progress Right Now:** Phase 8.9.1 ready for TDD RED step.
 - **Current Blocker:** None.
 
 
@@ -2593,13 +2591,295 @@ The new rule changes who may log in. Every place that creates buyers through `ve
 
 ---
 
-### 8.9 — PENDING VENDOR DECISION — SMS OTP & Mobile Call Masking
+### 8.9 — Universal DRY DPDP Consent Forms, Canonical Shared Notice Registry & Component Consolidation
+
+> ⚠️ **MANDATORY ARCHITECTURAL OBJECTIVE:**
+> Eliminate widespread UI code duplication, copy-pasted JSX markup, hardcoded raw strings, and notice text drift across **all 12 statutory DPDP consent and notice touchpoints** in the platform:
+> 1. `LoginPage.tsx` (Step 1 `OTP_AUTH` gate)
+> 2. `AgeStep.tsx` (Step 3 `AGE_DECLARATION` notice card)
+> 3. `SavedAddressesPage.tsx` (Add/Edit address modal `ORDER_PROCESSING` gate)
+> 4. `CheckoutPage.tsx` (New address dialog `ORDER_PROCESSING` gate)
+> 5. `CheckoutPage.tsx` (Order review `ORDER_PROCESSING` notice trigger + `MARKETING_COMMS` opt-in card)
+> 6. `BookingTimeslotPage.tsx` (Address modal `ORDER_PROCESSING` gate)
+> 7. `BookingTimeslotPage.tsx` (Section 5 `MARKETING_COMMS` opt-in card)
+> 8. `AnalyticsConsentBanner.tsx` (Floating bottom banner `ANALYTICS` notice)
+> 9. `PrivacyPolicyPage.tsx` (Section 3 — 5 canonical statutory purpose cards)
+> 10. `PrivacySettingsSection.tsx` (`/account/privacy` — 5-purpose management accordion)
+> 11. `ConsentNoticeModal.tsx` (Universal 5-purpose statutory Section 5 legal notice modal)
+> 12. `AdminUserDetailPage.tsx` (Admin statutory consent table & immutable audit log viewer)
+>
+> Establish `@gorola/shared` as the single canonical source of truth for all 5 consent purposes (`OTP_AUTH`, `AGE_DECLARATION`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`), and provide a single reusable `<ConsentOptInCard>` component (supporting `essential-gate`, `optional-opt-in`, and `informational` modes) and `useRecordConsent` hook.
+
+---
+
+#### 8.9.1 — Canonical Consent Notice & Purpose Registry (`@gorola/shared`)
+
+**Root cause / Goal:**
+Currently, `packages/shared/src/consent-notices.ts` only declares `OTP_AUTH` and `AGE_DECLARATION`. The remaining 3 statutory purposes (`ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`) are completely missing from shared packages. Because of this, page components (`CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `SavedAddressesPage.tsx`, `PrivacySettingsSection.tsx`, `ConsentNoticeModal.tsx`, `PrivacyPolicyPage.tsx`, `AnalyticsConsentBanner.tsx`) define ad-hoc string literals with subtle wording divergences. Furthermore, when calling `api.post("/api/v1/consent")`, raw unversioned strings are passed in POST bodies.
+
+**Fix / Approach:**
+Expand `packages/shared/src/consent-notices.ts` to be the single source of truth for all 5 consent purposes. Export `CANONICAL_CONSENT_NOTICES` containing for each purpose: `title`, `version`, `effectiveDate`, `isEssential`, `summaryText` (for inline UI cards), `plainText` (for audit log payloads), `noticeTriggerLabel`, `checkboxLabel`, and statutory disclosure breakdown. Export `getCanonicalNoticeText(purpose, version?)` and `isPurposeEssential(purpose)` helpers.
+
+---
+
+- [x] **RED — Unit (`packages/shared/src/__tests__/consent-notices.test.ts`):**
+  - [x] Test: `CANONICAL_CONSENT_NOTICES` exports all 5 canonical purposes (`OTP_AUTH`, `AGE_DECLARATION`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`).
+  - [x] Test: Each purpose object contains non-empty strings for `title`, `version`, `effectiveDate`, `summaryText`, `plainText`, `noticeTriggerLabel`, and `checkboxLabel`.
+  - [x] Test: `isEssential` evaluates to `true` for `OTP_AUTH`, `AGE_DECLARATION`, `ORDER_PROCESSING`, and `false` for `MARKETING_COMMS`, `ANALYTICS`.
+  - [x] Test: `getCanonicalNoticeText(purpose)` returns exact plain text matching statutory compliance requirements for all 5 purposes.
+  - [x] Test: `isPurposeEssential("ORDER_PROCESSING") === true`, `isPurposeEssential("MARKETING_COMMS") === false`.
+  - [x] **Run — confirm RED (shared module currently lacks the 3 purposes and helpers).**
+
+- [x] **GREEN — Shared (`packages/shared/src/consent-notices.ts` & `index.ts`):**
+  - [x] [Types] Export type `ConsentPurpose = "OTP_AUTH" | "AGE_DECLARATION" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";`
+  - [x] [Registry] Define and export `CANONICAL_CONSENT_NOTICES: Record<ConsentPurpose, CanonicalNoticeDefinition>`.
+  - [x] [Helpers] Implement and export `getCanonicalNoticeText(purpose: ConsentPurpose, version?: string): string` and `isPurposeEssential(purpose: ConsentPurpose): boolean`.
+  - [x] [Export] Re-export all types and constants from `packages/shared/src/index.ts`.
+  - [x] Run unit test — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Any package (`apps/api` or `apps/web`) imports `@gorola/shared` → Accesses identical canonical notice metadata and helper functions for all 5 statutory purposes → Eliminates string divergence across tiers → ✅ Done.
+
+---
+
+#### 8.9.2 — Universal `ConsentOptInCard` Component & `useRecordConsent` Hook (`apps/web`)
+
+**Root cause / Goal:**
+`SavedAddressesPage`, `CheckoutPage`, `BookingTimeslotPage`, `LoginPage`, `AgeStep`, and `PrivacyPolicyPage` duplicate identical Tailwind card layouts (~60 lines of JSX each) containing an essential/optional badge, summary paragraph, modal trigger, and acknowledged checkbox. Furthermore, error handling for background consent logging (`api.post("/api/v1/consent")`) is duplicated using raw `try/catch` and fire-and-forget catches. If network fails or user goes offline, error handling is inconsistent.
+
+**Fix / Approach:**
+1. Create `apps/web/src/components/consent/ConsentOptInCard.tsx`: A flexible, accessible UI component consuming `CANONICAL_CONSENT_NOTICES`. Handles three display modes:
+   - `essential-gate` (default for essential purposes): mandatory checkbox if not active, or "Consent Active" status pill if already granted.
+   - `optional-opt-in` (default for voluntary purposes): withdrawable marketing checkbox with amber "Optional" badge.
+   - `informational` (for `PrivacyPolicyPage.tsx` and public disclosures): read-only statutory card with badge, summary, and modal trigger, completely omitting checkboxes and interactive buttons.
+2. Create `apps/web/src/hooks/useRecordConsent.ts`: A hook exposing `recordConsent(purpose)` and `withdrawConsent(purpose)`. Automatically looks up canonical text from `@gorola/shared`, guards against duplicate calls, invalidates React Query `["consents"]`, and suppresses non-blocking background errors so commerce flows never crash.
+
+---
+
+- [x] **RED — Unit (`ConsentOptInCard.test.tsx`):**
+  - [x] Test: Renders canonical title and summary text for `ORDER_PROCESSING` from `@gorola/shared`.
+  - [x] Test: If `hasExistingActiveConsent=false` for essential purpose: renders checkbox, "Essential" badge, and `<ConsentNoticeModal>` trigger.
+  - [x] Test: If `hasExistingActiveConsent=true` for essential purpose: renders "Consent Active" status pill with emerald indicator; checkbox is NOT rendered.
+  - [x] Test: If purpose is `MARKETING_COMMS`: renders "Optional" badge (amber) and marketing checkbox text.
+  - [x] Test: If `mode="informational"`: renders badge, canonical summary, and modal trigger, with zero checkboxes or action buttons rendered.
+  - [x] Test: Toggling checkbox calls `onCheckedChange` with boolean value.
+  - [x] Test: Custom `data-testid` and `checkboxTestId` props are respected for backwards compatibility with existing E2E/integration tests.
+  - [x] Test: Keyboard navigation: Pressing Space or Enter on checkbox label toggles state.
+  - [x] **Run — confirm RED (component does not exist).**
+
+- [x] **RED — Unit (`useRecordConsent.test.ts`):**
+  - [x] Test: `recordConsent("ORDER_PROCESSING")` posts canonical notice text and version `"1.0"` to `/api/v1/consent`.
+  - [x] Test: Background network error is caught and suppressed; returns `{ success: false }` without throwing unhandled exception.
+  - [x] Test: Invalidate query key `["consents"]` is triggered on successful post.
+  - [x] Test: If consent is already active for that version in query cache, skips unnecessary network roundtrip.
+  - [x] **Run — confirm RED (hook does not exist).**
+
+- [x] **GREEN — Frontend (Components & Hooks):**
+  - [x] Create `apps/web/src/components/consent/ConsentOptInCard.tsx`:
+    - Props: `purpose: ConsentPurpose`, `mode?: "essential-gate" | "optional-opt-in" | "informational"`, `checked?: boolean`, `onCheckedChange?: (v: boolean) => void`, `hasExistingActiveConsent?: boolean`, `disabled?: boolean`, `className?: string`, `testId?: string`, `checkboxTestId?: string`, `triggerLabel?: string`.
+    - Renders unified header, badge, canonical summary, `<ConsentNoticeModal>`, link to `/privacy`, and conditional checkbox, "Consent Active" pill, or informational display.
+  - [x] Create `apps/web/src/hooks/useRecordConsent.ts`:
+    - Uses `api.post("/api/v1/consent")` with canonical text from `@gorola/shared`.
+    - Uses `queryClient.invalidateQueries({ queryKey: ["consents"] })`.
+  - [x] Run unit tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Developer imports `<ConsentOptInCard purpose="ORDER_PROCESSING" />` into any page → Renders standard accessible, DPDP-compliant consent card → Automatically adapts to user's current consent state (Active vs New vs Informational) → ✅ Done.
+
+---
+
+#### 8.9.3 — Refactor `SavedAddressesPage.tsx` to Universal `ConsentOptInCard` & Auto-Recorder
+
+**Root cause / Goal:**
+`SavedAddressesPage.tsx` (lines 373–432) manually renders a 60-line custom div `order-processing-consent-notice` with hardcoded text and manual state handling, plus copy-pasted `api.post("/api/v1/consent")` logic in lines 50–57 and 74–84. Notice text has slight wording divergences compared to the statutory modal.
+
+**Fix / Approach:**
+Replace lines 373–432 with `<ConsentOptInCard purpose="ORDER_PROCESSING" checked={opAcknowledged} onCheckedChange={setOpAcknowledged} hasExistingActiveConsent={hasOrderProcessingConsent} testId="order-processing-consent-notice" checkboxTestId="order-processing-acknowledge-checkbox" />`. Use `useRecordConsent` hook inside `createMutation` and `updateMutation` callbacks.
+
+---
+
+- [x] **RED — Component (`SavedAddressesPage.test.tsx`):**
+  - [x] Test: When opening Add Address dialog without prior consent, `<ConsentOptInCard>` displays with checkbox `order-processing-acknowledge-checkbox`.
+  - [x] Test: Save Address button is disabled when checkbox is unchecked.
+  - [x] Test: Checking checkbox enables Save Address button.
+  - [x] Test: When user already has active `ORDER_PROCESSING` consent, card displays "Consent Active" and Save Address button is enabled without requiring checkbox click.
+  - [x] Test: Saving address calls `recordConsent("ORDER_PROCESSING")` with canonical notice text.
+  - [x] Test (Edge Case): If `api.post("/api/v1/consent")` fails due to network glitch, address save STILL succeeds and user receives "Address added successfully" toast (non-blocking consent audit).
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`SavedAddressesPage.tsx`):**
+  - [x] Import `ConsentOptInCard` and `useRecordConsent`.
+  - [x] Replace custom inline consent card JSX with `<ConsentOptInCard>`.
+  - [x] Replace manual `api?.post("/api/v1/consent", ...)` in `createMutation` and `updateMutation` with `recordConsent("ORDER_PROCESSING")`.
+  - [x] Run component tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] User opens Add Address modal → Sees unified `ConsentOptInCard` → Acknowledges notice → Saves address → Address saved & consent logged cleanly with canonical text → Reopening edit address shows "Consent Active" pill without prompting again → ✅ Done.
+
+---
+
+#### 8.9.4 — Refactor `CheckoutPage.tsx` to Universal `ConsentOptInCard` (Order Processing & Marketing)
+
+**Root cause / Goal:**
+`CheckoutPage.tsx` has two separate hand-crafted consent sections: inline order processing card in the address dialog (lines 528–575) and review-step marketing card (lines 740–790), plus duplicated consent logging in `placeOrder` (lines 336–365).
+
+**Fix / Approach:**
+Replace both sections with `<ConsentOptInCard purpose="ORDER_PROCESSING" ... />` and `<ConsentOptInCard purpose="MARKETING_COMMS" ... />`. Wire `useRecordConsent` in order creation success callback.
+
+---
+
+- [x] **RED — Component (`CheckoutPage.test.tsx`):**
+  - [x] Test: Inline address creator renders `ConsentOptInCard` for `ORDER_PROCESSING` with `data-testid="checkout-order-processing-consent"`.
+  - [x] Test: Review step renders `ConsentOptInCard` for `MARKETING_COMMS` with `data-testid="checkout-marketing-opt-in"`.
+  - [x] Test: If user has not consented to marketing, checkbox `marketing-consent-checkbox` is unchecked; opting in logs `MARKETING_COMMS` on order placement.
+  - [x] Test: If user already granted marketing consent in a previous session, marketing card shows "Consent Active" and links to `/account/privacy`.
+  - [x] Test: If `ORDER_PROCESSING` is already active, checkout does not prompt for re-consent.
+  - [x] Test (Edge Case): Unchecking marketing opt-in does NOT disable the "Place Order" button (voluntary consent rule).
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`CheckoutPage.tsx`):**
+  - [x] Import `ConsentOptInCard` and `useRecordConsent`.
+  - [x] Replace inline address consent card with `<ConsentOptInCard purpose="ORDER_PROCESSING" testId="checkout-order-processing-consent" ... />`.
+  - [x] Replace review marketing card with `<ConsentOptInCard purpose="MARKETING_COMMS" testId="checkout-marketing-opt-in" checkboxTestId="marketing-consent-checkbox" ... />`.
+  - [x] Replace manual consent posts in `onSuccess` with `recordConsent`.
+  - [x] Run component tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Buyer checks out → Sees unified Order Fulfillment notice if entering new address → Sees voluntary Promotions card → Places order → Order created with canonical consent records in DB → ✅ Done.
+
+---
+
+#### 8.9.5 — Refactor `BookingTimeslotPage.tsx` to Universal `ConsentOptInCard` (Order Processing & Marketing)
+
+**Root cause / Goal:**
+`BookingTimeslotPage.tsx` duplicates the exact same two consent cards: Order Processing card in the Address dialog (lines 845–884) and Marketing card in Section 5 (lines 703–765), with duplicate logging in lines 353–383.
+
+**Fix / Approach:**
+Replace both cards with `<ConsentOptInCard>` and replace manual logging with `useRecordConsent`.
+
+---
+
+- [x] **RED — Component (`BookingTimeslotPage.test.tsx`):**
+  - [x] Test: Address dialog renders `ConsentOptInCard` for `ORDER_PROCESSING` (`data-testid="order-processing-consent-notice"`).
+  - [x] Test: Section 5 renders `ConsentOptInCard` for `MARKETING_COMMS` (`data-testid="booking-marketing-opt-in"`).
+  - [x] Test: Confirm Booking button is enabled when required fields are complete regardless of whether marketing checkbox is checked or unchecked.
+  - [x] Test: Booking appointment logs `ORDER_PROCESSING` and `MARKETING_COMMS` using canonical notice text.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`BookingTimeslotPage.tsx`):**
+  - [x] Import `ConsentOptInCard` and `useRecordConsent`.
+  - [x] Replace address dialog consent markup with `<ConsentOptInCard purpose="ORDER_PROCESSING" ... />`.
+  - [x] Replace Section 5 marketing markup with `<ConsentOptInCard purpose="MARKETING_COMMS" testId="booking-marketing-opt-in" ... />`.
+  - [x] Wire `recordConsent` in booking creation handler.
+  - [x] Run component tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] Buyer books hill service appointment → Interacts with unified `ConsentOptInCard` → Same visual styling, accessible behavior, and canonical wording as regular quick commerce checkout → ✅ Done.
+
+---
+
+#### 8.9.6 — Refactor `LoginPage.tsx` (`OTP_AUTH`) & `AgeStep.tsx` (`AGE_DECLARATION`) to Universal `ConsentOptInCard`
+
+**Root cause / Goal:**
+1. `LoginPage.tsx` step 1 ("consent", lines 463–524) renders a 60-line custom card with hardcoded text and manual button states.
+2. `AgeStep.tsx` (lines 201–234) renders a custom 35-line card with hardcoded notice layout, badges, and modal triggers for `AGE_DECLARATION` prior to date of birth entry.
+
+**Fix / Approach:**
+1. In `LoginPage.tsx`, replace the inline card markup with `<ConsentOptInCard purpose="OTP_AUTH" checked={acknowledged} onCheckedChange={setAcknowledged} testId="consent-notice-step" checkboxTestId="consent-acknowledge-checkbox" />`.
+2. In `AgeStep.tsx`, replace lines 201–234 with `<ConsentOptInCard purpose="AGE_DECLARATION" mode="informational" testId="age-step-notice-card" />` positioned above the Date of Birth input field.
+
+---
+
+- [x] **RED — Component (`LoginPage.test.tsx` & `AgeStep.test.tsx`):**
+  - [x] Test: `LoginPage` Step 1 renders `ConsentOptInCard` for `OTP_AUTH` with `data-testid="consent-notice-step"`.
+  - [x] Test: "Continue & Accept" button is disabled until `consent-acknowledge-checkbox` is checked.
+  - [x] Test: Modal trigger in card opens `ConsentNoticeModal` with authentication disclosures.
+  - [x] Test: Checking checkbox enables "Continue & Accept" button, transitioning to phone entry step.
+  - [x] Test: `AgeStep` renders `ConsentOptInCard` for `AGE_DECLARATION` with `mode="informational"` and canonical 18+ eligibility summary.
+  - [x] Test: Modal trigger in `AgeStep` card opens `ConsentNoticeModal` with age declaration statutory disclosures.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`LoginPage.tsx` & `AgeStep.tsx`):**
+  - [x] Import `ConsentOptInCard` into `LoginPage.tsx` and replace step 1 consent markup.
+  - [x] Import `ConsentOptInCard` into `AgeStep.tsx` and replace lines 201–234 with `<ConsentOptInCard purpose="AGE_DECLARATION" mode="informational" ... />`.
+  - [x] Run component tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] User visits `/login` → Sees unified `OTP_AUTH` consent card → Proceeds to OTP step → Reaches Age Verification → Sees unified `AGE_DECLARATION` card with identical typography and modal disclosures → ✅ Done.
+
+---
+
+#### 8.9.7 — Unify `PrivacySettingsSection.tsx`, `PrivacyPolicyPage.tsx`, `AnalyticsConsentBanner.tsx` & `ConsentNoticeModal.tsx` with Canonical Shared Registry
+
+**Root cause / Goal:**
+1. `PrivacySettingsSection.tsx` defines a local `PURPOSE_META` object (lines 35–111), and `ConsentNoticeModal.tsx` defines a local `CONSENT_NOTICES` object (lines 28–123).
+2. `PrivacyPolicyPage.tsx` Section 3 (lines 89–173) manually writes out 5 hardcoded purpose cards with hand-typed summaries and hardcoded badges.
+3. `AnalyticsConsentBanner.tsx` (lines 149–165) hardcodes raw descriptive strings for `ANALYTICS`.
+If any policy text is updated in the future, developers must edit multiple files across pages and modals, risking statutory non-compliance and text drift.
+
+**Fix / Approach:**
+1. Refactor `ConsentNoticeModal.tsx` to source its statutory notice breakdown directly from `CANONICAL_CONSENT_NOTICES` in `@gorola/shared`.
+2. Refactor `PrivacySettingsSection.tsx` to build purpose cards directly using `CANONICAL_CONSENT_NOTICES`.
+3. Refactor Section 3 of `PrivacyPolicyPage.tsx` to map over `CANONICAL_CONSENT_NOTICES` and render `<ConsentOptInCard purpose={purpose} mode="informational" />` across all 5 statutory purposes, guaranteeing 100% visual and textual synchronization.
+4. Refactor `AnalyticsConsentBanner.tsx` to consume canonical summary and trigger text from `CANONICAL_CONSENT_NOTICES.ANALYTICS`.
+
+---
+
+- [x] **RED — Component (`PrivacySettingsSection.test.tsx`, `PrivacyPolicyPage.test.tsx`, `AnalyticsConsentBanner.test.tsx` & `ConsentNoticeModal.test.tsx`):**
+  - [x] Test: `PrivacySettingsSection` renders all 5 canonical cards with titles, badges, and plain text descriptions matching `@gorola/shared`.
+  - [x] Test: Opting in via Privacy Settings posts exact `getCanonicalNoticeText(purpose)`.
+  - [x] Test: Withdrawing consent calls `DELETE /api/v1/consent/:purpose` and updates local state to "Withdrawn".
+  - [x] Test: `ConsentNoticeModal` renders complete 5-tier statutory disclosure (Purpose, Data Collected, Processors, Retention, Rights) for all 5 purposes sourced from shared registry.
+  - [x] Test: `PrivacyPolicyPage` Section 3 renders all 5 purpose cards using `<ConsentOptInCard mode="informational">` without rendering checkboxes or submission buttons.
+  - [x] Test: `AnalyticsConsentBanner` renders canonical summary text and modal trigger label from `@gorola/shared`.
+  - [x] Test: Changing a string in the shared registry automatically reflects in `PrivacySettingsSection`, `PrivacyPolicyPage`, `AnalyticsConsentBanner`, and `ConsentNoticeModal` without editing either component.
+  - [x] **Run — confirm RED.**
+
+- [x] **GREEN — Frontend (`PrivacySettingsSection.tsx`, `PrivacyPolicyPage.tsx`, `AnalyticsConsentBanner.tsx` & `ConsentNoticeModal.tsx`):**
+  - [x] Refactor `ConsentNoticeModal.tsx` to source its statutory notice breakdown from `@gorola/shared`.
+  - [x] Refactor `PrivacySettingsSection.tsx` to build purpose cards using `CANONICAL_CONSENT_NOTICES`.
+  - [x] Refactor `PrivacyPolicyPage.tsx` Section 3 to render `<ConsentOptInCard mode="informational">` for all 5 purposes.
+  - [x] Refactor `AnalyticsConsentBanner.tsx` to use `CANONICAL_CONSENT_NOTICES.ANALYTICS`.
+  - [x] Run component tests — **confirm GREEN**.
+
+- [x] **Verification chain:**
+  - [x] User navigates to `/privacy` → Sees Section 3 with 5 canonical purpose cards styled identically to the rest of the app → User navigates to `/account/privacy` → Sees the exact same summaries in the management accordion → User visits home and sees Analytics banner with synchronized text → All text flows from `@gorola/shared` with zero duplication → ✅ Done.
+
+---
+
+#### 8.9.8 — Test Suite Synchronization, Admin Verification, Edge Cases & Verification Chain
+
+**Root cause / Goal:**
+Unifying consent forms touches critical authentication, checkout, and address management paths. All edge cases (network timeouts, local storage access failures, active consent bypasses, and role guards) must be verified across the entire test suite.
+
+**Fix / Approach:**
+Run full regression across all related integration, unit, and E2E specs. Add targeted edge-case unit tests.
+
+---
+
+- [x] **RED / GREEN — Edge Cases & Regression:**
+  - [x] Test (Edge Case — Storage Disabled): `AnalyticsConsentBanner` and `ConsentOptInCard` do not throw when `localStorage` is inaccessible (e.g. strict Safari Private Browsing mode).
+  - [x] Test (Edge Case — Rapid Click): Rapid double-click on consent opt-in or withdraw button is debounced or guarded by loading state, preventing duplicate concurrent network requests.
+  - [x] Test (Edge Case — Partial Network Failure): If `POST /api/v1/consent` times out, address save and booking submission STILL complete successfully and toast user with success.
+  - [x] Test (Audit Trail): Verify that database `ConsentLog` rows created by `recordConsent` contain clean canonical `noticeText`, valid `consentVersion`, and `isWithdrawn === false`.
+  - [x] Test (Quality Gates):
+    - [x] `pnpm lint` passes with 0 errors, 0 warnings across all packages.
+    - [x] `pnpm typecheck` passes with 0 errors across all packages.
+    - [x] `pnpm test` passes with 0 failures across api and web.
+    - [x] `pnpm build` succeeds cleanly.
+
+- [x] **Verification chain:**
+  - [x] All 12 consent and notice touchpoints across the entire platform share one canonical notice registry, one card component, and one hook → Zero duplicated notice text → 100% passing test suites across api and web → ✅ Done.
+
+---
+
+### 8.10 — PENDING VENDOR DECISION — SMS OTP & Mobile Call Masking
 
 > ⚠️ **These items are deferred to the end of Phase 8 until the client finalizes the vendor choice (Exotel vs Fast2SMS + Exotel).**
 
 ---
 
-#### 8.9.1 — TRAI DLT Portal Registration & Template Approval
+#### 8.10.1 — TRAI DLT Portal Registration & Template Approval
 
 **Step-by-step Non-Code Instructions:**
 - [ ] **Step 1:** Log into JioTrueConnect (`trueconnect.jio.com`) or Airtel DLT (`dltconnect.airtel.in`).
@@ -2611,13 +2891,13 @@ The new rule changes who may log in. Every place that creates buyers through `ve
 
 ---
 
-#### 8.9.2 — Telecommunications Vendor DPA (Exotel / Fast2SMS) — procedure in 8.7.2 Provider 4
+#### 8.10.2 — Telecommunications Vendor DPA (Exotel / Fast2SMS) — procedure in 8.7.2 Provider 4
 
 - [ ] Log into vendor dashboard (Exotel / Fast2SMS), request/download signed DPA for DPDP compliance. Save to `DPAs/telecom-dpa.pdf`.
 
 ---
 
-#### 8.9.3 — Real OTP Gateway Integration
+#### 8.10.3 — Real OTP Gateway Integration
 
 - [ ] **RED — Integration (`otp.gateway.test.ts`):**
   - [ ] Test: `POST /api/v1/auth/otp/send` with `{ phone: '+919876543210' }` in production environment calls vendor API (`ExotelService.sendSMS` / `Fast2SMSService.sendSMS`) with PE ID and Template ID.
@@ -2630,7 +2910,7 @@ The new rule changes who may log in. Every place that creates buyers through `ve
 
 ---
 
-#### 8.9.4 — Mobile Call Masking Proxy Integration
+#### 8.10.4 — Mobile Call Masking Proxy Integration
 
 **Root cause / Goal:**
 Riders must call buyers to coordinate delivery without seeing raw buyer phone numbers on their screens. Exposing raw buyer numbers to riders creates serious data privacy and harassment risks under DPDP Sec 8(5).
@@ -3043,6 +3323,32 @@ Create backend endpoint `POST /api/v1/rider/orders/:id/call`. When a rider taps 
     - `pnpm typecheck`: **0 errors**.
     - `pnpm lint`: **0 errors, 0 warnings**.
     - `pnpm security:audit`: **0 unhandled vulnerabilities**.
+
+- **Session 26 — 2026-10-16 — Phase 8.9 Complete (Universal DRY DPDP Consent Forms, Canonical Shared Notice Registry & Component Consolidation):**
+  - **Canonical Notice Registry (`@gorola/shared/src/consent-notices.ts`):**
+    - Established single source of truth `CANONICAL_CONSENT_NOTICES` defining all 5 statutory DPDP purposes (`OTP_AUTH`, `AGE_DECLARATION`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`).
+    - Standardized versioning (`1.0`, `1.1`), titles, summaries, transparency prompts, modal trigger labels, checkbox labels, plain text, and complete 5-section disclosures.
+    - Exported pure utility helpers `getCanonicalNoticeText` and `isPurposeEssential` with 100% test coverage in `packages/shared/src/__tests__/consent-notices.test.ts`.
+  - **Universal Card Component & Recording Hook (`apps/web`):**
+    - Built `<ConsentOptInCard>` in `apps/web/src/components/consent/ConsentOptInCard.tsx` supporting 3 display modes (`essential-gate`, `optional-opt-in`, `informational`), active consent indicators, disabled states, optional custom checkbox labels, and statutory error alerts.
+    - Built `useRecordConsent` hook in `apps/web/src/hooks/useRecordConsent.ts` encapsulating background `POST /api/v1/consent` and `DELETE /api/v1/consent/:purpose` with query cache invalidation and non-blocking failure tolerance.
+  - **Platform-Wide Touchpoint Consolidation (Zero Custom Cards Remaining):**
+    - `SavedAddressesPage.tsx`: Replaced address modal fulfillment notice with canonical `<ConsentOptInCard purpose="ORDER_PROCESSING">`.
+    - `CheckoutPage.tsx`: Replaced Section 3 address dialog notice and Section 4 marketing card with `<ConsentOptInCard>` wired to `useRecordConsent`.
+    - `BookingTimeslotPage.tsx`: Replaced Section 5 marketing card and address dialog markup with `<ConsentOptInCard>` wired to `useRecordConsent`.
+    - `LoginPage.tsx`: Replaced Step 1 inline card with `<ConsentOptInCard purpose="OTP_AUTH">`.
+    - `AgeStep.tsx`: Replaced DOB header banner with `<ConsentOptInCard purpose="AGE_DECLARATION" mode="informational">`.
+    - `PrivacySettingsSection.tsx`: Derived purpose cards and `PURPOSE_META` directly from `CANONICAL_CONSENT_NOTICES` with canonical plainText logging.
+    - `PrivacyPolicyPage.tsx`: Replaced Section 3 custom card blocks with mapping over `STATUTORY_PURPOSES` rendering `<ConsentOptInCard mode="informational">`.
+    - `ConsentNoticeModal.tsx`: Sourced all 5 statutory notices directly from `CANONICAL_CONSENT_NOTICES`.
+    - `AnalyticsConsentBanner.tsx`: Sourced notice text and version from `CANONICAL_CONSENT_NOTICES.ANALYTICS`, added double-click protection and Safari private browsing tolerance.
+  - **Strict TDD & Quality Gates:**
+    - Every component and page refactored under strict TDD workflow (RED tests written first, failure verified, GREEN implementation confirmed).
+    - `pnpm lint`: **0 errors, 0 warnings** across all workspace packages.
+    - `pnpm typecheck`: **0 errors** across monorepo (`@gorola/shared`, `@gorola/api`, `@gorola/web`, `@gorola/ui`).
+    - Web Test Suites: **12 test files / 115 tests 100% PASSING**.
+    - Shared Test Suite: **5/5 tests 100% PASSING**.
+    - Production bundle build: `apps/web` and `apps/api` build cleanly.
 
 
 

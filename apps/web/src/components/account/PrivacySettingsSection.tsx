@@ -1,3 +1,4 @@
+import { CANONICAL_CONSENT_NOTICES, type ConsentPurpose } from "@gorola/shared";
 import { isAxiosError } from "axios";
 import { ChevronDown, ChevronUp, ShieldCheck, ShieldOff } from "lucide-react";
 import type { MouseEvent, ReactElement, ReactNode } from "react";
@@ -13,15 +14,13 @@ import { queryClient } from "@/lib/query-client";
 // Raw shape returned by GET /api/v1/consent
 type ConsentLogRow = {
   id: string;
-  purpose: "OTP_AUTH" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS" | "AGE_DECLARATION";
+  purpose: ConsentPurpose;
   consentVersion: string;
   noticeText: string;
   isWithdrawn: boolean;
   withdrawnAt: string | null;
   createdAt: string;
 };
-
-type ConsentPurpose = "OTP_AUTH" | "AGE_DECLARATION" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
 
 // Canonical 5-card display shape — one entry per purpose
 type PurposeCard = {
@@ -42,73 +41,29 @@ const PURPOSE_META: Record<
     transparencyPrompt: string;
     essential: boolean;
   }
-> = {
-  OTP_AUTH: {
-    title: "Authentication & Account Security",
-    description: (
-      <span>
-        We collect your phone number and share it with our secure SMS gateway (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) to send one-time passwords (OTP) and securely authenticate your account sessions under India&apos;s DPDP Act 2023. We do not sell your personal data.
-      </span>
-    ),
-    plainText:
-      "We collect your phone number and share it with our secure SMS gateway (Exotel) to send one-time passwords (OTP) and securely authenticate your account sessions under India's DPDP Act 2023. We do not sell your personal data.",
-    noticeLabel: "Authentication Notice",
-    transparencyPrompt: "For full details on retention period, data rights, and erasure policies, read the",
-    essential: true
-  },
-  AGE_DECLARATION: {
-    title: "Age Verification & Eligibility",
-    description: (
-      <span>
-        GoRola is available only to people aged 18 and over. You confirm that the date of birth you enter is correct. We use it once to check eligibility and do not store it; we keep only the date on which you confirmed.
-      </span>
-    ),
-    plainText:
-      "GoRola is available only to people aged 18 and over. You confirm that the date of birth you enter is correct. We use it once to check eligibility and do not store it; we keep only the date on which you confirmed.",
-    noticeLabel: "Age Declaration Notice",
-    transparencyPrompt: "For full details on non-storage of raw DOB, 90-day lockout hashing, and data rights, read the",
-    essential: true
-  },
-  ORDER_PROCESSING: {
-    title: "Order Fulfillment & Location Services",
-    description: (
-      <span>
-        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders, fulfill deliveries, and coordinate scheduled on-site service appointments. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners, delivery riders, and field service technicians for order fulfillment and scheduled service appointments. Governed by India&apos;s DPDP Act 2023.
-      </span>
-    ),
-    plainText:
-      "We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders, fulfill deliveries, and coordinate scheduled on-site service appointments. Data is shared with Ola Maps for navigation, Razorpay for online payments, and assigned store partners, delivery riders, and field service technicians for order fulfillment and scheduled service appointments. Governed by India's DPDP Act 2023.",
-    noticeLabel: "Order Fulfillment Notice",
-    transparencyPrompt: "For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the",
-    essential: true
-  },
-  MARKETING_COMMS: {
-    title: "Promotions & Seasonal Offers",
-    description: (
-      <span>
-        We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
-      </span>
-    ),
-    plainText:
-      "We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (Exotel) and app notifications. 100% voluntary.",
-    noticeLabel: "Promotions Notice",
-    transparencyPrompt: "For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the",
-    essential: false
-  },
-  ANALYTICS: {
-    title: "Usage & Performance Analytics",
-    description: (
-      <span>
-        We collect anonymous device telemetry and network latency data to identify bugs, optimize steep hill route planning, and improve app performance in weak signal areas across Mussoorie. Zero personal data is tracked.
-      </span>
-    ),
-    plainText:
-      "We collect anonymous device telemetry and network latency data to identify bugs, optimize steep hill route planning, and improve app performance in weak signal areas across Mussoorie. Zero personal data is tracked.",
-    noticeLabel: "Analytics Notice",
-    transparencyPrompt: "For full details on 180-day auto-purge schedules, telemetry anonymization, and opt-out rights, read the",
-    essential: false
-  }
-};
+> = Object.fromEntries(
+  (Object.keys(CANONICAL_CONSENT_NOTICES) as ConsentPurpose[]).map((p) => {
+    const c = CANONICAL_CONSENT_NOTICES[p];
+    return [
+      p,
+      {
+        title: c.title,
+        description: c.summaryText,
+        plainText: c.plainText,
+        noticeLabel: c.noticeTriggerLabel,
+        transparencyPrompt: c.transparencyPrompt,
+        essential: c.isEssential
+      }
+    ];
+  })
+) as Record<ConsentPurpose, {
+  title: string;
+  description: ReactNode;
+  plainText: string;
+  noticeLabel: string;
+  transparencyPrompt: string;
+  essential: boolean;
+}>;
 
 const CANONICAL_ORDER: ConsentPurpose[] = [
   "OTP_AUTH",
@@ -162,7 +117,7 @@ function buildPurposeCards(rows: ConsentLogRow[]): PurposeCard[] {
     return {
       purpose,
       latestId: "",
-      consentVersion: purpose === "AGE_DECLARATION" ? "1.1" : "1.0",
+      consentVersion: CANONICAL_CONSENT_NOTICES[purpose].version,
       isActive: isEssentialDefault || isAnalyticsAcceptedInStorage,
       grantedAt: ""
     };
@@ -248,11 +203,11 @@ export function PrivacySettingsSection(): ReactElement {
     if (!api) return;
     setActionLoading(purpose);
     try {
-      const meta = PURPOSE_META[purpose];
+      const canonical = CANONICAL_CONSENT_NOTICES[purpose];
       await api.post<{ success: boolean }>("/api/v1/consent", {
         purpose,
-        consentVersion: "1.0",
-        noticeText: meta.plainText
+        consentVersion: canonical.version,
+        noticeText: canonical.plainText
       });
       if (purpose === "ANALYTICS") {
         try {

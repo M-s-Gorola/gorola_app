@@ -11,7 +11,8 @@ import {
   MUSSOORIE_AREA_CENTER,
   OlaAddressMapPicker as AddressMapPicker} from "@/components/buyer/OlaAddressMapPicker";
 import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
-import { Checkbox } from "@/components/ui/checkbox";
+import { ConsentOptInCard } from "@/components/consent/ConsentOptInCard";
+import { useRecordConsent } from "@/hooks/useRecordConsent";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
 import { syncBuyerCartFromServer } from "@/lib/buyer-cart-sync";
@@ -49,6 +50,7 @@ export function CheckoutPage(): ReactElement {
   const discountSavedAmount = useCartStore((s) => s.discountSavedAmount);
   const clearCart = useCartStore((s) => s.clear);
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
+  const { recordConsent } = useRecordConsent();
 
   const addressesQuery = useQuery({
     enabled: !isBootstrapPending,
@@ -330,40 +332,15 @@ export function CheckoutPage(): ReactElement {
       void queryClient.invalidateQueries({ queryKey: ["buyer-addresses"] });
       
       // DPDP 2023: Log ORDER_PROCESSING consent only if not already active.
-      // The server also has an idempotency guard, but we avoid the network
-      // round-trip entirely when we already know consent exists in the cache.
       if (!hasOrderProcessingConsent) {
-        try {
-          const p1 = api?.post("/api/v1/consent", {
-            purpose: "ORDER_PROCESSING",
-            consentVersion: "1.0",
-            noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
-          });
-          if (p1 && typeof p1.catch === "function") {
-            p1.catch(() => {});
-          }
-        } catch {
-          /* ignore background consent logging error */
-        }
+        void recordConsent("ORDER_PROCESSING");
       }
 
       // Record MARKETING_COMMS only if the user explicitly opted in this session
       // and they haven't already granted it previously.
       if (marketingOptIn && !hasMarketingConsent) {
-        try {
-          const p2 = api?.post("/api/v1/consent", {
-            purpose: "MARKETING_COMMS",
-            consentVersion: "1.0",
-            noticeText: "You agreed to receive promotional offers and seasonal discounts."
-          });
-          if (p2 && typeof p2.catch === "function") {
-            p2.catch(() => {});
-          }
-        } catch {
-          /* ignore background consent logging error */
-        }
+        void recordConsent("MARKETING_COMMS");
       }
-      void queryClient.invalidateQueries({ queryKey: ["consents"] });
 
       navigate(`/orders/${orderId}`, { replace: true });
     }
@@ -525,52 +502,14 @@ export function CheckoutPage(): ReactElement {
                       />
                     </div>
 
-                    <div
-                      data-testid="checkout-order-processing-consent"
-                      className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs text-left"
-                    >
-                      <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-                        <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                        <span>Order Fulfillment &amp; Location Services</span>
-                      </div>
-                      <p className="text-muted-foreground leading-relaxed">
-                        We collect your delivery address, GPS coordinates, Display Name (if set), and payment details to route orders and fulfill deliveries. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and assigned store partners, delivery riders, and fulfillment personnel for order fulfillment. Governed by India&apos;s DPDP Act 2023.
-                      </p>
-                      
-                      <div className="pt-0.5 text-[11px] text-muted-foreground">
-                        <span>For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the </span>
-                        <ConsentNoticeModal
-                          purpose="ORDER_PROCESSING"
-                          triggerLabel="Order Fulfillment Notice"
-                          triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
-                        />
-                        <span> (or view our platform-wide </span>
-                        <a
-                          href="/privacy"
-                          className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-                        >
-                          Privacy Policy
-                        </a>
-                        <span>).</span>
-                      </div>
-
-                      {!hasOrderProcessingConsent && (
-                        <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
-                          <Checkbox
-                            checked={opAcknowledged}
-                            data-testid="order-processing-acknowledge-checkbox"
-                            id="op-ack-checkout"
-                            onCheckedChange={(v) => setOpAcknowledged(!!v)}
-                          />
-                          <label
-                            className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
-                            htmlFor="op-ack-checkout"
-                          >
-                            I have read and understood this notice
-                          </label>
-                        </div>
-                      )}
-                    </div>
+                    <ConsentOptInCard
+                      purpose="ORDER_PROCESSING"
+                      checked={opAcknowledged}
+                      onCheckedChange={setOpAcknowledged}
+                      hasExistingActiveConsent={hasOrderProcessingConsent}
+                      testId="checkout-order-processing-consent"
+                      checkboxTestId="order-processing-acknowledge-checkbox"
+                    />
                   </div>
                 ) : null}
 
@@ -738,54 +677,17 @@ export function CheckoutPage(): ReactElement {
             </div>
 
             {/* Rich Marketing Opt-in Card */}
+            {/* Rich Marketing Opt-in Card */}
             {!consentsQuery.isLoading && !hasMarketingConsent && (
-              <div
-                data-testid="checkout-marketing-opt-in"
-                className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
-                    <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                    <span>Promotions &amp; Seasonal Offers (Optional)</span>
-                  </div>
-                  <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                    Optional
-                  </span>
-                </div>
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
-                </p>
-                <div className="pt-0.5 text-[11px] text-muted-foreground">
-                  <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
-                  <ConsentNoticeModal
-                    purpose="MARKETING_COMMS"
-                    triggerLabel="Promotions Notice"
-                    triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
-                  />
-                  <span> (or view our platform-wide </span>
-                  <a
-                    href="/privacy"
-                    className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-                  >
-                    Privacy Policy
-                  </a>
-                  <span>).</span>
-                </div>
-                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
-                  <Checkbox
-                    checked={marketingOptIn}
-                    data-testid="marketing-consent-checkbox"
-                    id="marketing-optin"
-                    onCheckedChange={(v) => setMarketingOptIn(!!v)}
-                  />
-                  <label
-                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
-                    htmlFor="marketing-optin"
-                  >
-                    Yes, send me seasonal Mussoorie harvest updates and coupons
-                  </label>
-                </div>
-              </div>
+              <ConsentOptInCard
+                purpose="MARKETING_COMMS"
+                mode="optional-opt-in"
+                checked={marketingOptIn}
+                onCheckedChange={setMarketingOptIn}
+                testId="checkout-marketing-opt-in"
+                checkboxTestId="marketing-consent-checkbox"
+                checkboxLabel="Yes, send me seasonal Mussoorie harvest updates and coupons"
+              />
             )}
           </div>
 

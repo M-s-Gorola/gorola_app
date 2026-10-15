@@ -1,3 +1,4 @@
+import { CANONICAL_CONSENT_NOTICES } from "@gorola/shared";
 import { BarChart3, ShieldCheck } from "lucide-react";
 import type { ReactElement } from "react";
 import { useEffect, useState } from "react";
@@ -93,20 +94,17 @@ export function AnalyticsConsentBanner(): ReactElement | null {
     }
 
     try {
-      const p = api?.post("/api/v1/consent", {
+      await api?.post("/api/v1/consent", {
         purpose: "ANALYTICS",
-        consentVersion: "1.0",
-        noticeText: "We collect anonymous usage and performance telemetry to optimize steep road navigation and app speed in Mussoorie under India's DPDP Act 2023."
+        consentVersion: CANONICAL_CONSENT_NOTICES.ANALYTICS.version,
+        noticeText: CANONICAL_CONSENT_NOTICES.ANALYTICS.plainText
       });
-      if (p && typeof p.catch === "function") {
-        p.catch(() => {});
-      }
     } catch {
       /* ignore background network failure */
+    } finally {
+      setLoading(false);
+      setVisible(false);
     }
-
-    setLoading(false);
-    setVisible(false);
   };
 
   const handleDecline = (): void => {

@@ -9,9 +9,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { z } from "zod";
 
 import { AgeStep } from "@/components/auth/AgeStep";
-import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
+import { ConsentOptInCard } from "@/components/consent/ConsentOptInCard";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
@@ -462,55 +461,12 @@ export function LoginPage(): ReactElement {
 
         {step === "consent" ? (
           <div className="mt-6 flex flex-col gap-5" data-testid="consent-notice-step">
-            <div className="rounded-2xl border border-border/80 bg-white dark:bg-card p-5 text-sm text-gorola-charcoal space-y-3.5 shadow-xs">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2 font-semibold text-gorola-pine">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                  <span>Authentication &amp; Account Security</span>
-                </div>
-                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                  Essential
-                </span>
-              </div>
-              <p className="font-medium text-xs sm:text-sm text-gorola-charcoal">
-                GoRola is for people aged 18 and over.
-              </p>
-              <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm">
-                We collect your phone number and share it with our secure SMS gateway (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) to send one-time passwords (OTP) and securely authenticate your account sessions under India&apos;s DPDP Act 2023. We do not sell your personal data.
-              </p>
-              
-              <div className="pt-0.5 text-xs text-muted-foreground">
-                <span>For full details on retention period, data rights, and erasure policies, read the </span>
-                <ConsentNoticeModal
-                  purpose="OTP_AUTH"
-                  triggerLabel="Authentication Notice"
-                  triggerClassName="inline-flex items-center align-baseline gap-1 text-xs font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
-                />
-                <span> (or view our platform-wide </span>
-                <a
-                  className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-                  href="/privacy"
-                >
-                  Privacy Policy
-                </a>
-                <span>).</span>
-              </div>
-
-              <div className="flex items-start gap-2.5 pt-3.5 border-t border-border/60">
-                <Checkbox
-                  checked={acknowledged}
-                  data-testid="consent-acknowledge-checkbox"
-                  id="consent-ack"
-                  onCheckedChange={(v) => setAcknowledged(!!v)}
-                />
-                <label
-                  className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
-                  htmlFor="consent-ack"
-                >
-                  I have read and understood this notice
-                </label>
-              </div>
-            </div>
+            <ConsentOptInCard
+              purpose="OTP_AUTH"
+              checked={acknowledged}
+              onCheckedChange={setAcknowledged}
+              checkboxTestId="consent-acknowledge-checkbox"
+            />
 
             <Button
               className="w-full rounded-full"

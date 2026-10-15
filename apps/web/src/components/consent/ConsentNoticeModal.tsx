@@ -1,6 +1,6 @@
-import { CURRENT_PRIVACY_POLICY_VERSION, GRIEVANCE_EMAIL } from "@gorola/shared";
+import { CANONICAL_CONSENT_NOTICES, type ConsentPurpose, GRIEVANCE_EMAIL } from "@gorola/shared";
 import { FileText, ShieldCheck } from "lucide-react";
-import { ReactElement, ReactNode } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 import {
   Dialog,
@@ -12,9 +12,9 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 
-export type ConsentPurpose = "OTP_AUTH" | "AGE_DECLARATION" | "ORDER_PROCESSING" | "MARKETING_COMMS" | "ANALYTICS";
+export type { ConsentPurpose };
 
-interface NoticeContent {
+export interface NoticeContent {
   title: string;
   version: string;
   effectiveDate: string;
@@ -25,102 +25,24 @@ interface NoticeContent {
   rights: string | ReactNode;
 }
 
-export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = {
-  OTP_AUTH: {
-    title: "Authentication & Account Security",
-    version: CURRENT_PRIVACY_POLICY_VERSION,
-    effectiveDate: "29/09/2026",
-    purpose:
-      "GoRola is for people aged 18 and over. We process your personal data exclusively to verify your identity via One-Time Passwords (OTP), prevent unauthorized account access, and ensure session security.",
-    dataCollected: ["Phone Number"],
-    thirdParties: (
-      <span>
-        Your phone number is transmitted securely via our encrypted internal authentication microservices and shared with our authorized SMS Gateway Partners (such as <strong className="font-semibold text-gorola-charcoal">Exotel</strong>) solely for automated OTP delivery. We do not sell or monetize your data.
-      </span>
-    ),
-    retention:
-      "Retained for the lifetime of your active account. If you delete your account, this data is permanently erased within 30 days.",
-    rights: `You have the right to access, rectify, or erase your data. Contact ${GRIEVANCE_EMAIL}. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
-  },
-  AGE_DECLARATION: {
-    title: "Age Verification & Eligibility",
-    version: "1.1",
-    effectiveDate: "29/09/2026",
-    purpose:
-      "Under Section 9 of the DPDP Act 2023, we verify that you are at least 18 years of age before creating an account on our marketplace.",
-    dataCollected: [
-      "Date of Birth — processed ephemerally in-memory during sign-up to verify 18+ eligibility and discarded immediately (zero persistent storage of raw DOB)",
-      "Age Confirmation Date — retained as an immutable statutory audit log of your affirmative declaration"
-    ],
-    thirdParties:
-      "None. Age verification is performed strictly in-memory on our secure servers. Your date of birth is never shared with third parties, SMS gateways, or external advertising networks.",
-    retention:
-      "Raw date of birth is not stored. The timestamp of your age confirmation is retained for the lifetime of your active account.",
-    rights: `Contact ${GRIEVANCE_EMAIL} for any data questions. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
-  },
-  ORDER_PROCESSING: {
-    title: "Order Fulfillment & Location Services",
-    version: "1.0",
-    effectiveDate: "29/09/2026",
-    purpose:
-      "We process your location and transaction details to calculate accurate delivery routes, coordinate with local fulfillment hubs, assign delivery riders and field service technicians, and process electronic payments.",
-    dataCollected: [
-      "Delivery or Service Address & Landmark Notes",
-      "GPS Coordinates (saved address pin, order delivery coordinates, and on-site appointment locations)",
-      "Display Name (if you have set one) — shared with your assigned store partner, delivery rider, or field service technician for fulfillment and appointment verification",
-      "Transaction & Billing Details (excluding raw credit card data/CVV) — only when online payment is selected"
-    ],
-    thirdParties: (
-      <span>
-        Your delivery address and masked contact details are shared strictly on a need-to-know basis with: <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> (spatial routing and geolocation), <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> (secure payment processing — only when online payment is selected), and verified <strong className="font-semibold text-gorola-charcoal">Store Partners, Delivery Riders, and Field Service Technicians</strong> solely for physical order fulfillment and scheduled on-site service appointments in compliance with the DPDP Act 2023.
-      </span>
-    ),
-    retention: (
-      <span>
-        Your saved delivery address (including GPS pin) is stored until you delete it or your account. The GPS coordinates copied to each order record are nulled out when you exercise your Right to Erasure; the financial record of the order (totals, payment method) is retained for 7 years under Indian GST and financial accounting law. Live GPS streams used for routing are never persisted — they are processed in-transit by <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> and discarded.
-      </span>
-    ),
-    rights: `You may update your saved addresses at any time. Contact ${GRIEVANCE_EMAIL}. You also hold the statutory right to lodge a complaint with the Data Protection Board of India (DPBI).`
-  },
-  MARKETING_COMMS: {
-    title: "Promotions & Seasonal Offers",
-    version: "1.0",
-    effectiveDate: "29/09/2026",
-    purpose:
-      "We process your phone number and historical purchase categories to send you targeted seasonal Mussoorie harvest updates, hill-station discounts, and exclusive store coupons via SMS and app notifications.",
-    dataCollected: [
-      "Phone Number — used to send SMS promotional messages",
-      "Display Name (if you have set one) — used for personalised greetings",
-      "Purchase History & Regional Location (Mussoorie cluster) — used to personalise offers"
-    ],
-    thirdParties: (
-      <span>
-        Promotional messages are sent via our authorised SMS gateway partners (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>). No data is shared with external advertising networks or third-party marketers. Your phone number is never sold.
-      </span>
-    ),
-    retention:
-      "Processed for marketing until you withdraw your consent. Upon withdrawal, scrubbed from all promotional distributions within 48 hours.",
-    rights:
-      "Consent for marketing is entirely voluntary. You can withdraw your consent instantly via the Privacy Settings panel at any time without affecting your core service access."
-  },
-  ANALYTICS: {
-    title: "Usage & Performance Analytics",
-    version: "1.0",
-    effectiveDate: "29/09/2026",
-    purpose:
-      "We collect system performance logs and navigation response rates to identify software bugs, optimise steep hill routing, and improve app speed over weak network bands.",
-    dataCollected: [
-      "Device Telemetry (OS version, hardware model, app crash logs)",
-      "Network performance data and regional route latency parameters"
-    ],
-    thirdParties:
-      "Processed natively within our secure internal systems. Not mapped to your personal identifier. Handled purely as bulk performance telemetry. Zero PII is tracked.",
-    retention:
-      "Retained in aggregated logs for a maximum of 180 days, then automatically purged or completely anonymized.",
-    rights:
-      "Turn off performance tracking at any time via the Privacy dashboard. Disabling this will not restrict any app features or purchases."
-  }
-};
+export const CONSENT_NOTICES: Record<ConsentPurpose, NoticeContent> = Object.fromEntries(
+  (Object.keys(CANONICAL_CONSENT_NOTICES) as ConsentPurpose[]).map((purpose) => {
+    const canonical = CANONICAL_CONSENT_NOTICES[purpose];
+    return [
+      purpose,
+      {
+        title: canonical.title,
+        version: canonical.version,
+        effectiveDate: canonical.effectiveDate,
+        purpose: canonical.summaryText,
+        dataCollected: canonical.disclosures.dataCollected,
+        thirdParties: canonical.disclosures.thirdParties,
+        retention: canonical.disclosures.retention,
+        rights: canonical.disclosures.rights
+      }
+    ];
+  })
+) as Record<ConsentPurpose, NoticeContent>;
 
 export interface ConsentNoticeModalProps {
   purpose: ConsentPurpose;

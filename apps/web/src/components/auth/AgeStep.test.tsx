@@ -1,4 +1,4 @@
-import { CONSENT_NOTICES } from "@gorola/shared";
+import { CANONICAL_CONSENT_NOTICES, CONSENT_NOTICES } from "@gorola/shared";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
@@ -220,6 +220,15 @@ describe("AgeStep Component (8.8.10)", () => {
       (n) => n === "18" || n === "21" || n === "16" || n === "13"
     );
     expect(blockedMatches.every((n) => n === "18")).toBe(true);
+  });
+
+  it("renders ConsentOptInCard for AGE_DECLARATION in informational mode with modal trigger", () => {
+    render(<AgeStep onConfirm={vi.fn()} />);
+    const noticeCard = screen.getByTestId("age-step-notice-card");
+    expect(noticeCard).toBeInTheDocument();
+    expect(noticeCard).toHaveTextContent(CANONICAL_CONSENT_NOTICES.AGE_DECLARATION.summaryText);
+    expect(screen.getByTestId("view-notice-btn-AGE_DECLARATION")).toBeInTheDocument();
+    expect(screen.queryByRole("checkbox")).not.toBeInTheDocument();
   });
 });
 

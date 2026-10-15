@@ -237,6 +237,54 @@ describe("SavedAddressesPage", () => {
     expect(saveBtn).not.toBeDisabled();
   });
 
+  it("when api.post('/api/v1/consent') fails due to network error, address save still succeeds", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { success: true, data: { consents: [] } }
+        });
+      }
+      if (url === "/api/v1/addresses") {
+        return Promise.resolve({
+          data: { success: true, data: { addresses: [] } }
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: {} } });
+    });
+
+    apiPostSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/addresses") {
+        return Promise.resolve({ data: { success: true, data: { id: "addr-new-1" } } });
+      }
+      if (url === "/api/v1/consent") {
+        return Promise.reject(new Error("Network disconnect"));
+      }
+      return Promise.resolve({ data: { success: true } });
+    });
+
+    renderComponent();
+
+    const addBtn = await screen.findByRole("button", { name: /Add New|Add your first address/i });
+    fireEvent.click(addBtn);
+
+    const checkbox = await screen.findByTestId("order-processing-acknowledge-checkbox");
+    fireEvent.click(checkbox);
+
+    const labelInput = screen.getByPlaceholderText("Home");
+    const landmarkInput = screen.getByPlaceholderText("E.g. — near the red gate, behind Hotel Padmini");
+    const saveBtn = screen.getByTestId("save-address-btn");
+
+    fireEvent.change(labelInput, { target: { value: "Mountain Lodge" } });
+    fireEvent.change(landmarkInput, { target: { value: "Near Library Chowk" } });
+
+    fireEvent.click(saveBtn);
+
+    await waitFor(() => {
+      expect(apiPostSpy).toHaveBeenCalledWith("/api/v1/addresses", expect.any(Object));
+      expect(apiPostSpy).toHaveBeenCalledWith("/api/v1/consent", expect.any(Object));
+    });
+  });
+
   it("opens edit form and updates an existing address", async () => {
     renderComponent();
 

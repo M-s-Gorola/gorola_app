@@ -10,6 +10,7 @@ import { CheckoutPage } from "./CheckoutPage";
 
 import { useAuthStore } from "@/store/auth.store";
 import { useCartStore } from "@/store/cart.store";
+import { CANONICAL_CONSENT_NOTICES } from "@gorola/shared";
 
 const { getMock, postMock, syncCartMock } = vi.hoisted(() => ({
   getMock: vi.fn(),
@@ -677,6 +678,122 @@ describe("CheckoutPage", () => {
           deliveryNote: "Gate code 5566, leave at guard"
         })
       );
+    });
+  });
+
+  it("renders canonical ConsentOptInCard with 'Consent Active' pill when ORDER_PROCESSING consent exists", async () => {
+    const user = userEvent.setup();
+    renderCheckout();
+
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText(/Deliver to new location/i));
+
+    const consentCard = screen.getByTestId("checkout-order-processing-consent");
+    expect(consentCard).toBeInTheDocument();
+    expect(consentCard).toHaveTextContent("Consent Active");
+    expect(consentCard).toHaveTextContent(CANONICAL_CONSENT_NOTICES.ORDER_PROCESSING.summaryText);
+  });
+
+  it("records MARKETING_COMMS consent with canonical notice text when user checks opt-in and places order", async () => {
+    act(() => {
+      useCartStore.setState({ selectedPaymentMethod: "COD" });
+    });
+
+    postMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/orders") {
+        return Promise.resolve({
+          data: {
+            data: { id: "order-marketing-123" },
+            success: true
+          }
+        });
+      }
+      return Promise.resolve({ data: { success: true } });
+    });
+
+    const user = userEvent.setup();
+    renderCheckout();
+    await waitFor(() => {
+      expect(screen.getByText(/^Deliver to:/)).toBeInTheDocument();
+    });
+
+    await user.click(screen.getByLabelText(/^Home$/));
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+
+    const marketingCard = screen.getByTestId("checkout-marketing-opt-in");
+    expect(marketingCard).toBeInTheDocument();
+    expect(marketingCard).toHaveTextContent(CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.summaryText);
+
+    const checkbox = screen.getByTestId("marketing-consent-checkbox");
+    await user.click(checkbox);
+
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
+        purpose: "MARKETING_COMMS",
+        consentVersion: CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.version,
+        noticeText: CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.plainText
+      });
+    });
+  });
+
+  it("records ORDER_PROCESSING consent with canonical notice text when placing order with new address without prior consent", async () => {
+    act(() => {
+      useCartStore.setState({ selectedPaymentMethod: "COD" });
+    });
+
+    getMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/consent") {
+        return Promise.resolve({
+          data: { data: { consents: [] }, success: true }
+        });
+      }
+      return Promise.resolve({
+        data: {
+          data: { addresses: [] },
+          success: true
+        }
+      });
+    });
+
+    postMock.mockImplementation((url: string) => {
+      if (url === "/api/v1/orders") {
+        return Promise.resolve({
+          data: {
+            data: { id: "order-op-123" },
+            success: true
+          }
+        });
+      }
+      return Promise.resolve({ data: { success: true } });
+    });
+
+    const user = userEvent.setup();
+    renderCheckout();
+
+    await waitFor(() => {
+      expect(screen.getByPlaceholderText(/Hotel Padmini|E\.g\./i)).toBeInTheDocument();
+    });
+
+    const landmark = screen.getByPlaceholderText(/Hotel Padmini|E\.g\./i);
+    await user.type(landmark, "Near landmark text here area tenchars");
+
+    const checkbox = screen.getByTestId("order-processing-acknowledge-checkbox");
+    await user.click(checkbox);
+
+    await user.click(screen.getByRole("button", { name: /^Continue$/i }));
+    await user.click(screen.getByRole("button", { name: /^Place Order$/i }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
+        purpose: "ORDER_PROCESSING",
+        consentVersion: CANONICAL_CONSENT_NOTICES.ORDER_PROCESSING.version,
+        noticeText: CANONICAL_CONSENT_NOTICES.ORDER_PROCESSING.plainText
+      });
     });
   });
 });

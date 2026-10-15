@@ -1,3 +1,4 @@
+import { CANONICAL_CONSENT_NOTICES } from "@gorola/shared";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -159,10 +160,11 @@ describe("AnalyticsConsentBanner (DPDP 8.2.7 - Option A)", () => {
     fireEvent.click(acceptBtn);
 
     await waitFor(() => {
-      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
         purpose: "ANALYTICS",
-        consentVersion: "1.0"
-      }));
+        consentVersion: CANONICAL_CONSENT_NOTICES.ANALYTICS.version,
+        noticeText: CANONICAL_CONSENT_NOTICES.ANALYTICS.plainText
+      });
     });
 
     expect(localStorage.getItem("gorola_analytics_consent")).toBe("accepted");
@@ -187,6 +189,55 @@ describe("AnalyticsConsentBanner (DPDP 8.2.7 - Option A)", () => {
     });
     expect(localStorage.getItem("gorola_analytics_consent")).toBe("declined");
     expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
+  });
+
+  it("handles localStorage throwing SecurityError gracefully without throwing or crashing", async () => {
+    useAuthStore.setState({
+      accessToken: "mock-buyer-token",
+      userId: "buyer-123",
+      role: "BUYER"
+    });
+
+    const getItemSpy = vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => {
+      throw new Error("SecurityError: Access is denied for this document");
+    });
+
+    render(<AnalyticsConsentBanner />);
+
+    // Should not throw or crash; gracefully hides banner
+    await waitFor(() => {
+      expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
+    });
+
+    getItemSpy.mockRestore();
+  });
+
+  it("disables Accept button during loading to prevent rapid double clicks", async () => {
+    useAuthStore.setState({
+      accessToken: "mock-buyer-token",
+      userId: "buyer-123",
+      role: "BUYER"
+    });
+
+    let resolvePost: ((value: unknown) => void) | null = null;
+    postMock.mockImplementationOnce(() => new Promise((resolve) => {
+      resolvePost = resolve;
+    }));
+
+    render(<AnalyticsConsentBanner />);
+
+    const acceptBtn = await screen.findByRole("button", { name: /Accept Analytics/i });
+    expect(acceptBtn).not.toBeDisabled();
+
+    fireEvent.click(acceptBtn);
+
+    expect(acceptBtn).toBeDisabled();
+
+    // Now resolve
+    resolvePost!({ data: { success: true } });
+    await waitFor(() => {
+      expect(screen.queryByTestId("analytics-consent-banner")).not.toBeInTheDocument();
+    });
   });
 });
 

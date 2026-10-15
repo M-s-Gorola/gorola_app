@@ -6,9 +6,8 @@ import { useState } from "react";
 import { toast } from "sonner";
 
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
-import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
+import { ConsentOptInCard } from "@/components/consent/ConsentOptInCard";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -25,6 +24,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useOrderProcessingConsent } from "@/hooks/useOrderProcessingConsent";
+import { useRecordConsent } from "@/hooks/useRecordConsent";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
 
@@ -54,6 +54,7 @@ export function SavedAddressesPage(): ReactElement {
   const isBootstrapPending = useAuthStore((s) => s.isBootstrapPending);
 
   const { hasConsent: hasOrderProcessingConsent } = useOrderProcessingConsent();
+  const { recordConsent } = useRecordConsent();
 
   const { data: addresses, isLoading, error } = useQuery({
     enabled: !isBootstrapPending,
@@ -78,19 +79,7 @@ export function SavedAddressesPage(): ReactElement {
       setIsFormOpen(false);
       invalidateAddresses();
       // DPDP 2023: Log ORDER_PROCESSING consent when address is saved
-      try {
-        const p = api?.post("/api/v1/consent", {
-          purpose: "ORDER_PROCESSING",
-          consentVersion: "1.0",
-          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
-        });
-        if (p && typeof p.catch === "function") {
-          p.catch(() => {});
-        }
-      } catch {
-        /* ignore background consent logging error */
-      }
-      queryClient.invalidateQueries({ queryKey: ["consents"] });
+      void recordConsent("ORDER_PROCESSING");
     },
     onError: (err) => handleApiError(err)
   });
@@ -105,19 +94,7 @@ export function SavedAddressesPage(): ReactElement {
       setIsFormOpen(false);
       invalidateAddresses();
       // DPDP 2023: Log ORDER_PROCESSING consent when address is updated
-      try {
-        const p = api?.post("/api/v1/consent", {
-          purpose: "ORDER_PROCESSING",
-          consentVersion: "1.0",
-          noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
-        });
-        if (p && typeof p.catch === "function") {
-          p.catch(() => {});
-        }
-      } catch {
-        /* ignore background consent logging error */
-      }
-      queryClient.invalidateQueries({ queryKey: ["consents"] });
+      void recordConsent("ORDER_PROCESSING");
     },
     onError: (err) => handleApiError(err)
   });
@@ -370,66 +347,14 @@ export function SavedAddressesPage(): ReactElement {
               <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
             )}
 
-            <div
-              data-testid="order-processing-consent-notice"
-              className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                  <span>Order Fulfillment &amp; Location Services</span>
-                </div>
-                <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-                  Essential
-                </span>
-              </div>
-              <p className="text-muted-foreground leading-relaxed">
-                We collect your address, GPS coordinates, Display Name (if set), and contact details to route orders, fulfill deliveries, and coordinate scheduled on-site service appointments. Data is shared with <strong className="font-semibold text-gorola-charcoal">Ola Maps</strong> for navigation, <strong className="font-semibold text-gorola-charcoal">Razorpay</strong> for online payments, and verified store partners, delivery riders, and field service technicians for order fulfillment and scheduled service appointments. Governed by India&apos;s DPDP Act 2023.
-              </p>
-
-              <div className="pt-0.5 text-[11px] text-muted-foreground">
-                <span>For full details on statutory 7-year GST retention, live GPS handling, and data rights, read the </span>
-                <ConsentNoticeModal
-                  purpose="ORDER_PROCESSING"
-                  triggerLabel="Order Fulfillment Notice"
-                  triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
-                />
-                <span> (or view our platform-wide </span>
-                <a
-                  href="/privacy"
-                  className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-                >
-                  Privacy Policy
-                </a>
-                <span>).</span>
-              </div>
-
-              {!hasOrderProcessingConsent ? (
-                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
-                  <Checkbox
-                    checked={opAcknowledged}
-                    data-testid="order-processing-acknowledge-checkbox"
-                    id="op-ack"
-                    onCheckedChange={(v) => setOpAcknowledged(!!v)}
-                  />
-                  <label
-                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
-                    htmlFor="op-ack"
-                  >
-                    I have read and understood this notice
-                  </label>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
-                    <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
-                    Consent Active
-                  </span>
-                  <span className="text-muted-foreground/40">•</span>
-                  <span>Permanent operational requirement</span>
-                </div>
-              )}
-            </div>
+            <ConsentOptInCard
+              purpose="ORDER_PROCESSING"
+              checked={opAcknowledged}
+              onCheckedChange={setOpAcknowledged}
+              hasExistingActiveConsent={hasOrderProcessingConsent}
+              testId="order-processing-consent-notice"
+              checkboxTestId="order-processing-acknowledge-checkbox"
+            />
           </div>
 
           <DialogFooter>
