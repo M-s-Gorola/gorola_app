@@ -54,8 +54,14 @@ export function AdminUsersPage(): ReactElement {
   // Debounce search effect (300ms)
   useEffect(() => {
     const handler = setTimeout(() => {
-      setDebouncedSearch(searchInput.trim());
-      setPage(1);
+      const trimmed = searchInput.trim();
+      setDebouncedSearch((prev) => {
+        if (prev !== trimmed) {
+          setPage(1);
+          return trimmed;
+        }
+        return prev;
+      });
     }, 300);
 
     return () => {

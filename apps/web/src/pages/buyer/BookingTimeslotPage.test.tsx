@@ -1,3 +1,4 @@
+import { CANONICAL_CONSENT_NOTICES } from "@gorola/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -803,6 +804,100 @@ describe("BookingTimeslotPage", () => {
           deliveryNote: "Patient requires gentle care"
         })
       );
+    });
+  });
+
+  it("records MARKETING_COMMS consent with canonical notice text when marketing opt-in is checked on booking confirmation", async () => {
+    apiGetSpy.mockImplementation((url: string) => {
+      if (url.includes("/api/v1/consent")) {
+        return Promise.resolve({
+          data: { success: true, data: { consents: [] } }
+        });
+      }
+      if (url.includes("/api/v1/products/prod1")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              id: "prod1",
+              name: "CBC Blood Test",
+              store: { id: "store1", name: "Apex Labs", bookingLeadDays: 1 },
+              variants: [
+                {
+                  id: "var1",
+                  label: "Standard Test",
+                  price: "500.00",
+                  requiresFasting: false,
+                  allowedTimeslots: ["09:00-12:00"]
+                }
+              ]
+            }
+          }
+        });
+      }
+      if (url.includes("/api/v1/addresses")) {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: {
+              addresses: [
+                {
+                  id: "addr1",
+                  label: "Home",
+                  landmarkDescription: "Near Clock Tower Mussoorie",
+                  flatRoom: "1A"
+                }
+              ]
+            }
+          }
+        });
+      }
+      return Promise.resolve({ data: { success: true, data: [] } });
+    });
+
+    apiPostSpy.mockImplementation((url: string) => {
+      if (url === "/api/v1/bookings") {
+        return Promise.resolve({
+          data: {
+            success: true,
+            data: { orderId: "ord-new-456" }
+          }
+        });
+      }
+      return Promise.resolve({ data: { success: true } });
+    });
+
+    renderComponent();
+    await screen.findByText("CBC Blood Test");
+
+    const dateInput = screen.getByLabelText(/Select Date/i);
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const tomorrowStr = tomorrow.toISOString().split("T")[0];
+    fireEvent.change(dateInput, { target: { value: tomorrowStr } });
+
+    const slotBtn = screen.getByRole("button", { name: "09:00-12:00" });
+    fireEvent.click(slotBtn);
+
+    const addressRadio = screen.getByLabelText(/Near Clock Tower Mussoorie/i);
+    fireEvent.click(addressRadio);
+
+    const marketingCard = screen.getByTestId("booking-marketing-opt-in");
+    expect(marketingCard).toBeInTheDocument();
+    expect(marketingCard).toHaveTextContent(CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.summaryText);
+
+    const checkbox = screen.getByTestId("marketing-consent-checkbox");
+    fireEvent.click(checkbox);
+
+    const confirmBtn = screen.getByRole("button", { name: /Confirm Booking/i });
+    fireEvent.click(confirmBtn);
+
+    await waitFor(() => {
+      expect(apiPostSpy).toHaveBeenCalledWith("/api/v1/consent", {
+        purpose: "MARKETING_COMMS",
+        consentVersion: CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.version,
+        noticeText: CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.plainText
+      });
     });
   });
 });

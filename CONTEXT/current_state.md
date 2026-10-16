@@ -3,15 +3,31 @@
 ## Active Milestone: Phase 6 — Core Operations & Enterprise Architecture
 - **Current Phase:** Phase 6.20 — Universal Pagination (20/page), Merchant Card/Table View Toggles, Promotional Breakdown Unification & Admin Modal Parity — **COMPLETED ✅**
 - **Next Phase:** Phase 6.21 — Tax Calculation Logic, GST Rules & Advanced Invoice Formatting — **QUEUED 🔮 (Pending Client Approval)**
-- **Last Updated:** 2026-10-15
+- **Last Updated:** 2026-10-16
 
-## Quality Gates Status (Phase 6.20)
+## Quality Gates Status (Phase 8.9 Complete)
 - `pnpm typecheck`: 0 errors (clean across `packages/shared`, `packages/ui`, `apps/api`, `apps/web`)
 - `pnpm lint`: 0 errors, 0 warnings across monorepo
-- `apps/api test`: 145 test files, 860 tests passing (100% green)
-- `apps/web test`: 109 test files, 684 tests passing (100% green)
+- `apps/web test`: 111 test files, 709 tests passing (100% green)
+- `packages/shared test`: 5/5 tests passing (100% green)
+- Production Build: `apps/web` and `apps/api` build cleanly
 
-## Session 98 Notes: Dedicated Pagination Cards & Detail Sub-Table View Toggles
+## Session 99 Notes: Phase 8.9 Complete (Universal DRY DPDP Consent Forms, Canonical Shared Notice Registry & Component Consolidation)
+- **Search Debounce Race Condition Fix (`AdminUsersPage.tsx`):**
+  - Resolved race condition where an unconditional mount-time 300ms search debounce timer fired `setPage(1)` during user page transitions.
+  - Guarded `setPage(1)` to trigger only when the trimmed query actually differs from the previous value.
+- **Single Source of Truth Notice Registry (`packages/shared/src/consent-notices.ts`):**
+  - Defined `CANONICAL_CONSENT_NOTICES` for all 5 statutory purposes (`OTP_AUTH`, `AGE_DECLARATION`, `ORDER_PROCESSING`, `MARKETING_COMMS`, `ANALYTICS`).
+  - Standardized all titles, summaries, transparency prompts, modal trigger labels, checkbox labels, and 5-tier legal disclosures across the platform.
+  - Zero text drift; pure helpers `getCanonicalNoticeText` and `isPurposeEssential` exported.
+- **Universal Component & Hook (`apps/web`):**
+  - Created `<ConsentOptInCard>` (`apps/web/src/components/consent/ConsentOptInCard.tsx`) with 3 display modes (`essential-gate`, `optional-opt-in`, `informational`), active consent indicators, error alerts, and disabled states.
+  - Created `useRecordConsent` (`apps/web/src/hooks/useRecordConsent.ts`) hook with non-blocking error handling and query cache invalidation.
+- **Consolidated All Platform Touchpoints (0 Duplicate Cards / 0 Hardcoded Text):**
+  - Refactored `SavedAddressesPage.tsx`, `CheckoutPage.tsx`, `BookingTimeslotPage.tsx`, `LoginPage.tsx`, `AgeStep.tsx`, `PrivacySettingsSection.tsx`, `PrivacyPolicyPage.tsx`, `ConsentNoticeModal.tsx`, and `AnalyticsConsentBanner.tsx`.
+- **Quality Gates:**
+  - Strict TDD adhered to throughout: RED unit/component stubs written and failure confirmed before implementation.
+  - 100% clean typecheck (`pnpm typecheck` 0 errors), 100% clean lint (`pnpm lint` 0 errors, 0 warnings), all test suites green.
 - **Dedicated Pagination Card Containers:**
   - Upgraded pagination footers in `StoreBookingsPage.tsx`, `StoreOrdersPage.tsx`, and `OrderHistoryPage.tsx` into standalone floating cards (`bg-white border border-gorola-mint/20 rounded-2xl p-4 shadow-sm flex items-center justify-between gap-4`).
   - Solved visibility issues over background patterns with high-contrast text and clean button borders.

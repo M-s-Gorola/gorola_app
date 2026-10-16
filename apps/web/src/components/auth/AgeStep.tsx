@@ -1,8 +1,7 @@
-import { CONSENT_NOTICES } from "@gorola/shared";
 import { Calendar } from "lucide-react";
 import { type ReactElement, useState } from "react";
 
-import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
+import { ConsentOptInCard } from "@/components/consent/ConsentOptInCard";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
@@ -199,40 +198,14 @@ export function AgeStep({
 
   return (
     <div className="mt-6 flex flex-col gap-5" data-testid="age-step">
+      <ConsentOptInCard
+        purpose="AGE_DECLARATION"
+        mode="informational"
+        testId="age-step-notice-card"
+      />
+
       <div className="rounded-2xl border border-border/80 bg-white dark:bg-card p-5 text-sm text-gorola-charcoal space-y-3.5 shadow-xs">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2 font-semibold text-gorola-pine">
-            <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-            <span>Age Confirmation</span>
-          </div>
-          <span className="inline-flex items-center rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/20">
-            Essential
-          </span>
-        </div>
-
-        <p className="text-muted-foreground leading-relaxed text-xs sm:text-sm">
-          {CONSENT_NOTICES.AGE_DECLARATION["1.1"]}
-        </p>
-
-        <div className="pt-0.5 text-xs text-muted-foreground">
-          <span>For full details on non-storage of raw DOB and 90-day lockout hashing, read the </span>
-          <ConsentNoticeModal
-            purpose="AGE_DECLARATION"
-            triggerLabel="Age Declaration Notice"
-          />
-          <span> (or view our platform-wide </span>
-          <a
-            href="/privacy"
-            target="_blank"
-            rel="noreferrer"
-            className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-          >
-            Privacy Policy
-          </a>
-          <span>).</span>
-        </div>
-
-        <div className="pt-2">
+        <div className="pt-1">
           <div className="flex items-center justify-between mb-2">
             <label className="text-xs font-medium text-gorola-charcoal block">
               Date of birth

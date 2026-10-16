@@ -1,3 +1,4 @@
+import { CANONICAL_CONSENT_NOTICES } from "@gorola/shared";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -184,10 +185,11 @@ describe("PrivacySettingsSection (DPDP 8.2.3)", () => {
     fireEvent.click(optInBtn);
 
     await waitFor(() => {
-      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", expect.objectContaining({
+      expect(postMock).toHaveBeenCalledWith("/api/v1/consent", {
         purpose: "MARKETING_COMMS",
-        consentVersion: "1.0"
-      }));
+        consentVersion: CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.version,
+        noticeText: CANONICAL_CONSENT_NOTICES.MARKETING_COMMS.plainText
+      });
     });
   });
 

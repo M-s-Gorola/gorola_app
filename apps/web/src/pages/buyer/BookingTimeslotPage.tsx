@@ -8,9 +8,8 @@ import { toast } from "sonner";
 
 import { DeliveryNoteInput } from "@/components/buyer/DeliveryNoteInput";
 import { type MapCoordinates, MUSSOORIE_AREA_CENTER,OlaAddressMapPicker as AddressMapPicker } from "@/components/buyer/OlaAddressMapPicker";
-import { ConsentNoticeModal } from "@/components/consent/ConsentNoticeModal";
+import { ConsentOptInCard } from "@/components/consent/ConsentOptInCard";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -19,6 +18,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import { useRecordConsent } from "@/hooks/useRecordConsent";
 import { useSystemSettings } from "@/hooks/useSystemSettings";
 import { api } from "@/lib/api";
 import { useAuthStore } from "@/store/auth.store";
@@ -64,6 +64,7 @@ export function BookingTimeslotPage(): ReactElement {
   const [selectedAddressId, setSelectedAddressId] = useState("");
   const [serviceNote, setServiceNote] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const { recordConsent } = useRecordConsent();
 
   // Address creation form state
   const queryClient = useQueryClient();
@@ -351,37 +352,14 @@ export function BookingTimeslotPage(): ReactElement {
       );
       // DPDP 2023: Log ORDER_PROCESSING consent only if not already active
       if (!hasOrderProcessingConsent) {
-        try {
-          const p = api?.post("/api/v1/consent", {
-            purpose: "ORDER_PROCESSING",
-            consentVersion: "1.0",
-            noticeText: "Your delivery address, landmark notes, and GPS coordinates are saved to your account and shared with Ola Maps for routing, and with your assigned store partner and delivery rider for fulfillment. If you have set a display name, it will be visible to your assigned store partner and rider."
-          });
-          if (p && typeof p.catch === "function") {
-            p.catch(() => {});
-          }
-        } catch {
-          /* ignore background consent logging error */
-        }
+        void recordConsent("ORDER_PROCESSING");
       }
 
       // Record MARKETING_COMMS only if the user explicitly opted in this session
       // and they haven't already granted it previously.
       if (marketingOptIn && !hasMarketingConsent) {
-        try {
-          const p2 = api?.post("/api/v1/consent", {
-            purpose: "MARKETING_COMMS",
-            consentVersion: "1.0",
-            noticeText: "You agreed to receive promotional offers and seasonal discounts."
-          });
-          if (p2 && typeof p2.catch === "function") {
-            p2.catch(() => {});
-          }
-        } catch {
-          /* ignore background consent logging error */
-        }
+        void recordConsent("MARKETING_COMMS");
       }
-      void queryClient.invalidateQueries({ queryKey: ["consents"] });
 
       toast.success("Booking placed successfully!");
       navigate(`/bookings/${res.data.data.orderId}`, { replace: true });
@@ -700,69 +678,16 @@ export function BookingTimeslotPage(): ReactElement {
 
         {/* Section 5: Marketing Consent & Action Button */}
         <div className="border-t border-gorola-pine/10 pt-6 space-y-4">
-          <div
-            data-testid="booking-marketing-opt-in"
-            className="rounded-2xl border border-border/80 bg-white dark:bg-card p-4 space-y-2.5 text-left shadow-xs"
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2 font-semibold text-xs text-gorola-charcoal">
-                <span className="inline-block h-2 w-2 rounded-full bg-amber-500" />
-                <span>Promotions &amp; Seasonal Offers (Optional)</span>
-              </div>
-              <span className="inline-flex items-center rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-inset ring-amber-600/20">
-                Optional
-              </span>
-            </div>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              We collect your phone number, Display Name (if set), and purchase categories to send updates on Mussoorie store flash sales, seasonal discounts, and coupons via SMS (<strong className="font-semibold text-gorola-charcoal">Exotel</strong>) and app notifications. 100% voluntary.
-            </p>
-            <div className="pt-0.5 text-[11px] text-muted-foreground">
-              <span>For full details on 48-hour opt-out scrubbing, data retention, and withdrawal rights, read the </span>
-              <ConsentNoticeModal
-                purpose="MARKETING_COMMS"
-                triggerLabel="Promotions Notice"
-                triggerClassName="inline-flex items-center align-baseline gap-1 text-[11px] font-semibold text-gorola-pine underline hover:text-emerald-700 cursor-pointer p-0 bg-transparent border-0"
-              />
-              <span> (or view our platform-wide </span>
-              <a
-                href="/privacy"
-                className="font-semibold text-gorola-pine underline hover:text-emerald-700 align-baseline"
-              >
-                Privacy Policy
-              </a>
-              <span>).</span>
-            </div>
-            {!hasMarketingConsent ? (
-              <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
-                <Checkbox
-                  checked={marketingOptIn}
-                  data-testid="marketing-consent-checkbox"
-                  id="marketing-optin-booking"
-                  onCheckedChange={(v) => setMarketingOptIn(!!v)}
-                />
-                <label
-                  className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
-                  htmlFor="marketing-optin-booking"
-                >
-                  Yes, send me seasonal Mussoorie harvest updates and coupons
-                </label>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
-                <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
-                  <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
-                  Consent Active
-                </span>
-                <span className="text-muted-foreground/40">•</span>
-                <span>
-                  Manage or withdraw in{" "}
-                  <a href="/profile" className="underline text-gorola-pine hover:text-emerald-700">
-                    Privacy Settings
-                  </a>
-                </span>
-              </div>
-            )}
-          </div>
+          <ConsentOptInCard
+            purpose="MARKETING_COMMS"
+            mode="optional-opt-in"
+            checked={marketingOptIn}
+            onCheckedChange={setMarketingOptIn}
+            hasExistingActiveConsent={hasMarketingConsent}
+            testId="booking-marketing-opt-in"
+            checkboxTestId="marketing-consent-checkbox"
+            checkboxLabel="Yes, send me seasonal Mussoorie harvest updates and coupons"
+          />
 
           {/* Confirm Booking CTA */}
           <button
@@ -841,47 +766,14 @@ export function BookingTimeslotPage(): ReactElement {
               <p className="rounded-lg bg-red-50 px-3 py-2 font-dm-sans text-sm text-red-700">{formError}</p>
             )}
 
-            <div
-              data-testid="order-processing-consent-notice"
-              className="rounded-xl border border-border/80 bg-white dark:bg-card p-3.5 text-xs text-gorola-charcoal space-y-2.5 shadow-xs"
-            >
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-1.5 font-semibold text-gorola-pine">
-                  <span className="inline-block h-2 w-2 rounded-full bg-emerald-600" />
-                  <span>Order Fulfillment &amp; Location Services</span>
-                </div>
-                <ConsentNoticeModal purpose="ORDER_PROCESSING" />
-              </div>
-              <p className="text-muted-foreground leading-relaxed">
-                Your address, landmark notes, and GPS coordinates are shared with <strong>Ola Maps</strong> for location services, and with assigned store partners, delivery riders, and field service technicians for order fulfillment and scheduled on-site service appointments. If you choose online payment, your transaction details are processed securely via <strong>Razorpay</strong>. Governed by India&apos;s DPDP Act 2023.
-              </p>
-
-              {!hasOrderProcessingConsent ? (
-                <div className="flex items-start gap-2.5 pt-2.5 border-t border-border/60">
-                  <Checkbox
-                    checked={opAcknowledged}
-                    data-testid="order-processing-acknowledge-checkbox"
-                    id="op-ack-booking-dialog"
-                    onCheckedChange={(v) => setOpAcknowledged(!!v)}
-                  />
-                  <label
-                    className="text-xs font-medium text-gorola-charcoal/90 leading-tight cursor-pointer select-none"
-                    htmlFor="op-ack-booking-dialog"
-                  >
-                    I have read and understood this notice
-                  </label>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 pt-2.5 border-t border-border/60 text-xs text-muted-foreground">
-                  <span className="inline-flex items-center gap-1.5 font-medium text-emerald-700 dark:text-emerald-400">
-                    <span className="h-2 w-2 rounded-full bg-emerald-600 inline-block" />
-                    Consent Active
-                  </span>
-                  <span className="text-muted-foreground/40">•</span>
-                  <span>Permanent operational requirement</span>
-                </div>
-              )}
-            </div>
+            <ConsentOptInCard
+              purpose="ORDER_PROCESSING"
+              checked={opAcknowledged}
+              onCheckedChange={setOpAcknowledged}
+              hasExistingActiveConsent={hasOrderProcessingConsent}
+              testId="order-processing-consent-notice"
+              checkboxTestId="order-processing-acknowledge-checkbox"
+            />
           </div>
 
           <DialogFooter>

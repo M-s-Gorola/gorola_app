@@ -16,6 +16,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { LoginPage } from "./LoginPage";
 
 import { useAuthStore } from "@/store/auth.store";
+import { CANONICAL_CONSENT_NOTICES } from "@gorola/shared";
 
 
 const { postMock } = vi.hoisted(() => ({
@@ -112,6 +113,14 @@ describe("LoginPage", () => {
     const continueBtn = screen.getByTestId("consent-continue-btn");
     expect(continueBtn).toBeDisabled();
     expect(screen.queryByLabelText(/phone number/i)).not.toBeInTheDocument();
+  });
+
+  it("renders canonical ConsentOptInCard for OTP_AUTH on consent step with canonical notice text", () => {
+    renderLogin(["/login"]);
+    const consentCard = screen.getByTestId("consent-notice-step");
+    expect(consentCard).toBeInTheDocument();
+    expect(consentCard).toHaveTextContent(CANONICAL_CONSENT_NOTICES.OTP_AUTH.summaryText);
+    expect(screen.getByTestId("view-notice-btn-OTP_AUTH")).toBeInTheDocument();
   });
 
   it("clicking continue button while acknowledgement checkbox is unchecked does not advance step", async () => {
